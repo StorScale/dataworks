@@ -12,6 +12,8 @@ the target cluster. Read this, then [plan.md](plan.md) and the
   - **`platform`** runs the Compose stack and every suite.
   - **`kubernetes`** installs the chart on kind with `storscale up --k8s`, then runs every
     suite with `helm test`, the browser suite included.
+  - **`kubernetes-https`** does the same behind HTTPS with a private CA, as on a real cluster
+    (`deploy/kind/https.sh`, `https.yaml`): every suite but the browser's.
 - **What's published, and signed:**
   - The images: `ghcr.io/storscale/platformd:0.3.0` and `ghcr.io/storscale/platform-*:0.3.0`.
   - The chart: `oci://ghcr.io/storscale/charts/storscale-platform` at version 0.3.0.

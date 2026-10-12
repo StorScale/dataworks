@@ -1,0 +1,17 @@
+# The platform behind HTTPS on kind, as on a real cluster: ingress-nginx ends
+# TLS with a certificate from a private CA (deploy/kind/https.sh makes both).
+#   STORSCALE_DOMAIN=storscale.test STORSCALE_K8S_VALUES=deploy/kind/https.yaml storscale up --dir stack --k8s
+global:
+  scheme: https
+  port: 443
+  ca:
+    configMap: storscale-test-ca
+gateway:
+  service: {type: ClusterIP}
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"   # S3 uploads through s3., as on a real cluster
+    tls:
+      - secretName: storscale-tls

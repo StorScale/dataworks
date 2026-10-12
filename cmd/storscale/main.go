@@ -42,6 +42,8 @@ Environment:
   STORSCALE_DOMAIN, STORSCALE_PORT   the platform's domain and port (storscale.localhost, 8800)
   DOCKER_SOCK                        the Docker socket JupyterHub starts notebooks through
                                      (rootless Docker: /run/user/<uid>/docker.sock)
+  STORSCALE_K8S_VALUES               up --k8s: more values files for the chart, space-separated
+                                     (deploy/kind/https.yaml: HTTPS, after deploy/kind/https.sh)
 `
 
 func main() {

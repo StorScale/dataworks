@@ -68,7 +68,12 @@ spec:
   ingressClassName: {{ . }}
   {{- end }}
   {{- with .Values.gateway.ingress.tls }}
-  tls: {{- toYaml . | nindent 4 }}
+  tls:
+    {{- range . }}
+    - secretName: {{ .secretName }}
+      {{- $d := $.Values.global.domain }}
+      hosts: {{- toYaml (.hosts | default (list $d (printf "catalog.%s" $d) (printf "access.%s" $d) (printf "s3.%s" $d))) | nindent 8 }}
+    {{- end }}
   {{- end }}
   rules:
     {{- range $h := list "" "catalog." "access." "s3." }}

@@ -68,7 +68,7 @@ gateway:
     enabled: false
     className: ""
     annotations: {}   # such as cert-manager.io/cluster-issuer, for its certificate
-    tls: []           # [{secretName, hosts}]: the domain, and catalog., access., s3. under it
+    tls: []           # [{secretName, hosts}]; hosts default to the domain, and catalog., access., s3. under it
 
 # Trino's HTTPS port, for JDBC and CLI clients outside the cluster.
 trino:

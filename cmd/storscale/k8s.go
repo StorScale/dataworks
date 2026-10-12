@@ -129,6 +129,9 @@ func (k *kube) up(st *stack) error {
 	}
 	args := append([]string{"upgrade", "--install", release, chart, "--create-namespace", "--timeout", "10m",
 		"--set", "global.domain=" + st.setting("STORSCALE_DOMAIN")}, extra...)
+	for _, f := range strings.Fields(os.Getenv("STORSCALE_K8S_VALUES")) {
+		args = append(args, "-f", f)
+	}
 	if err := helm(args...); err != nil {
 		return err
 	}

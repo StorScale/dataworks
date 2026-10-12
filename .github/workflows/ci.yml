@@ -78,13 +78,35 @@ jobs:
       - run: bin/storscale test --dir stack --k8s
       - name: What went wrong
         if: failure()
-        run: |
-          kubectl --context kind-storscale -n storscale get pods,jobs,projects -o wide
-          kubectl --context kind-storscale -n storscale get events --sort-by=.lastTimestamp | tail -40
-          kubectl --context kind-storscale -n storscale describe jobs | grep -E '^Name:|Pods Statuses|^Events|  (Normal|Warning)' || true
-          for p in $(kubectl --context kind-storscale -n storscale get pods -o name); do
-            echo "=== $p"; kubectl --context kind-storscale -n storscale logs "$p" --all-containers --tail 60 || true
-            # the run before a restart, for a container that crashed
-            kubectl --context kind-storscale -n storscale logs "$p" --all-containers --previous --tail 40 2>/dev/null \
-              | sed 's/^/  (before its restart) /' || true
-          done
+        run: deploy/kind/diagnose.sh
+
+  # The same on kind behind HTTPS, as on a real cluster: ingress-nginx ends
+  # TLS with a certificate from a private CA that only the platform's
+  # settings know of (deploy/kind/https.sh, https.yaml). Every suite but the
+  # browser's, whose Chromium keeps its own trust store.
+  kubernetes-https:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      STORSCALE_DOMAIN: storscale.test   # not .localhost: libcurl takes those for loopback
+      STORSCALE_K8S_VALUES: deploy/kind/https.yaml
+      KUBECTL_CONTEXT: kind-storscale
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: azure/setup-helm@v4
+      - uses: helm/kind-action@v1
+        with:
+          install_only: true
+      - name: Room for the images
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL && df -h /
+      - run: go build -o bin/storscale ./cmd/storscale
+      - run: kind create cluster --name storscale --config deploy/kind/cluster.yaml --wait 180s
+      - run: deploy/kind/https.sh "$STORSCALE_DOMAIN" storscale
+      - run: bin/storscale up --dir stack --k8s
+      - run: bin/storscale test --dir stack --k8s lakehouse superset airflow jupyterhub catalog semantic projects monitoring
+      - name: What went wrong
+        if: failure()
+        run: deploy/kind/diagnose.sh

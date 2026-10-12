@@ -4,17 +4,21 @@
 # operator's servers, people's notebooks) then uses the addresses a browser
 # does, and Keycloak's tokens carry one issuer.
 #
-#   deploy/kind/dns.sh [domain] [namespace]     (default: storscale.localhost storscale)
+#   deploy/kind/dns.sh [domain] [namespace] [target]
+#                       (default: storscale.localhost storscale gateway.<namespace>.svc.cluster.local)
 #
 # Adds one rewrite rule to CoreDNS: <domain> and *.<domain> are answered as
-# gateway.<namespace>.svc.cluster.local. Safe to run again. KUBECTL_CONTEXT:
-# the cluster's kubectl context (default: the current one).
+# the target Service (the gateway, or an ingress in front of it, as
+# deploy/kind/https.sh makes). Safe to run again: a rule for the domain is
+# kept as it is. KUBECTL_CONTEXT: the cluster's kubectl context (default:
+# the current one).
 set -euo pipefail
 kubectl() { command kubectl ${KUBECTL_CONTEXT:+--context "$KUBECTL_CONTEXT"} "$@"; }
 domain=${1:-storscale.localhost}
 ns=${2:-storscale}
 re=$(printf '%s' "$domain" | sed 's/\./\\\\./g')
-target="gateway.$ns.svc.cluster.local."
+target=${3:-gateway.$ns.svc.cluster.local}
+target=${target%.}.
 
 corefile=$(kubectl -n kube-system get configmap coredns -o jsonpath='{.data.Corefile}')
 if grep -q "# storscale: $domain" <<<"$corefile"; then

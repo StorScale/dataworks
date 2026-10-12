@@ -25,6 +25,11 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
   - `storscale up --k8s` prints a failed try's logs, and a crashing container's last run, as they happen. It stops as soon as a setup step is out of tries.
   - It also stops on a container that keeps crashing. Between crashes the container runs for a moment, which had reset its count, so it waited the whole hour.
   - CI's "What went wrong" also prints the Jobs' events and each crashed container's run before its restart.
+- **CI tests the platform behind HTTPS with a private CA** (the job `kubernetes-https`), as on a real cluster: on kind, ingress-nginx ends TLS with a certificate from a throwaway CA that only the platform's settings know of. It runs every suite but the browser's. The first real install found three bugs this would have caught (Buckets', Trino's and Airflow's).
+  - `deploy/kind/https.sh` makes the CA, the certificate and ingress-nginx, and points the platform's names at it. `deploy/kind/https.yaml` holds the values.
+  - `storscale up --k8s` takes more values files (`STORSCALE_K8S_VALUES`), and `deploy/kind/dns.sh` a Service to point the names at.
+  - An Ingress TLS entry without `hosts` covers the domain and `catalog.`, `access.`, `s3.` under it.
+  - CI's "What went wrong" is a script, `deploy/kind/diagnose.sh`.
 - **Setup steps wait for their database** on Kubernetes: `airflow-init`, `superset-init` and the catalog's migration start once PostgreSQL accepts connections (`wait.py tcp`). On a first install Airflow's often started first, failed, and was tried again.
 
 ## [0.3.0] - 2026-10-08
