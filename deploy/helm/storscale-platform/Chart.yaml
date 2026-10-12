@@ -14,7 +14,7 @@ annotations:
 dependencies:
   # Buckets: the S3 storage, run by its operator (a BucketsCluster named "buckets").
   - name: buckets-operator
-    version: 1.12.0
+    version: 1.19.0
     repository: oci://ghcr.io/storscale/charts
     condition: buckets-operator.enabled
   # Spark jobs (SparkApplication resources).

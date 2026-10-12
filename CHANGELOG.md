@@ -17,6 +17,10 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
   - The pipelines' Keycloak connection keeps its scheme (`extra.scheme`).
   - The Ingress takes annotations (`gateway.ingress.annotations`), for cert-manager.
 
+### Changed
+- **Buckets 1.19.0**, up from 1.12.0, in Compose and the chart (bucketsd and its operator). It takes about a third of the memory under load. The operator's `BucketsCluster` only gains fields (`fips`, `scim`).
+  - Since 1.15 each server keeps a copy of its audit log on its first drive, by default up to 10 GiB, as much as the chart's drives hold. The platform keeps 1 GiB (`buckets.auditLocalMax`).
+
 ## [0.3.0] - 2026-10-08
 
 The first release: phases 0 to 5 of [the plan](docs/plan.md).

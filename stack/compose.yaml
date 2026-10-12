@@ -317,6 +317,8 @@ services:
       MINIO_IDENTITY_OPENID_CONFIG_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}/sso/realms/lakehouse/.well-known/openid-configuration
       MINIO_IDENTITY_OPENID_CLIENT_ID: lakehouse
       MINIO_IDENTITY_OPENID_CLAIM_NAME: groups
+      # Its audit log's copy on the first drive: at most this much (Buckets' default is 10G).
+      BUCKETS_AUDIT_LOCAL_MAX: 1G
     volumes:
       - drive1:/data1
       - drive2:/data2

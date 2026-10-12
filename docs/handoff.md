@@ -153,9 +153,9 @@ Every other secret is in the same Secret. They're generated on install and kept 
 
 ## Related repositories
 
-- **[StorScale/buckets](https://github.com/StorScale/buckets):** the storage, at 1.16.0.
-  The chart pins bucketsd 1.12.0 (`upstream.bucketsd`), the version tested here. Moving to
-  1.16.0 is a values change; run the suites after.
+- **[StorScale/buckets](https://github.com/StorScale/buckets):** the storage. The platform
+  pins 1.19.0: bucketsd in `upstream.bucketsd` and `stack/.env`, and the operator chart in
+  `Chart.yaml` (then `helm dependency update`). Run the suites after moving it.
 - **[StorScale/buckets-website](https://github.com/StorScale/buckets-website):**
   storscale.io. `deploy/deploy.sh` builds from the Buckets checkout beside it (or
   `BUCKETS_REPO`), so pull that checkout first, or the site publishes an old version.
