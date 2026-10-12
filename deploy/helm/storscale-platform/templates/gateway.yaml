@@ -21,9 +21,13 @@ spec:
           args: ["caddy", "run", "--config", "/etc/storscale/Caddyfile", "--adapter", "caddyfile"]
           env:
             - {name: STORSCALE_DOMAIN, value: {{ .Values.global.domain | quote }}}
-            - {name: STORSCALE_PORT, value: {{ .Values.global.port | quote }}}
+            - {name: GATEWAY_PORT, value: {{ .Values.gateway.port | quote }}}
+            - {name: PLATFORM_URL, value: {{ include "storscale.url" . | quote }}}
+            {{- with .Values.gateway.trustedProxies | default (ternary "private_ranges" "" .Values.gateway.ingress.enabled) }}
+            - {name: GATEWAY_TRUSTED_PROXIES, value: {{ . | quote }}}
+            {{- end }}
           ports:
-            - {name: http, containerPort: {{ .Values.global.port }}}
+            - {name: http, containerPort: {{ .Values.gateway.port }}}
           readinessProbe:
             tcpSocket: {port: http}   # Caddy is up; each route's service has its own probe
             periodSeconds: 5
@@ -44,7 +48,7 @@ spec:
   selector: {{- include "storscale.selector" (list .Release.Name "gateway") | nindent 4 }}
   ports:
     - name: http
-      port: {{ .Values.global.port }}
+      port: {{ .Values.gateway.port }}
       targetPort: http
       {{- if and (eq .Values.gateway.service.type "NodePort") .Values.gateway.service.nodePort }}
       nodePort: {{ .Values.gateway.service.nodePort }}
@@ -56,6 +60,9 @@ kind: Ingress
 metadata:
   name: gateway
   labels: {{- include "storscale.labels" . | nindent 4 }}
+  {{- with .Values.gateway.ingress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   {{- with .Values.gateway.ingress.className }}
   ingressClassName: {{ . }}

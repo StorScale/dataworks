@@ -15,6 +15,7 @@ data:
   STORSCALE_DOMAIN: {{ .Values.global.domain | quote }}
   STORSCALE_PORT: {{ .Values.global.port | quote }}
   PLATFORM_URL: {{ include "storscale.url" . | quote }}
+  CATALOG_PUBLIC_URL: {{ include "storscale.subURL" (list . "catalog") | quote }}
   KEYCLOAK_URL: "{{ include "storscale.url" . }}/sso"
   NOTEBOOKS_URL: "{{ include "storscale.url" . }}/notebooks"
   DASHBOARDS_URL: "{{ include "storscale.url" . }}/dashboards"

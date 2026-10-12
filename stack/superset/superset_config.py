@@ -13,6 +13,11 @@ SESSION_COOKIE_NAME = "superset_session"
 SQLALCHEMY_DATABASE_URI = (f"postgresql+psycopg2://superset:{os.environ['SUPERSET_DB_PASSWORD']}"
                            "@superset-db:5432/superset")
 
+# Behind the gateway: its callback address (for Keycloak) uses the scheme and
+# name people used, which the gateway forwards.
+ENABLE_PROXY_FIX = True
+PROXY_FIX_CONFIG = {"x_for": 1, "x_proto": 1, "x_host": 1, "x_port": 0, "x_prefix": 0}  # the host carries any port
+
 # --- Sign-in: Keycloak, through OpenID Connect -----------------------------------------
 KEYCLOAK = os.environ["KEYCLOAK_URL"] + "/realms/lakehouse"
 AUTH_TYPE = AUTH_OAUTH

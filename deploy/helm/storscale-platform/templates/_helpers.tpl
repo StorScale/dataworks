@@ -9,12 +9,17 @@
 {{ $root.Values.images.registry }}/{{ index $root.Values.images $name }}:{{ $root.Values.images.tag | default $root.Chart.AppVersion }}
 {{- end }}
 
-{{/* The platform's address, and its tools' addresses. */}}
+{{/* The platform's address, and its tools' addresses: the port is left out
+     when it's the scheme's own (443 for https, 80 for http). */}}
+{{- define "storscale.portSuffix" -}}
+{{- $port := toString .Values.global.port -}}
+{{- if not (has (list .Values.global.scheme $port) (list (list "https" "443") (list "http" "80") (list "https" "") (list "http" ""))) }}:{{ $port }}{{ end }}
+{{- end }}
 {{- define "storscale.url" -}}
-{{ .Values.global.scheme }}://{{ .Values.global.domain }}:{{ .Values.global.port }}
+{{ .Values.global.scheme }}://{{ .Values.global.domain }}{{ include "storscale.portSuffix" . }}
 {{- end }}
 {{- define "storscale.subURL" -}}
-{{- $root := index . 0 -}}{{ $root.Values.global.scheme }}://{{ index . 1 }}.{{ $root.Values.global.domain }}:{{ $root.Values.global.port }}
+{{- $root := index . 0 -}}{{ $root.Values.global.scheme }}://{{ index . 1 }}.{{ $root.Values.global.domain }}{{ include "storscale.portSuffix" $root }}
 {{- end }}
 
 {{- define "storscale.labels" -}}

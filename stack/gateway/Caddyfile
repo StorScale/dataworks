@@ -1,4 +1,8 @@
-# The gateway: the platform's one address, STORSCALE_DOMAIN on STORSCALE_PORT.
+# The gateway: the platform's one address (PLATFORM_URL), names under
+# STORSCALE_DOMAIN, listening on GATEWAY_PORT over plain HTTP. In Compose
+# people reach it directly; on Kubernetes it may sit behind an ingress that
+# ends TLS, which GATEWAY_TRUSTED_PROXIES names, so the tools see the scheme
+# people used (X-Forwarded-Proto).
 #
 # The tools the platform shows in its frames are on paths of that address:
 # one origin, so every browser treats them, and their cookies, as the
@@ -8,6 +12,9 @@
 {
 	auto_https off
 	admin off
+	servers {
+		trusted_proxies static {$GATEWAY_TRUSTED_PROXIES:127.0.0.1/32}
+	}
 }
 
 (tool) {
@@ -19,7 +26,7 @@
 	header ?Content-Security-Policy "frame-ancestors 'self'"
 }
 
-http://{$STORSCALE_DOMAIN}:{$STORSCALE_PORT} {
+http://{$STORSCALE_DOMAIN}:{$GATEWAY_PORT} {
 	redir /sso /sso/
 	redir /notebooks /notebooks/
 	redir /dashboards /dashboards/
@@ -54,7 +61,7 @@ http://{$STORSCALE_DOMAIN}:{$STORSCALE_PORT} {
 }
 
 # The tools that open in a tab of their own keep names of their own.
-http://catalog.{$STORSCALE_DOMAIN}:{$STORSCALE_PORT} {
+http://catalog.{$STORSCALE_DOMAIN}:{$GATEWAY_PORT} {
 	# The platform's way in: starts OpenMetadata's service worker, then signs in.
 	handle /_storscale/* {
 		root * /srv
@@ -65,16 +72,16 @@ http://catalog.{$STORSCALE_DOMAIN}:{$STORSCALE_PORT} {
 	}
 }
 
-http://access.{$STORSCALE_DOMAIN}:{$STORSCALE_PORT} {
+http://access.{$STORSCALE_DOMAIN}:{$GATEWAY_PORT} {
 	reverse_proxy ranger-admin:6080
 }
 
-http://s3.{$STORSCALE_DOMAIN}:{$STORSCALE_PORT} {
+http://s3.{$STORSCALE_DOMAIN}:{$GATEWAY_PORT} {
 	reverse_proxy buckets:9000
 }
 
 # Any other name: the health check, and nothing else.
-http://:{$STORSCALE_PORT} {
+http://:{$GATEWAY_PORT} {
 	respond /healthz "ok" 200
-	respond "Not found: use http://{$STORSCALE_DOMAIN}:{$STORSCALE_PORT}" 404
+	respond "Not found: use {$PLATFORM_URL}" 404
 }

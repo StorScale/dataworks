@@ -149,7 +149,8 @@ services:
     image: caddy:2.11.2-alpine
     environment:
       STORSCALE_DOMAIN: ${STORSCALE_DOMAIN}
-      STORSCALE_PORT: ${STORSCALE_PORT}
+      GATEWAY_PORT: ${STORSCALE_PORT}
+      PLATFORM_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}
     volumes:
       - ./gateway/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./gateway/catalog:/srv/_storscale:ro
@@ -198,8 +199,8 @@ services:
       KC_PROXY_HEADERS: xforwarded
       KC_HEALTH_ENABLED: "true"
       # The realm's placeholders: people's password, redirect URIs, client secrets.
-      STORSCALE_DOMAIN: ${STORSCALE_DOMAIN}
-      STORSCALE_PORT: ${STORSCALE_PORT}
+      PLATFORM_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}
+      CATALOG_PUBLIC_URL: http://catalog.${STORSCALE_DOMAIN}:${STORSCALE_PORT}
       LAKEHOUSE_USER_PASSWORD: ${LAKEHOUSE_USER_PASSWORD}
       JUPYTERHUB_OAUTH_SECRET: ${JUPYTERHUB_OAUTH_SECRET}
       PLATFORM_OAUTH_SECRET: ${PLATFORM_OAUTH_SECRET}
@@ -558,7 +559,7 @@ services:
   airflow:
     restart: unless-stopped
     <<: *airflow
-    command: ["api-server"]
+    command: ["api-server", "--proxy-headers"]   # the scheme people used, from the gateway
     depends_on:
       airflow-init: {condition: service_completed_successfully}
       setup-trino: {condition: service_completed_successfully}

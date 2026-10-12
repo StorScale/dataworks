@@ -24,18 +24,42 @@ the target cluster. Read this, then [plan.md](plan.md) and the
 Needs about 12–16 GB of memory, 4 or more CPUs, about 60 GB of disk, Helm, and a
 default StorageClass (or set `storage.storageClassName` and `buckets.storageClassName`).
 
+With TLS at the Ingress, a certificate from cert-manager, and a private CA, a values file
+such as this one (`platform.yaml`):
+
+```yaml
+global:
+  domain: platform.example.com
+  scheme: https
+  port: 443
+gateway:
+  service: {type: ClusterIP}
+  ingress:
+    enabled: true
+    className: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: my-issuer
+      cert-manager.io/common-name: platform.example.com   # if the issuer wants one
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"     # S3 uploads
+    tls:
+      - secretName: storscale-tls
+        hosts: [platform.example.com, catalog.platform.example.com, access.platform.example.com, s3.platform.example.com]
+trino:
+  service: {type: ClusterIP}
+```
+
 ```bash
-helm install storscale oci://ghcr.io/storscale/charts/storscale-platform --version 0.3.0 \
-  -n storscale --create-namespace \
-  --set global.domain=platform.example.com \
-  --set gateway.service.type=ClusterIP --set gateway.ingress.enabled=true \
-  --set gateway.ingress.className=nginx \
-  --set trino.service.type=ClusterIP
+helm install storscale oci://ghcr.io/storscale/charts/storscale-platform --version <version> \
+  -n storscale --create-namespace -f platform.yaml --set-file global.ca.certs=root-ca.pem
 kubectl -n storscale get pods,jobs,projects -w      # the first install takes 10–20 minutes
 helm test storscale -n storscale --logs --timeout 60m
 ```
 
-Install with the subcharts on. Helm installs a subchart's CRDs (Buckets' and the
+HTTPS and `global.ca` came after 0.3.0: until a release has them, install from a checkout
+(`deploy/helm/storscale-platform`, after `helm dependency build`).
+
+Install with the subcharts on, unless the cluster already runs one: a Spark Operator that
+another release installed owns the Spark CRDs (`--set spark-operator.enabled=false`). Helm installs a subchart's CRDs (Buckets' and the
 Spark Operator's) only on a fresh install, never on an upgrade.
 
 People's password (the example users alice, bob, carol):
@@ -51,13 +75,17 @@ Every other secret is in the same Secret. They're generated on install and kept 
    - Pods must resolve them to the gateway too. Ordinary DNS works if the load balancer
      allows hairpin traffic. If not, add a CoreDNS rewrite as
      [deploy/kind/dns.sh](../deploy/kind/dns.sh) does on kind.
-2. **HTTPS, and which port.** `global.port` is two things at once: the port in every URL
-   (`scheme://domain:port`), and the port the gateway (Caddy) listens on, over plain HTTP.
-   - A real install wants TLS at the Ingress on 443, with URLs carrying no port.
-   - Expect to split this into a public port (in URLs) and the gateway's own port.
-     Keycloak (`KC_HOSTNAME`, `KC_PROXY_HEADERS=xforwarded`), the gateway's Caddyfile and
-     the tools' callback URLs all follow `global.*`.
-   - `global.scheme=https` has never been tried.
+2. **HTTPS.** TLS ends at the Ingress: `global.scheme=https` and `global.port=443` give URLs
+   with no port, and the gateway listens on `gateway.port` (8800) over plain HTTP.
+   - Give the Ingress its certificate with `gateway.ingress.annotations` (cert-manager) and
+     `gateway.ingress.tls`, for the domain and `catalog.`, `access.`, `s3.` under it.
+   - With the Ingress on, the gateway trusts `X-Forwarded-Proto` from private ranges
+     (`gateway.trustedProxies`), so Superset and Airflow build `https` sign-in callbacks.
+   - Tested piece by piece: the chart renders with no port in any URL, Caddy routes the
+     names and passes the scheme on, and Keycloak's realm takes the `https` addresses.
+     Not yet a whole install over HTTPS.
+   - ingress-nginx limits request bodies to 1 MB unless told otherwise
+     (`nginx.ingress.kubernetes.io/proxy-body-size: "0"`), which S3 uploads hit.
    - A private CA is ready: give it as `--set-file global.ca.certs=root-ca.pem` and every
      service that calls the platform's public names trusts it (Python, Go, curl, Java,
      notebooks, and Buckets through `SSL_CERT_DIR`). Tested on a real cluster against a

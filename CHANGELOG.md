@@ -10,6 +10,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
   - Notebook pods get the same, through JupyterHub.
   - Buckets, whose pods its operator makes, reads the CA from `SSL_CERT_DIR`.
   - Without `global.ca`, the chart renders as before.
+- **The platform can sit behind an ingress that ends TLS,** at an address with no port (`global.scheme: https`, `global.port: 443`):
+  - The port is left out of the platform's URLs when it's the scheme's own. The gateway listens on a port of its own (`gateway.port`, 8800), over plain HTTP.
+  - The gateway passes on the scheme people used (`X-Forwarded-Proto`) from the proxies it trusts: with the ingress on, those in private ranges (`gateway.trustedProxies`). Superset (`ENABLE_PROXY_FIX`) and Airflow's API server (`--proxy-headers`) build their sign-in callbacks from it.
+  - Keycloak's realm takes the platform's address whole (`PLATFORM_URL`, `CATALOG_PUBLIC_URL`) for its redirect URIs and the MCP audience, so they follow the scheme too.
+  - The pipelines' Keycloak connection keeps its scheme (`extra.scheme`).
+  - The Ingress takes annotations (`gateway.ingress.annotations`), for cert-manager.
 
 ## [0.3.0] - 2026-10-08
 

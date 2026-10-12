@@ -69,7 +69,8 @@ spec:
                 --firstname StorScale --lastname Platform --email platform@{{ .Values.global.domain }} --role Op >/dev/null 2>&1;
               airflow users reset-password --username storscale-platform --password "$AIRFLOW_PLATFORM_PASSWORD" >/dev/null &&
               airflow connections add keycloak_pipelines --conn-type http \
-                --conn-host {{ .Values.global.domain }} --conn-port {{ .Values.global.port }} --conn-schema sso \
+                --conn-host {{ .Values.global.domain }}{{ if include "storscale.portSuffix" . }} --conn-port {{ .Values.global.port }}{{ end }} --conn-schema sso \
+                --conn-extra '{"scheme": "{{ .Values.global.scheme }}"}' \
                 --conn-login airflow-pipelines --conn-password "$AIRFLOW_PIPELINES_SECRET" \
                 --conn-description "The pipelines' Keycloak service account (client credentials)" &&
               python /tools/k8s.py done airflow-init
@@ -101,7 +102,7 @@ spec:
       containers:
         - name: api-server
           {{- include "storscale.airflow.common" . | nindent 10 }}
-          args: ["api-server"]
+          args: ["api-server", "--proxy-headers"]   # the scheme people used, from the gateway
           ports:
             - {name: http, containerPort: 8090}
           readinessProbe:

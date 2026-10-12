@@ -2,7 +2,9 @@
 # kind node (deploy/kind/cluster.yaml); `storscale up --k8s` installs it so.
 
 global:
-  # The platform's one address: people's browsers and the services use it.
+  # The platform's one address, scheme://domain:port: people's browsers and
+  # the services use it. The port is left out of it when it's the scheme's
+  # own, so behind an ingress that ends TLS: scheme https, port 443.
   domain: storscale.localhost
   port: 8800
   scheme: http
@@ -47,19 +49,26 @@ upstream:
   grafana: grafana/grafana:13.0.10
   bucketsd: ghcr.io/storscale/bucketsd:1.12.0
 
-# The gateway: every address of the platform, as one Service. The platform's
+# The gateway: every address of the platform, as one Service. It listens on
+# its own port over plain HTTP, whatever the platform's address is. The platform's
 # names (domain, and catalog., access., s3. under it) must resolve to it from
 # inside the cluster too, as from people's browsers: through the domain's DNS
 # (an ingress or load balancer), or, on kind, through the cluster's DNS
 # (deploy/kind/dns.sh), as Compose's network aliases do.
 gateway:
+  port: 8800
+  # Proxies whose X-Forwarded-* headers the gateway passes on, so the tools
+  # see the scheme people used: Caddy's trusted_proxies ranges, such as
+  # "private_ranges" or CIDRs. Defaults to private_ranges with the ingress on.
+  trustedProxies: ""
   service:
     type: NodePort
     nodePort: 30880   # kind maps the host's port 8800 here
   ingress:
     enabled: false
     className: ""
-    tls: []
+    annotations: {}   # such as cert-manager.io/cluster-issuer, for its certificate
+    tls: []           # [{secretName, hosts}]: the domain, and catalog., access., s3. under it
 
 # Trino's HTTPS port, for JDBC and CLI clients outside the cluster.
 trino:
