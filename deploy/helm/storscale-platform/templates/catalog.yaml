@@ -109,7 +109,7 @@ spec:
     spec:
       enableServiceLinks: false
       serviceAccountName: storscale
-      restartPolicy: OnFailure
+      restartPolicy: Never   # each try a pod of its own, kept with its logs
       initContainers:
         {{- include "storscale.wait" (list . "search" (list "url" "http://openmetadata-search:9200/_cluster/health")) | nindent 8 }}
         - name: migrate

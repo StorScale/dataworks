@@ -246,31 +246,88 @@ func (p *pod) why() (string, bool) {
 		if w := c.State.Waiting; w != nil {
 			return fmt.Sprintf("%s (%d restarts)", w.Reason, c.RestartCount), stuckReason(w.Reason, c.RestartCount)
 		}
-		if c.RestartCount > 0 {
-			return fmt.Sprintf("starting (%d restarts)", c.RestartCount), false
+		if c.RestartCount > 0 { // between crashes: as stuck as in CrashLoopBackOff
+			return fmt.Sprintf("starting (%d restarts)", c.RestartCount), c.RestartCount >= crashLimit
 		}
 		return "starting", false
 	}
 	return strings.ToLower(p.Status.Phase), false
 }
 
+// crashLimit: a container restarted this often keeps crashing.
+const crashLimit = 6
+
 func stuckReason(reason string, restarts int) bool {
 	switch reason {
 	case "ErrImagePull", "ImagePullBackOff", "InvalidImageName", "CreateContainerConfigError":
 		return true
 	case "CrashLoopBackOff":
-		return restarts >= 6
+		return restarts >= crashLimit
 	}
 	return false
 }
 
+// failedJob names a setup step (Job) that has run out of tries, and why.
+func failedJob() (string, string) {
+	out, err := exec.Command("kubectl", "--context", kubeContext, "-n", namespace, "get", "jobs", "-o", "json").Output()
+	if err != nil {
+		return "", ""
+	}
+	var list struct {
+		Items []struct {
+			Metadata struct {
+				Name string `json:"name"`
+			} `json:"metadata"`
+			Status struct {
+				Conditions []struct{ Type, Status, Reason, Message string } `json:"conditions"`
+			} `json:"status"`
+		}
+	}
+	json.Unmarshal(out, &list)
+	for _, j := range list.Items {
+		for _, c := range j.Status.Conditions {
+			if c.Type == "Failed" && c.Status == "True" {
+				return j.Metadata.Name, strings.TrimSpace(c.Reason + ": " + c.Message)
+			}
+		}
+	}
+	return "", ""
+}
+
+// showFailures prints, once each, the logs of a setup step's failed try (its
+// pod is kept) and of a container's run before each restart, so a failure
+// says why as it happens, before its pod is gone.
+func showFailures(p pod, shown map[string]int) {
+	if _, job := p.Metadata.Labels["job-name"]; job && p.Status.Phase == "Failed" {
+		if _, ok := shown[p.Metadata.Name]; !ok {
+			shown[p.Metadata.Name] = 1
+			fmt.Printf("--- %s failed:\n", p.Metadata.Name)
+			kubectl("logs", p.Metadata.Name, "--all-containers", "--tail", "40")
+		}
+		return
+	}
+	for _, c := range append(p.Status.InitContainerStatuses, p.Status.ContainerStatuses...) {
+		key := p.Metadata.Name + "/" + c.Name
+		if c.RestartCount > shown[key] {
+			shown[key] = c.RestartCount
+			fmt.Printf("--- %s, container %s, restarted (%d); its last run:\n", p.Metadata.Name, c.Name, c.RestartCount)
+			kubectl("logs", p.Metadata.Name, "-c", c.Name, "--previous", "--tail", "40")
+		}
+	}
+}
+
 // waitReady waits for every pod of the platform to be ready, saying every
-// half minute which aren't and why, and gives up early on one that is stuck
-// (its image can't be pulled, or it keeps crashing), with its logs.
+// half minute which aren't and why, and the logs of what fails as it fails.
+// It gives up early on a pod that is stuck (its image can't be pulled, or it
+// keeps crashing), with its logs, and on a setup step out of tries.
 func waitReady(limit time.Duration) error {
 	deadline := time.Now().Add(limit)
 	stuckSince := map[string]time.Time{}
+	shown := map[string]int{}
 	for {
+		if job, why := failedJob(); job != "" {
+			return fmt.Errorf("the setup step %s failed (%s); its tries' logs are above", job, why)
+		}
 		out, err := exec.Command("kubectl", "--context", kubeContext, "-n", namespace, "get", "pods", "-o", "json").Output()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "reading the pods:", err)
@@ -279,6 +336,7 @@ func waitReady(limit time.Duration) error {
 			json.Unmarshal(out, &list)
 			var waiting []string
 			for _, p := range list.Items {
+				showFailures(p, shown)
 				_, job := p.Metadata.Labels["job-name"]
 				if p.Status.Phase == "Succeeded" || (job && p.Status.Phase == "Failed") || strings.HasPrefix(p.Metadata.Name, "storscale-test") {
 					continue // a finished setup step, a failed try of one (it's tried again), or a test

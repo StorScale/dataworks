@@ -29,7 +29,7 @@ volumes:
 {{- $init := fromYaml (include "storscale.superset.pod" .) }}
 {{- $_ := set (index $init.containers 0) "command" (list "sh" "-c" "superset db upgrade && superset init && python /app/pythonpath/bootstrap.py && python /tools/k8s.py done superset-init") }}
 {{- $_ := set (index $init.containers 0) "resources" (dict "requests" (dict "cpu" "100m" "memory" "512Mi") "limits" (dict "memory" "1Gi")) }}
-{{- $_ := set $init "restartPolicy" "OnFailure" }}
+{{- $_ := set $init "restartPolicy" "Never" }}
 {{- $_ := set $init "enableServiceLinks" false }}
 apiVersion: batch/v1
 kind: Job

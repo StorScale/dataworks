@@ -20,6 +20,10 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 ### Changed
 - **Buckets 1.19.0**, up from 1.12.0, in Compose and the chart (bucketsd and its operator). It takes about a third of the memory under load. The operator's `BucketsCluster` only gains fields (`fips`, `scim`).
   - Since 1.15 each server keeps a copy of its audit log on its first drive, by default up to 10 GiB, as much as the chart's drives hold. The platform keeps 1 GiB (`buckets.auditLocalMax`).
+- **A setup step that fails on Kubernetes says why.** Each try of a setup Job runs in a pod of its own (`restartPolicy: Never`), kept with its logs after the Job gives up. Before, the Job's one pod went with it, and its logs too.
+  - `storscale up --k8s` prints a failed try's logs, and a crashing container's last run, as they happen. It stops as soon as a setup step is out of tries.
+  - It also stops on a container that keeps crashing. Between crashes the container runs for a moment, which had reset its count, so it waited the whole hour.
+  - CI's "What went wrong" also prints the Jobs' events and each crashed container's run before its restart.
 
 ## [0.3.0] - 2026-10-08
 

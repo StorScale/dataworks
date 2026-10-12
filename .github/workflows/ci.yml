@@ -81,6 +81,10 @@ jobs:
         run: |
           kubectl --context kind-storscale -n storscale get pods,jobs,projects -o wide
           kubectl --context kind-storscale -n storscale get events --sort-by=.lastTimestamp | tail -40
+          kubectl --context kind-storscale -n storscale describe jobs | grep -E '^Name:|Pods Statuses|^Events|  (Normal|Warning)' || true
           for p in $(kubectl --context kind-storscale -n storscale get pods -o name); do
             echo "=== $p"; kubectl --context kind-storscale -n storscale logs "$p" --all-containers --tail 60 || true
+            # the run before a restart, for a container that crashed
+            kubectl --context kind-storscale -n storscale logs "$p" --all-containers --previous --tail 40 2>/dev/null \
+              | sed 's/^/  (before its restart) /' || true
           done

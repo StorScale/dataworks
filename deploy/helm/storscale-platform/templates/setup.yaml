@@ -1,7 +1,9 @@
 {{/* The platform's setup steps (stack/tools/setup/run.py), as Compose's
      setup and setup-trino. Named after the release's revision, so each
      upgrade runs them again; every step is safe to run again. Services that
-     need a step wait for it (storscale.wait ... "job"). */}}
+     need a step wait for it (storscale.wait ... "job"). A failed try is not
+     restarted in place but tried again in a new pod (restartPolicy: Never),
+     so each try's pod, and its logs, outlive the Job's failure. */}}
 {{- define "storscale.setupJob" -}}
 {{- $root := index . 0 -}}{{- $step := index . 1 -}}{{- $stage := index . 2 -}}{{- $waits := index . 3 -}}
 apiVersion: batch/v1
@@ -18,7 +20,7 @@ spec:
     spec:
       enableServiceLinks: false
       serviceAccountName: storscale
-      restartPolicy: OnFailure
+      restartPolicy: Never   # each try a pod of its own, kept with its logs
       initContainers:
         {{- include "storscale.ca.init" $root | nindent 8 }}
         {{- range $i, $w := $waits }}
