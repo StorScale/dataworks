@@ -126,7 +126,9 @@ print(json.dumps({
     "user": me,
     "token_user": claims.get("preferred_username"), "token_groups": claims.get("groups"),
     "token_aud": claims.get("aud"),
-    "keys_in_env": sorted(k for k in os.environ if k.startswith(("AWS_", "MINIO_", "BUCKETS_ROOT"))),
+    # (AWS_CA_BUNDLE, with a private CA, is the CAs' file, not a key)
+    "keys_in_env": sorted(k for k in os.environ
+                          if k.startswith(("AWS_", "MINIO_", "BUCKETS_ROOT")) and k != "AWS_CA_BUNDLE"),
     "put_own": code(lambda: s3.put_object(Bucket="home", Key=f"{me}/notes.txt", Body=f"{me}'s notes".encode())),
     "list_own": code(lambda: s3.list_objects_v2(Bucket="home", Prefix=f"{me}/")),
     "get_other": code(lambda: s3.get_object(Bucket="home", Key=f"{other}/notes.txt")),
