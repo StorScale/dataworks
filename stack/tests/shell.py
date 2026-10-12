@@ -151,7 +151,12 @@ def run(browser, switch=True, start_run=True):
         url = frame.url if frame and not frame.is_detached() else "no frame"
         shown = frame is not None and re.search(where, url) is not None
         if shown:
-            frame.wait_for_load_state("load", timeout=120_000)
+            # Its document, not every image and script on it: "load" can wait
+            # on one slow asset (WebKit, on Superset's dashboard list, timed out).
+            try:
+                frame.wait_for_load_state("domcontentloaded", timeout=120_000)
+            except Exception as e:  # noqa: BLE001 (a failed check, not the end of the suite)
+                shown, url = False, f"{url}: didn't load ({type(e).__name__})"
         on_keycloak = frame is not None and frame.url.startswith(AUTH)
         check(f"{tool} opens in the platform, signed in as alice", shown and not on_keycloak, url)
     check("one sign-in for all of them", len(sign_ins) == 1, f"{len(sign_ins)} Keycloak sign-in(s)")
