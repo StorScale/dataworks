@@ -98,7 +98,10 @@ data:
 {{/* Trusting a private CA (global.ca). An init container (ca-bundle) adds
      the CAs to the public ones from the tools image, as a PEM bundle and as
      a truststore for Java, in /etc/storscale/ca; the environment points
-     each language's TLS at them. Each renders nothing without global.ca.
+     each language's TLS at them. The bundle also holds Trino's own
+     certificate (Secret trino-tls): Python's requests puts
+     REQUESTS_CA_BUNDLE in place of a session's own verify=, which is how
+     the Trino client trusts Trino. Each renders nothing without global.ca.
        storscale.ca.init     in initContainers, before the rest
        storscale.ca.env      in a container's env
        storscale.ca.mount    in a container's volumeMounts
@@ -123,13 +126,14 @@ data:
   imagePullPolicy: {{ .Values.images.pullPolicy }}
   command: ["sh", "-c"]
   args:
-    - cat /etc/ssl/certs/ca-certificates.crt /ca-in/ca.crt > /ca/ca-certificates.crt &&
+    - cat /etc/ssl/certs/ca-certificates.crt /ca-in/ca.crt /ca-trino/cert.pem > /ca/ca-certificates.crt &&
       cp /ca-in/ca.crt /ca/extra.crt &&
       openssl pkcs12 -export -nokeys -jdktrust anyExtendedKeyUsage -in /ca/ca-certificates.crt
         -out /ca/truststore.p12 -passout pass:changeit &&
       chmod 644 /ca/*
   volumeMounts:
     - {name: storscale-ca-in, mountPath: /ca-in}
+    - {name: storscale-ca-trino, mountPath: /ca-trino}
     - {name: storscale-ca, mountPath: /ca}
   resources:
     requests: {cpu: 10m, memory: 32Mi}
@@ -162,6 +166,7 @@ data:
   configMap:
     name: {{ include "storscale.ca.configMap" . }}
     items: [{key: {{ .Values.global.ca.key | quote }}, path: ca.crt}]
+- {name: storscale-ca-trino, secret: {secretName: trino-tls, items: [{key: cert.pem, path: cert.pem}]}}
 - {name: storscale-ca, emptyDir: {}}
 {{- end }}
 {{- end }}
