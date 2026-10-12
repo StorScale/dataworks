@@ -148,12 +148,18 @@ spec:
       enableServiceLinks: false
       serviceAccountName: storscale
       initContainers:
+        {{- include "storscale.ca.init" . | nindent 8 }}
         {{- include "storscale.wait" (list . "migrate" (list "job" "openmetadata-migrate")) | nindent 8 }}
         {{- include "storscale.wait" (list . "keycloak" (list "url" "http://keycloak:9000/health/ready")) | nindent 8 }}
       containers:
         - name: openmetadata
           image: {{ .Values.upstream.openmetadata }}
-          env: {{- include "storscale.openmetadata.env" . | nindent 12 }}
+          env:
+            {{- include "storscale.openmetadata.env" . | nindent 12 }}
+            {{- include "storscale.ca.env" . | nindent 12 }}
+          {{- with include "storscale.ca.mount" . }}
+          volumeMounts: {{- . | nindent 12 }}
+          {{- end }}
           ports:
             - {name: http, containerPort: 8585}
             - {name: admin, containerPort: 8586}
@@ -164,6 +170,7 @@ spec:
           {{- include "storscale.resources" (list "100m" "896Mi" "1280Mi") | nindent 10 }}
       volumes:
         {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 8 }}
+        {{- include "storscale.ca.volumes" . | nindent 8 }}
 ---
 apiVersion: v1
 kind: Service

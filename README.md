@@ -61,7 +61,7 @@ kubectl --context kind-storscale -n storscale get projects
 
 The addresses are the same as with Compose. On Kubernetes, every password is generated on install and kept in the Secret `storscale-env`: `storscale up --k8s` prints how to read the people's. `storscale down --k8s` uninstalls the platform; `--volumes` also deletes the cluster.
 
-On another cluster, install the chart, and make the platform's domain (`global.domain`, with `catalog.`, `access.` and `s3.` under it) resolve to the gateway Service. Inside the cluster it has to resolve to the gateway too: on kind, [deploy/kind/dns.sh](deploy/kind/dns.sh) does that with one rule in the cluster's DNS. [docs/handoff.md](docs/handoff.md) covers installing on a real cluster, and what hasn't been tested there yet.
+On another cluster, install the chart, and make the platform's domain (`global.domain`, with `catalog.`, `access.` and `s3.` under it) resolve to the gateway Service. Inside the cluster it has to resolve to the gateway too: on kind, [deploy/kind/dns.sh](deploy/kind/dns.sh) does that with one rule in the cluster's DNS. If a private CA signs the platform's certificate, give it to the chart (`--set-file global.ca.certs=root-ca.pem`) so the services trust it. [docs/handoff.md](docs/handoff.md) covers installing on a real cluster, and what hasn't been tested there yet.
 
 ## Licence
 

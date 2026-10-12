@@ -1,0 +1,11 @@
+{{/* The CAs given as global.ca.certs, for the services' ca-bundle init
+     containers (storscale.ca.init). */}}
+{{- if .Values.global.ca.certs }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "storscale.ca.configMap" . }}
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+data:
+  {{ .Values.global.ca.key }}: {{ .Values.global.ca.certs | quote }}
+{{- end }}

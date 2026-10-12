@@ -6,6 +6,16 @@ global:
   domain: storscale.localhost
   port: 8800
   scheme: http
+  # Certificate authorities to trust besides the public ones: the one that
+  # signs the platform's certificate, when it's private. The services call
+  # the platform at its public address too (Keycloak's tokens name it), so
+  # they must trust its certificate as people's browsers do. Give the CAs as
+  # PEM (--set-file global.ca.certs=root-ca.pem), or name a ConfigMap in the
+  # release's namespace that holds them (trust-manager's Bundles make these).
+  ca:
+    certs: ""
+    configMap: ""
+    key: ca.crt   # the ConfigMap's key
 
 # The images built from this repository (stack/*/Dockerfile and platformd's).
 images:

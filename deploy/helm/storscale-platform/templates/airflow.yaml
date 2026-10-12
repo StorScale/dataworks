@@ -21,18 +21,21 @@ env:
   - {name: AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION, value: "False"}
   - {name: AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL, value: "10"}
   - {name: STORSCALE_REVISION, value: {{ .Release.Revision | quote }}}
+  {{- include "storscale.ca.env" . | nindent 2 }}
 volumeMounts:
   - {name: files-airflow, mountPath: /opt/airflow/webserver_config.py, subPath: webserver_config.py}
   - {name: files-airflow, mountPath: /opt/airflow/dags, subPath: dags}
   - {name: files-tools, mountPath: /tools}
   - {name: tls, mountPath: /tls}
   - {name: catalog, mountPath: /catalog, readOnly: true}   # the catalog's token, for reporting lineage
+  {{- include "storscale.ca.mount" . | nindent 2 }}
 {{- end }}
 {{- define "storscale.airflow.volumes" -}}
 {{- include "storscale.filesVolume" (list . "airflow" "airflow") }}
 {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 0 }}
 - {name: tls, secret: {secretName: trino-tls}}
 - {name: catalog, secret: {secretName: catalog-token, optional: true}}
+{{- include "storscale.ca.volumes" . | nindent 0 }}
 {{- end }}
 apiVersion: batch/v1
 kind: Job
@@ -49,6 +52,9 @@ spec:
       enableServiceLinks: false
       serviceAccountName: storscale
       restartPolicy: OnFailure   # retried until its database is up
+      {{- with include "storscale.ca.init" . }}
+      initContainers: {{- . | nindent 8 }}
+      {{- end }}
       containers:
         - name: init
           {{- include "storscale.airflow.common" . | nindent 10 }}
@@ -89,6 +95,7 @@ spec:
       enableServiceLinks: false
       serviceAccountName: storscale
       initContainers:
+        {{- include "storscale.ca.init" . | nindent 8 }}
         {{- include "storscale.wait" (list . "setup" (list "job" "airflow-init" "setup-trino")) | nindent 8 }}
         {{- include "storscale.wait" (list . "keycloak" (list "url" "http://keycloak:9000/health/ready")) | nindent 8 }}
       containers:
@@ -134,6 +141,7 @@ spec:
       enableServiceLinks: false
       serviceAccountName: storscale
       initContainers:
+        {{- include "storscale.ca.init" $ | nindent 8 }}
         {{- include "storscale.wait" (list $ "airflow" (list "url" "http://airflow:8090/pipelines/api/v2/monitor/health")) | nindent 8 }}
       containers:
         - name: {{ $part }}

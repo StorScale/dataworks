@@ -44,6 +44,9 @@ spec:
   enableServiceLinks: false
   serviceAccountName: storscale-test
   restartPolicy: Never
+  {{- with include "storscale.ca.init" . }}
+  initContainers: {{- . | nindent 4 }}
+  {{- end }}
   containers:
     - name: test
       image: {{ include "storscale.image" (list . "tools") }}
@@ -59,6 +62,7 @@ spec:
       env:
         - {name: BUCKETS_DRIVE, value: "buckets-pool-0-0/data2-buckets-pool-0-0"}
         - {name: STORSCALE_TOOLS_IMAGE, value: {{ include "storscale.image" (list . "tools") | quote }}}
+        {{- include "storscale.ca.env" . | nindent 8 }}
       volumeMounts:
         - {name: files-tools, mountPath: /tools}
         - {name: files-tests, mountPath: /tests}
@@ -66,6 +70,7 @@ spec:
         - {name: files-monitoring, mountPath: /dashboards, subPath: dashboards}
         - {name: tls, mountPath: /tls}
         - {name: suites, mountPath: /etc/storscale-tests}
+        {{- include "storscale.ca.mount" . | nindent 8 }}
       {{- include "storscale.resources" (list "50m" "128Mi" "768Mi") | nindent 6 }}
   volumes:
     {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 4 }}
@@ -74,6 +79,7 @@ spec:
     {{- include "storscale.filesVolume" (list . "monitoring" "monitoring") | nindent 4 }}
     - {name: tls, secret: {secretName: trino-tls}}
     - {name: suites, configMap: {name: storscale-tests, optional: true}}
+    {{- include "storscale.ca.volumes" . | nindent 4 }}
 ---
 apiVersion: v1
 kind: Pod

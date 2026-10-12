@@ -2,6 +2,9 @@
 # metadata database, roles and the Trino database come first (superset-init).
 {{- define "storscale.superset.pod" -}}
 serviceAccountName: storscale
+{{- with include "storscale.ca.init" . }}
+initContainers: {{- . | nindent 2 }}
+{{- end }}
 containers:
   - name: superset
     image: {{ include "storscale.image" (list . "superset") }}
@@ -11,14 +14,17 @@ containers:
       - {name: SUPERSET_CONFIG_PATH, value: /app/pythonpath/superset_config.py}
       - {name: SUPERSET_APP_ROOT, value: /dashboards}
       - {name: STORSCALE_REVISION, value: {{ .Release.Revision | quote }}}
+      {{- include "storscale.ca.env" . | nindent 6 }}
     volumeMounts:
       - {name: files-superset, mountPath: /app/pythonpath}
       - {name: files-tools, mountPath: /tools}
       - {name: tls, mountPath: /tls}
+      {{- include "storscale.ca.mount" . | nindent 6 }}
 volumes:
   {{- include "storscale.filesVolume" (list . "superset" "superset") | nindent 2 }}
   {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 2 }}
   - {name: tls, secret: {secretName: trino-tls}}
+  {{- include "storscale.ca.volumes" . | nindent 2 }}
 {{- end }}
 {{- $init := fromYaml (include "storscale.superset.pod" .) }}
 {{- $_ := set (index $init.containers 0) "command" (list "sh" "-c" "superset db upgrade && superset init && python /app/pythonpath/bootstrap.py && python /tools/k8s.py done superset-init") }}
@@ -44,7 +50,7 @@ spec:
 {{- $_ := set $c "readinessProbe" (dict "httpGet" (dict "path" "/dashboards/health" "port" "http") "periodSeconds" 5 "failureThreshold" 60) }}
 {{- $_ := set $c "resources" (dict "requests" (dict "cpu" "100m" "memory" "512Mi") "limits" (dict "memory" "1Gi")) }}
 {{- $_ := set $pod "enableServiceLinks" false }}
-{{- $_ := set $pod "initContainers" (fromYamlArray (include "storscale.wait" (list . "setup" (list "job" "superset-init" "setup-trino")))) }}
+{{- $_ := set $pod "initContainers" (concat ($pod.initContainers | default list) (fromYamlArray (include "storscale.wait" (list . "setup" (list "job" "superset-init" "setup-trino"))))) }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

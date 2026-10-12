@@ -79,6 +79,14 @@ if os.environ.get("STORSCALE_K8S") == "true":
     c.KubeSpawner.storage_capacity = os.environ.get("NOTEBOOK_STORAGE", "1Gi")
     c.KubeSpawner.volumes = [{"name": "work", "persistentVolumeClaim": {"claimName": "notebooks-{user_server}"}}]
     c.KubeSpawner.volume_mounts = [{"name": "work", "mountPath": "/home/jovyan/work"}]
+    # A private CA the platform's certificate comes from (the chart's global.ca):
+    # the chart gives the init container, volumes and environment that trust it.
+    ca = json.loads(os.environ.get("NOTEBOOK_CA") or "{}")
+    if ca:
+        c.KubeSpawner.init_containers = ca["init_containers"]
+        c.KubeSpawner.volumes += ca["volumes"]
+        c.KubeSpawner.volume_mounts += ca["volume_mounts"]
+        c.KubeSpawner.environment.update({e["name"]: e["value"] for e in ca["env"]})
 else:
     c.JupyterHub.spawner_class = "docker"
     c.DockerSpawner.image = "storscale-notebook"

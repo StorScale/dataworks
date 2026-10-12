@@ -20,6 +20,7 @@ spec:
       serviceAccountName: storscale
       restartPolicy: OnFailure
       initContainers:
+        {{- include "storscale.ca.init" $root | nindent 8 }}
         {{- range $i, $w := $waits }}
         {{- include "storscale.wait" (list $root (printf "%d" $i) $w) | nindent 8 }}
         {{- end }}
@@ -31,15 +32,18 @@ spec:
           {{- include "storscale.envFrom" $root | nindent 10 }}
           env:
             - {name: STORSCALE_REVISION, value: {{ $root.Release.Revision | quote }}}
+            {{- include "storscale.ca.env" $root | nindent 12 }}
           volumeMounts:
             - {name: files-tools, mountPath: /tools}
             - {name: files-projects, mountPath: /projects}
             - {name: tls, mountPath: /tls}
+            {{- include "storscale.ca.mount" $root | nindent 12 }}
           {{- include "storscale.resources" (list "50m" "128Mi" "512Mi") | nindent 10 }}
       volumes:
         {{- include "storscale.filesVolume" (list $root "tools" "tools") | nindent 8 }}
         {{- include "storscale.filesVolume" (list $root "projects" "projects") | nindent 8 }}
         - {name: tls, secret: {secretName: trino-tls}}
+        {{- include "storscale.ca.volumes" $root | nindent 8 }}
 {{- end }}
 
 {{- /* Before Trino: Buckets' buckets, policies and accounts; Ranger's people and policies. */}}

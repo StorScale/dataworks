@@ -89,6 +89,77 @@ data:
     requests: {cpu: 10m, memory: 32Mi}
 {{- end }}
 
+{{/* Trusting a private CA (global.ca). An init container (ca-bundle) adds
+     the CAs to the public ones from the tools image, as a PEM bundle and as
+     a truststore for Java, in /etc/storscale/ca; the environment points
+     each language's TLS at them. Each renders nothing without global.ca.
+       storscale.ca.init     in initContainers, before the rest
+       storscale.ca.env      in a container's env
+       storscale.ca.mount    in a container's volumeMounts
+       storscale.ca.volumes  in the pod's volumes */}}
+{{- define "storscale.ca.enabled" -}}
+{{- if and .Values.global.ca.certs .Values.global.ca.configMap }}
+{{- fail "global.ca: give certs or configMap, not both" }}
+{{- end }}
+{{- if or .Values.global.ca.certs .Values.global.ca.configMap }}true{{ end }}
+{{- end }}
+
+{{/* The chart's ConfigMap is named after its content, so pods that use it
+     start afresh, with the new bundle, when the CAs change. */}}
+{{- define "storscale.ca.configMap" -}}
+{{- .Values.global.ca.configMap | default (printf "storscale-ca-%s" (.Values.global.ca.certs | sha256sum | trunc 8)) }}
+{{- end }}
+
+{{- define "storscale.ca.init" -}}
+{{- if include "storscale.ca.enabled" . -}}
+- name: ca-bundle
+  image: {{ include "storscale.image" (list . "tools") }}
+  imagePullPolicy: {{ .Values.images.pullPolicy }}
+  command: ["sh", "-c"]
+  args:
+    - cat /etc/ssl/certs/ca-certificates.crt /ca-in/ca.crt > /ca/ca-certificates.crt &&
+      cp /ca-in/ca.crt /ca/extra.crt &&
+      openssl pkcs12 -export -nokeys -jdktrust anyExtendedKeyUsage -in /ca/ca-certificates.crt
+        -out /ca/truststore.p12 -passout pass:changeit &&
+      chmod 644 /ca/*
+  volumeMounts:
+    - {name: storscale-ca-in, mountPath: /ca-in}
+    - {name: storscale-ca, mountPath: /ca}
+  resources:
+    requests: {cpu: 10m, memory: 32Mi}
+{{- end }}
+{{- end }}
+
+{{/* Go and OpenSSL read SSL_CERT_FILE, Python's requests REQUESTS_CA_BUNDLE,
+     boto3 AWS_CA_BUNDLE, Node NODE_EXTRA_CA_CERTS, and Java its default
+     truststore. */}}
+{{- define "storscale.ca.env" -}}
+{{- if include "storscale.ca.enabled" . -}}
+- {name: SSL_CERT_FILE, value: /etc/storscale/ca/ca-certificates.crt}
+- {name: REQUESTS_CA_BUNDLE, value: /etc/storscale/ca/ca-certificates.crt}
+- {name: CURL_CA_BUNDLE, value: /etc/storscale/ca/ca-certificates.crt}
+- {name: AWS_CA_BUNDLE, value: /etc/storscale/ca/ca-certificates.crt}
+- {name: NODE_EXTRA_CA_CERTS, value: /etc/storscale/ca/extra.crt}
+- {name: JAVA_TOOL_OPTIONS, value: "-Djavax.net.ssl.trustStore=/etc/storscale/ca/truststore.p12 -Djavax.net.ssl.trustStoreType=PKCS12 -Djavax.net.ssl.trustStorePassword=changeit"}
+{{- end }}
+{{- end }}
+
+{{- define "storscale.ca.mount" -}}
+{{- if include "storscale.ca.enabled" . -}}
+- {name: storscale-ca, mountPath: /etc/storscale/ca, readOnly: true}
+{{- end }}
+{{- end }}
+
+{{- define "storscale.ca.volumes" -}}
+{{- if include "storscale.ca.enabled" . -}}
+- name: storscale-ca-in
+  configMap:
+    name: {{ include "storscale.ca.configMap" . }}
+    items: [{key: {{ .Values.global.ca.key | quote }}, path: ca.crt}]
+- {name: storscale-ca, emptyDir: {}}
+{{- end }}
+{{- end }}
+
 {{/* Resources: what a service asks for, and the most memory it may use. */}}
 {{- define "storscale.resources" -}}
 resources:

@@ -16,6 +16,7 @@ spec:
       enableServiceLinks: false
       serviceAccountName: storscale
       initContainers:
+        {{- include "storscale.ca.init" . | nindent 8 }}
         {{- include "storscale.wait" (list . "keycloak" (list "url" "http://keycloak:9000/health/ready")) | nindent 8 }}
       containers:
         - name: platformd
@@ -36,6 +37,7 @@ spec:
             - {name: AIRFLOW_URL, value: "http://airflow:8090/pipelines"}
             - {name: AIRFLOW_USER, value: storscale-platform}
             - {name: AIRFLOW_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: AIRFLOW_PLATFORM_PASSWORD}}}
+            {{- include "storscale.ca.env" . | nindent 12 }}
           ports:
             - {name: http, containerPort: 8080}
           readinessProbe:
@@ -43,9 +45,11 @@ spec:
             periodSeconds: 5
           volumeMounts:
             - {name: catalog, mountPath: /catalog, readOnly: true}
+            {{- include "storscale.ca.mount" . | nindent 12 }}
           {{- include "storscale.resources" (list "20m" "32Mi" "256Mi") | nindent 10 }}
       volumes:
         {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 8 }}
+        {{- include "storscale.ca.volumes" . | nindent 8 }}
         # The catalog's bot token, which catalog-sync keeps up to date.
         - {name: catalog, secret: {secretName: catalog-token, optional: true}}
 ---
@@ -127,6 +131,7 @@ spec:
       enableServiceLinks: false
       serviceAccountName: storscale
       initContainers:
+        {{- include "storscale.ca.init" . | nindent 8 }}
         {{- include "storscale.wait" (list . "keycloak" (list "url" "http://keycloak:9000/health/ready")) | nindent 8 }}
       containers:
         - name: semanticd
@@ -138,6 +143,7 @@ spec:
             - {name: MCP_URL, value: "{{ include "storscale.url" . }}/mcp"}
             - {name: STORE_ACCESS_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: PLATFORM_STORE_ACCESS_KEY}}}
             - {name: STORE_SECRET_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: PLATFORM_STORE_SECRET_KEY}}}
+            {{- include "storscale.ca.env" . | nindent 12 }}
           ports:
             - {name: http, containerPort: 8000}
           readinessProbe:
@@ -145,10 +151,12 @@ spec:
             periodSeconds: 5
           volumeMounts:
             - {name: tls, mountPath: /tls}
+            {{- include "storscale.ca.mount" . | nindent 12 }}
           {{- include "storscale.resources" (list "20m" "160Mi" "512Mi") | nindent 10 }}
       volumes:
         {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 8 }}
         - {name: tls, secret: {secretName: trino-tls}}
+        {{- include "storscale.ca.volumes" . | nindent 8 }}
 ---
 apiVersion: v1
 kind: Service

@@ -58,6 +58,11 @@ Every other secret is in the same Secret. They're generated on install and kept 
      Keycloak (`KC_HOSTNAME`, `KC_PROXY_HEADERS=xforwarded`), the gateway's Caddyfile and
      the tools' callback URLs all follow `global.*`.
    - `global.scheme=https` has never been tried.
+   - A private CA is ready: give it as `--set-file global.ca.certs=root-ca.pem` and every
+     service that calls the platform's public names trusts it (Python, Go, curl, Java,
+     notebooks, and Buckets through `SSL_CERT_DIR`). Tested on a real cluster against a
+     corporate Vault PKI. The browser suite's Chromium doesn't read it yet: it keeps its own
+     trust store (NSS).
 3. **Keycloak runs `start-dev`,** with its database in H2 inside the pod, and imports the
    realm afresh on each start (`stack/keycloak/realm.json`). Fine for a trial, not for
    real users: give it a database, and decide who owns the realm.

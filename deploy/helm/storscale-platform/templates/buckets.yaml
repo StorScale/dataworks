@@ -24,3 +24,16 @@ spec:
     - {name: MINIO_IDENTITY_OPENID_CONFIG_URL, value: "{{ include "storscale.url" . }}/sso/realms/lakehouse/.well-known/openid-configuration"}
     - {name: MINIO_IDENTITY_OPENID_CLIENT_ID, value: lakehouse}
     - {name: MINIO_IDENTITY_OPENID_CLAIM_NAME, value: groups}
+  {{- if include "storscale.ca.enabled" . }}
+    # It reads Keycloak's configuration at the public address. The operator
+    # makes its pods, so no ca-bundle init container: Go adds the
+    # certificates in SSL_CERT_DIR to the system's own.
+    - {name: SSL_CERT_DIR, value: /etc/storscale/ca}
+  volumes:
+    - name: storscale-ca
+      configMap:
+        name: {{ include "storscale.ca.configMap" . }}
+        items: [{key: {{ .Values.global.ca.key | quote }}, path: ca.crt}]
+  volumeMounts:
+    - {name: storscale-ca, mountPath: /etc/storscale/ca, readOnly: true}
+  {{- end }}
