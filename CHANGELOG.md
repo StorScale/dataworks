@@ -4,6 +4,10 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-12
+
+For a real cluster: the platform behind an ingress that ends TLS, with a private CA, on Buckets 1.19.0. Installed on one (Kubernetes 1.27, ingress-nginx, a corporate Vault PKI through cert-manager), where every suite but the browser's passes, as it does in CI's new `kubernetes-https` job.
+
 ### Added
 - **The chart trusts a private CA,** for a platform whose certificate a company's own CA signs: give it as PEM (`--set-file global.ca.certs=root-ca.pem`), or name a ConfigMap that holds it (`global.ca.configMap`). The services call the platform at its public address too, so each one that does trusts the CA as browsers do:
   - An init container adds it to the public CAs, as a PEM bundle and a Java truststore. Python, Go, curl and boto3 read the bundle through their usual variables (`SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, ...), and Java (Trino, OpenMetadata) through `JAVA_TOOL_OPTIONS`.

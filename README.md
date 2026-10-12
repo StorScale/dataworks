@@ -43,7 +43,7 @@ One Keycloak sign-in covers the platform and every tool in it: JupyterHub, Super
 | Access policies (Ranger) | http://access.storscale.localhost:8800 |
 | Trino, for JDBC and CLI clients | https://localhost:8443 |
 
-From a checkout, `--dir stack` builds the platform's images from it. Without it, `storscale` runs the stack built into the binary, with the released images (0.3.0 is the first release). On Kubernetes, without a checkout, `storscale up --k8s` installs the published chart, `oci://ghcr.io/storscale/charts/storscale-platform`, at its own version.
+From a checkout, `--dir stack` builds the platform's images from it. Without it, `storscale` runs the stack built into the binary, with the released images, at its own version. On Kubernetes, without a checkout, `storscale up --k8s` installs the published chart, `oci://ghcr.io/storscale/charts/storscale-platform`, at its own version.
 
 `storscale down` stops it, and `storscale down --volumes` also deletes its data. [stack/README.md](stack/README.md) describes the services.
 

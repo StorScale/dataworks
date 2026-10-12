@@ -4,22 +4,24 @@ For whoever picks this up next, person or agent, on a machine that can reach
 the target cluster. Read this, then [plan.md](plan.md) and the
 [CHANGELOG](../CHANGELOG.md).
 
-## Where things stand (2026-10-08)
+## Where things stand (2026-10-12)
 
-- **Release 0.3.0** is phases 0–5 of the plan: the platform, its web app, projects,
-  the catalog, the semantic layer with MCP for agents, and the Helm chart.
-- **CI passes on both ways of running it:**
+- **Release 0.4.0** is phases 0–5 of the plan (the platform, its web app, projects, the
+  catalog, the semantic layer with MCP for agents, and the Helm chart), ready for a real
+  cluster: behind an ingress that ends TLS, with a private CA, on Buckets 1.19.0.
+- **CI passes on every way of running it:**
   - **`platform`** runs the Compose stack and every suite.
   - **`kubernetes`** installs the chart on kind with `storscale up --k8s`, then runs every
     suite with `helm test`, the browser suite included.
   - **`kubernetes-https`** does the same behind HTTPS with a private CA, as on a real cluster
     (`deploy/kind/https.sh`, `https.yaml`): every suite but the browser's.
 - **What's published, and signed:**
-  - The images: `ghcr.io/storscale/platformd:0.3.0` and `ghcr.io/storscale/platform-*:0.3.0`.
-  - The chart: `oci://ghcr.io/storscale/charts/storscale-platform` at version 0.3.0.
-- **Only ever installed on kind.** It ran at `http://storscale.localhost:8800`, with a
-  single node and CoreDNS rewritten so the platform's names resolve to the gateway.
-  Nobody has installed it on a real cluster yet; that is the next step.
+  - The images: `ghcr.io/storscale/platformd:0.4.0` and `ghcr.io/storscale/platform-*:0.4.0`.
+  - The chart: `oci://ghcr.io/storscale/charts/storscale-platform` at version 0.4.0.
+- **Installed on a real cluster:** Kubernetes 1.27, shared with other teams, with
+  ingress-nginx and a certificate from a corporate Vault PKI (through cert-manager).
+  Every suite but the browser's passes there. That install found the three bugs the
+  `kubernetes-https` job now catches; see the CHANGELOG.
 
 ## Install on a real cluster
 
@@ -51,14 +53,11 @@ trino:
 ```
 
 ```bash
-helm install storscale oci://ghcr.io/storscale/charts/storscale-platform --version <version> \
+helm install storscale oci://ghcr.io/storscale/charts/storscale-platform --version 0.4.0 \
   -n storscale --create-namespace -f platform.yaml --set-file global.ca.certs=root-ca.pem
 kubectl -n storscale get pods,jobs,projects -w      # the first install takes 10–20 minutes
 helm test storscale -n storscale --logs --timeout 60m
 ```
-
-HTTPS and `global.ca` came after 0.3.0: until a release has them, install from a checkout
-(`deploy/helm/storscale-platform`, after `helm dependency build`).
 
 Install with the subcharts on, unless the cluster already runs one: a Spark Operator that
 another release installed owns the Spark CRDs (`--set spark-operator.enabled=false`). Helm installs a subchart's CRDs (Buckets' and the
@@ -68,7 +67,9 @@ People's password (the example users alice, bob, carol):
 `kubectl -n storscale get secret storscale-env -o jsonpath='{.data.LAKEHOUSE_USER_PASSWORD}' | base64 -d`.
 Every other secret is in the same Secret. They're generated on install and kept on upgrade.
 
-## Untested on a real cluster: expect to fix these
+## On a real cluster
+
+Items 1 and 2 work on one; 3 to 6 are still to do.
 
 1. **One address, inside and out.** Every service uses the platform's public names:
    `domain`, plus `catalog.`, `access.` and `s3.` under it. Keycloak's tokens carry
@@ -83,16 +84,12 @@ Every other secret is in the same Secret. They're generated on install and kept 
      `gateway.ingress.tls`, for the domain and `catalog.`, `access.`, `s3.` under it.
    - With the Ingress on, the gateway trusts `X-Forwarded-Proto` from private ranges
      (`gateway.trustedProxies`), so Superset and Airflow build `https` sign-in callbacks.
-   - Tested piece by piece: the chart renders with no port in any URL, Caddy routes the
-     names and passes the scheme on, and Keycloak's realm takes the `https` addresses.
-     Not yet a whole install over HTTPS.
    - ingress-nginx limits request bodies to 1 MB unless told otherwise
      (`nginx.ingress.kubernetes.io/proxy-body-size: "0"`), which S3 uploads hit.
    - A private CA is ready: give it as `--set-file global.ca.certs=root-ca.pem` and every
      service that calls the platform's public names trusts it (Python, Go, curl, Java,
-     notebooks, and Buckets through `SSL_CERT_FILE`, since bucketsd uses OpenSSL). Tested on a
-     real cluster against a corporate Vault PKI. The browser suite's Chromium doesn't read it
-     yet: it keeps its own trust store (NSS).
+     notebooks, and Buckets through `SSL_CERT_FILE`, since bucketsd uses OpenSSL). The browser
+     suite's Chromium doesn't read it yet: it keeps its own trust store (NSS).
 3. **Keycloak runs `start-dev`,** with its database in H2 inside the pod, and imports the
    realm afresh on each start (`stack/keycloak/realm.json`). Fine for a trial, not for
    real users: give it a database, and decide who owns the realm.
@@ -106,6 +103,16 @@ Every other secret is in the same Secret. They're generated on install and kept 
 6. **No Spark suite yet.** The Spark Operator is installed, but nothing runs on it.
 
 ## Things we learned the hard way
+
+- **A private CA reaches each client its own way.** CI's `kubernetes-https` job now tests it;
+  the first real install found these:
+  - bucketsd is C with OpenSSL: it ignores `SSL_CERT_DIR` files without hashed names, so it
+    gets `SSL_CERT_FILE`.
+  - Python's `requests` puts `REQUESTS_CA_BUNDLE` in place of a session's own `verify=`,
+    which is how the Trino client trusts Trino: the bundle holds Trino's certificate too.
+  - Airflow's API server (uvicorn) trusts `X-Forwarded-Proto` only from
+    `FORWARDED_ALLOW_IPS`, `127.0.0.1` by default, so without it Airflow sends Keycloak an
+    `http://` callback, which Keycloak refuses.
 
 - **Buckets reads Keycloak's OpenID configuration only as it starts.** If it starts before
   Keycloak, nobody can get Buckets credentials from a Keycloak token
