@@ -5,7 +5,9 @@
     python wait.py job <step> [<step> ...]  until each setup step has finished for this
                                             revision (STORSCALE_REVISION) or a later one
     python wait.py secret <name> <key>      until the Secret has the key
+    python wait.py tcp <host:port> [...]    until each accepts connections (a database)
 """
+import socket
 import sys
 import time
 
@@ -25,6 +27,10 @@ def ready(kind, arg):
         if kind == "secret":
             name, key = arg.split("/", 1)
             return bool(k8s.get_secret(name).get(key))
+        if kind == "tcp":
+            host, _, port = arg.rpartition(":")
+            socket.create_connection((host, int(port)), timeout=5).close()
+            return True
     except Exception:  # noqa: BLE001 (not there yet)
         return False
     raise SystemExit(__doc__)

@@ -51,10 +51,10 @@ spec:
     spec:
       enableServiceLinks: false
       serviceAccountName: storscale
-      restartPolicy: Never   # retried, in a new pod, until its database is up
-      {{- with include "storscale.ca.init" . }}
-      initContainers: {{- . | nindent 8 }}
-      {{- end }}
+      restartPolicy: Never   # retried, in a new pod, if its database isn't ready yet
+      initContainers:
+        {{- include "storscale.ca.init" . | nindent 8 }}
+        {{- include "storscale.wait" (list . "db" (list "tcp" "airflow-db:5432")) | nindent 8 }}
       containers:
         - name: init
           {{- include "storscale.airflow.common" . | nindent 10 }}

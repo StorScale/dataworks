@@ -31,6 +31,7 @@ volumes:
 {{- $_ := set (index $init.containers 0) "resources" (dict "requests" (dict "cpu" "100m" "memory" "512Mi") "limits" (dict "memory" "1Gi")) }}
 {{- $_ := set $init "restartPolicy" "Never" }}
 {{- $_ := set $init "enableServiceLinks" false }}
+{{- $_ := set $init "initContainers" (concat ($init.initContainers | default list) (fromYamlArray (include "storscale.wait" (list . "db" (list "tcp" "superset-db:5432"))))) }}
 apiVersion: batch/v1
 kind: Job
 metadata:

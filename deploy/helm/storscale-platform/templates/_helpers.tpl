@@ -78,6 +78,7 @@ data:
        url <url>             until it answers 2xx
        job <name>            until the setup step <name> of this release has finished
        secret <name> <key>   until a Secret has the key
+       tcp <host:port>       until it accepts connections (a database)
      (stack/tools/wait.py) */}}
 {{- define "storscale.wait" -}}
 {{- $root := index . 0 -}}{{- $name := index . 1 -}}{{- $args := index . 2 -}}

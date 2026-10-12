@@ -112,6 +112,7 @@ spec:
       restartPolicy: Never   # each try a pod of its own, kept with its logs
       initContainers:
         {{- include "storscale.wait" (list . "search" (list "url" "http://openmetadata-search:9200/_cluster/health")) | nindent 8 }}
+        {{- include "storscale.wait" (list . "db" (list "tcp" "openmetadata-db:5432")) | nindent 8 }}
         - name: migrate
           image: {{ .Values.upstream.openmetadata }}
           command: ["./bootstrap/openmetadata-ops.sh", "migrate"]
