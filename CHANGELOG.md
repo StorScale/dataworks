@@ -8,7 +8,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 - **The chart trusts a private CA,** for a platform whose certificate a company's own CA signs: give it as PEM (`--set-file global.ca.certs=root-ca.pem`), or name a ConfigMap that holds it (`global.ca.configMap`). The services call the platform at its public address too, so each one that does trusts the CA as browsers do:
   - An init container adds it to the public CAs, as a PEM bundle and a Java truststore. Python, Go, curl and boto3 read the bundle through their usual variables (`SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, ...), and Java (Trino, OpenMetadata) through `JAVA_TOOL_OPTIONS`.
   - Notebook pods get the same, through JupyterHub.
-  - Buckets, whose pods its operator makes, reads the CA from `SSL_CERT_DIR`.
+  - Buckets, whose pods its operator makes, reads the CA from `SSL_CERT_FILE` (bucketsd uses OpenSSL), in place of its image's list of public CAs.
   - Without `global.ca`, the chart renders as before.
 - **The platform can sit behind an ingress that ends TLS,** at an address with no port (`global.scheme: https`, `global.port: 443`):
   - The port is left out of the platform's URLs when it's the scheme's own. The gateway listens on a port of its own (`gateway.port`, 8800), over plain HTTP.

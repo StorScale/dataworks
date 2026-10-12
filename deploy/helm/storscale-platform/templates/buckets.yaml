@@ -27,9 +27,10 @@ spec:
     - {name: BUCKETS_AUDIT_LOCAL_MAX, value: {{ .Values.buckets.auditLocalMax | quote }}}
   {{- if include "storscale.ca.enabled" . }}
     # It reads Keycloak's configuration at the public address. The operator
-    # makes its pods, so no ca-bundle init container: Go adds the
-    # certificates in SSL_CERT_DIR to the system's own.
-    - {name: SSL_CERT_DIR, value: /etc/storscale/ca}
+    # makes its pods, so no ca-bundle init container: bucketsd (OpenSSL)
+    # trusts the CAs in SSL_CERT_FILE in place of the image's own list, which
+    # the platform's Buckets doesn't need (it calls only the platform).
+    - {name: SSL_CERT_FILE, value: /etc/storscale/ca/ca.crt}
   volumes:
     - name: storscale-ca
       configMap:

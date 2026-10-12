@@ -88,9 +88,9 @@ Every other secret is in the same Secret. They're generated on install and kept 
      (`nginx.ingress.kubernetes.io/proxy-body-size: "0"`), which S3 uploads hit.
    - A private CA is ready: give it as `--set-file global.ca.certs=root-ca.pem` and every
      service that calls the platform's public names trusts it (Python, Go, curl, Java,
-     notebooks, and Buckets through `SSL_CERT_DIR`). Tested on a real cluster against a
-     corporate Vault PKI. The browser suite's Chromium doesn't read it yet: it keeps its own
-     trust store (NSS).
+     notebooks, and Buckets through `SSL_CERT_FILE`, since bucketsd uses OpenSSL). Tested on a
+     real cluster against a corporate Vault PKI. The browser suite's Chromium doesn't read it
+     yet: it keeps its own trust store (NSS).
 3. **Keycloak runs `start-dev`,** with its database in H2 inside the pod, and imports the
    realm afresh on each start (`stack/keycloak/realm.json`). Fine for a trial, not for
    real users: give it a database, and decide who owns the realm.
