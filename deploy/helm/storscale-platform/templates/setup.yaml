@@ -48,9 +48,11 @@ spec:
         {{- include "storscale.ca.volumes" $root | nindent 8 }}
 {{- end }}
 
-{{- /* Before Trino: Buckets' buckets, policies and accounts; Ranger's people and policies. */}}
+{{- /* Before Trino: Buckets' buckets, policies and accounts; Ranger's people and policies.
+     Ranger is up when its REST API asks for a sign-in (401): its login page
+     answers before that, and the API can still be 404. */}}
 {{ include "storscale.setupJob" (list . "setup" "base" (list
-  (list "url" "http://keycloak:9000/health/ready" "http://buckets:9000/minio/health/live" "http://ranger-admin:6080/login.jsp"))) }}
+  (list "url" "http://keycloak:9000/health/ready" "http://buckets:9000/minio/health/live" "http://ranger-admin:6080/service/public/v2/api/servicedef==401"))) }}
 ---
 {{- /* Once Trino is up: what Superset needs, then the sales project and its data. */}}
 {{ include "storscale.setupJob" (list . "setup-trino" "trino" (list

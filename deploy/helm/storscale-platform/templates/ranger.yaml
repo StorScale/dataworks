@@ -119,11 +119,17 @@ spec:
             - {name: RANGER_DB_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: RANGER_PASSWORD}}}
           ports:
             - {name: http, containerPort: 6080}
-          # unauthenticated, so it never counts toward Ranger's sign-in lockout
-          readinessProbe:
-            httpGet: {path: /login.jsp, port: http}
+          # Ready when its REST API asks for a sign-in (401): its login page
+          # answers before the API does. Unauthenticated, so it never counts
+          # toward Ranger's sign-in lockout. An API not up 20 minutes after
+          # Ranger starts won't come up: then it starts again.
+          startupProbe:
+            exec: {command: ["sh", "-c", "test \"$(curl -s -o /dev/null -w '%{http_code}' http://localhost:6080/service/public/v2/api/servicedef)\" = 401"]}
             periodSeconds: 10
-            failureThreshold: 60
+            failureThreshold: 120
+          readinessProbe:
+            exec: {command: ["sh", "-c", "test \"$(curl -s -o /dev/null -w '%{http_code}' http://localhost:6080/service/public/v2/api/servicedef)\" = 401"]}
+            periodSeconds: 10
           volumeMounts:
             - {name: files-ranger, mountPath: /home/ranger/scripts/create-ranger-services.py, subPath: create-ranger-services.py}
           # Its 512 MB heap, the JVM's own memory, and the setup scripts it

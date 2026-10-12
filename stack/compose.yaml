@@ -375,8 +375,10 @@ services:
       ranger-db: {condition: service_healthy}
       ranger-solr: {condition: service_started}
     healthcheck:
-      # unauthenticated, so it never counts toward Ranger's sign-in lockout
-      test: ["CMD-SHELL", "curl -sf http://localhost:6080/login.jsp >/dev/null"]
+      # Healthy when its REST API asks for a sign-in (401): its login page
+      # answers before the API does. Unauthenticated, so it never counts
+      # toward Ranger's sign-in lockout.
+      test: ["CMD-SHELL", "test \"$$(curl -s -o /dev/null -w '%{http_code}' http://localhost:6080/service/public/v2/api/servicedef)\" = 401"]
       interval: 10s
       start_period: 120s
       retries: 60

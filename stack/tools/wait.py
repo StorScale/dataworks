@@ -1,7 +1,8 @@
 """Wait, before a service starts in Kubernetes, as Compose's depends_on does.
 
     python wait.py url <url> [<url> ...]   until each answers (any HTTP status below 500);
-                                            <url>=~<text>: and its answer contains <text>
+                                            <url>=~<text>: and its answer contains <text>;
+                                            <url>==<status>: with that status exactly
     python wait.py job <step> [<step> ...]  until each setup step has finished for this
                                             revision (STORSCALE_REVISION) or a later one
     python wait.py secret <name> <key>      until the Secret has the key
@@ -19,8 +20,11 @@ import k8s
 def ready(kind, arg):
     try:
         if kind == "url":
-            url, _, text = arg.partition("=~")
+            url, _, status = arg.partition("==")
+            url, _, text = url.partition("=~")
             r = requests.get(url, timeout=5, verify=False)
+            if status:
+                return r.status_code == int(status)
             return r.status_code < 500 and text in r.text
         if kind == "job":
             return k8s.done_revision(arg) >= int(k8s.os.environ["STORSCALE_REVISION"])
