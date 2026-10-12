@@ -49,6 +49,13 @@ http://{$STORSCALE_DOMAIN}:{$GATEWAY_PORT} {
 	handle /dashboards/* {
 		import tool superset:8088
 	}
+	# A few of Superset's images are asked for without its /dashboards root
+	# (its frontend writes /static/assets/images/... for the dashboard and
+	# chart cards' fallbacks, and an empty query): they're Superset's.
+	handle /static/assets/images/* {
+		rewrite * /dashboards{uri}
+		reverse_proxy superset:8088
+	}
 	handle /pipelines/* {
 		import tool airflow:8090
 	}

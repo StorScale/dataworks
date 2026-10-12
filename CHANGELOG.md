@@ -36,6 +36,9 @@ For a real cluster: the platform behind an ingress that ends TLS, with a private
   - CI's "What went wrong" is a script, `deploy/kind/diagnose.sh`.
 - **Setup steps wait for their database** on Kubernetes: `airflow-init`, `superset-init` and the catalog's migration start once PostgreSQL accepts connections (`wait.py tcp`). On a first install Airflow's often started first, failed, and was tried again.
 
+### Fixed
+- **Superset's dashboard and chart cards show their picture.** Superset's frontend asks for those fallback images at `/static/assets/images/...`, without its `/dashboards` root, and the platform answered with its own page. The gateway sends those requests to Superset.
+
 ## [0.3.0] - 2026-10-08
 
 The first release: phases 0 to 5 of [the plan](docs/plan.md).
