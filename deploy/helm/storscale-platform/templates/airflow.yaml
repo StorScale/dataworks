@@ -16,6 +16,9 @@ env:
   - {name: AIRFLOW__API_AUTH__JWT_SECRET, value: "$(AIRFLOW_JWT_SECRET)"}
   - {name: AIRFLOW__API__BASE_URL, value: "{{ include "storscale.url" . }}/pipelines"}
   - {name: AIRFLOW__API__PORT, value: "8090"}
+  # The API server (--proxy-headers) trusts X-Forwarded-* only from these;
+  # uvicorn's default, 127.0.0.1, leaves out the gateway.
+  - {name: FORWARDED_ALLOW_IPS, value: "*"}
   - {name: AIRFLOW__CORE__EXECUTION_API_SERVER_URL, value: "http://airflow:8090/pipelines/execution/"}
   - {name: AIRFLOW__CORE__LOAD_EXAMPLES, value: "False"}
   - {name: AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION, value: "False"}
