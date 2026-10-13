@@ -12,6 +12,8 @@ spec:
   template:
     metadata:
       labels: {{- include "storscale.selector" (list .Release.Name "platformd") | nindent 8 }}
+      annotations:
+        checksum/brand: {{ printf "%s/%s" .Values.brand.name .Values.brand.logo | sha256sum }}
     spec:
       enableServiceLinks: false
       serviceAccountName: storscale
@@ -37,6 +39,10 @@ spec:
             - {name: AIRFLOW_URL, value: "http://airflow:8090/pipelines"}
             - {name: AIRFLOW_USER, value: storscale-platform}
             - {name: AIRFLOW_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: AIRFLOW_PLATFORM_PASSWORD}}}
+            - {name: BRAND_NAME, value: {{ .Values.brand.name | quote }}}
+            {{- if .Values.brand.logo }}
+            - {name: BRAND_LOGO, value: /etc/storscale/brand/logo}
+            {{- end }}
             {{- include "storscale.ca.env" . | nindent 12 }}
           ports:
             - {name: http, containerPort: 8080}
@@ -45,6 +51,9 @@ spec:
             periodSeconds: 5
           volumeMounts:
             - {name: catalog, mountPath: /catalog, readOnly: true}
+            {{- if .Values.brand.logo }}
+            - {name: brand, mountPath: /etc/storscale/brand, readOnly: true}
+            {{- end }}
             {{- include "storscale.ca.mount" . | nindent 12 }}
           {{- include "storscale.resources" (list "20m" "32Mi" "256Mi") | nindent 10 }}
       volumes:
@@ -52,6 +61,9 @@ spec:
         {{- include "storscale.ca.volumes" . | nindent 8 }}
         # The catalog's bot token, which catalog-sync keeps up to date.
         - {name: catalog, secret: {secretName: catalog-token, optional: true}}
+        {{- if .Values.brand.logo }}
+        - {name: brand, configMap: {name: storscale-brand}}
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service

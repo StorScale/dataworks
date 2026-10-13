@@ -11,8 +11,12 @@ export type Tool = {
   embedUrl?: string;
 };
 
+// The top bar's corner: StorScale's icon and name, or the deployment's logo
+// in their place (logo: its address), named for screen readers.
+export type Brand = { name: string; logo: string };
+
 export type Session =
-  | { state: "signed-in"; user: User; tools: Tool[]; admin: boolean; projects: boolean; flow: boolean; semantic: boolean; pipelines: boolean }
+  | { state: "signed-in"; user: User; tools: Tool[]; admin: boolean; projects: boolean; flow: boolean; semantic: boolean; pipelines: boolean; brand: Brand }
   | { state: "refused"; user: User; error: string };
 
 // session is null when nobody is signed in.
@@ -22,7 +26,8 @@ export async function session(): Promise<Session | null> {
   const body = await res.json();
   if (res.status === 403) return { state: "refused", user: body.user, error: body.error };
   if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-  return { state: "signed-in", user: body.user, tools: body.tools, admin: !!body.admin, projects: !!body.projects, flow: !!body.flow, semantic: !!body.semantic, pipelines: !!body.pipelines };
+  return { state: "signed-in", user: body.user, tools: body.tools, admin: !!body.admin, projects: !!body.projects, flow: !!body.flow, semantic: !!body.semantic, pipelines: !!body.pipelines,
+    brand: { name: body.brand?.name || "StorScale", logo: body.brand?.logo || "" } };
 }
 
 // Set once signing out has begun: a request answered 401 after that (one
