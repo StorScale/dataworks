@@ -20,12 +20,14 @@ function useMenu() {
 
 // TopBar is on every page: the platform, the project you're in, search, your tools, you.
 export function TopBar() {
-  const { user, admin, projects } = usePlatform();
+  const { user, admin, projects, brand } = usePlatform();
   const project = useMatch("/p/:project/*")?.params.project;
   const account = useMenu();
   return (
     <header className="topbar">
-      <Link to="/" className="brand" data-testid="home-link"><img src="/favicon.svg" alt="" /> StorScale</Link>
+      <Link to="/" className="brand" data-testid="home-link">
+        {brand.logo ? <img className="logo" src={brand.logo} alt={brand.name} /> : <><img src="/favicon.svg" alt="" /> {brand.name}</>}
+      </Link>
       {projects && <ProjectSwitcher current={project} />}
       <Search project={project} />
       <span className="grow" />

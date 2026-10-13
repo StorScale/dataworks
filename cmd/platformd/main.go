@@ -97,6 +97,7 @@ type config struct {
 	CatalogURL, CatalogTokenFile                          string
 	SemanticURL                                           string
 	AirflowURL, AirflowUser, AirflowPassword              string
+	BrandName, BrandLogo                                  string // the top bar's corner (brand.go)
 }
 
 func (c config) issuer() string { return c.KeycloakURL + "/realms/" + c.Realm }
@@ -135,6 +136,7 @@ func configFromEnv(get func(string) string) (config, error) {
 		CatalogURL: get("CATALOG_URL"), CatalogTokenFile: or("CATALOG_TOKEN_FILE", "/catalog/token"),
 		SemanticURL: strings.TrimRight(get("SEMANTIC_URL"), "/"),
 		AirflowURL:  get("AIRFLOW_URL"), AirflowUser: get("AIRFLOW_USER"), AirflowPassword: get("AIRFLOW_PASSWORD"),
+		BrandName: or("BRAND_NAME", "StorScale"), BrandLogo: get("BRAND_LOGO"),
 	}
 	c.KeycloakDirectURL = strings.TrimRight(or("KEYCLOAK_DIRECT_URL", c.KeycloakURL), "/")
 	var missing []string

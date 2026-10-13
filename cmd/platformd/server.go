@@ -62,6 +62,7 @@ type server struct {
 	store    store.Store       // nil: no projects
 	catalog  *catalog.Client   // nil: no Flow view
 	airflow  *pipelines.Client // nil: no pipelines
+	brand    brand
 
 	mu       sync.Mutex
 	sessions map[string]*session
@@ -95,6 +96,9 @@ func newServer(ctx context.Context, cfg config, log *slog.Logger) (*server, erro
 		sessions: map[string]*session{},
 		logins:   map[string]*login{},
 	}
+	if s.brand, err = loadBrand(cfg.BrandName, cfg.BrandLogo); err != nil {
+		return nil, err
+	}
 	if cfg.StoreURL != "" || cfg.ProjectStore == "kubernetes" {
 		if s.store, err = store.Open(cfg.ProjectStore, cfg.StoreURL, cfg.StoreAccessKey, cfg.StoreSecretKey, cfg.StoreBucket); err != nil {
 			return nil, err
@@ -117,6 +121,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /auth/callback", s.handleCallback)
 	mux.HandleFunc("POST /auth/logout", s.handleLogout)
 	mux.HandleFunc("GET /api/session", s.handleSession)
+	mux.HandleFunc("GET /brand/logo", s.handleBrandLogo)
 	mux.HandleFunc("GET /api/projects", s.handleProjects)
 	mux.HandleFunc("GET /api/projects/{name}", s.handleProject)
 	mux.HandleFunc("PUT /api/projects/{name}", s.handlePutProject)
@@ -209,7 +214,8 @@ func (s *server) handleSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"user": sess.User, "tools": toolsFor(s.cfg.PlatformURL, sess.User.Groups, s.cfg.AdminGroups),
-		"admin": s.isAdmin(sess.User), "projects": s.store != nil, "flow": s.catalog != nil, "semantic": s.cfg.SemanticURL != "", "pipelines": s.airflow != nil})
+		"admin": s.isAdmin(sess.User), "projects": s.store != nil, "flow": s.catalog != nil, "semantic": s.cfg.SemanticURL != "", "pipelines": s.airflow != nil,
+		"brand": s.brand.session()})
 }
 
 // handleLogout ends the platform's session and returns Keycloak's logout
