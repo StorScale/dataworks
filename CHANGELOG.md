@@ -6,6 +6,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ### Fixed
 - **Superset's logo, and its link, in its top-left corner.** Under `/dashboards`, Superset 6.1 puts its root in front of the logo's address and its frontend does it again (`/dashboards/dashboards/...`), so the logo was a broken image, and its link led nowhere. Superset gets them as whole addresses, which neither changes.
+- **No usage pixel from Superset.** Superset 6.1's frontend always draws a tracking pixel from Scarf (`apachesuperset.gateway.scarf.sh`), which reports its version from inside the network. Superset runs without a content security policy of its own, so the gateway gives its pages one that allows images only from where Superset's default policy does: browsers never fetch the pixel.
 
 ## [0.4.0] - 2026-10-12
 

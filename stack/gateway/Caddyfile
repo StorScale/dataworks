@@ -47,7 +47,13 @@ http://{$STORSCALE_DOMAIN}:{$GATEWAY_PORT} {
 		import tool jupyterhub:8000
 	}
 	handle /dashboards/* {
-		import tool superset:8088
+		reverse_proxy superset:8088 {
+			header_down -X-Frame-Options
+		}
+		# As the other tools (tool, above), and images only from where
+		# Superset's own default policy allows them (it runs without one): its
+		# frontend always draws a usage pixel from Scarf, which this keeps out.
+		header ?Content-Security-Policy "frame-ancestors 'self'; img-src 'self' data: blob: ows.terrestris.de https://cdn.document360.io"
 	}
 	# A few of Superset's images are asked for without its /dashboards root
 	# (its frontend writes /static/assets/images/... for the dashboard and
