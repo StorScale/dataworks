@@ -4,6 +4,10 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-13
+
+A brand of your own in the top bar, and Superset's corner put right: its logo loads, and it no longer reports to Scarf.
+
 ### Added
 - **A brand of your own in the top bar's corner** (`brand.name`, `brand.logo`): a logo (SVG, PNG, JPEG, GIF or WebP, given base64) takes the place of StorScale's icon and name, which stay the default. platformd serves it at `/brand/logo`, so that an SVG opened on its own runs nothing, and refuses at start-up a file that isn't an image.
 
