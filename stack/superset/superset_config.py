@@ -13,6 +13,18 @@ SESSION_COOKIE_NAME = "superset_session"
 SQLALCHEMY_DATABASE_URI = (f"postgresql+psycopg2://superset:{os.environ['SUPERSET_DB_PASSWORD']}"
                            "@superset-db:5432/superset")
 
+# Its logo and the logo's link, as whole addresses. Under /dashboards Superset
+# puts its root in front of APP_ICON and the theme's logo, and its frontend
+# does it again (/dashboards/dashboards/...): a whole address is left as is.
+# superset.config, being read, has its THEME_DEFAULT by now.
+from superset import config as _defaults  # noqa: E402
+
+DASHBOARDS_URL = os.environ["DASHBOARDS_URL"]
+APP_ICON = f"{DASHBOARDS_URL}/static/assets/images/superset-logo-horiz.png"
+THEME_DEFAULT = {**_defaults.THEME_DEFAULT,
+                 "token": {**_defaults.THEME_DEFAULT["token"],
+                           "brandLogoUrl": APP_ICON, "brandLogoHref": f"{DASHBOARDS_URL}/"}}
+
 # Behind the gateway: its callback address (for Keycloak) uses the scheme and
 # name people used, which the gateway forwards.
 ENABLE_PROXY_FIX = True

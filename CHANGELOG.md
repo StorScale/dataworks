@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+- **Superset's logo, and its link, in its top-left corner.** Under `/dashboards`, Superset 6.1 puts its root in front of the logo's address and its frontend does it again (`/dashboards/dashboards/...`), so the logo was a broken image, and its link led nowhere. Superset gets them as whole addresses, which neither changes.
+
 ## [0.4.0] - 2026-10-12
 
 For a real cluster: the platform behind an ingress that ends TLS, with a private CA, on Buckets 1.19.0. Installed on one (Kubernetes 1.27, ingress-nginx, a corporate Vault PKI through cert-manager), where every suite but the browser's passes, as it does in CI's new `kubernetes-https` job.
