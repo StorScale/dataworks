@@ -61,8 +61,67 @@ func TestALogoThatIsntAnImageIsRefused(t *testing.T) {
 	html := filepath.Join(dir, "logo.html")
 	os.WriteFile(html, []byte("<html><script>alert(1)</script></html>"), 0o644)
 	for _, f := range []string{html, filepath.Join(dir, "missing.svg")} {
-		if _, err := loadBrand("Vericast", f); err == nil {
-			t.Errorf("%s: loaded, want an error at start-up", filepath.Base(f))
+		if _, err := loadBrand("Vericast", "", f, ""); err == nil {
+			t.Errorf("logo %s: loaded, want an error at start-up", filepath.Base(f))
 		}
+		if _, err := loadBrand("Vericast", "", "", f); err == nil {
+			t.Errorf("icon %s: loaded, want an error at start-up", filepath.Base(f))
+		}
+	}
+}
+
+const index = `<!doctype html><html><head>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<title>StorScale Platform</title>
+<script type="module" crossorigin src="/assets/index-x.js"></script>
+</head><body><div id="root"></div></body></html>`
+
+// tab gets a page of the app, and says what its tab shows.
+func tab(t *testing.T, url string) (title, icon string) {
+	t.Helper()
+	res, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(res.Body)
+	page := string(body)
+	if res.StatusCode != http.StatusOK || !strings.Contains(page, `src="/assets/index-x.js"`) {
+		t.Fatalf("%s: %d %s, want the app's page", url, res.StatusCode, page)
+	}
+	title = page[strings.Index(page, "<title>")+7 : strings.Index(page, "</title>")]
+	i := strings.Index(page, `<link rel="icon"`)
+	return title, page[i : i+strings.Index(page[i:], ">")+1]
+}
+
+func TestTheTabShowsTheBrand(t *testing.T) {
+	icon := filepath.Join(t.TempDir(), "icon.png")
+	os.WriteFile(icon, []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"), 0o644)
+	for name, tc := range map[string]struct {
+		change              func(*config)
+		wantTitle, wantIcon string
+	}{
+		"StorScale's": {func(c *config) { c.BrandName = "StorScale" }, "StorScale Platform", `<link rel="icon" href="/favicon.svg" type="image/svg+xml" />`},
+		"a deployment's": {func(c *config) { c.BrandName, c.BrandIcon = "Vericast", icon },
+			"Vericast Platform", `<link rel="icon" href="/brand/icon" type="image/png" />`},
+		"a title of its own": {func(c *config) { c.BrandName, c.BrandTitle = "Vericast", "Data & AI <Lab>" },
+			"Data &amp; AI &lt;Lab&gt;", `<link rel="icon" href="/favicon.svg" type="image/svg+xml" />`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ts := newTestServerWith(t, newFakeKeycloak(t), func(c *config) {
+				os.WriteFile(filepath.Join(c.WebDir, "index.html"), []byte(index), 0o644)
+				tc.change(c)
+			})
+			for _, path := range []string{"/", "/p/sales/data", "/index.html"} {
+				if title, icon := tab(t, ts.URL+path); title != tc.wantTitle || icon != tc.wantIcon {
+					t.Errorf("%s: title %q, icon %s; want %q, %s", path, title, icon, tc.wantTitle, tc.wantIcon)
+				}
+			}
+			res, _ := http.Get(ts.URL + "/brand/icon")
+			if want := map[bool]int{true: http.StatusOK, false: http.StatusNotFound}[strings.Contains(tc.wantIcon, "/brand/icon")]; res.StatusCode != want {
+				t.Errorf("/brand/icon: %d, want %d", res.StatusCode, want)
+			} else if want == http.StatusOK && res.Header.Get("Content-Type") != "image/png" {
+				t.Errorf("/brand/icon: %q, want image/png", res.Header.Get("Content-Type"))
+			}
+		})
 	}
 }

@@ -63,6 +63,7 @@ type server struct {
 	catalog  *catalog.Client   // nil: no Flow view
 	airflow  *pipelines.Client // nil: no pipelines
 	brand    brand
+	index    []byte // the web app's index.html, with the brand's title and icon
 
 	mu       sync.Mutex
 	sessions map[string]*session
@@ -96,8 +97,13 @@ func newServer(ctx context.Context, cfg config, log *slog.Logger) (*server, erro
 		sessions: map[string]*session{},
 		logins:   map[string]*login{},
 	}
-	if s.brand, err = loadBrand(cfg.BrandName, cfg.BrandLogo); err != nil {
+	if s.brand, err = loadBrand(cfg.BrandName, cfg.BrandTitle, cfg.BrandLogo, cfg.BrandIcon); err != nil {
 		return nil, err
+	}
+	if index, err := os.ReadFile(filepath.Join(cfg.WebDir, "index.html")); err == nil {
+		s.index = s.brand.page(index)
+	} else {
+		log.Warn("no web app", "error", err)
 	}
 	if cfg.StoreURL != "" || cfg.ProjectStore == "kubernetes" {
 		if s.store, err = store.Open(cfg.ProjectStore, cfg.StoreURL, cfg.StoreAccessKey, cfg.StoreSecretKey, cfg.StoreBucket); err != nil {
@@ -122,6 +128,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /auth/logout", s.handleLogout)
 	mux.HandleFunc("GET /api/session", s.handleSession)
 	mux.HandleFunc("GET /brand/logo", s.handleBrandLogo)
+	mux.HandleFunc("GET /brand/icon", s.handleBrandIcon)
 	mux.HandleFunc("GET /api/projects", s.handleProjects)
 	mux.HandleFunc("GET /api/projects/{name}", s.handleProject)
 	mux.HandleFunc("PUT /api/projects/{name}", s.handlePutProject)
@@ -288,9 +295,10 @@ func (s *server) web() http.Handler {
 	files := http.FileServer(http.Dir(s.cfg.WebDir))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := filepath.Join(s.cfg.WebDir, filepath.FromSlash(filepath.Clean("/"+r.URL.Path)))
-		if st, err := os.Stat(p); err != nil || st.IsDir() {
+		if st, err := os.Stat(p); err != nil || st.IsDir() || filepath.Base(p) == "index.html" {
 			w.Header().Set("Cache-Control", "no-cache")
-			http.ServeFile(w, r, filepath.Join(s.cfg.WebDir, "index.html"))
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Write(s.index)
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, "/assets/") {

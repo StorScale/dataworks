@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **The brand in the browser's tab too:** its title (`brand.title`, by default "<name> Platform") and an icon (`brand.icon`, a square image, since a tab shows it at 16 to 32 pixels). platformd puts them in the app's page as it serves it, so the tab shows them from the first moment, the sign-in included, and serves the icon at `/brand/icon`. ICO images are taken too.
+
 ## [0.4.1] - 2026-10-13
 
 A brand of your own in the top bar, and Superset's corner put right: its logo loads, and it no longer reports to Scarf.
