@@ -1,10 +1,16 @@
-{{/* The deployment's own logo (brand.logo), for platformd (brand.go). */}}
-{{- if .Values.brand.logo }}
+{{/* The deployment's own logo and tab icon (brand.logo, brand.icon), for
+     platformd (brand.go). */}}
+{{- if or .Values.brand.logo .Values.brand.icon }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: storscale-brand
   labels: {{- include "storscale.labels" . | nindent 4 }}
 binaryData:
-  logo: {{ .Values.brand.logo | nospace | quote }}
+  {{- with .Values.brand.logo }}
+  logo: {{ . | nospace | quote }}
+  {{- end }}
+  {{- with .Values.brand.icon }}
+  icon: {{ . | nospace | quote }}
+  {{- end }}
 {{- end }}

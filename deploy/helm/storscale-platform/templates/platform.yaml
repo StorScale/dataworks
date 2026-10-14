@@ -13,7 +13,7 @@ spec:
     metadata:
       labels: {{- include "storscale.selector" (list .Release.Name "platformd") | nindent 8 }}
       annotations:
-        checksum/brand: {{ printf "%s/%s" .Values.brand.name .Values.brand.logo | sha256sum }}
+        checksum/brand: {{ list .Values.brand.name .Values.brand.title .Values.brand.logo .Values.brand.icon | toJson | sha256sum }}
     spec:
       enableServiceLinks: false
       serviceAccountName: storscale
@@ -40,8 +40,14 @@ spec:
             - {name: AIRFLOW_USER, value: storscale-platform}
             - {name: AIRFLOW_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: AIRFLOW_PLATFORM_PASSWORD}}}
             - {name: BRAND_NAME, value: {{ .Values.brand.name | quote }}}
+            {{- with .Values.brand.title }}
+            - {name: BRAND_TITLE, value: {{ . | quote }}}
+            {{- end }}
             {{- if .Values.brand.logo }}
             - {name: BRAND_LOGO, value: /etc/storscale/brand/logo}
+            {{- end }}
+            {{- if .Values.brand.icon }}
+            - {name: BRAND_ICON, value: /etc/storscale/brand/icon}
             {{- end }}
             {{- include "storscale.ca.env" . | nindent 12 }}
           ports:
@@ -51,7 +57,7 @@ spec:
             periodSeconds: 5
           volumeMounts:
             - {name: catalog, mountPath: /catalog, readOnly: true}
-            {{- if .Values.brand.logo }}
+            {{- if or .Values.brand.logo .Values.brand.icon }}
             - {name: brand, mountPath: /etc/storscale/brand, readOnly: true}
             {{- end }}
             {{- include "storscale.ca.mount" . | nindent 12 }}
@@ -61,7 +67,7 @@ spec:
         {{- include "storscale.ca.volumes" . | nindent 8 }}
         # The catalog's bot token, which catalog-sync keeps up to date.
         - {name: catalog, secret: {secretName: catalog-token, optional: true}}
-        {{- if .Values.brand.logo }}
+        {{- if or .Values.brand.logo .Values.brand.icon }}
         - {name: brand, configMap: {name: storscale-brand}}
         {{- end }}
 ---
