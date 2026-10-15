@@ -99,9 +99,25 @@ spec:
                 pipelines:
                   type: object
                   required: [serviceAccount]
-                  description: The Keycloak client whose service account runs the project's pipelines.
+                  description: >-
+                    The Keycloak client whose service account runs the project's pipelines, and
+                    the git repo their code (Airflow's DAGs) comes from.
                   properties:
                     serviceAccount: {type: string, maxLength: 100}
+                    repo:
+                      type: string
+                      maxLength: 500
+                      description: An https:// or ssh address of a git repo, never with credentials in it.
+                    path: {type: string, maxLength: 200, description: "The DAGs' folder in the repo; default the whole repo."}
+                    ref: {type: string, maxLength: 200, description: "A branch, tag or commit; default the install's own."}
+                    credentials:
+                      type: object
+                      required: [secretRef]
+                      description: >-
+                        The Secret, in the project's namespace, holding the repo's credentials:
+                        username and password (a token), or sshPrivateKey and knownHosts.
+                      properties:
+                        secretRef: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
             status:
               type: object
               x-kubernetes-preserve-unknown-fields: true

@@ -139,3 +139,50 @@ func TestHashFollowsTheSpec(t *testing.T) {
 		t.Error("the same spec changed its hash")
 	}
 }
+
+func withPipelines(t *testing.T, pipelines string) error {
+	t.Helper()
+	_, err := Parse([]byte(strings.Replace(sales, `"pipelines": {"serviceAccount": "airflow-pipelines"}`, `"pipelines": `+pipelines, 1)))
+	return err
+}
+
+func TestAPipelinesRepo(t *testing.T) {
+	for _, ok := range []string{
+		`{"serviceAccount": "airflow-pipelines"}`,
+		`{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git"}`,
+		`{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git", "path": "etl/dags", "ref": "release/1.2",
+		  "credentials": {"secretRef": "sales-git"}}`,
+		`{"serviceAccount": "airflow-pipelines", "repo": "git@git.example.com:sales/dags.git", "credentials": {"secretRef": "sales-git"}}`,
+		`{"serviceAccount": "airflow-pipelines", "repo": "ssh://git@git.example.com/sales/dags.git", "ref": "3f2a9c1",
+		  "credentials": {"secretRef": "sales-git"}}`,
+	} {
+		if err := withPipelines(t, ok); err != nil {
+			t.Errorf("%s: %v", ok, err)
+		}
+	}
+	for _, tc := range []struct{ pipelines, want string }{
+		{`{"serviceAccount": "airflow-pipelines", "path": "dags"}`, "need a repo"},
+		{`{"serviceAccount": "airflow-pipelines", "repo": "https://bob:ghp_token@git.example.com/sales/dags.git"}`, "no user or token"},
+		{`{"serviceAccount": "airflow-pipelines", "repo": "https://ghp_token@git.example.com/sales/dags.git"}`, "no user or token"},
+		{`{"serviceAccount": "airflow-pipelines", "repo": "ssh://git:secret@git.example.com/sales/dags.git", "credentials": {"secretRef": "s"}}`, "no password"},
+		{`{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git?token=x"}`, "no query"},
+		{`{"serviceAccount": "airflow-pipelines", "repo": "file:///etc"}`, "https:// or ssh"},
+		{`{"serviceAccount": "airflow-pipelines", "repo": "git@git.example.com:sales/dags.git"}`, "an ssh repo needs credentials"},
+		{`{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git", "path": "../other"}`, "a folder in the repo"},
+		{`{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git", "path": "/abs"}`, "a folder in the repo"},
+		{`{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git", "ref": "main..x"}`, "a branch, tag or commit"},
+		{`{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git", "ref": "-delete"}`, "a branch, tag or commit"},
+		{`{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git", "credentials": {"secretRef": "Sales_Git"}}`, "isn't a Secret's name"},
+	} {
+		if err := withPipelines(t, tc.pipelines); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", tc.pipelines, err, tc.want)
+		}
+	}
+}
+
+func TestTheBundleAndConnectionOfAProject(t *testing.T) {
+	p, _ := Parse([]byte(strings.Replace(sales, `"name": "sales"`, `"name": "sales-eu"`, 1)))
+	if p.BundleName() != "project-sales-eu" || p.GitConnID() != "git_sales_eu" {
+		t.Errorf("bundle %q, connection %q", p.BundleName(), p.GitConnID())
+	}
+}
