@@ -1,6 +1,8 @@
 // Package pipelines reads a project's pipelines and their runs from Airflow,
-// and starts runs, as the platform's own Airflow account. A pipeline belongs
-// to a project when its DAG is tagged project:<name>.
+// and starts runs, as the platform's own Airflow account. A project's
+// pipelines are the DAGs of its own bundle (project-<name>: its pipelines
+// repo), and those of the platform's own bundle tagged project:<name>. A tag
+// on a DAG from another project's repo counts for nothing.
 package pipelines
 
 import (
@@ -12,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -34,8 +37,14 @@ type Pipeline struct {
 	ID          string `json:"id"`
 	Description string `json:"description"`
 	Paused      bool   `json:"paused"`
-	Runs        []Run  `json:"runs"`  // newest first
-	Tasks       []Task `json:"tasks"` // the newest run's
+	Bundle      string `json:"bundle"`           // project-<name>, or the platform's own
+	Commit      string `json:"commit,omitempty"` // of the repo, as Airflow last parsed it
+	// ClashesWith are other bundles this DAG ID has also come from: two repos
+	// define it, and Airflow keeps whichever it parsed last.
+	ClashesWith     []string `json:"clashesWith,omitempty"`
+	HasImportErrors bool     `json:"hasImportErrors"`
+	Runs            []Run    `json:"runs"`  // newest first
+	Tasks           []Task   `json:"tasks"` // the newest run's
 }
 
 type Run struct {
@@ -45,6 +54,67 @@ type Run struct {
 	Ended       time.Time `json:"ended"`
 	RequestedBy string    `json:"requestedBy,omitempty"` // who asked the platform to start it
 	Type        string    `json:"type"`                  // manual, scheduled
+	Commit      string    `json:"commit,omitempty"`      // the code it ran
+}
+
+// ImportError is a file of the project's repo Airflow couldn't load.
+type ImportError struct {
+	File  string `json:"file"`
+	Error string `json:"error"`
+}
+
+// PlatformBundle holds the platform's own DAGs (Airflow's dags folder).
+const PlatformBundle = "dags-folder"
+
+// Bundle is a project's own bundle, its pipelines repo.
+func Bundle(project string) string { return "project-" + project }
+
+type dag struct {
+	ID              string  `json:"dag_id"`
+	Description     *string `json:"description"`
+	Paused          bool    `json:"is_paused"`
+	BundleName      *string `json:"bundle_name"`
+	BundleVersion   *string `json:"bundle_version"`
+	HasImportErrors bool    `json:"has_import_errors"`
+}
+
+// dags are all the DAGs a query finds, a page at a time.
+func (c *Client) dags(ctx context.Context, q url.Values) ([]dag, error) {
+	var out []dag
+	for offset := 0; ; offset += 100 {
+		q.Set("limit", "100")
+		q.Set("offset", fmt.Sprint(offset))
+		var page struct {
+			DAGs  []dag `json:"dags"`
+			Total int   `json:"total_entries"`
+		}
+		if err := c.call(ctx, "GET", "/dags?"+q.Encode(), nil, &page); err != nil {
+			return nil, err
+		}
+		out = append(out, page.DAGs...)
+		if len(page.DAGs) < 100 || len(out) >= page.Total {
+			return out, nil
+		}
+	}
+}
+
+// clashes are the other bundles a DAG's versions came from.
+func (c *Client) clashes(ctx context.Context, id, bundle string) ([]string, error) {
+	var vs struct {
+		Versions []struct {
+			Bundle *string `json:"bundle_name"`
+		} `json:"dag_versions"`
+	}
+	if err := c.call(ctx, "GET", "/dags/"+url.PathEscape(id)+"/dagVersions?limit=100&order_by=-version_number", nil, &vs); err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, v := range vs.Versions {
+		if v.Bundle != nil && *v.Bundle != bundle && !slices.Contains(out, *v.Bundle) {
+			out = append(out, *v.Bundle)
+		}
+	}
+	return out, nil
 }
 
 type Task struct {
@@ -113,21 +183,28 @@ func (c *Client) call(ctx context.Context, method, path string, in, out any) err
 
 // Of is a project's pipelines, each with its recent runs and its newest run's tasks.
 func (c *Client) Of(ctx context.Context, project string, runs int) ([]Pipeline, error) {
-	var dags struct {
-		DAGs []struct {
-			ID          string  `json:"dag_id"`
-			Description *string `json:"description"`
-			Paused      bool    `json:"is_paused"`
-		} `json:"dags"`
+	own, err := c.dags(ctx, url.Values{"bundle_name": {Bundle(project)}})
+	if err != nil {
+		return nil, err
 	}
-	if err := c.call(ctx, "GET", "/dags?limit=100&tags="+url.QueryEscape("project:"+project), nil, &dags); err != nil {
+	tagged, err := c.dags(ctx, url.Values{"bundle_name": {PlatformBundle}, "tags": {"project:" + project}})
+	if err != nil {
 		return nil, err
 	}
 	out := []Pipeline{}
-	for _, d := range dags.DAGs {
-		p := Pipeline{ID: d.ID, Paused: d.Paused, Runs: []Run{}, Tasks: []Task{}}
+	for _, d := range append(own, tagged...) {
+		p := Pipeline{ID: d.ID, Paused: d.Paused, HasImportErrors: d.HasImportErrors, Runs: []Run{}, Tasks: []Task{}}
 		if d.Description != nil {
 			p.Description = *d.Description
+		}
+		if d.BundleName != nil {
+			p.Bundle = *d.BundleName
+		}
+		if d.BundleVersion != nil {
+			p.Commit = *d.BundleVersion
+		}
+		if p.ClashesWith, err = c.clashes(ctx, d.ID, p.Bundle); err != nil {
+			return nil, err
 		}
 		var rs struct {
 			Runs []struct {
@@ -137,6 +214,7 @@ func (c *Client) Of(ctx context.Context, project string, runs int) ([]Pipeline, 
 				Ended   *time.Time     `json:"end_date"`
 				Type    string         `json:"run_type"`
 				Conf    map[string]any `json:"conf"`
+				Commit  *string        `json:"bundle_version"`
 			} `json:"dag_runs"`
 		}
 		if err := c.call(ctx, "GET", fmt.Sprintf("/dags/%s/dagRuns?order_by=-start_date&limit=%d", url.PathEscape(d.ID), runs), nil, &rs); err != nil {
@@ -144,6 +222,9 @@ func (c *Client) Of(ctx context.Context, project string, runs int) ([]Pipeline, 
 		}
 		for _, r := range rs.Runs {
 			run := Run{ID: r.ID, State: r.State, Type: r.Type, Started: deref(r.Started), Ended: deref(r.Ended)}
+			if r.Commit != nil {
+				run.Commit = *r.Commit
+			}
 			if by, ok := r.Conf["requested_by"].(string); ok {
 				run.RequestedBy = by
 			}
@@ -173,6 +254,35 @@ func (c *Client) Of(ctx context.Context, project string, runs int) ([]Pipeline, 
 		out = append(out, p)
 	}
 	return out, nil
+}
+
+// ImportErrors are the files of the project's repo Airflow couldn't load.
+func (c *Client) ImportErrors(ctx context.Context, project string) ([]ImportError, error) {
+	out := []ImportError{}
+	for offset := 0; ; offset += 100 {
+		var page struct {
+			Errors []struct {
+				File   string  `json:"filename"`
+				Bundle *string `json:"bundle_name"`
+				Stack  string  `json:"stack_trace"`
+			} `json:"import_errors"`
+		}
+		if err := c.call(ctx, "GET", fmt.Sprintf("/importErrors?limit=100&offset=%d", offset), nil, &page); err != nil {
+			return nil, err
+		}
+		for _, e := range page.Errors {
+			if e.Bundle != nil && *e.Bundle == Bundle(project) {
+				msg := e.Stack
+				if len(msg) > 2000 {
+					msg = msg[len(msg)-2000:] // the end says what went wrong
+				}
+				out = append(out, ImportError{File: e.File, Error: msg})
+			}
+		}
+		if len(page.Errors) < 100 {
+			return out, nil
+		}
+	}
 }
 
 // Start starts a run of a project's pipeline, recording who asked for it.

@@ -131,13 +131,18 @@ export type SQLAnswer = { columns: string[]; rows: unknown[][]; seconds?: number
 export const runSQL = (name: string, sql: string, limit?: number) =>
   api<SQLAnswer>("POST", `/api/projects/${encodeURIComponent(name)}/sql`, { sql, limit });
 
-// --- A project's pipelines (Airflow DAGs tagged project:<name>) ---------------------
+// --- A project's pipelines: the DAGs in its repo, and the platform's own tagged project:<name>
 
-export type PipelineRun = { id: string; state: string; started: string; ended: string; requestedBy?: string; type: string };
+export type PipelineRun = { id: string; state: string; started: string; ended: string; requestedBy?: string; type: string; commit?: string };
 export type PipelineTask = { id: string; state: string; started: string; ended: string };
-export type Pipeline = { id: string; description: string; paused: boolean; runs: PipelineRun[]; tasks: PipelineTask[] };
+export type Pipeline = {
+  id: string; description: string; paused: boolean; runs: PipelineRun[]; tasks: PipelineTask[];
+  bundle: string; commit?: string; clashesWith?: string[]; hasImportErrors: boolean;
+};
+export type PipelinesRepo = { url: string; path?: string; ref?: string };
+export type ImportError = { file: string; error: string };
 export const getPipelines = (name: string) =>
-  api<{ pipelines: Pipeline[]; canRun: boolean }>("GET", `/api/projects/${encodeURIComponent(name)}/pipelines`);
+  api<{ pipelines: Pipeline[]; canRun: boolean; repo?: PipelinesRepo; importErrors?: ImportError[] }>("GET", `/api/projects/${encodeURIComponent(name)}/pipelines`);
 export const startRun = (name: string, pipeline: string) =>
   api<{ run: string }>("POST", `/api/projects/${encodeURIComponent(name)}/pipelines/${encodeURIComponent(pipeline)}/runs`);
 
