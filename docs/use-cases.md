@@ -142,6 +142,7 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 **Requirements**
 - R7.5 DAG IDs unique across projects: a clash is refused and reported, never silently replaced.
 - R7.6 Each project's git credential reads its repo only.
+- R7.6a A project's DAG code, as it is parsed and as it runs, reads only its own connections: not another project's, nor the platform's secrets (plan, "Keeping projects' DAG code apart").
 
 ### 7.3 A change, tested on its own data first
 
