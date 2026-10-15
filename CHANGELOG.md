@@ -10,6 +10,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
   - The operator keeps each project's git connection in Airflow (`git_<name>`), from that Secret, and serves the DAG bundles Airflow should run: the platform's own, and one per project (`project-<name>`). Airflow's scheduler and DAG processor start through a wrapper that takes the list and starts them again when it changes.
   - The git provider is pinned at 1.0.0 (before it, a token could be kept on disk in a clone). SSH repos are checked against the install's known hosts (`pipelines.gitKnownHosts`).
   - A project's Pipelines page lists the DAGs in its repo, and the platform's own tagged for it; a DAG in another project's repo can't claim it by its tag. It names the repo, shows the commit each pipeline is at and each run ran, lists the files in the repo that didn't load, and warns when another repo has a DAG with the same ID.
+  - **Not yet safe for teams that don't trust each other:** every project's DAG code runs in one Airflow, whose containers hold every connection and the platform's whole secret set. The plan now has the work to keep projects apart, next in phase 7 ([docs/plan.md](docs/plan.md)).
   - A new suite, `pipelines_git`, serves a git repo of its own and checks the whole path: the DAG loads and runs at the commit pushed, the next commit follows, the token shows nowhere, and deleting the project takes its DAGs away. The tools image has git for it; the test pod may write its own Secret.
 
 ### Changed
