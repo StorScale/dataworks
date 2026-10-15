@@ -4,6 +4,10 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+- **The plan's roadmap after phase 5** ([docs/plan.md](docs/plan.md)), from research into what buyers of Dataiku and comparable platforms value: production-ready (6), git-native projects with Airflow's DAGs from a git repo per project first (7), governed AI (8), usage and cost per project (9), self-service and ML (10).
+- **Use cases and storyboards for phases 6 to 10** ([docs/use-cases.md](docs/use-cases.md)): who does what, frame by frame, the requirements each sets, and the questions still open.
+
 ## [0.4.2] - 2026-10-13
 
 The brand in the browser's tab too: its title and icon.

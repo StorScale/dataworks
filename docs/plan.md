@@ -84,7 +84,12 @@ spec:
   storage:   { bucket: sales-landing, quotaGiB: 500 }
   tables:    { catalog: iceberg, namespace: sales }      # Nessie namespace; branch per change request (later)
   notebooks: { image: storscale/notebook:py312, cpu: 2, memory: 8Gi }
-  pipelines: { repo: https://git.example.com/sales/dags.git, path: dags/, serviceAccount: true }
+  pipelines:                                              # a git repo of DAGs per project (phase 7)
+    serviceAccount: airflow-pipelines
+    repo: https://git.example.com/sales/dags.git
+    path: dags/
+    ref: main                                             # by default the install's own (main in dev, a release branch in prod)
+    credentials: { secretRef: sales-git }                 # a Secret's name: never a token in the spec
   dashboards: true
 ```
 
@@ -103,7 +108,7 @@ The examples already prove every mapping in this list by hand.
 
 **Phase 2 delivered (2026-10-06)** the parts that cover access: `members`, `tables` (with the readers' view: tables, row filters and masks), `files` and `pipelines.serviceAccount`, applied to Keycloak, Ranger, Buckets and Nessie (`stack/projects/sales.json` is one). Still to come:
 - notebook profiles and quotas;
-- a pipelines repo and DAG folder per project;
+- a pipelines repo per project (phase 7, below);
 - Superset and Airflow roles per project. Until then, those tools' roles come from the platform-wide groups, while their data access already follows the project through Trino and Buckets.
 
 ## Matching Dataiku
@@ -114,23 +119,48 @@ The examples already prove every mapping in this list by hand.
 | Flow (visual DAG) | A read-only Flow view drawn from OpenLineage and dbt lineage, with links into each job | MVP (view); an editable Flow is a later gap to build |
 | Code recipes (SQL, Python, PySpark) | Trino, Jupyter, Spark, and dbt models | MVP (Spark later) |
 | Join, group, window and pivot recipes | dbt models, or Trino SQL from a template | MVP |
-| Prepare recipe (point-and-click) | Gap to build: a recipe builder that generates SQL | Later |
+| Prepare recipe (point-and-click) | Gap to build: a recipe builder that generates SQL | Phase 10 |
 | Datasets and connections, Iceberg REST | Trino catalogs, Nessie's Iceberg REST endpoint | MVP |
 | Semantic Models, AI SQL, agent tools (MCP) | The semantic layer: MetricFlow models, an editor in the shell, and an MCP server that queries as the person or agent asking | Phase 4 |
 | Data catalog, column lineage, search | OpenMetadata + OpenLineage, shown in the shell | MVP |
 | Data quality rules | Soda checks as Airflow tasks, results in the catalog | MVP |
 | Scenarios, triggers, reporters | Airflow (data-aware scheduling), Grafana alerting | MVP |
 | Dashboards, charts | Superset | MVP |
-| Audit trail | Ranger, Keycloak, Trino and Buckets audit logs sent to Loki, with one Audit page | MVP |
+| Audit trail | Ranger, Keycloak, Trino and Buckets audit logs sent to Loki, with one Audit page | Phase 6 |
 | Code environments, compute on Kubernetes | JupyterHub profiles, images built per project, quotas | MVP |
-| Bundles and Deployer (dev to prod) | Git CI plus a Nessie branch merge, with project promotion between installs | Later |
-| AutoML, experiment tracking, model registry, drift | MLflow, FLAML, Evidently + Grafana | Later |
-| LLM Mesh, prompt studio, Knowledge Banks, agents | LiteLLM, Langfuse, pgvector | Later (agent access to data comes in phase 4) |
-| Webapps, Answers, Stories, Govern sign-offs | Not planned yet | Not included |
+| Project version control (git) | Each project's pipelines (and later its whole spec) in its own git repo, readable as code | Phase 7 (DAGs first) |
+| Bundles and Deployer (dev to prod) | Git CI plus a Nessie branch per change, checked, then merged; promotion between installs, with rollback | Phase 7 |
+| LLM Mesh (gateway, cost caps, guardrails) | LiteLLM in front of the models, with a budget per project, and every call audited | Phase 8 |
+| Agents, prompt studio, Knowledge Banks | The MCP server (phase 4), agent identity and audit, Langfuse, pgvector | Phase 8 (agent access to data came in phase 4) |
+| Govern (approvals, registry, standards) | Approvals and a registry for models and agents, in the project | Phase 8 (agents), phase 10 (models) |
+| Usage and cost per project | Trino, Spark and storage use attributed to projects, with budgets, in Grafana | Phase 9 |
+| AutoML, experiment tracking, model registry, drift | MLflow, FLAML, Evidently + Grafana | Phase 10 |
+| Webapps and Dataiku Apps | Simple data apps per project | Phase 10 |
+| Answers, Stories | Not planned yet | Not included |
+
+## What buyers value (research, 2026-10-15)
+
+A survey of Dataiku and the platforms it's compared with (Databricks, Snowflake, Microsoft Fabric, Palantir Foundry, Domino, and the open-source stacks), from vendors' release notes, analysts' public summaries, review sites and practitioner surveys. Some of the evidence is vendor-reported, and G2, TrustRadius and Gartner Peer Insights couldn't be read directly.
+
+- **Why people buy Dataiku:** one project and Flow shared by coders and non-coders; visual recipes beside code; scenarios that automate manual work (its ROI studies credit them with 80–90% of it); reuse; lineage; and Govern, its approvals and standards (Gartner ranks it first for the product owner). Since 2024 its new work is GenAI: the LLM Mesh, agents, semantic models for agents and, in 15.0, its own MCP server. The complaints: price, a learning curve and many clicks, slowness on large data, and git: projects are git repos, but their JSON doesn't diff well and conflicts can't be resolved in the UI. What customers value is the promotion from dev to prod (bundles, the Deployer, rollback) more than git itself.
+- **Across the market in 2026:**
+  1. **A trustworthy, governed foundation** (quality, lineage, access everywhere) comes first: in dbt's 2026 survey 83% call trust a priority, and in Informatica's 57% of data leaders say unreliable data keeps AI from production.
+  2. **Agents over governed data, with a semantic layer:** every vendor's headline (Genie One, CoWork, Fabric data agents, AIP). Gartner (May 2026) puts the semantic layer's gain in agents' accuracy at up to 80%. The semantic layers are converging on the Open Semantic Interchange, around open-sourced MetricFlow.
+  3. **Git-based CI/CD:** a declarative project file with a target per environment, plan then deploy, an isolated environment per pull request, CI on what changed (Databricks' Bundles, Snowflake's DCM Projects and dbt Slim CI, Fabric's deployment pipelines). Palantir's branching goes furthest: one branch across pipelines, logic and apps.
+  4. **Governance for AI:** agents' identity, audit and spend caps (Databricks' AI Gateway, Snowflake's Agent Identity), and approvals for models and agents.
+  5. **Cost visible and controlled:** Fabric's capacity costs are its most common complaint, and spend outruns budgets (dbt 2026: 57% spend more on compute, 36% have more budget).
+  6. **Self-service:** visual prep, and simple data apps.
+  7. **Low operating burden:** the main objection to assembled open-source stacks is the upgrade treadmill and version skew, separate access and metadata models, and no one accountable. Managed offerings (Datacoves, Astronomer) sell exactly that.
+- **Where StorScale stands:**
+  - **Strong already:** the project as the unit, Iceberg and Nessie, Ranger's policies applying to agents as to people, column lineage, and the semantic layer with an MCP server that queries as the user, where Dataiku (15.x), Databricks and Dremio are going.
+  - **Where it can lead:** Nessie's catalog-wide branches. A pull request becomes a git branch and a data branch, its pipelines and checks run there, and both merge together (write, audit, publish). Only Palantir does something like it, and no open stack packages it.
+  - **To watch:** consolidation. SAP is buying Dremio, Nessie's owner, and Fivetran has merged with dbt Labs and bought SQLMesh's maker. Keep an Iceberg REST alternative to Nessie in view (Apache Polaris, Lakekeeper).
+
+Sources: Dataiku's version 14 and 15 release notes (https://www.dataiku.com/product/product-updates/version-14) and its version control docs (https://doc.dataiku.com/dss/latest/collaboration/version-control.html); Forrester's Wave for data lakehouses, Q3 2026 (https://www.forrester.com/blogs/takeaways-from-the-forrester-wave-data-lakehouses-q3-2026/); Gartner on semantics and agents (https://gcom.pdo.aws.gartner.com/en/newsroom/press-releases/2026-05-11-gartner-says-lack-of-semantics-causes-inaccurate-artificial-intelligence-agents-and-wasted-spending); dbt Labs' 2026 report (https://www.getdbt.com/blog/new-dbt-labs-report-finds-ai-driven-acceleration-is-outpacing-trust-and-governance); Databricks' and Snowflake's CI/CD docs (https://docs.databricks.com/aws/en/dev-tools/ci-cd, https://docs.snowflake.com/developer-guide/builders/devops); Palantir's Foundry Branching (https://palantir.com/docs/foundry/foundry-branching/overview).
 
 ## Phases
 
-Each phase ends with a gate: an end-to-end test like the examples' `test.py`, run in CI.
+Each phase ends with a gate: an end-to-end test like the examples' `test.py`, run in CI. The use cases and storyboards behind phases 6 to 10, and the requirements they set, are in [use-cases.md](use-cases.md).
 
 | Phase | Deliverable | Gate |
 |---|---|---|
@@ -140,8 +170,11 @@ Each phase ends with a gate: an end-to-end test like the examples' `test.py`, ru
 | 3 | Catalog and lineage: OpenMetadata, OpenLineage from Airflow, Spark and Trino, a Flow view, Soda checks | A pipeline run appears in the lineage graph, column-level; a failing check shows on the dataset |
 | 4 | The semantic layer and agent access (below): MetricFlow models per project, the Semantic layer pages, the MCP server | An agent signed in as alice asks for revenue by region and gets EU only, masked as in Trino; carol's agent gets nothing; bob's metric change shows up in the next answer; Ranger's audit names both the agent and alice |
 | 5 | Kubernetes: the Helm umbrella chart, the Buckets operator, Spark Operator, KubeSpawner | `helm install` on kind gives a healthy install; the phase 1–4 tests pass on it |
-| 6 | Operations: Audit and Health pages (Loki, Grafana), backup and upgrade notes, docs on storscale.io/platform | A full upgrade between two releases with no lost projects |
-| 7+ | Later items, in this order: MLflow, Prepare-recipe builder, promotion between installs, LiteLLM | Per feature |
+| 6 | Production-ready: Keycloak on a real database, in production mode, and who owns the realm decided; the example users switchable off; one-command upgrades and a tested version matrix; Audit and Health pages (Loki, Grafana); backup and upgrade notes; docs on storscale.io/platform | A full upgrade between two releases on a real cluster, with no lost projects, people or settings |
+| 7 | Git-native projects: Airflow DAGs from a git repo per project, first (below); then the project spec in git, with a target per environment; a Nessie branch per change, its pipelines and checks run there before it merges (write, audit, publish); promotion between installs, with rollback | A push to a project's repo runs on its own data branch, passes the checks, and merges to production; a bad change is refused and production is untouched |
+| 8 | Governed AI: agents' identity and audit; an LLM gateway (LiteLLM) with a budget per project; approvals for agents; tests for the semantic layer; the Open Semantic Interchange; an AI assistant for SQL and pipeline code | An agent's answers stay within the caller's policies and the project's budget, and every call is audited |
+| 9 | Usage and cost per project: Trino, Spark and storage use attributed to projects, with budgets and alerts in Grafana | A project's usage and cost show, and crossing its budget alerts |
+| 10 | Self-service and ML: visual prep (a recipe builder that writes SQL); simple data apps; MLflow, with a model registry and approvals | An analyst makes a clean dataset and an app from it without code |
 
 ## Phase 5: Kubernetes, how
 
@@ -162,6 +195,25 @@ Each phase ends with a gate: an end-to-end test like the examples' `test.py`, ru
   - The monitoring suite fails a drive from a pod beside Buckets', which mounts the drive's volume (bucketsd's image has no shell).
   - The setup steps create the `sales` project as a Project resource.
 - Still to come: a Spark suite (the operator is installed, but nothing runs on it yet), and the browser suite's run on a laptop's kind cluster, which runs out of memory in a 10 GB VM; CI runs it.
+
+## Phase 7: pipelines from git, how
+
+Each project's DAGs come from its own git repo, as an Airflow 3 **DAG bundle** (`GitDagBundle`, from the git provider already in Airflow's image).
+
+- **The spec:** `pipelines: {serviceAccount, repo, path, ref, credentials: {secretRef}}` (above). `ref` defaults to the install's own (`main` in development, a release branch or tag in production). Credentials are only ever a Secret's name; a repo URL with a user or token in it is refused.
+- **Bundles:** one per project, `project-<name>`, with `subdir` from `path`, `git_conn_id` `git_<name>`, and a refresh about every minute. The platform's own DAGs stay in a local bundle.
+- **The operator:**
+  - writes the list of bundles (on Kubernetes a ConfigMap read by Airflow's API server, scheduler and DAG processor; in Compose a file on a shared volume), and restarts the DAG processor and the scheduler only when the list changes: Airflow 3.3 reads it only as it starts, and has no API to add a bundle;
+  - creates each project's git connection from its Secret (an `AIRFLOW_CONN_*` variable or the REST API), never on a command line or in a file;
+  - reports in the project's status: the bundle, the last commit seen, import errors.
+- **What runs:** each run records the commit it was created from (`bundle_version`), and its tasks run that commit; a rerun runs it again. A push reaches Airflow within the refresh interval; Airflow 3.3 has no refresh API for a webhook to call.
+- **In the platform:** a project's Pipelines page lists the DAGs of its bundle (`bundle_name`), not its `project:<name>` tag, which any repo could copy. It shows each pipeline's commit and each run's, with links to the repo, and import errors.
+- **Guardrails:**
+  - DAG IDs are global in Airflow, and when two bundles define the same one the last parsed wins, without a warning: the platform refuses a clash between projects.
+  - Every project's code runs in one Airflow, which can read every connection: each project's git credential is a read-only deploy key or a token for its repo only.
+  - The git provider is pinned at 1.0.1 or later: before 1.0.0, a token could be stored on disk in the clone's git config.
+- **Tests:** a suite with a git server of its own (Compose and kind): push a DAG, create a project pointing at it, see the DAG appear and run at that commit; push a change and see the next commit; check that no token is in Airflow's config, its logs or the clone; delete the project and see its DAGs go.
+- **Effort:** about 9 to 13 days.
 
 ## The semantic layer, and agents
 
@@ -204,3 +256,5 @@ People define what the business means once: entities (customer, order), dimensio
 7. **Data quality with OpenMetadata's own tests (phase 3), not Soda:** it's one tool fewer, the results show on the tables in the catalog, and projects declare their checks (`spec.tables.checks`). Soda or Great Expectations can post results to the same tests through OpenMetadata's API later.
 8. **The catalog opens in its own tab (phase 3), not in the platform's frame:** OpenMetadata's web app keeps its token in a service worker. Each project's Overview and Data pages show its lineage and checks inside the platform.
 9. **The platform's own pages for everyday work; the tools for depth (added 2026-10-07):** the web app is organised around the project, not the tools. Its own pages cover what people do daily: browsing tables, previewing them, SQL, metrics, pipeline runs and access. They read the same APIs and run queries as the person asking. JupyterLab and Superset dashboards are shown in the frame, as project tabs. Airflow, SQL Lab, the catalog and Ranger stay one click away for authoring and administration.
+10. **The roadmap after phase 5 (added 2026-10-15):** from the research above, in this order: production-ready (6), git-native projects (7), governed AI (8), usage and cost per project (9), self-service and ML (10). Real people come before new features; then what buyers value most where StorScale can lead (git and data branches together, agents under the same policies).
+11. **Airflow takes its DAGs from git as DAG bundles, one per project (added 2026-10-15),** not git-sync: bundles version each run by its commit and take several repos, where git-sync takes one repo and keeps no versions.
