@@ -1,5 +1,5 @@
 // platform-operator applies StorScale Platform's projects to the systems they
-// live in: Keycloak, Apache Ranger, Buckets and Nessie. It reads projects from
+// live in: Keycloak, Apache Ranger, Buckets, Nessie and Airflow. It reads projects from
 // the store (a Buckets bucket, which platformd writes to; on Kubernetes,
 // Project resources) and writes back each project's status.
 //
@@ -13,13 +13,20 @@
 //	OPERATOR_CLIENT_ID, OPERATOR_CLIENT_SECRET  the operator's Keycloak client (a service account)
 //	RANGER_URL, RANGER_USER, RANGER_PASSWORD, RANGER_SERVICE  Ranger's admin API, and Trino's service
 //	NESSIE_URL, NESSIE_WAREHOUSE         Nessie, and its warehouse
-//	PLATFORM_LISTEN                      health checks (:8081)
+//	AIRFLOW_URL, AIRFLOW_USER, AIRFLOW_PASSWORD  Airflow's API and the platform's account in it,
+//	                                     for projects' pipelines repos (none: no repos)
+//	PIPELINES_DEFAULT_REF                the branch a repo is followed on when its project names none (main)
+//	GIT_KNOWN_HOSTS                      the git hosts' SSH keys, a file in Airflow's containers (none:
+//	                                     a host's key is taken the first time it's seen)
+//	PLATFORM_LISTEN                      health checks (:8081), and GET /airflow/bundles: the DAG
+//	                                     bundles Airflow should run (no credentials in it)
 //
 // `platform-operator healthcheck` checks a running operator.
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -29,6 +36,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/StorScale/storscale-platform/internal/pipelines"
 	"github.com/StorScale/storscale-platform/internal/reconcile"
 	"github.com/StorScale/storscale-platform/internal/store"
 )
@@ -78,11 +86,29 @@ func main() {
 		Log:                log,
 		RangerUserPassword: rangerPassword,
 	}
+	if u := os.Getenv("AIRFLOW_URL"); u != "" {
+		r.Airflow = &reconcile.Airflow{API: pipelines.New(u, env("AIRFLOW_USER", "storscale-platform"), os.Getenv("AIRFLOW_PASSWORD")),
+			DefaultRef: env("PIPELINES_DEFAULT_REF", "main"), KnownHosts: os.Getenv("GIT_KNOWN_HOSTS")}
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	go func() {
 		mux := http.NewServeMux()
 		mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { fmt.Fprintln(w, "ok") })
+		// Airflow's processes start with this list (stack/tools/airflow_bundles.py).
+		mux.HandleFunc("GET /airflow/bundles", func(w http.ResponseWriter, req *http.Request) {
+			if r.Airflow == nil {
+				http.Error(w, "no Airflow configured", http.StatusNotFound)
+				return
+			}
+			bundles, err := r.Bundles(req.Context())
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(bundles)
+		})
 		hs := &http.Server{Addr: listen, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 		go func() { <-ctx.Done(); hs.Close() }()
 		hs.ListenAndServe()

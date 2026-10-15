@@ -112,8 +112,9 @@ type Pipelines struct {
 
 // GitCredentials name where the repo's credentials are kept, never the
 // credentials themselves: a Secret (on Kubernetes, in the project's
-// namespace) with username and password (a token), or sshPrivateKey and
-// knownHosts.
+// namespace) with username and password (a token), or sshPrivateKey. The
+// git hosts' SSH keys are the install's (Airflow's known hosts), not a
+// project's.
 type GitCredentials struct {
 	SecretRef string `json:"secretRef"`
 }
@@ -284,7 +285,7 @@ func (pl *Pipelines) problems() []string {
 	case c != nil && !secretRE.MatchString(c.SecretRef):
 		out = append(out, fmt.Sprintf("credentials: secretRef %q isn't a Secret's name", c.SecretRef))
 	case c == nil && ssh:
-		out = append(out, "an ssh repo needs credentials: a Secret with sshPrivateKey and knownHosts")
+		out = append(out, "an ssh repo needs credentials: a Secret with sshPrivateKey")
 	}
 	return out
 }

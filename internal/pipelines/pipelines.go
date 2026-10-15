@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -102,7 +103,7 @@ func (c *Client) call(ctx context.Context, method, path string, in, out any) err
 	}
 	if res.StatusCode/100 != 2 {
 		msg, _ := io.ReadAll(io.LimitReader(res.Body, 300))
-		return fmt.Errorf("Airflow: %s %s: HTTP %d %s", method, path, res.StatusCode, msg)
+		return &APIError{Method: method, Path: path, Code: res.StatusCode, Body: string(msg)}
 	}
 	if out != nil {
 		return json.NewDecoder(res.Body).Decode(out)
@@ -201,4 +202,55 @@ func deref(t *time.Time) time.Time {
 		return time.Time{}
 	}
 	return *t
+}
+
+// APIError is Airflow's API refusing a request.
+type APIError struct {
+	Method, Path string
+	Code         int
+	Body         string // Airflow's answer, which may echo what was sent
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("Airflow: %s %s: HTTP %d %s", e.Method, e.Path, e.Code, e.Body)
+}
+
+func code(err error) int {
+	var e *APIError
+	if errors.As(err, &e) {
+		return e.Code
+	}
+	return 0
+}
+
+// A Connection is one of Airflow's connections (its REST API's shape). The
+// platform keeps each project's git credentials in one, encrypted in
+// Airflow's database, for the project's DAG bundle.
+type Connection struct {
+	ID       string `json:"connection_id"`
+	Type     string `json:"conn_type"`
+	Host     string `json:"host,omitempty"`
+	Login    string `json:"login,omitempty"`
+	Password string `json:"password,omitempty"`
+	Extra    string `json:"extra,omitempty"` // JSON
+}
+
+// PutConnection makes Airflow hold the connection as given, creating it or
+// replacing what it held.
+func (c *Client) PutConnection(ctx context.Context, conn Connection) error {
+	path := "/connections/" + url.PathEscape(conn.ID)
+	err := c.call(ctx, "PATCH", path, conn, nil)
+	if code(err) == http.StatusNotFound {
+		err = c.call(ctx, "POST", "/connections", conn, nil)
+	}
+	return err
+}
+
+// DeleteConnection removes a connection; one that isn't there is no error.
+func (c *Client) DeleteConnection(ctx context.Context, id string) error {
+	err := c.call(ctx, "DELETE", "/connections/"+url.PathEscape(id), nil, nil)
+	if code(err) == http.StatusNotFound {
+		return nil
+	}
+	return err
 }

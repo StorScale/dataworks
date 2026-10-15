@@ -1,7 +1,7 @@
 // Package reconcile applies projects to the systems they live in: Keycloak
 // (groups, and who's in them), Apache Ranger (the same groups, and the
-// tables' policies), Buckets (the files' bucket and its policies) and Nessie
-// (the tables' namespace). Every step is idempotent: applying a project twice
+// tables' policies), Buckets (the files' bucket and its policies), Nessie
+// (the tables' namespace) and Airflow (the pipelines' git repo). Every step is idempotent: applying a project twice
 // does nothing the second time, and a project that's gone is undone.
 package reconcile
 
@@ -21,6 +21,7 @@ type Reconciler struct {
 	Ranger   *Ranger
 	Buckets  *Buckets
 	Nessie   *Nessie
+	Airflow  *Airflow // nil: no pipelines from git
 	Store    store.Store
 	Log      *slog.Logger
 	// RangerUserPassword starts the password of people the operator adds to
@@ -51,6 +52,13 @@ func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Sta
 	if p.Spec.Tables != nil {
 		part("nessie", r.Nessie.ensureNamespace(ctx, p.Spec.Tables.Namespace))
 	}
+	if r.Airflow != nil {
+		if pl := p.Spec.Pipelines; pl != nil && pl.Repo != "" {
+			part("airflow", r.applyAirflow(ctx, p))
+		} else if err := r.applyAirflow(ctx, p); err != nil { // the repo went: its connection goes
+			part("airflow", err)
+		}
+	}
 	st.Phase = project.Ready
 	for _, pt := range st.Parts {
 		if !pt.OK {
@@ -73,6 +81,9 @@ func (r *Reconciler) Delete(ctx context.Context, p *project.Project) error {
 	keep(r.Ranger.syncPolicies(ctx, p.RangerPrefix(), nil))
 	keep(r.Ranger.syncGroupMembers(ctx, p.Groups(), nil, r.RangerUserPassword))
 	keep(r.Ranger.deleteGroups(ctx, p.Groups()))
+	if r.Airflow != nil {
+		keep(r.Airflow.API.DeleteConnection(ctx, p.GitConnID()))
+	}
 	for _, g := range p.Groups() {
 		keep(r.Keycloak.deleteGroup(ctx, g))
 		keep(r.Buckets.deletePolicy(ctx, g))

@@ -213,9 +213,10 @@ Each project's DAGs come from its own git repo, as an Airflow 3 **DAG bundle** (
 - **The spec:** `pipelines: {serviceAccount, repo, path, ref, credentials: {secretRef}}` (above). `ref` defaults to the install's own (`main` in development, a release branch or tag in production). Credentials are only ever a Secret's name; a repo URL with a user or token in it is refused.
 - **Bundles:** one per project, `project-<name>`, with `subdir` from `path`, `git_conn_id` `git_<name>`, and a refresh about every minute. The platform's own DAGs stay in a local bundle.
 - **The operator:**
-  - writes the list of bundles (on Kubernetes a ConfigMap read by Airflow's API server, scheduler and DAG processor; in Compose a file on a shared volume), and restarts the DAG processor and the scheduler only when the list changes: Airflow 3.3 reads it only as it starts, and has no API to add a bundle;
-  - creates each project's git connection from its Secret (an `AIRFLOW_CONN_*` variable or the REST API), never on a command line or in a file;
-  - reports in the project's status: the bundle, the last commit seen, import errors.
+  - serves the list of bundles (`GET /airflow/bundles`): the platform's own, and each project's whose connection is in place. Airflow 3.3 reads its bundles only as it starts, and has no API to add one, so the scheduler and the DAG processor start through a small wrapper (`stack/tools/airflow_bundles.py`) that reads the list, and starts its process again when the list changes. The same on Kubernetes and in Compose, with no rights to restart anything;
+  - keeps each project's git connection in Airflow through its REST API, as the platform's account (its `Op` role may), from the Secret the project names (on Kubernetes a Secret in the namespace; in Compose `secrets/<name>.json` in the platform's bucket): never on a command line or in a file. A token rotated in the Secret reaches Airflow within a minute;
+  - reports it in the project's status (the `airflow` part).
+- **SSH hosts:** the git hosts' keys are the install's (`pipelines.gitKnownHosts`), checked strictly; without them a host's key is taken the first time.
 - **What runs:** each run records the commit it was created from (`bundle_version`), and its tasks run that commit; a rerun runs it again. A push reaches Airflow within the refresh interval; Airflow 3.3 has no refresh API for a webhook to call.
 - **In the platform:** a project's Pipelines page lists the DAGs of its bundle (`bundle_name`), not its `project:<name>` tag, which any repo could copy. It shows each pipeline's commit and each run's, with links to the repo, and import errors.
 - **Guardrails:**

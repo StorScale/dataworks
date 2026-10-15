@@ -3,7 +3,8 @@
 // where the platform runs:
 //
 //   - Bucket: JSON objects in a Buckets bucket, projects/<name>.json and
-//     status/<name>.json (Compose);
+//     status/<name>.json, and the secrets projects name, secrets/<name>.json
+//     (Compose);
 //   - Kube: Project resources, with their status (Kubernetes);
 //   - Mirror: Kube, with a copy of every project and status kept in the
 //     bucket, for the services that read projects there.
@@ -38,6 +39,10 @@ type Store interface {
 	PutStatus(ctx context.Context, st *project.Status) error
 	// DeleteStatus says the operator is done with a project: it has undone it.
 	DeleteStatus(ctx context.Context, name string) error
+	// Secret is a secret a project names (its git credentials), as keys and
+	// values: nil, with no error, when there's no such secret. On
+	// Kubernetes, a Secret in the namespace; otherwise secrets/<name>.json.
+	Secret(ctx context.Context, name string) (map[string]string, error)
 }
 
 type Bucket struct {
@@ -138,6 +143,18 @@ func (s *Bucket) each(ctx context.Context, prefix string, f func([]byte) error) 
 		}
 	}
 	return nil
+}
+
+func (s *Bucket) Secret(ctx context.Context, name string) (map[string]string, error) {
+	data, err := s.get(ctx, "secrets/"+name+".json")
+	if data == nil || err != nil {
+		return nil, err
+	}
+	var out map[string]string
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, errors.New("secrets/" + name + ".json: " + err.Error())
+	}
+	return out, nil
 }
 
 // get is nil, with no error, when there's no such object.

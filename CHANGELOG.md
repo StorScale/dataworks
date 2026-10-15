@@ -4,6 +4,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **Projects' pipelines from git (phase 7, first steps):**
+  - A project names a git repo for its pipelines (`pipelines.repo`, `path`, `ref`, `credentials.secretRef`); a repo address with credentials in it is refused, and credentials are only ever a Secret's name.
+  - The operator keeps each project's git connection in Airflow (`git_<name>`), from that Secret, and serves the DAG bundles Airflow should run: the platform's own, and one per project (`project-<name>`). Airflow's scheduler and DAG processor start through a wrapper that takes the list and starts them again when it changes.
+  - The git provider is pinned at 1.0.0 (before it, a token could be kept on disk in a clone). SSH repos are checked against the install's known hosts (`pipelines.gitKnownHosts`).
+
 ### Changed
 - **The plan's roadmap after phase 5** ([docs/plan.md](docs/plan.md)), from research into what buyers of Dataiku and comparable platforms value: production-ready (6), git-native projects with Airflow's DAGs from a git repo per project first (7), getting data in (8), governed AI (9), usage and cost per project (10), self-service and ML (11).
 - **Use cases and storyboards for phases 6 to 11** ([docs/use-cases.md](docs/use-cases.md)): who does what, frame by frame, the requirements each sets, and the questions still open.

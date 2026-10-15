@@ -90,6 +90,7 @@ x-airflow: &airflow
   volumes:
     - ./airflow/webserver_config.py:/opt/airflow/webserver_config.py:ro
     - ./airflow/dags:/opt/airflow/dags:ro
+    - ./tools/airflow_bundles.py:/tools/airflow_bundles.py:ro   # the bundles: the platform's DAGs, and projects' repos
     - tls:/tls:ro
     - catalog:/catalog:ro   # the catalog's token, for reporting lineage
 
@@ -291,6 +292,9 @@ services:
       RANGER_URL: http://ranger-admin:6080
       RANGER_PASSWORD: ${RANGER_PASSWORD}
       NESSIE_URL: http://nessie:19120
+      # Projects' pipelines repos: their git connections, through the platform's Airflow account.
+      AIRFLOW_URL: http://airflow:8090/pipelines
+      AIRFLOW_PASSWORD: ${AIRFLOW_PLATFORM_PASSWORD}
     depends_on:
       setup: {condition: service_completed_successfully}
       nessie: {condition: service_started}
@@ -580,14 +584,14 @@ services:
   airflow-scheduler:
     restart: unless-stopped
     <<: *airflow
-    command: ["scheduler"]
+    command: ["python", "/tools/airflow_bundles.py", "airflow", "scheduler"]
     depends_on:
       airflow: {condition: service_healthy}
 
   airflow-dag-processor:
     restart: unless-stopped
     <<: *airflow
-    command: ["dag-processor"]
+    command: ["python", "/tools/airflow_bundles.py", "airflow", "dag-processor"]
     depends_on:
       airflow: {condition: service_healthy}
 

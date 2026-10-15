@@ -1,0 +1,11 @@
+{{/* The git hosts' SSH keys (pipelines.gitKnownHosts), for projects' SSH
+     repos: mounted into Airflow, named in their git connections. */}}
+{{- if .Values.pipelines.gitKnownHosts }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: storscale-git-known-hosts
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+data:
+  known_hosts: {{ .Values.pipelines.gitKnownHosts | quote }}
+{{- end }}

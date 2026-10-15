@@ -31,6 +31,9 @@ volumeMounts:
   - {name: files-tools, mountPath: /tools}
   - {name: tls, mountPath: /tls}
   - {name: catalog, mountPath: /catalog, readOnly: true}   # the catalog's token, for reporting lineage
+  {{- if .Values.pipelines.gitKnownHosts }}
+  - {name: git-known-hosts, mountPath: /etc/storscale/git, readOnly: true}   # the git hosts' SSH keys
+  {{- end }}
   {{- include "storscale.ca.mount" . | nindent 2 }}
 {{- end }}
 {{- define "storscale.airflow.volumes" -}}
@@ -38,6 +41,9 @@ volumeMounts:
 {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 0 }}
 - {name: tls, secret: {secretName: trino-tls}}
 - {name: catalog, secret: {secretName: catalog-token, optional: true}}
+{{- if .Values.pipelines.gitKnownHosts }}
+- {name: git-known-hosts, configMap: {name: storscale-git-known-hosts}}
+{{- end }}
 {{- include "storscale.ca.volumes" . | nindent 0 }}
 {{- end }}
 apiVersion: batch/v1
@@ -150,7 +156,9 @@ spec:
       containers:
         - name: {{ $part }}
           {{- include "storscale.airflow.common" $ | nindent 10 }}
-          args: [{{ $part | quote }}]
+          # Through the wrapper that gives it the DAG bundles: the platform's own,
+          # and each project's pipelines repo (from the operator).
+          args: ["python", "/tools/airflow_bundles.py", "airflow", {{ $part | quote }}]
           {{- if eq $part "scheduler" }}
           {{- include "storscale.resources" (list "100m" "384Mi" "1536Mi") | nindent 10 }}
           {{- else }}
