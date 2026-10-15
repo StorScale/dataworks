@@ -218,12 +218,13 @@ Each project's DAGs come from its own git repo, as an Airflow 3 **DAG bundle** (
   - reports it in the project's status (the `airflow` part).
 - **SSH hosts:** the git hosts' keys are the install's (`pipelines.gitKnownHosts`), checked strictly; without them a host's key is taken the first time.
 - **What runs:** each run records the commit it was created from (`bundle_version`), and its tasks run that commit; a rerun runs it again. A push reaches Airflow within the refresh interval; Airflow 3.3 has no refresh API for a webhook to call.
-- **In the platform:** a project's Pipelines page lists the DAGs of its bundle (`bundle_name`), not its `project:<name>` tag, which any repo could copy. It shows each pipeline's commit and each run's, with links to the repo, and import errors.
+- **In the platform:** a project's Pipelines page lists the DAGs of its bundle (`bundle_name`), and the platform's own tagged `project:<name>`; a tag in another project's repo doesn't count. It names the repo, shows each pipeline's commit and each run's, and lists the repo's files that didn't load.
 - **Guardrails:**
-  - DAG IDs are global in Airflow, and when two bundles define the same one the last parsed wins, without a warning: the platform refuses a clash between projects.
+  - DAG IDs are global in Airflow, and when two bundles define the same one the last parsed wins, without a warning: the Pipelines page warns of a clash (from the DAG's versions, which name their bundles). Refusing one is later work.
   - Every project's code runs in one Airflow, which can read every connection: each project's git credential is a read-only deploy key or a token for its repo only.
-  - The git provider is pinned at 1.0.1 or later: before 1.0.0, a token could be stored on disk in the clone's git config.
-- **Tests:** a suite with a git server of its own (Compose and kind): push a DAG, create a project pointing at it, see the DAG appear and run at that commit; push a change and see the next commit; check that no token is in Airflow's config, its logs or the clone; delete the project and see its DAGs go.
+  - The git provider is pinned at 1.0.0: it hands git the token through a credential helper, for each fetch. Before it, a token could be stored on disk in the clone's git config.
+- **Tests:** `pipelines_git`, with a git server of its own (git http-backend behind a token, in the test's container or pod), in Compose and on kind: push a DAG, create a project pointing at it, see the DAG appear and run at that commit; push a change and see the next commit, and a broken file named; check that the token isn't in Airflow's API, the bundle list, or what a task sees (the checkout's git settings, its environment, its log); delete the project and see its DAGs, connection and bundle go.
+- **Status (2026-10-15):** built, as above.
 - **Effort:** about 9 to 13 days.
 
 ## The semantic layer, and agents
