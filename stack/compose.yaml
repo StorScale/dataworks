@@ -65,33 +65,37 @@ x-superset: &superset
     - ./superset:/app/pythonpath:ro
     - tls:/tls:ro
 
+# Airflow runs every project's DAG code, so it gets the keys it needs and no
+# others: not .env, which holds the platform's admin secrets. (Compose fills
+# in the ${...} below from .env; the containers see only the results.)
+x-airflow-env: &airflow-env
+  <<: *urls
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__PARALLELISM: "4"   # LocalExecutor keeps this many workers; its default, 32, holds GBs
+  AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@airflow-db:5432/airflow
+  AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+  AIRFLOW__API__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
+  AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET}
+  AIRFLOW__API__BASE_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}/pipelines
+  # The API server (--proxy-headers) trusts X-Forwarded-* only from these;
+  # uvicorn's default, 127.0.0.1, leaves out the gateway.
+  FORWARDED_ALLOW_IPS: "*"
+  AIRFLOW__API__PORT: "8090"
+  AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow:8090/pipelines/execution/
+  AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+  AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "False"
+  AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: "10"
+
 x-airflow: &airflow
   build: ./airflow/image
   image: storscale-airflow
-  env_file: .env
-  environment:
-    <<: *urls
-    AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__CORE__PARALLELISM: "4"   # LocalExecutor keeps this many workers; its default, 32, holds GBs
-    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@airflow-db:5432/airflow
-    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-    AIRFLOW__API__SECRET_KEY: ${AIRFLOW_SECRET_KEY}
-    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET}
-    AIRFLOW__API__BASE_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}/pipelines
-    # The API server (--proxy-headers) trusts X-Forwarded-* only from these;
-    # uvicorn's default, 127.0.0.1, leaves out the gateway.
-    FORWARDED_ALLOW_IPS: "*"
-    AIRFLOW__API__PORT: "8090"
-    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow:8090/pipelines/execution/
-    AIRFLOW__CORE__LOAD_EXAMPLES: "False"
-    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "False"
-    AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: "10"
+  environment: *airflow-env
   volumes:
     - ./airflow/webserver_config.py:/opt/airflow/webserver_config.py:ro
     - ./airflow/dags:/opt/airflow/dags:ro
     - ./tools/airflow_bundles.py:/tools/airflow_bundles.py:ro   # the bundles: the platform's DAGs, and projects' repos
-    - tls:/tls:ro
+    - trino-cert:/tls:ro   # Trino's certificate, not its key
     - catalog:/catalog:ro   # the catalog's token, for reporting lineage
 
 # OpenMetadata's server, and its one-off database migration.
@@ -417,10 +421,14 @@ services:
     depends_on:
       setup: {condition: service_completed_successfully}
 
-  # Trino's self-signed certificate (Trino accepts tokens only over HTTPS).
+  # Trino's self-signed certificate (Trino accepts tokens only over HTTPS),
+  # and a copy of the certificate alone, for Airflow (trino-cert).
   tls:
     <<: *tools
-    command: ["sh", "-c", "test -s /tls/trino.pem || (openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj /CN=trino -addext subjectAltName=DNS:trino,DNS:localhost -keyout /tls/key.pem -out /tls/cert.pem && cat /tls/key.pem /tls/cert.pem > /tls/trino.pem && chmod 644 /tls/*.pem)"]
+    command: ["sh", "-c", "(test -s /tls/trino.pem || (openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj /CN=trino -addext subjectAltName=DNS:trino,DNS:localhost -keyout /tls/key.pem -out /tls/cert.pem && cat /tls/key.pem /tls/cert.pem > /tls/trino.pem && chmod 644 /tls/*.pem)) && cp /tls/cert.pem /cert/cert.pem && chmod 644 /cert/cert.pem"]
+    volumes:
+      - tls:/tls
+      - trino-cert:/cert
 
   # Trino's password file (bcrypt): Superset signs in to Trino as "superset".
   trino-passwords:
@@ -549,6 +557,10 @@ services:
   # Airflow's database, and its one secret: the pipelines' Keycloak client.
   airflow-init:
     <<: *airflow
+    environment:
+      <<: *airflow-env
+      AIRFLOW_PLATFORM_PASSWORD: ${AIRFLOW_PLATFORM_PASSWORD}
+      AIRFLOW_PIPELINES_SECRET: ${AIRFLOW_PIPELINES_SECRET}
     entrypoint: ["bash", "-c"]
     command:
       - |
@@ -570,6 +582,9 @@ services:
   airflow:
     restart: unless-stopped
     <<: *airflow
+    environment:
+      <<: *airflow-env
+      AIRFLOW_OAUTH_SECRET: ${AIRFLOW_OAUTH_SECRET}   # people's sign-in (webserver_config.py)
     command: ["api-server", "--proxy-headers"]   # the scheme people used, from the gateway
     depends_on:
       airflow-init: {condition: service_completed_successfully}
@@ -781,6 +796,7 @@ volumes:
   ranger-db:
   nessie-data:
   tls:
+  trino-cert:
   trino-auth:
   prometheus-token:
   jupyterhub-data:

@@ -17,7 +17,9 @@ OAUTH_PROVIDERS = [{
     "name": "keycloak", "icon": "fa-key", "token_key": "access_token",
     "remote_app": {
         "client_id": "airflow",
-        "client_secret": os.environ["AIRFLOW_OAUTH_SECRET"],
+        # The API server's alone: the scheduler and DAG processor run
+        # projects' DAG code and sign no one in, so they go without it.
+        "client_secret": os.environ.get("AIRFLOW_OAUTH_SECRET", ""),
         "server_metadata_url": f"{KEYCLOAK}/.well-known/openid-configuration",
         "api_base_url": f"{KEYCLOAK}/protocol/openid-connect/",
         "client_kwargs": {"scope": "openid profile email"},

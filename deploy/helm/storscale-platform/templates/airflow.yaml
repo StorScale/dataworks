@@ -2,11 +2,25 @@
 # the scheduler (LocalExecutor: it runs the tasks too) and the DAG processor,
 # after airflow-init (its database, the platform's account, and the
 # pipelines' Keycloak client).
+#
+# Airflow runs every project's DAG code, so it gets the keys it needs and no
+# others: storscale-env's Airflow keys by name, not all of it (the platform's
+# admin secrets); Trino's certificate, not its key; and a service account that
+# may only read whether the setup steps are done.
+# storscale.airflow.common: (list $ part), part init, api-server, scheduler or dag-processor.
 {{- define "storscale.airflow.common" -}}
-image: {{ include "storscale.image" (list . "airflow") }}
-imagePullPolicy: {{ .Values.images.pullPolicy }}
-{{ include "storscale.envFrom" . }}
+{{- $root := index . 0 }}{{ $part := index . 1 -}}
+image: {{ include "storscale.image" (list $root "airflow") }}
+imagePullPolicy: {{ $root.Values.images.pullPolicy }}
+envFrom:
+  - configMapRef: {name: storscale-config}
 env:
+  {{- $keys := list "AIRFLOW_DB_PASSWORD" "AIRFLOW_FERNET_KEY" "AIRFLOW_SECRET_KEY" "AIRFLOW_JWT_SECRET" }}
+  {{- if eq $part "init" }}{{ $keys = concat $keys (list "AIRFLOW_PLATFORM_PASSWORD" "AIRFLOW_PIPELINES_SECRET") }}{{ end }}
+  {{- if eq $part "api-server" }}{{ $keys = append $keys "AIRFLOW_OAUTH_SECRET" }}{{ end }}
+  {{- range $keys }}
+  - {name: {{ . }}, valueFrom: {secretKeyRef: {name: storscale-env, key: {{ . }}}}}
+  {{- end }}
   - {name: AIRFLOW__CORE__EXECUTOR, value: LocalExecutor}
   - {name: AIRFLOW__CORE__PARALLELISM, value: "4"}
   - {name: AIRFLOW__CORE__AUTH_MANAGER, value: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager}
@@ -14,7 +28,7 @@ env:
   - {name: AIRFLOW__CORE__FERNET_KEY, value: "$(AIRFLOW_FERNET_KEY)"}
   - {name: AIRFLOW__API__SECRET_KEY, value: "$(AIRFLOW_SECRET_KEY)"}
   - {name: AIRFLOW__API_AUTH__JWT_SECRET, value: "$(AIRFLOW_JWT_SECRET)"}
-  - {name: AIRFLOW__API__BASE_URL, value: "{{ include "storscale.url" . }}/pipelines"}
+  - {name: AIRFLOW__API__BASE_URL, value: "{{ include "storscale.url" $root }}/pipelines"}
   - {name: AIRFLOW__API__PORT, value: "8090"}
   # The API server (--proxy-headers) trusts X-Forwarded-* only from these;
   # uvicorn's default, 127.0.0.1, leaves out the gateway.
@@ -23,23 +37,23 @@ env:
   - {name: AIRFLOW__CORE__LOAD_EXAMPLES, value: "False"}
   - {name: AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION, value: "False"}
   - {name: AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL, value: "10"}
-  - {name: STORSCALE_REVISION, value: {{ .Release.Revision | quote }}}
-  {{- include "storscale.ca.env" . | nindent 2 }}
+  - {name: STORSCALE_REVISION, value: {{ $root.Release.Revision | quote }}}
+  {{- include "storscale.ca.env" $root | nindent 2 }}
 volumeMounts:
   - {name: files-airflow, mountPath: /opt/airflow/webserver_config.py, subPath: webserver_config.py}
   - {name: files-airflow, mountPath: /opt/airflow/dags, subPath: dags}
   - {name: files-tools, mountPath: /tools}
   - {name: tls, mountPath: /tls}
   - {name: catalog, mountPath: /catalog, readOnly: true}   # the catalog's token, for reporting lineage
-  {{- if .Values.pipelines.gitKnownHosts }}
+  {{- if $root.Values.pipelines.gitKnownHosts }}
   - {name: git-known-hosts, mountPath: /etc/storscale/git, readOnly: true}   # the git hosts' SSH keys
   {{- end }}
-  {{- include "storscale.ca.mount" . | nindent 2 }}
+  {{- include "storscale.ca.mount" $root | nindent 2 }}
 {{- end }}
 {{- define "storscale.airflow.volumes" -}}
 {{- include "storscale.filesVolume" (list . "airflow" "airflow") }}
 {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 0 }}
-- {name: tls, secret: {secretName: trino-tls}}
+- {name: tls, secret: {secretName: trino-tls, items: [{key: cert.pem, path: cert.pem}]}}
 - {name: catalog, secret: {secretName: catalog-token, optional: true}}
 {{- if .Values.pipelines.gitKnownHosts }}
 - {name: git-known-hosts, configMap: {name: storscale-git-known-hosts}}
@@ -66,7 +80,7 @@ spec:
         {{- include "storscale.wait" (list . "db" (list "tcp" "airflow-db:5432")) | nindent 8 }}
       containers:
         - name: init
-          {{- include "storscale.airflow.common" . | nindent 10 }}
+          {{- include "storscale.airflow.common" (list . "init") | nindent 10 }}
           command: ["bash", "-c"]
           args:
             - |
@@ -103,14 +117,14 @@ spec:
         checksum/config: {{ include "storscale.filesConfigMap" (list . "airflow" "airflow") | sha256sum }}
     spec:
       enableServiceLinks: false
-      serviceAccountName: storscale
+      serviceAccountName: storscale-airflow
       initContainers:
         {{- include "storscale.ca.init" . | nindent 8 }}
         {{- include "storscale.wait" (list . "setup" (list "job" "airflow-init" "setup-trino")) | nindent 8 }}
         {{- include "storscale.wait" (list . "keycloak" (list "url" "http://keycloak:9000/health/ready")) | nindent 8 }}
       containers:
         - name: api-server
-          {{- include "storscale.airflow.common" . | nindent 10 }}
+          {{- include "storscale.airflow.common" (list . "api-server") | nindent 10 }}
           args: ["api-server", "--proxy-headers"]   # the scheme people used, from the gateway
           ports:
             - {name: http, containerPort: 8090}
@@ -149,13 +163,13 @@ spec:
         checksum/config: {{ include "storscale.filesConfigMap" (list $ "airflow" "airflow") | sha256sum }}
     spec:
       enableServiceLinks: false
-      serviceAccountName: storscale
+      serviceAccountName: storscale-airflow
       initContainers:
         {{- include "storscale.ca.init" $ | nindent 8 }}
         {{- include "storscale.wait" (list $ "airflow" (list "url" "http://airflow:8090/pipelines/api/v2/monitor/health")) | nindent 8 }}
       containers:
         - name: {{ $part }}
-          {{- include "storscale.airflow.common" $ | nindent 10 }}
+          {{- include "storscale.airflow.common" (list $ $part) | nindent 10 }}
           # Through the wrapper that gives it the DAG bundles: the platform's own,
           # and each project's pipelines repo (from the operator).
           args: ["python", "/tools/airflow_bundles.py", "airflow", {{ $part | quote }}]
@@ -167,3 +181,32 @@ spec:
       volumes:
         {{- include "storscale.airflow.volumes" $ | nindent 8 }}
 {{- end }}
+---
+# Airflow's own service account: its pods wait for the setup steps, and
+# nothing else (airflow-init, which runs no DAG code, marks itself done as
+# the platform's own steps do).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: storscale-airflow
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: storscale-airflow
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [storscale-setup-done]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: storscale-airflow
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: storscale-airflow}
+subjects:
+  - {kind: ServiceAccount, name: storscale-airflow, namespace: {{ .Release.Namespace }}}

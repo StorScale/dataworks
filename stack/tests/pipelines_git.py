@@ -9,7 +9,8 @@ token), as a team's git host would, and makes a project, pipes, that names it:
      commit pushed, and the platform shows it as the project's;
   2. bob runs it from the platform; the run says which commit it ran, and
      nothing it can see (the checkout's git settings, its environment, its
-     log) holds the token;
+     log) holds the token. Neither as it's parsed nor as it runs can its
+     code read the platform's secrets (Airflow has its own keys only);
   3. a new commit reaches Airflow, with a file that doesn't load: the
      platform shows the new commit and names the broken file;
   4. deleting the project takes its repo out of Airflow: its DAGs, its
@@ -42,18 +43,41 @@ OPERATOR = "http://platform-operator:8081"
 NAME, DAG, SECRET, PORT = "pipes", "pipes_hello", "storscale-test-git", 8418
 USER, TOKEN = "pipes-bot", "gittest_" + secrets.token_hex(16)
 
-DAG_V1 = '''"""Says hello, and what of git it can see."""
+DAG_V1 = '''"""Says hello, and what of git and the platform's secrets it can see: as
+it's parsed (in its description) and as it runs (in its log)."""
 import os
 import subprocess
 from datetime import datetime
 
+import requests
+
 from airflow.sdk import dag, task
 
+PLATFORM_SECRETS = ["BUCKETS_ROOT_PASSWORD", "KEYCLOAK_ADMIN_PASSWORD", "RANGER_PASSWORD", "OPERATOR_CLIENT_SECRET",
+                    "PLATFORM_STORE_SECRET_KEY", "PLATFORM_OAUTH_SECRET", "AIRFLOW_PLATFORM_PASSWORD", "AIRFLOW_OAUTH_SECRET"]
+SA = "/var/run/secrets/kubernetes.io/serviceaccount"
 
-@dag(dag_id="pipes_hello", description="{description}", schedule=None, start_date=datetime(2026, 1, 1), catchup=False)
+
+def exposed():
+    """What of the platform's this code can read: none, if Airflow is given only its own keys."""
+    found = [k for k in PLATFORM_SECRETS if os.environ.get(k)]
+    if os.path.exists("/tls/key.pem") or os.path.exists("/tls/trino.pem"):
+        found.append("trino-key")
+    if os.path.exists(SA + "/token"):
+        ns = open(SA + "/namespace").read().strip()
+        r = requests.get(f"https://kubernetes.default.svc/api/v1/namespaces/{{ns}}/secrets/storscale-env", timeout=10,
+                         headers={{"Authorization": "Bearer " + open(SA + "/token").read().strip()}}, verify=SA + "/ca.crt")
+        if r.status_code != 403:
+            found.append(f"kubernetes-secrets(HTTP {{r.status_code}})")
+    return ",".join(found) or "none"
+
+
+@dag(dag_id="pipes_hello", description="{description}; exposed: " + exposed(), schedule=None,
+     start_date=datetime(2026, 1, 1), catchup=False)
 def pipes_hello():
     @task
     def show():
+        print("pipes_check: exposed " + exposed())
         here = os.path.dirname(os.path.abspath(__file__))
         git = subprocess.run(["git", "-C", here, "config", "--list", "--show-origin"], capture_output=True, text=True)
         for line in (git.stdout + git.stderr).splitlines():
@@ -219,6 +243,8 @@ def main():
         loaded = wait(lambda: hello(bob, v1), 600, every=10)
         check("Airflow loads the repo's DAG, at the commit pushed", loaded is not None,
               f"{DAG} at {v1[:7]}" if loaded else f"not yet: {[(x['id'], x.get('commit')) for x in pipelines(bob).get('pipelines', [])]}")
+        check("... and the DAG's code, as it's parsed, can't read the platform's secrets",
+              loaded is not None and loaded["description"].endswith("exposed: none"), (loaded or {}).get("description"))
         check("... fetching it with the token", any(a for _, a in Git.seen) and all(
             a for path, a in Git.seen if not path.endswith("/info/refs?service=git-upload-pack")),
               f"{sum(a for _, a in Git.seen)} of {len(Git.seen)} requests signed in")
@@ -240,12 +266,15 @@ def main():
         check("... and no token in what the task sees: the checkout's git settings, its environment, its log",
               log.ok and any("pipes_check: done" in x for x in seen) and TOKEN not in text and not any("***" in x for x in seen),
               f"HTTP {log.status_code}, {len(seen)} lines checked")
+        check("... nor the platform's secrets: not in its environment, its files, or through Kubernetes",
+              any(x.endswith("pipes_check: exposed none") for x in seen),
+              next((x for x in seen if "pipes_check: exposed" in x), "no line"))
 
         # 3. A new commit, with a broken file.
         v2 = push(work, {f"dags/{DAG}.py": DAG_V1.format(description="Hello, v2"),
                          "dags/broken.py": "from airflow.sdk import dag\n\nthis is not python\n"}, "v2, and a mistake")
         now = wait(lambda: hello(bob, v2), 420, every=10)
-        check("a new commit reaches Airflow, and the platform shows it", now is not None and now["description"] == "Hello, v2",
+        check("a new commit reaches Airflow, and the platform shows it", now is not None and now["description"].startswith("Hello, v2;"),
               f"{DAG} at {v2[:7]}" if now else f"still at {(hello(bob) or {}).get('commit', '?')[:7]}")
         errs = wait(lambda: pipelines(bob).get("importErrors"), 180, every=10) or []
         check("... and names the file in it that didn't load", any(e["file"].endswith("broken.py") for e in errs),
