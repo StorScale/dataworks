@@ -229,18 +229,25 @@ Each project's DAGs come from its own git repo, as an Airflow 3 **DAG bundle** (
 ### Keeping projects' DAG code apart (next, before a second team uses it)
 
 Today every project's DAG code runs in one Airflow, as the same user, in the same containers:
-- **What it can read:** every connection, so every project's git token; and the containers' environment, which is the platform's whole secret set (`.env` in Compose, the Secret `storscale-env` on Kubernetes): Buckets' root keys, Keycloak's and Ranger's admin passwords, the operator's client secret. A DAG file runs as it's parsed, so a push to any project's repo is enough; no run is needed.
+- **What it could read:** every connection, so every project's git token; and the containers' environment, which was the platform's whole secret set (`.env` in Compose, the Secret `storscale-env` on Kubernetes). Step 1 takes the platform's secrets away; every connection stays readable until step 2. A DAG file runs as it's parsed, so a push to any project's repo is enough; no run is needed.
 - **So:** until this is done, a team's repo is as trusted as the platform. One team, or several that trust each other, only.
 
 The work, in order:
 1. **Give Airflow only what it needs.** Its containers take named keys, not all of `storscale-env` (its database, Fernet, JWT and API keys, the platform's account, the pipelines' Keycloak secret), and none of the platform's admin secrets. Done on its own, it's the biggest gain.
    - **Built (2026-10-15):** the scheduler and DAG processor get Airflow's database, Fernet, API and JWT keys and nothing more of `storscale-env`; the API server also its Keycloak client secret; `airflow-init` also the platform's account and the pipelines' secret. Trino's certificate without its key. On Kubernetes a service account of Airflow's own, which may only read whether the setup steps are done (the platform's own could read every Secret). `pipelines_git` checks it, at parse time and in a task.
    - **What's left for steps 2 and 3:** Airflow's own keys are still there for any DAG to read. With its database password and Fernet key, a DAG reads every connection; with the JWT secret, it can sign itself an API token. The catalog's bot token (for lineage) is there too.
-2. **Parse each project's repo apart.** A DAG processor per project (`airflow dag-processor --bundle-name project-<name>`, in Airflow 3.3), started by the wrapper from the operator's list, with an environment holding nothing but what parsing needs. The platform's own bundle keeps its own.
-3. **Run each project's tasks apart, with its own connections only.** Airflow's multi-team mode (`[core] multi_team`, since 3.2) gives each team its bundles, its connections and variables, and its executor; a task's token then reads only its team's connections. A team per project, set by the operator; tasks in their own pods (Kubernetes executor), under a service account per project, on Kubernetes. Multi-team is new in Airflow: try it first, and keep to what it promises.
-4. **A test that it holds:** a DAG in one project's repo tries, at parse time and in a task, to read another project's connection, the platform's secrets and the environment, and gets none of them. It joins `pipelines_git`.
-- **Effort:** step 1 about 2 days; steps 2 to 4 about 8 to 12, more if multi-team falls short.
-- **Effort:** about 9 to 13 days.
+2. **An Airflow per project (decided 2026-10-15).** A DAG processor or a team per project can't do it in Airflow 3.3: the DAG processor must reach the database directly, parsing runs in a fork of it, and Airflow's security model says a DAG author "can potentially retrieve credentials from the parent process"; multi-team mode is experimental and shares signing keys and connections. So each project with a repo gets an Airflow of its own, and its code can only reach its own:
+   - **What it is:** one pod per project (`airflow-<name>`): the API server, the scheduler (LocalExecutor) and the DAG processor, with one bundle, the project's repo. About 1 to 1.5 GB of memory each.
+   - **Its keys:** a database and a Postgres user of its own on the shared Airflow database server; its own Fernet, API and JWT keys and platform account, made by the operator into a Secret `airflow-<name>`. Its connections: the repo's, and its pipelines' Keycloak client. Nothing else of the platform's.
+   - **Who its tasks run as:** a Keycloak service account per project (`pipelines-<name>`), made by the operator, a member of that project alone. Today's shared `airflow-pipelines` would let one project's code act in every project that uses it.
+   - **The operator:** creates, upgrades (to the chart's Airflow image) and deletes it: the database and user, the Secret, the Deployment and Service, owned by the Project so they go with it. Deleting a project drops its Airflow database, and its run history with it. It needs rights on Deployments and Services in the namespace, and Postgres' admin password; those stay in the operator.
+   - **The platform:** platformd talks to each project's Airflow (from the project's status) for the Pipelines page. That page shows runs, tasks and their logs. Airflow's own UI per project comes later: it needs a path per project at the gateway and a Keycloak client each.
+   - **The shared Airflow:** keeps the platform's own DAGs (`sales_ingest`, `lakehouse_identity`), and no project's repo, on Kubernetes. The bundle wrapper goes there.
+   - **Compose:** one shared Airflow with the projects' bundles, as now: for development on one machine, by one team. The operator in Compose can't start containers, by design.
+   - **Lineage:** a project's Airflow reports to the catalog with a bot token of its own, later; until then its runs have no lineage.
+3. **A test that it holds:** a DAG in one project's repo tries, at parse time and in a task, to read another project's connections, the platform's secrets and its environment, and to act as another project's service account, and gets none of them. It joins `pipelines_git`, on kind.
+- **Open:** whether the gateway gives each project's Airflow UI a path (`/pipelines/<name>/`), or the platform's page is enough; a size per project (`pipelines.resources`), with the install's default.
+- **Effort:** step 1 about 2 days (done); step 2 about 10 to 14; step 3 about 2.
 
 ## The semantic layer, and agents
 
