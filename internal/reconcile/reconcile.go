@@ -55,8 +55,12 @@ func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Sta
 	if r.Airflow != nil {
 		if pl := p.Spec.Pipelines; pl != nil && pl.Repo != "" {
 			part("airflow", r.applyAirflow(ctx, p))
-		} else if err := r.applyAirflow(ctx, p); err != nil { // the repo went: its connection goes
-			part("airflow", err)
+		} else if err := r.applyAirflow(ctx, p); err != nil && r.Log != nil {
+			// The repo went (or there never was one): its connection goes, if
+			// any. A project without a repo doesn't wait on Airflow, which may
+			// be starting, and itself waits for projects (setup-trino); the
+			// next resync tries again.
+			r.Log.Warn("removing the git connection", "project", p.Metadata.Name, "error", err)
 		}
 	}
 	st.Phase = project.Ready
