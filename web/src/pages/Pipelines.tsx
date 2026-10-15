@@ -1,10 +1,37 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ago, getPipelines, startRun, took, when } from "../api";
+import { ago, getPipelines, startRun, took, when, type ImportError, type PipelinesRepo } from "../api";
 import { ErrorBanner, Spinner, StateDot, usePoll, useProject } from "../lib";
 
-// Pipelines is a project's Airflow DAGs: their recent runs, the newest run's
-// tasks, and (for editors) a way to start one. Writing them stays in Airflow.
+// Pipelines is a project's Airflow DAGs: those in its pipelines repo, and the
+// platform's own tagged for it. Their recent runs, the newest run's tasks, the
+// commit each ran, and (for editors) a way to start one. Writing them happens
+// in the repo (or Airflow's own DAGs folder).
+
+const short = (sha?: string) => sha?.slice(0, 7);
+
+// Repo is the project's pipelines repo, and the files in it Airflow couldn't load.
+function Repo({ repo, errors }: { repo: PipelinesRepo; errors?: ImportError[] }) {
+  return (
+    <div className="card" data-testid="pipelines-repo">
+      <p className="small" style={{ margin: 0 }}>
+        From <code>{repo.url}</code>{repo.path && <>, in <code>{repo.path}</code></>}, on <code>{repo.ref || "the default branch"}</code>.
+        {" "}Airflow checks it for new commits every few minutes.
+      </p>
+      {errors && errors.length > 0 && (
+        <div className="banner error" style={{ marginTop: 12 }} data-testid="import-errors">
+          <strong>{errors.length === 1 ? "A file" : `${errors.length} files`} in the repo didn't load.</strong>
+          {errors.map((e) => (
+            <details key={e.file} style={{ marginTop: 6 }}>
+              <summary className="mono small">{e.file}</summary>
+              <pre className="small" style={{ whiteSpace: "pre-wrap", margin: "6px 0 0" }}>{e.error}</pre>
+            </details>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 export default function Pipelines() {
   const { name } = useProject();
   const [params, setParams] = useSearchParams();
@@ -18,8 +45,11 @@ export default function Pipelines() {
   if (data.pipelines.length === 0) {
     return (
       <div className="page">
+        {data.repo && <Repo repo={data.repo} errors={data.importErrors} />}
         <div className="empty">
-          No pipelines yet. A pipeline belongs to this project when its Airflow DAG is tagged <code>project:{name}</code>.{" "}
+          {data.repo
+            ? <>No pipelines yet. Push a DAG to the repo, and it shows here once Airflow has loaded it.</>
+            : <>No pipelines yet. Name a git repo for them in the project's settings, or tag an Airflow DAG <code>project:{name}</code>.</>}{" "}
           <Link to="/tools/pipelines">Open Airflow</Link>
         </div>
       </div>
@@ -58,11 +88,15 @@ export default function Pipelines() {
         </nav>
 
         <section className="main stack">
+          {data.repo && <Repo repo={data.repo} errors={data.importErrors} />}
           <div className="card">
             <div className="card-head" style={{ alignItems: "flex-start" }}>
               <div>
                 <h2 className="mono" style={{ fontSize: 18 }}>{p.id}</h2>
                 <p className="muted small" style={{ margin: "4px 0 0" }}>{p.description || "No description."}{p.paused && <> · <span className="pill">paused</span></>}</p>
+                <p className="muted small" style={{ margin: "4px 0 0" }} data-testid="pipeline-source">
+                  {p.bundle === "dags-folder" ? "The platform's own, in Airflow's DAGs folder." : <>From the repo, at <code title={p.commit}>{short(p.commit) ?? "–"}</code>.</>}
+                </p>
               </div>
               <div className="row">
                 <Link className="btn" to="/tools/pipelines">Edit in Airflow</Link>
@@ -70,6 +104,12 @@ export default function Pipelines() {
               </div>
             </div>
             <ErrorBanner error={startError} />
+            {p.clashesWith && p.clashesWith.length > 0 && (
+              <div className="banner warn" data-testid="pipeline-clash">
+                Another repo has a DAG with this ID too ({p.clashesWith.map((b) => b.replace(/^project-/, "")).join(", ")}). Airflow keeps only one at a time,
+                so this one may show the other's code. Give one of them a new <code>dag_id</code>.
+              </div>
+            )}
             {started && <div className="banner info" data-testid="run-started">Started run <code>{started}</code>. It runs as the project's pipelines service account.</div>}
             {!data.canRun && <p className="small muted" style={{ margin: 0 }}>The project's editors can start runs.</p>}
 
@@ -109,11 +149,12 @@ export default function Pipelines() {
 
           <div className="card flush">
             <table className="t">
-              <thead><tr><th>Run</th><th>Started</th><th>Took</th><th>By</th></tr></thead>
+              <thead><tr><th>Run</th><th>Commit</th><th>Started</th><th>Took</th><th>By</th></tr></thead>
               <tbody>
                 {p.runs.map((r) => (
                   <tr key={r.id}>
                     <td><span className="row" style={{ gap: 8 }}><StateDot state={r.state} /><span className="mono small">{r.id}</span></span></td>
+                    <td className="mono small" title={r.commit}>{short(r.commit) ?? "–"}</td>
                     <td className="small">{when(r.started)?.toLocaleString() ?? "–"}</td>
                     <td className="small muted">{took(when(r.started), when(r.ended)) || (r.state === "running" ? "running" : "–")}</td>
                     <td className="small muted">{r.requestedBy ?? (r.type === "scheduled" ? "schedule" : r.type)}</td>

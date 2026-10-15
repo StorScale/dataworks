@@ -308,7 +308,17 @@ func (s *server) handlePipelines(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"pipelines": ps, "canRun": v.Role == project.Editor || s.isAdmin(sess.User)})
+	out := map[string]any{"pipelines": ps, "canRun": v.Role == project.Editor || s.isAdmin(sess.User)}
+	// The project's pipelines repo, and the files in it Airflow couldn't load.
+	if pl := v.Spec.Spec.Pipelines; pl != nil && pl.Repo != "" {
+		out["repo"] = map[string]string{"url": pl.Repo, "path": pl.Path, "ref": pl.Ref}
+		errs, err := s.airflow.ImportErrors(r.Context(), v.Name)
+		if err != nil {
+			s.log.Error("import errors", "project", v.Name, "error", err)
+		}
+		out["importErrors"] = errs
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // handleStartRun starts a run of one of the project's pipelines, for its
