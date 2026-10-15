@@ -5,8 +5,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 ## [Unreleased]
 
 ### Changed
-- **The plan's roadmap after phase 5** ([docs/plan.md](docs/plan.md)), from research into what buyers of Dataiku and comparable platforms value: production-ready (6), git-native projects with Airflow's DAGs from a git repo per project first (7), governed AI (8), usage and cost per project (9), self-service and ML (10).
-- **Use cases and storyboards for phases 6 to 10** ([docs/use-cases.md](docs/use-cases.md)): who does what, frame by frame, the requirements each sets, and the questions still open.
+- **The plan's roadmap after phase 5** ([docs/plan.md](docs/plan.md)), from research into what buyers of Dataiku and comparable platforms value: production-ready (6), git-native projects with Airflow's DAGs from a git repo per project first (7), getting data in (8), governed AI (9), usage and cost per project (10), self-service and ML (11).
+- **Use cases and storyboards for phases 6 to 11** ([docs/use-cases.md](docs/use-cases.md)): who does what, frame by frame, the requirements each sets, and the questions still open.
+- **What an install needs before real use, added to the plan:** Iceberg table maintenance, high availability and hardening, and alerts on data problems (phase 6); dbt (phase 7); getting data in, by connectors and change capture, as a new phase 8; classification of columns with Ranger's policies by tag (phase 9). Retention and erasure, templates, and data products are listed, not yet placed.
 
 ## [0.4.2] - 2026-10-13
 
