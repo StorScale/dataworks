@@ -189,3 +189,27 @@ func TestKubeRefusals(t *testing.T) {
 		t.Error("a wrong token: no error")
 	}
 }
+
+func TestASecretIsReadFromTheProjectsNamespace(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Header.Get("Authorization") != "Bearer sa-token":
+			http.Error(w, `{"message":"Unauthorized"}`, http.StatusUnauthorized)
+		case r.URL.Path == "/api/v1/namespaces/storscale/secrets/sales-git":
+			// Kubernetes gives a Secret's values in base64.
+			w.Write([]byte(`{"data": {"username": "Ym9i", "password": "Z2hwX3Rva2Vu"}}`))
+		default:
+			http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
+		}
+	}))
+	defer ts.Close()
+	k := &Kube{URL: ts.URL + "/apis/platform.storscale.io/v1alpha1/namespaces/storscale/projects", HTTP: ts.Client(),
+		Token: func() (string, error) { return "sa-token", nil }}
+	got, err := k.Secret(context.Background(), "sales-git")
+	if err != nil || got["username"] != "bob" || got["password"] != "ghp_token" {
+		t.Errorf("Secret: %v %v, want bob and his token, decoded", got, err)
+	}
+	if got, err := k.Secret(context.Background(), "nothing"); got != nil || err != nil {
+		t.Errorf("a missing Secret: %v %v, want nil and no error", got, err)
+	}
+}

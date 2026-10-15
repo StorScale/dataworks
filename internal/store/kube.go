@@ -92,6 +92,27 @@ func (r *resource) status() (*project.Status, error) {
 
 // call sends a request to the API. 404 is (nil, nil): no such project.
 func (k *Kube) call(ctx context.Context, method, path, contentType string, body, out any) (bool, error) {
+	return k.do(ctx, method, k.URL+path, contentType, body, out)
+}
+
+// Secret reads a Secret in the projects' namespace.
+func (k *Kube) Secret(ctx context.Context, name string) (map[string]string, error) {
+	u := strings.TrimSuffix(strings.Replace(k.URL, "/apis/platform.storscale.io/v1alpha1/", "/api/v1/", 1), "/projects") + "/secrets/" + name
+	var sec struct {
+		Data map[string][]byte `json:"data"` // base64 in JSON: decoded as []byte
+	}
+	found, err := k.do(ctx, "GET", u, "", nil, &sec)
+	if !found || err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for key, v := range sec.Data {
+		out[key] = string(v)
+	}
+	return out, nil
+}
+
+func (k *Kube) do(ctx context.Context, method, url, contentType string, body, out any) (bool, error) {
 	var rd io.Reader
 	if body != nil {
 		data, err := json.Marshal(body)
@@ -100,7 +121,7 @@ func (k *Kube) call(ctx context.Context, method, path, contentType string, body,
 		}
 		rd = bytes.NewReader(data)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, k.URL+path, rd)
+	req, err := http.NewRequestWithContext(ctx, method, url, rd)
 	if err != nil {
 		return false, err
 	}

@@ -115,7 +115,8 @@ spec:
                       required: [secretRef]
                       description: >-
                         The Secret, in the project's namespace, holding the repo's credentials:
-                        username and password (a token), or sshPrivateKey and knownHosts.
+                        username and password (a token), or sshPrivateKey (the git hosts'
+                        keys are the install's).
                       properties:
                         secretRef: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
             status:

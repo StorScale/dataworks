@@ -114,6 +114,13 @@ spec:
             - {name: RANGER_URL, value: "http://ranger-admin:6080"}
             - {name: RANGER_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: RANGER_PASSWORD}}}
             - {name: NESSIE_URL, value: "http://nessie:19120"}
+            # Projects' pipelines repos: their git connections, through the platform's Airflow account.
+            - {name: AIRFLOW_URL, value: "http://airflow:8090/pipelines"}
+            - {name: AIRFLOW_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: AIRFLOW_PLATFORM_PASSWORD}}}
+            - {name: PIPELINES_DEFAULT_REF, value: {{ .Values.pipelines.defaultRef | quote }}}
+            {{- if .Values.pipelines.gitKnownHosts }}
+            - {name: GIT_KNOWN_HOSTS, value: /etc/storscale/git/known_hosts}
+            {{- end }}
           ports:
             - {name: health, containerPort: 8081}
           readinessProbe:
