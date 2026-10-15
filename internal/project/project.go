@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"regexp"
 	"slices"
 	"sort"
@@ -99,8 +100,22 @@ type Files struct {
 
 // Pipelines: a Keycloak client whose service account runs the project's
 // pipelines. It reads and writes the tables, and the files under landing/.
+// With a repo, the pipelines' code (Airflow's DAGs) comes from it: Airflow
+// takes it as a DAG bundle of the project's own (BundleName).
 type Pipelines struct {
-	ServiceAccount string `json:"serviceAccount"` // the Keycloak client's ID
+	ServiceAccount string          `json:"serviceAccount"`        // the Keycloak client's ID
+	Repo           string          `json:"repo,omitempty"`        // a git repo: https://... or ssh, never with credentials in it
+	Path           string          `json:"path,omitempty"`        // the DAGs' folder in it; default the whole repo
+	Ref            string          `json:"ref,omitempty"`         // a branch, tag or commit; default the install's own
+	Credentials    *GitCredentials `json:"credentials,omitempty"` // for a repo that isn't public
+}
+
+// GitCredentials name where the repo's credentials are kept, never the
+// credentials themselves: a Secret (on Kubernetes, in the project's
+// namespace) with username and password (a token), or sshPrivateKey and
+// knownHosts.
+type GitCredentials struct {
+	SecretRef string `json:"secretRef"`
 }
 
 // MaskTypes are Ranger's column masks for Trino.
@@ -108,6 +123,10 @@ var MaskTypes = []string{"MASK", "MASK_SHOW_LAST_4", "MASK_SHOW_FIRST_4", "MASK_
 
 var (
 	nameRE       = regexp.MustCompile(`^[a-z][a-z0-9-]{1,38}[a-z0-9]$`)
+	secretRE     = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$`)
+	gitPathRE    = regexp.MustCompile(`^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`)
+	gitRefRE     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_./-]{0,199}$`)
+	scpRepoRE    = regexp.MustCompile(`^[A-Za-z0-9_.-]+@[A-Za-z0-9.-]+:[A-Za-z0-9_.~/-]+$`) // git@host:org/repo.git
 	identifierRE = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
 	principalRE  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@-]{0,99}$`)
 )
@@ -211,14 +230,70 @@ func (p *Project) Validate() error {
 	if f := p.Spec.Files; f != nil && !nameRE.MatchString(f.Bucket) {
 		bad("files: bucket %q: 3 to 40 lowercase letters, digits and dashes", f.Bucket)
 	}
-	if pl := p.Spec.Pipelines; pl != nil && !principalRE.MatchString(pl.ServiceAccount) {
-		bad("pipelines: serviceAccount %q isn't a Keycloak client ID", pl.ServiceAccount)
+	if pl := p.Spec.Pipelines; pl != nil {
+		if !principalRE.MatchString(pl.ServiceAccount) {
+			bad("pipelines: serviceAccount %q isn't a Keycloak client ID", pl.ServiceAccount)
+		}
+		for _, e := range pl.problems() {
+			bad("pipelines: %s", e)
+		}
 	}
 	if len(errs) > 0 {
 		return fmt.Errorf("%s", strings.Join(errs, "; "))
 	}
 	return nil
 }
+
+// problems are what's wrong with the pipelines' repo, path, ref and credentials.
+func (pl *Pipelines) problems() []string {
+	var out []string
+	if pl.Repo == "" {
+		if pl.Path != "" || pl.Ref != "" || pl.Credentials != nil {
+			out = append(out, "path, ref and credentials need a repo")
+		}
+		return out
+	}
+	ssh := false
+	if u, err := url.Parse(pl.Repo); err == nil && (u.Scheme == "https" || u.Scheme == "http" || u.Scheme == "ssh") {
+		switch {
+		case u.Host == "" || u.Path == "" || u.Path == "/":
+			out = append(out, fmt.Sprintf("repo %q needs a host and a path", pl.Repo))
+		case u.RawQuery != "" || u.Fragment != "":
+			out = append(out, fmt.Sprintf("repo %q: no query or fragment", pl.Repo))
+		case u.Scheme == "ssh":
+			ssh = true
+			if _, set := u.User.Password(); set {
+				out = append(out, "repo: no password in the address; name a Secret in credentials")
+			}
+		case u.User != nil:
+			out = append(out, "repo: no user or token in the address; name a Secret in credentials")
+		}
+	} else if scpRepoRE.MatchString(pl.Repo) {
+		ssh = true
+	} else {
+		out = append(out, fmt.Sprintf("repo %q: an https:// or ssh address of a git repo", pl.Repo))
+	}
+	if pl.Path != "" && (!gitPathRE.MatchString(pl.Path) || slices.Contains(strings.Split(pl.Path, "/"), "..") || len(pl.Path) > 200) {
+		out = append(out, fmt.Sprintf("path %q: a folder in the repo, as dags or etl/dags", pl.Path))
+	}
+	if pl.Ref != "" && (!gitRefRE.MatchString(pl.Ref) || strings.Contains(pl.Ref, "..") || strings.HasSuffix(pl.Ref, "/") ||
+		strings.HasSuffix(pl.Ref, ".lock")) {
+		out = append(out, fmt.Sprintf("ref %q: a branch, tag or commit", pl.Ref))
+	}
+	switch c := pl.Credentials; {
+	case c != nil && !secretRE.MatchString(c.SecretRef):
+		out = append(out, fmt.Sprintf("credentials: secretRef %q isn't a Secret's name", c.SecretRef))
+	case c == nil && ssh:
+		out = append(out, "an ssh repo needs credentials: a Secret with sshPrivateKey and knownHosts")
+	}
+	return out
+}
+
+// BundleName is the Airflow DAG bundle of the project's pipelines repo.
+func (p *Project) BundleName() string { return "project-" + p.Metadata.Name }
+
+// GitConnID is the Airflow connection holding the repo's credentials.
+func (p *Project) GitConnID() string { return "git_" + strings.ReplaceAll(p.Metadata.Name, "-", "_") }
 
 // Hash identifies a spec: the operator applies a project again when it changes.
 func (p *Project) Hash() string {
