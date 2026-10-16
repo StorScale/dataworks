@@ -90,27 +90,33 @@ func (r *Reconciler) applyAirflow(ctx context.Context, p *project.Project) error
 	if pl == nil || pl.Repo == "" {
 		return r.Airflow.API.DeleteConnection(ctx, p.GitConnID())
 	}
-	return r.putGitConnection(ctx, r.Airflow.API, p)
+	conn, err := r.gitConnection(ctx, p)
+	if err != nil {
+		return err
+	}
+	return putConnection(ctx, r.Airflow.API, p, conn)
 }
 
-// putGitConnection makes an Airflow (the shared one, or the project's own)
-// hold the project's git connection, from the Secret it names.
-func (r *Reconciler) putGitConnection(ctx context.Context, api *pipelines.Client, p *project.Project) error {
+// gitConnection is the project's git connection, from the connection it names.
+func (r *Reconciler) gitConnection(ctx context.Context, p *project.Project) (pipelines.Connection, error) {
 	pl := p.Spec.Pipelines
 	var secret map[string]string
 	if pl.Credentials != nil {
 		var err error
 		if secret, err = r.Store.Connection(ctx, p.Metadata.Name, pl.Credentials.SecretRef); err != nil {
-			return fmt.Errorf("reading secret %q: %w", pl.Credentials.SecretRef, err)
+			return pipelines.Connection{}, fmt.Errorf("reading secret %q: %w", pl.Credentials.SecretRef, err)
 		}
 		if secret == nil {
-			return fmt.Errorf("no secret %q (the repo's credentials) among the project's connections", pl.Credentials.SecretRef)
+			return pipelines.Connection{}, fmt.Errorf("no secret %q (the repo's credentials) among the project's connections", pl.Credentials.SecretRef)
 		}
 	}
-	conn, err := r.Airflow.connection(p, secret)
-	if err != nil {
-		return err
-	}
+	return r.Airflow.connection(p, secret)
+}
+
+// putConnection makes an Airflow (the shared one, or the project's own) hold
+// the project's git connection.
+func putConnection(ctx context.Context, api *pipelines.Client, p *project.Project, conn pipelines.Connection) error {
+	pl := p.Spec.Pipelines
 	if err := api.PutConnection(ctx, conn); err != nil {
 		// Airflow's answer may echo what was sent: say only what failed, and how.
 		var e *pipelines.APIError

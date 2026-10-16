@@ -156,6 +156,25 @@ func (k *Kube) Delete(ctx context.Context, kind, name string) error {
 	return err
 }
 
+// PodAnnotation is an annotation of a Deployment's pods (its template): ""
+// when there's no such Deployment or annotation.
+func (k *Kube) PodAnnotation(ctx context.Context, name, key string) (string, error) {
+	var d struct {
+		Spec struct {
+			Template struct {
+				Metadata struct {
+					Annotations map[string]string `json:"annotations"`
+				} `json:"metadata"`
+			} `json:"template"`
+		} `json:"spec"`
+	}
+	found, err := k.do(ctx, "GET", k.path("deployments", name), "", nil, &d)
+	if !found || err != nil {
+		return "", err
+	}
+	return d.Spec.Template.Metadata.Annotations[key], nil
+}
+
 // Ready says whether a Deployment's newest pods are all ready.
 func (k *Kube) Ready(ctx context.Context, name string) (bool, error) {
 	var d struct {
