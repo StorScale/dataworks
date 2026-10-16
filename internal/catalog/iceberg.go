@@ -22,7 +22,7 @@ func LastChange(ctx context.Context, c *http.Client, base, warehouse, namespace,
 		}
 		res, err := c.Do(req)
 		if err != nil {
-			return err
+			return fmt.Errorf("iceberg: %v", err)
 		}
 		defer res.Body.Close()
 		if res.StatusCode == http.StatusNotFound {
@@ -31,18 +31,21 @@ func LastChange(ctx context.Context, c *http.Client, base, warehouse, namespace,
 		if res.StatusCode != 200 {
 			return fmt.Errorf("iceberg: GET %s: HTTP %d", path, res.StatusCode)
 		}
-		return json.NewDecoder(res.Body).Decode(out)
+		if err := json.NewDecoder(res.Body).Decode(out); err != nil {
+			return fmt.Errorf("iceberg: GET %s: %v", path, err)
+		}
+		return nil
 	}
 	var cfg struct {
-		Defaults  map[string]string `json:"defaults"`
-		Overrides map[string]string `json:"overrides"`
+		Defaults  map[string]any `json:"defaults"` // strings, by the spec; not every catalog keeps to it
+		Overrides map[string]any `json:"overrides"`
 	}
 	if err := get("/v1/config?warehouse="+url.QueryEscape(warehouse), &cfg); err != nil {
 		return time.Time{}, err
 	}
-	prefix := cfg.Overrides["prefix"]
+	prefix, _ := cfg.Overrides["prefix"].(string)
 	if prefix == "" {
-		prefix = cfg.Defaults["prefix"]
+		prefix, _ = cfg.Defaults["prefix"].(string)
 	}
 	path := "/v1/"
 	if prefix != "" {

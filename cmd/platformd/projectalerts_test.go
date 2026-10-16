@@ -7,7 +7,7 @@ import (
 )
 
 func newProjectAlerts() *projectAlerts {
-	return &projectAlerts{issues: map[string]map[string]issue{}, told: map[string]string{}, muted: map[string]time.Time{}, http: http.DefaultClient}
+	return &projectAlerts{issues: map[string]map[string]issue{}, told: map[string]string{}, muted: map[string]time.Time{}, unknown: map[string][]string{}, http: http.DefaultClient}
 }
 
 func TestProjectAlertsTellWhatStartsAndWhatComesRight(t *testing.T) {
