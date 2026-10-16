@@ -233,6 +233,13 @@ How:
 - **Still open:** who approves access requests.
 - **Effort:** about 4 to 6 days.
 
+### One-command upgrades (built 2026-10-16)
+
+Helm installs a chart's CRDs once and never upgrades them, so each release's notes said to apply the Project definition by hand first; the 0.5.0 upgrade of `storscale-da1` without it silently dropped `pipelines.repo` and the rest from every project. And a checkout's chart once pointed `storscale-da1` at images not yet published.
+
+- **`storscale upgrade`,** on any cluster: checks the release (not mid-upgrade, not going backwards, its images published on ghcr.io), says what it will do and asks; applies the release's Project definition; `helm upgrade --reset-then-reuse-values` with the images pinned to the release; waits for every Deployment and StatefulSet to roll out and every pod to be ready, with the reasons of what isn't; prints the `helm rollback` that undoes it. `--dry-run` shows the CRD's changes and renders the chart against the cluster.
+- **Tested in CI:** the `kubernetes` job installs the last release, makes a project under it, upgrades to the commit, checks the project kept every setting and is Ready, then runs every suite. That is one pair, the last release to the next; a wider matrix (each of the last few releases, and Kubernetes versions) is still to come, as are database backups before an upgrade.
+
 ## Phase 7: pipelines from git, how
 
 Each project's DAGs come from its own git repo, as an Airflow 3 **DAG bundle** (`GitDagBundle`, from the git provider already in Airflow's image).

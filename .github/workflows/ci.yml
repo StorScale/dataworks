@@ -56,11 +56,14 @@ jobs:
           bin/storscale status --dir stack
           docker compose --project-name storscale logs --no-color --tail 200
 
-  # The platform on Kubernetes: the Helm chart on kind, as `storscale up --k8s`
-  # installs it, and every suite of checks (helm test).
+  # The platform on Kubernetes, upgraded: the last release installed on kind
+  # (`storscale up --k8s --version`), a project kept in it, then `storscale
+  # upgrade` to this checkout, as a real cluster would be; the project must
+  # keep every setting. Then every suite of checks (helm test). (A fresh
+  # install is kubernetes-https's.)
   kubernetes:
     runs-on: ubuntu-latest
-    timeout-minutes: 150   # a first install pulls ~10 GB of images, then waits on each setup step
+    timeout-minutes: 180   # a first install pulls ~10 GB of images, then waits on each setup step; then the upgrade
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -73,8 +76,38 @@ jobs:
       - name: Room for the images
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL && df -h /
       - run: go build -o bin/storscale ./cmd/storscale
-      # --dir stack: this checkout's images and chart
-      - run: bin/storscale up --dir stack --k8s
+      - name: The last release
+        id: last
+        run: |
+          git fetch --tags --quiet
+          v=$(git tag --list 'v*' --sort=-v:refname | grep -vx "v$(cat VERSION)" | head -1)
+          echo "the last release: $v"
+          echo "version=${v#v}" >> "$GITHUB_OUTPUT"
+      - run: bin/storscale up --k8s --version ${{ steps.last.outputs.version }}
+      - name: A project, as the last release keeps it
+        run: |
+          kubectl --context kind-storscale -n storscale apply -f - <<'YAML'
+          apiVersion: platform.storscale.io/v1alpha1
+          kind: Project
+          metadata: {name: upgrade-check}
+          spec:
+            description: Kept through an upgrade.
+            members: [{group: engineers, role: editor}, {group: analysts, role: reader}]
+            tables: {namespace: upgrade_check, readers: {tables: [kept]}}
+            files: {}
+            limits: {queries: 3, storage: 5Gi}
+          YAML
+      - run: bin/storscale upgrade --k8s --dir stack --yes
+      - name: The project kept every setting
+        run: |
+          p() { kubectl --context kind-storscale -n storscale get project upgrade-check -o jsonpath="$1"; }
+          test "$(p '{.spec.description}|{.spec.tables.namespace}|{.spec.tables.readers.tables[0]}|{.spec.limits.queries}|{.spec.limits.storage}|{.spec.members[1].group}')" \
+            = "Kept through an upgrade.|upgrade_check|kept|3|5Gi|analysts"
+          for i in $(seq 60); do [ "$(p '{.status.phase}')" = Ready ] && break; sleep 5; done
+          p '{.status.phase}' | grep -qx Ready
+          kubectl --context kind-storscale -n storscale delete project upgrade-check --wait
+      - name: Room again (the last release's images)
+        run: docker exec storscale-control-plane crictl rmi --prune >/dev/null && df -h /
       - run: bin/storscale test --dir stack --k8s
       - name: What went wrong
         if: failure()

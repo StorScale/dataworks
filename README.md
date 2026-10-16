@@ -61,6 +61,8 @@ kubectl --context kind-storscale -n storscale get projects
 
 The addresses are the same as with Compose. On Kubernetes, every password is generated on install and kept in the Secret `storscale-env`: `storscale up --k8s` prints how to read the people's. `storscale down --k8s` uninstalls the platform; `--volumes` also deletes the cluster.
 
+`storscale upgrade` takes the platform on any Kubernetes cluster (`--context`) to a newer release: the release's Project definition first, which Helm never upgrades, then the chart with the values it was installed with, then it waits for every service. It checks first and asks; `--dry-run` only checks.
+
 On another cluster, install the chart, and make the platform's domain (`global.domain`, with `catalog.`, `access.` and `s3.` under it) resolve to the gateway Service. Inside the cluster it has to resolve to the gateway too: on kind, [deploy/kind/dns.sh](deploy/kind/dns.sh) does that with one rule in the cluster's DNS. If a private CA signs the platform's certificate, give it to the chart (`--set-file global.ca.certs=root-ca.pem`) so the services trust it. [docs/handoff.md](docs/handoff.md) covers installing on a real cluster, and what hasn't been tested there yet.
 
 ## Licence

@@ -20,11 +20,30 @@ import (
 // "storscale" in the namespace "storscale".
 const (
 	kindCluster = "storscale"
+	ociChart    = "oci://ghcr.io/storscale/charts/storscale-platform"
+)
+
+// Where the platform is: kind's, unless `storscale upgrade` is told of
+// another cluster (--context "" is kubectl's current one).
+var (
 	kubeContext = "kind-storscale"
 	namespace   = "storscale"
 	release     = "storscale"
-	ociChart    = "oci://ghcr.io/storscale/charts/storscale-platform"
 )
+
+// kubeArgs are kubectl's flags for the platform's cluster and namespace.
+func kubeArgs(args ...string) []string {
+	var out []string
+	if kubeContext != "" {
+		out = append(out, "--context", kubeContext)
+	}
+	return append(append(out, "--namespace", namespace), args...)
+}
+
+// kubeOut is kubectl's output, for reading.
+func kubeOut(args ...string) ([]byte, error) {
+	return exec.Command("kubectl", kubeArgs(args...)...).Output()
+}
 
 // kube is the platform on kind. checkout is the repository the stack is in,
 // when it's a checkout's stack (--dir stack): then the images are built from
@@ -60,11 +79,19 @@ func run1(name string, args ...string) error {
 }
 
 func kubectl(args ...string) error {
-	return run1("kubectl", append([]string{"--context", kubeContext, "--namespace", namespace}, args...)...)
+	return run1("kubectl", kubeArgs(args...)...)
+}
+
+func helmArgs(args ...string) []string {
+	var out []string
+	if kubeContext != "" {
+		out = append(out, "--kube-context", kubeContext)
+	}
+	return append(append(out, "--namespace", namespace), args...)
 }
 
 func helm(args ...string) error {
-	return run1("helm", append([]string{"--kube-context", kubeContext, "--namespace", namespace}, args...)...)
+	return run1("helm", helmArgs(args...)...)
 }
 
 // script writes one of deploy/kind's files out, to run or to pass to kind.
@@ -82,7 +109,7 @@ func script(name string) (string, error) {
 	return f.Name(), err
 }
 
-func (k *kube) up(st *stack) error {
+func (k *kube) up(st *stack, ver string) error {
 	if err := need("docker", "kind", "kubectl", "helm"); err != nil {
 		return err
 	}
@@ -115,7 +142,21 @@ func (k *kube) up(st *stack) error {
 		return fmt.Errorf("the cluster's DNS: %w", err)
 	}
 
-	chart, extra := ociChart, []string{"--version", version()}
+	chart, extra := ociChart, []string{"--version", ver}
+	crds := ""
+	if k.checkout != "" && ver != version() {
+		return errors.New("--version is for a published release: leave out --dir to install one")
+	}
+	if k.checkout == "" {
+		dir, err := pullChart(ver)
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(dir)
+		crds = filepath.Join(dir, "storscale-platform", "crds")
+	} else {
+		crds = filepath.Join(k.checkout, "deploy", "helm", "storscale-platform", "crds")
+	}
 	if k.checkout != "" {
 		fmt.Println("building the platform's images from", k.checkout)
 		if err := run1(filepath.Join(k.checkout, "deploy", "kind", "images.sh"), kindCluster); err != nil {
@@ -131,6 +172,11 @@ func (k *kube) up(st *stack) error {
 		"--set", "global.domain=" + st.setting("STORSCALE_DOMAIN")}, extra...)
 	for _, f := range strings.Fields(os.Getenv("STORSCALE_K8S_VALUES")) {
 		args = append(args, "-f", f)
+	}
+	// Helm installs a chart's CRDs once and never upgrades them: an older
+	// one drops the fields it lacks from every project.
+	if err := applyCRDs(crds); err != nil {
+		return err
 	}
 	if err := helm(args...); err != nil {
 		return err
@@ -151,12 +197,12 @@ func (k *kube) test(suites []string) error {
 	if len(suites) == 0 {
 		kubectl("delete", "configmap", "storscale-tests", "--ignore-not-found")
 	} else {
-		manifest, err := exec.Command("kubectl", "--context", kubeContext, "-n", namespace, "create", "configmap", "storscale-tests",
-			"--from-literal=suites="+strings.Join(suites, " "), "--dry-run=client", "-o", "yaml").Output()
+		manifest, err := kubeOut("create", "configmap", "storscale-tests",
+			"--from-literal=suites="+strings.Join(suites, " "), "--dry-run=client", "-o", "yaml")
 		if err != nil {
 			return err
 		}
-		c := exec.Command("kubectl", "--context", kubeContext, "-n", namespace, "apply", "-f", "-")
+		c := exec.Command("kubectl", kubeArgs("apply", "-f", "-")...)
 		c.Stdin, c.Stderr = strings.NewReader(string(manifest)), os.Stderr
 		if err := c.Run(); err != nil {
 			return err
@@ -165,13 +211,19 @@ func (k *kube) test(suites []string) error {
 	return helm("test", release, "--logs", "--timeout", "60m")
 }
 
-func (k *kube) do(cmd string, st *stack, args []string, volumes bool) error {
+func (k *kube) do(cmd string, st *stack, args []string, o options) error {
 	if err := need("kind", "kubectl", "helm"); err != nil {
 		return err
 	}
+	ver := o.version
+	if ver == "" {
+		ver = version()
+	}
 	switch cmd {
 	case "up":
-		return k.up(st)
+		return k.up(st, ver)
+	case "upgrade":
+		return k.upgrade(st, o)
 	case "status":
 		return kubectl("get", "pods,jobs,projects,bucketsclusters")
 	case "urls":
@@ -190,7 +242,7 @@ func (k *kube) do(cmd string, st *stack, args []string, volumes bool) error {
 		}
 		return nil
 	case "down":
-		if volumes {
+		if o.volumes {
 			return run1("kind", "delete", "cluster", "--name", kindCluster)
 		}
 		return helm("uninstall", release)
@@ -272,7 +324,7 @@ func stuckReason(reason string, restarts int) bool {
 
 // failedJob names a setup step (Job) that has run out of tries, and why.
 func failedJob() (string, string) {
-	out, err := exec.Command("kubectl", "--context", kubeContext, "-n", namespace, "get", "jobs", "-o", "json").Output()
+	out, err := kubeOut("get", "jobs", "-o", "json")
 	if err != nil {
 		return "", ""
 	}
@@ -319,6 +371,55 @@ func showFailures(p pod, shown map[string]int) {
 	}
 }
 
+// rollingOut are the Deployments and StatefulSets whose pods aren't all of
+// their latest spec yet: just after an upgrade the old pods are still ready.
+func rollingOut() []string {
+	out, err := kubeOut("get", "deployments,statefulsets", "-o", "json")
+	if err != nil {
+		return nil
+	}
+	var list struct {
+		Items []struct {
+			Kind     string `json:"kind"`
+			Metadata struct {
+				Name       string `json:"name"`
+				Generation int64  `json:"generation"`
+			} `json:"metadata"`
+			Spec struct {
+				Replicas       *int32 `json:"replicas"`
+				UpdateStrategy struct {
+					Type          string `json:"type"`
+					RollingUpdate *struct {
+						Partition *int32 `json:"partition"`
+					} `json:"rollingUpdate"`
+				} `json:"updateStrategy"` // StatefulSets'
+			} `json:"spec"`
+			Status struct {
+				ObservedGeneration int64 `json:"observedGeneration"`
+				UpdatedReplicas    int32 `json:"updatedReplicas"`
+			} `json:"status"`
+		} `json:"items"`
+	}
+	json.Unmarshal(out, &list)
+	var rolling []string
+	for _, d := range list.Items {
+		if d.Spec.UpdateStrategy.Type == "OnDelete" {
+			continue // its pods change only as they're deleted
+		}
+		want := int32(1)
+		if d.Spec.Replicas != nil {
+			want = *d.Spec.Replicas
+		}
+		if ru := d.Spec.UpdateStrategy.RollingUpdate; ru != nil && ru.Partition != nil {
+			want -= *ru.Partition // those below it keep the old spec
+		}
+		if d.Status.ObservedGeneration < d.Metadata.Generation || d.Status.UpdatedReplicas < want {
+			rolling = append(rolling, strings.ToLower(d.Kind)+"/"+d.Metadata.Name+" (rolling out)")
+		}
+	}
+	return rolling
+}
+
 // waitReady waits for every pod of the platform to be ready, saying every
 // half minute which aren't and why, and the logs of what fails as it fails.
 // It gives up early on a pod that is stuck (its image can't be pulled, or it
@@ -331,7 +432,7 @@ func waitReady(limit time.Duration) error {
 		if job, why := failedJob(); job != "" {
 			return fmt.Errorf("the setup step %s failed (%s); its tries' logs are above", job, why)
 		}
-		out, err := exec.Command("kubectl", "--context", kubeContext, "-n", namespace, "get", "pods", "-o", "json").Output()
+		out, err := kubeOut("get", "pods", "-o", "json")
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "reading the pods:", err)
 		} else {
@@ -363,6 +464,7 @@ func waitReady(limit time.Duration) error {
 					return fmt.Errorf("%s is stuck: %s", p.Metadata.Name, why)
 				}
 			}
+			waiting = append(waiting, rollingOut()...)
 			if len(list.Items) > 0 && len(waiting) == 0 {
 				fmt.Println("every service is ready")
 				return nil
