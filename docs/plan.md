@@ -229,7 +229,8 @@ How:
 - **The same in Compose,** so CI checks an upgrade: the setup step runs twice, and a user, a group and a client mapper added by hand are still there, while a client's changed redirect address is put back.
 - **Moving an install over:** today's realm lives in Keycloak's development database inside its container, and is rebuilt at each restart. The first start on Postgres builds it once more, then keeps it. People added by hand since Keycloak last restarted would need adding again: check before upgrading `storscale-da1`.
 - **Status (2026-10-16):** built: Keycloak in production mode on Postgres (its own server in Compose, a database on the platform's in Kubernetes, made on upgrade by an init container); the realm imported only when there's none (Keycloak's own import skips an existing realm, so the file isn't split yet); `setup/realm.py` keeping the platform's parts at every install and upgrade; the `realm` suite checks an upgrade keeps an administrator's person, group, mapper and attribute, and puts the platform's parts back. The example people are still made with the realm on a first install, whatever `examples.users` says (R6.2, next).
-- **Still open:** corporate sign-in (which identity provider, and which of its groups map to the platform's engineers, analysts and administrators: the group names become settings); who approves access requests.
+- **Decided (2026-10-16):** the identity provider will be Entra ID, brokered by Keycloak, its groups mapped to the platform's roles (the group names become settings). Until real users come, the platform stays in development with its example people; corporate sign-in and `examples.users` wait.
+- **Still open:** who approves access requests.
 - **Effort:** about 4 to 6 days.
 
 ## Phase 7: pipelines from git, how
