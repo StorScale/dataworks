@@ -18,6 +18,12 @@
 //	PIPELINES_DEFAULT_REF                the branch a repo is followed on when its project names none (main)
 //	GIT_KNOWN_HOSTS                      the git hosts' SSH keys, a file in Airflow's containers (none:
 //	                                     a host's key is taken the first time it's seen)
+//	AIRFLOW_PROJECT_TEMPLATE             on Kubernetes, the chart's project Airflow (a file): with it,
+//	                                     each project with a repo gets an Airflow of its own
+//	AIRFLOW_DB_HOST, POSTGRES_ADMIN_USER, POSTGRES_ADMIN_PASSWORD  the server their databases are on
+//	                                     (airflow-db:5432), as its admin (postgres)
+//	PIPELINES_DEFAULT_MEMORY             a project's Airflow's memory when it names none (3Gi)
+//	PLATFORM_URL                         the platform's address (the pipelines' Keycloak, for them)
 //	PLATFORM_LISTEN                      health checks (:8081), and GET /airflow/bundles: the DAG
 //	                                     bundles Airflow should run (no credentials in it)
 //
@@ -30,6 +36,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -89,6 +96,25 @@ func main() {
 	if u := os.Getenv("AIRFLOW_URL"); u != "" {
 		r.Airflow = &reconcile.Airflow{API: pipelines.New(u, env("AIRFLOW_USER", "storscale-platform"), os.Getenv("AIRFLOW_PASSWORD")),
 			DefaultRef: env("PIPELINES_DEFAULT_REF", "main"), KnownHosts: os.Getenv("GIT_KNOWN_HOSTS")}
+	}
+	// On Kubernetes, each project with a repo gets an Airflow of its own, from
+	// the chart's template (AIRFLOW_PROJECT_TEMPLATE), with a database on
+	// Airflow's server (AIRFLOW_DB_HOST, as POSTGRES_ADMIN_PASSWORD's user).
+	if tpl := os.Getenv("AIRFLOW_PROJECT_TEMPLATE"); tpl != "" && r.Airflow != nil {
+		t, err := reconcile.LoadTemplate(tpl)
+		if err != nil {
+			log.Error("project Airflow template", "error", err)
+			os.Exit(2)
+		}
+		kube, err := reconcile.NewKube()
+		if err != nil {
+			log.Error("kubernetes", "error", err)
+			os.Exit(2)
+		}
+		pg := url.URL{Scheme: "postgres", User: url.UserPassword(env("POSTGRES_ADMIN_USER", "postgres"), os.Getenv("POSTGRES_ADMIN_PASSWORD")),
+			Host: env("AIRFLOW_DB_HOST", "airflow-db:5432"), Path: "/postgres", RawQuery: "sslmode=disable&connect_timeout=10"}
+		r.ProjectAirflows = &reconcile.ProjectAirflows{Kube: kube, Postgres: &reconcile.Postgres{URL: pg.String()}, Template: t,
+			DefaultMemory: env("PIPELINES_DEFAULT_MEMORY", "3Gi"), PlatformURL: os.Getenv("PLATFORM_URL")}
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

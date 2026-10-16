@@ -39,6 +39,8 @@ spec:
             - {name: AIRFLOW_URL, value: "http://airflow:8090/pipelines"}
             - {name: AIRFLOW_USER, value: storscale-platform}
             - {name: AIRFLOW_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: AIRFLOW_PLATFORM_PASSWORD}}}
+            # A project with a repo has an Airflow of its own (project-<name>-airflow).
+            - {name: PROJECT_AIRFLOWS, value: "true"}
             - {name: BRAND_NAME, value: {{ .Values.brand.name | quote }}}
             {{- with .Values.brand.title }}
             - {name: BRAND_TITLE, value: {{ . | quote }}}
@@ -93,6 +95,8 @@ spec:
   template:
     metadata:
       labels: {{- include "storscale.selector" (list .Release.Name "platform-operator") | nindent 8 }}
+      annotations:
+        checksum/airflow-project: {{ include "storscale.airflow.project" . | sha256sum }}
     spec:
       enableServiceLinks: false
       serviceAccountName: storscale
@@ -121,6 +125,15 @@ spec:
             {{- if .Values.pipelines.gitKnownHosts }}
             - {name: GIT_KNOWN_HOSTS, value: /etc/storscale/git/known_hosts}
             {{- end }}
+            # Each project with a repo gets an Airflow of its own (templates/airflow-project.yaml),
+            # with a database on Airflow's server, made as its admin.
+            - {name: AIRFLOW_PROJECT_TEMPLATE, value: /etc/storscale/airflow-project/template.json}
+            - {name: AIRFLOW_DB_HOST, value: "airflow-db:5432"}
+            - {name: POSTGRES_ADMIN_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: POSTGRES_ADMIN_PASSWORD}}}
+            - {name: PIPELINES_DEFAULT_MEMORY, value: {{ .Values.pipelines.memory | quote }}}
+            - {name: PLATFORM_URL, value: {{ include "storscale.url" . | quote }}}
+          volumeMounts:
+            - {name: airflow-project, mountPath: /etc/storscale/airflow-project, readOnly: true}
           ports:
             - {name: health, containerPort: 8081}
           readinessProbe:
@@ -129,6 +142,7 @@ spec:
           {{- include "storscale.resources" (list "20m" "32Mi" "256Mi") | nindent 10 }}
       volumes:
         {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 8 }}
+        - {name: airflow-project, configMap: {name: storscale-airflow-project}}
 ---
 apiVersion: v1
 kind: Service

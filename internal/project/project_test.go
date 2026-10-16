@@ -155,6 +155,8 @@ func TestAPipelinesRepo(t *testing.T) {
 		`{"serviceAccount": "airflow-pipelines", "repo": "git@git.example.com:sales/dags.git", "credentials": {"secretRef": "sales-git"}}`,
 		`{"serviceAccount": "airflow-pipelines", "repo": "ssh://git@git.example.com/sales/dags.git", "ref": "3f2a9c1",
 		  "credentials": {"secretRef": "sales-git"}}`,
+		`{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git", "memory": "2048Mi"}`,
+		`{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git", "memory": "4Gi"}`,
 	} {
 		if err := withPipelines(t, ok); err != nil {
 			t.Errorf("%s: %v", ok, err)
@@ -173,6 +175,10 @@ func TestAPipelinesRepo(t *testing.T) {
 		{`{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git", "ref": "main..x"}`, "a branch, tag or commit"},
 		{`{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git", "ref": "-delete"}`, "a branch, tag or commit"},
 		{`{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git", "credentials": {"secretRef": "Sales_Git"}}`, "isn't a Secret's name"},
+		{`{"serviceAccount": "airflow-pipelines", "memory": "2Gi"}`, "need a repo"},
+		{`{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git", "memory": "1536Mi"}`, "from 2Gi to 64Gi"},
+		{`{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git", "memory": "65Gi"}`, "from 2Gi to 64Gi"},
+		{`{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git", "memory": "2G"}`, "from 2Gi to 64Gi"},
 	} {
 		if err := withPipelines(t, tc.pipelines); err == nil || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s: %v, want %q", tc.pipelines, err, tc.want)
@@ -184,5 +190,11 @@ func TestTheBundleAndConnectionOfAProject(t *testing.T) {
 	p, _ := Parse([]byte(strings.Replace(sales, `"name": "sales"`, `"name": "sales-eu"`, 1)))
 	if p.BundleName() != "project-sales-eu" || p.GitConnID() != "git_sales_eu" {
 		t.Errorf("bundle %q, connection %q", p.BundleName(), p.GitConnID())
+	}
+	if p.AirflowName() != "project-sales-eu-airflow" || p.AirflowDatabase() != "airflow_sales_eu" || p.PipelinesClientID() != "project-sales-eu-pipelines" {
+		t.Errorf("its Airflow %q, database %q, client %q", p.AirflowName(), p.AirflowDatabase(), p.PipelinesClientID())
+	}
+	if mi, ok := MiB("2Gi"); !ok || mi != 2048 {
+		t.Errorf("2Gi: %d MiB", mi)
 	}
 }

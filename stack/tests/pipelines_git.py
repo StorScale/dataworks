@@ -16,9 +16,18 @@ token), as a team's git host would, and makes a project, pipes, that names it:
   4. deleting the project takes its repo out of Airflow: its DAGs, its
      connection and its bundle go.
 
+On Kubernetes the project gets an Airflow of its own, and these check too
+that it's the project's alone: its repo isn't in the shared Airflow; its
+pipelines run as a service account of its own, in the memory it gives
+them; its UI is at /airflow/pipes/, for its members only; and its DAG code
+can't reach another tool's database. Deleting the project takes its
+Airflow away.
+
 The secret holding the token is the suite's: in Compose an object in the
 platform's bucket (secrets/<name>.json), in Kubernetes a Secret.
 """
+import html
+import re
 import base64
 import json
 import os
@@ -38,9 +47,10 @@ import k8s
 from projects import platform, projects, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
-AIRFLOW = "http://airflow:8090/pipelines"
 OPERATOR = "http://platform-operator:8081"
 NAME, DAG, SECRET, PORT = "pipes", "pipes_hello", "storscale-test-git", 8418
+OWN = k8s.in_cluster()   # the project has an Airflow of its own
+AIRFLOW = f"http://project-{NAME}-airflow:8090/airflow/{NAME}" if OWN else "http://airflow:8090/pipelines"
 USER, TOKEN = "pipes-bot", "gittest_" + secrets.token_hex(16)
 
 DAG_V1 = '''"""Says hello, and what of git and the platform's secrets it can see: as
@@ -63,6 +73,24 @@ def exposed():
     found = [k for k in PLATFORM_SECRETS if os.environ.get(k)]
     if os.path.exists("/tls/key.pem") or os.path.exists("/tls/trino.pem"):
         found.append("trino-key")
+    # A project's own Airflow (not the shared one, whose database is airflow):
+    # with its own database's user, which its processes' environment holds,
+    # it can't reach another tool's database.
+    try:
+        environ = open("/proc/1/environ", "rb").read().split(b"\\0")
+    except OSError:  # unreadable: nothing to take from it
+        environ = []
+    conn = next((e.split(b"=", 1)[1].decode() for e in environ if e.startswith(b"AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=")), "")
+    if conn and not conn.endswith("/airflow"):
+        import psycopg2
+        server = conn.replace("postgresql+psycopg2://", "postgresql://").rsplit("/", 1)[0]
+        for db in ("airflow", "superset"):
+            try:
+                psycopg2.connect(server + "/" + db, connect_timeout=5).close()
+                found.append("database-" + db)
+            except psycopg2.OperationalError as e:
+                if "permission denied" not in str(e):
+                    found.append("database-" + db + "(" + str(e).strip()[:60] + ")")
     if os.path.exists(SA + "/token"):
         ns = open(SA + "/namespace").read().strip()
         r = requests.get(f"https://kubernetes.default.svc/api/v1/namespaces/{{ns}}/secrets/storscale-env", timeout=10,
@@ -181,13 +209,35 @@ def delete_secret():
 
 
 def airflow():
-    """Airflow's API, as the platform's account."""
-    r = requests.post(f"{AIRFLOW}/auth/token", timeout=30,
-                      json={"username": "storscale-platform", "password": env["AIRFLOW_PLATFORM_PASSWORD"]})
+    """The project's Airflow's API (its own, or the shared one), as the platform's account."""
+    pw = k8s.get_secret(f"project-{NAME}-airflow").get("PLATFORM_PASSWORD") if OWN else env["AIRFLOW_PLATFORM_PASSWORD"]
+    r = requests.post(f"{AIRFLOW}/auth/token", timeout=30, json={"username": "storscale-platform", "password": pw})
     r.raise_for_status()
     s = requests.Session()
     s.headers["Authorization"] = "Bearer " + r.json()["access_token"]
     return s
+
+
+def sign_in(base, user):
+    """Sign in to an Airflow's UI through Keycloak's form; API headers, or None."""
+    s = requests.Session()
+    r = s.get(f"{base}/auth/login/keycloak?next=", timeout=30)
+    form = re.search(r'<form[^>]*id="kc-form-login"[^>]*action="([^"]+)"', r.text)
+    if not form:
+        return None
+    s.post(html.unescape(form.group(1)), timeout=120,
+           data={"username": user, "password": env["LAKEHOUSE_USER_PASSWORD"], "credentialId": ""})
+    token = s.cookies.get("_token")
+    return {"Authorization": f"Bearer {token}"} if token else None
+
+
+def memory_mib(deployment):
+    """A Deployment's containers' memory limits, added up, in MiB."""
+    total = 0
+    for c in deployment["spec"]["template"]["spec"]["containers"]:
+        q = c.get("resources", {}).get("limits", {}).get("memory", "0Mi")
+        total += int(q[:-2]) * (1024 if q.endswith("Gi") else 1)
+    return total
 
 
 def pipelines(bob):
@@ -222,19 +272,38 @@ def main():
             "spec": {"description": "Pipelines from git: the pipelines_git suite's.",
                      "members": [{"group": "engineers", "role": "editor"}],
                      "pipelines": {"serviceAccount": "airflow-pipelines", "repo": repo, "path": "dags",
-                                   "credentials": {"secretRef": SECRET}}}}
+                                   "credentials": {"secretRef": SECRET}, "memory": "2Gi"}}}
     try:
         # 1. The repo, in Airflow.
         put = bob.put(f"{PLATFORM}/api/projects/{NAME}", data=json.dumps(spec), timeout=30)
         p = wait(lambda: (lambda x: x if x and (x.get("status") or {}).get("phase") == "Ready" else None)(
-            (projects(bob) or {}).get(NAME)), 180)
+            (projects(bob) or {}).get(NAME)), 600 if OWN else 180)
         parts = {x["system"]: x for x in ((p or {}).get("status") or {}).get("parts", [])}
         check("a project names its pipelines repo, and the operator gives it to Airflow",
               put.ok and parts.get("airflow", {}).get("ok"), f"HTTP {put.status_code}, airflow: {parts.get('airflow')}")
         bundles = requests.get(f"{OPERATOR}/airflow/bundles", timeout=10).json()
-        check("... as a bundle that names the repo and its connection, never the token",
-              any(b["name"] == f"project-{NAME}" for b in bundles) and TOKEN not in json.dumps(bundles),
-              [b["name"] for b in bundles])
+        if OWN:
+            check("... an Airflow of its own: the shared one doesn't take the repo",
+                  all(b["name"] != f"project-{NAME}" for b in bundles) and TOKEN not in json.dumps(bundles),
+                  [b["name"] for b in bundles])
+            members = {m["username"]: m["role"] for m in p["status"].get("members", [])}
+            check("... whose pipelines run as a service account of the project's own",
+                  members.get(f"service-account-project-{NAME}-pipelines") == "pipelines"
+                  and "service-account-airflow-pipelines" not in members, members)
+            d = k8s._api("GET", f"deployments/project-{NAME}-airflow", api="apis/apps/v1")
+            check("... in the memory the project gives it (2Gi)", d.ok and memory_mib(d.json()) == 2048,
+                  f"HTTP {d.status_code}, {memory_mib(d.json()) if d.ok else '?'} MiB")
+            ui = f"{PLATFORM}/airflow/{NAME}"
+            health = requests.get(f"{ui}/api/v2/monitor/health", timeout=30)
+            check("... its UI is at the platform's /airflow/pipes/", health.ok, f"HTTP {health.status_code}")
+            bob_ui, alice_ui = sign_in(ui, "bob"), sign_in(ui, "alice")
+            conns = requests.get(f"{ui}/api/v2/connections", headers=bob_ui, timeout=30).status_code if bob_ui else None
+            check("... where the project's editors sign in (Op), and people outside it can't",
+                  conns == 200 and alice_ui is None, f"bob: {conns}, alice: {'refused' if alice_ui is None else 'signed in'}")
+        else:
+            check("... as a bundle that names the repo and its connection, never the token",
+                  any(b["name"] == f"project-{NAME}" for b in bundles) and TOKEN not in json.dumps(bundles),
+                  [b["name"] for b in bundles])
         af = airflow()
         conn = af.get(f"{AIRFLOW}/api/v2/connections/git_{NAME}", timeout=30)
         check("... its connection holds the token, which Airflow's API never shows",
@@ -266,7 +335,7 @@ def main():
         check("... and no token in what the task sees: the checkout's git settings, its environment, its log",
               log.ok and any("pipes_check: done" in x for x in seen) and TOKEN not in text and not any("***" in x for x in seen),
               f"HTTP {log.status_code}, {len(seen)} lines checked")
-        check("... nor the platform's secrets: not in its environment, its files, or through Kubernetes",
+        check("... nor the platform's secrets: not in its environment, its files, through Kubernetes, or another database",
               any(x.endswith("pipes_check: exposed none") for x in seen),
               next((x for x in seen if "pipes_check: exposed" in x), "no line"))
 
@@ -287,6 +356,14 @@ def main():
         bob.delete(f"{PLATFORM}/api/projects/{NAME}", headers={"X-Platform-Request": "1"}, timeout=30)
         went = wait(lambda: NAME not in (projects(bob) or {}), 180)
         delete_secret()
+    if OWN:
+        gone = wait(lambda: not k8s.get_secret(f"project-{NAME}-airflow") and k8s._api(
+            "GET", f"deployments/project-{NAME}-airflow", api="apis/apps/v1").status_code == 404, 180)
+        check("deleting the project takes its Airflow away: its pod, its keys", went and gone,
+              "gone" if gone else "still there")
+        server.shutdown()
+        finish()
+        return
     check("deleting the project takes its repo out of Airflow", went and wait(
         lambda: all(b["name"] != f"project-{NAME}" for b in requests.get(f"{OPERATOR}/airflow/bundles", timeout=10).json()), 60),
         "the project, and its bundle, gone")

@@ -86,7 +86,8 @@
           "query-users",
           "query-groups",
           "view-clients",
-          "query-clients"
+          "query-clients",
+          "manage-clients"
         ]
       }
     }
@@ -288,7 +289,8 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
       "redirectUris": [
-        "${PLATFORM_URL:http://storscale.localhost:8800}/pipelines/auth/oauth-authorized/keycloak"
+        "${PLATFORM_URL:http://storscale.localhost:8800}/pipelines/auth/oauth-authorized/keycloak",
+        "${PLATFORM_URL:http://storscale.localhost:8800}/airflow/*"
       ],
       "webOrigins": [
         "${PLATFORM_URL:http://storscale.localhost:8800}"

@@ -97,6 +97,7 @@ type config struct {
 	CatalogURL, CatalogTokenFile                          string
 	SemanticURL                                           string
 	AirflowURL, AirflowUser, AirflowPassword              string
+	ProjectAirflows                                       bool   // a project with a repo has its own Airflow (Kubernetes)
 	BrandName, BrandTitle, BrandLogo, BrandIcon           string // the top bar's corner, the tab (brand.go)
 }
 
@@ -136,7 +137,8 @@ func configFromEnv(get func(string) string) (config, error) {
 		CatalogURL: get("CATALOG_URL"), CatalogTokenFile: or("CATALOG_TOKEN_FILE", "/catalog/token"),
 		SemanticURL: strings.TrimRight(get("SEMANTIC_URL"), "/"),
 		AirflowURL:  get("AIRFLOW_URL"), AirflowUser: get("AIRFLOW_USER"), AirflowPassword: get("AIRFLOW_PASSWORD"),
-		BrandName: or("BRAND_NAME", "StorScale"), BrandTitle: get("BRAND_TITLE"),
+		ProjectAirflows: get("PROJECT_AIRFLOWS") == "true",
+		BrandName:       or("BRAND_NAME", "StorScale"), BrandTitle: get("BRAND_TITLE"),
 		BrandLogo: get("BRAND_LOGO"), BrandIcon: get("BRAND_ICON"),
 	}
 	c.KeycloakDirectURL = strings.TrimRight(or("KEYCLOAK_DIRECT_URL", c.KeycloakURL), "/")

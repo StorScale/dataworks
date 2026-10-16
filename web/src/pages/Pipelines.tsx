@@ -10,6 +10,14 @@ import { ErrorBanner, Spinner, StateDot, usePoll, useProject } from "../lib";
 
 const short = (sha?: string) => sha?.slice(0, 7);
 
+// AirflowLink opens the Airflow the project's pipelines run in: its own (on
+// Kubernetes, with a repo), in a tab of its own, or the shared one, in the platform.
+function AirflowLink({ path, label, className }: { path?: string; label: string; className?: string }) {
+  return path
+    ? <a className={className} href={path} target="_blank" rel="noreferrer" data-testid="open-airflow">{label}</a>
+    : <Link className={className} to="/tools/pipelines" data-testid="open-airflow">{label}</Link>;
+}
+
 // Repo is the project's pipelines repo, and the files in it Airflow couldn't load.
 function Repo({ repo, errors }: { repo: PipelinesRepo; errors?: ImportError[] }) {
   return (
@@ -50,7 +58,7 @@ export default function Pipelines() {
           {data.repo
             ? <>No pipelines yet. Push a DAG to the repo, and it shows here once Airflow has loaded it.</>
             : <>No pipelines yet. Name a git repo for them in the project's settings, or tag an Airflow DAG <code>project:{name}</code>.</>}{" "}
-          <Link to="/tools/pipelines">Open Airflow</Link>
+          <AirflowLink path={data.airflowPath} label="Open Airflow" />
         </div>
       </div>
     );
@@ -99,7 +107,7 @@ export default function Pipelines() {
                 </p>
               </div>
               <div className="row">
-                <Link className="btn" to="/tools/pipelines">Edit in Airflow</Link>
+                <AirflowLink className="btn" path={data.airflowPath} label="Open in Airflow" />
                 {data.canRun && <button className="btn primary" onClick={run} disabled={starting} data-testid="run-now">{starting ? "Starting…" : "Run now"}</button>}
               </div>
             </div>

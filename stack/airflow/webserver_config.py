@@ -1,6 +1,9 @@
 """Sign-in to Airflow's UI and API (the FAB auth manager): Keycloak, through
 OpenID Connect. Keycloak's groups are Airflow's roles, set again at every
-sign-in; anyone in neither group is refused."""
+sign-in; anyone in none of the groups is refused. The shared Airflow's groups
+are engineers and analysts; a project's own Airflow's are the project's
+editors and readers (AIRFLOW_ROLE_GROUPS, from the operator)."""
+import json
 import os
 
 from flask_appbuilder.security.manager import AUTH_OAUTH
@@ -9,8 +12,8 @@ from airflow.providers.fab.auth_manager.security_manager.override import FabAirf
 
 KEYCLOAK = os.environ["KEYCLOAK_URL"] + "/realms/lakehouse"
 # Its own cookie name: the platform's tools share one address (Superset's
-# Flask app would otherwise use "session" too).
-SESSION_COOKIE_NAME = "airflow_session"
+# Flask app would otherwise use "session" too), and so do projects' Airflows.
+SESSION_COOKIE_NAME = os.environ.get("AIRFLOW_SESSION_COOKIE", "airflow_session")
 
 AUTH_TYPE = AUTH_OAUTH
 OAUTH_PROVIDERS = [{
@@ -26,12 +29,13 @@ OAUTH_PROVIDERS = [{
     },
 }]
 
-# Engineers operate pipelines (trigger, clear, see connections); analysts
-# watch them. Nobody gets Admin from Keycloak here.
-ALLOWED_GROUPS = {"analysts", "engineers"}
+# Engineers (a project's editors) operate pipelines (trigger, clear, see
+# connections); analysts (its readers) watch them. Nobody gets Admin from
+# Keycloak here.
+AUTH_ROLES_MAPPING = json.loads(os.environ.get("AIRFLOW_ROLE_GROUPS") or '{"engineers": ["Op"], "analysts": ["Viewer"]}')
+ALLOWED_GROUPS = set(AUTH_ROLES_MAPPING)
 AUTH_USER_REGISTRATION = True
 AUTH_USER_REGISTRATION_ROLE = "Viewer"
-AUTH_ROLES_MAPPING = {"engineers": ["Op"], "analysts": ["Viewer"]}
 AUTH_ROLES_SYNC_AT_LOGIN = True
 
 

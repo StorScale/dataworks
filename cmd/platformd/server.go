@@ -62,8 +62,11 @@ type server struct {
 	store    store.Store       // nil: no projects
 	catalog  *catalog.Client   // nil: no Flow view
 	airflow  *pipelines.Client // nil: no pipelines
-	brand    brand
-	index    []byte // the web app's index.html, with the brand's title and icon
+	// projects' own Airflows (cfg.ProjectAirflows), by project, with the
+	// password they were made with
+	projectAirflows map[string]projectAirflow
+	brand           brand
+	index           []byte // the web app's index.html, with the brand's title and icon
 
 	mu       sync.Mutex
 	sessions map[string]*session

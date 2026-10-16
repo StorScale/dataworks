@@ -30,6 +30,10 @@ rules:
     resources: [secrets]
     resourceNames: [storscale-test-git]
     verbs: [update, delete]
+  # ... and the project Airflow the operator makes for it (its memory).
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
