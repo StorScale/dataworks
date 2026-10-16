@@ -13,6 +13,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
   - **Not yet safe for teams that don't trust each other:** every project's DAG code runs in one Airflow, whose containers hold every connection and the platform's whole secret set. The plan now has the work to keep projects apart, next in phase 7 ([docs/plan.md](docs/plan.md)).
   - A new suite, `pipelines_git`, serves a git repo of its own and checks the whole path: the DAG loads and runs at the commit pushed, the next commit follows, the token shows nowhere, and deleting the project takes its DAGs away. The tools image has git for it; the test pod may write its own Secret.
 
+### Fixed
+- **Task logs on Kubernetes:** Airflow's API server fetched a task's log from the scheduler by the pod's name, which the cluster's DNS doesn't know, so logs came back empty (in Airflow's UI too). The scheduler now gives its IP.
+
 ### Changed
 - **Airflow gets only the keys it needs:** every project's DAG code runs in Airflow, which had the platform's whole secret set (`.env`, or the Secret `storscale-env`), Trino's private key and, on Kubernetes, a service account that could read every Secret. Now it has its own keys by name, Trino's certificate alone, and a service account (`storscale-airflow`) that may only read whether the setup steps are done. Airflow's own keys are still readable by DAG code; the rest of the work is in the plan.
 - **The plan's roadmap after phase 5** ([docs/plan.md](docs/plan.md)), from research into what buyers of Dataiku and comparable platforms value: production-ready (6), git-native projects with Airflow's DAGs from a git repo per project first (7), getting data in (8), governed AI (9), usage and cost per project (10), self-service and ML (11).
