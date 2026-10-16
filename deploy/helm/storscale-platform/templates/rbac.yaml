@@ -1,7 +1,8 @@
 # The platform's own pods: setup steps write a few Secrets (the catalog's bot
 # token, Prometheus' Buckets token) and mark themselves finished; services
 # wait for them; platformd and the operator keep the projects (Project
-# resources). Nothing outside the release's namespace.
+# resources), and the operator each project's own Airflow. Nothing outside
+# the release's namespace.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -21,6 +22,13 @@ rules:
   - apiGroups: [""]
     resources: [pods]
     verbs: [list, deletecollection]
+  # The operator runs each project's own Airflow (a Deployment and a Service).
+  - apiGroups: [""]
+    resources: [services]
+    verbs: [get, create, patch, delete]
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, create, patch, delete]
   - apiGroups: [platform.storscale.io]
     resources: [projects]
     verbs: [get, list, watch, create, update, patch, delete]

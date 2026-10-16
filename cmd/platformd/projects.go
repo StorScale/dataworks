@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
 	"slices"
 	"sort"
 
+	"github.com/StorScale/storscale-platform/internal/pipelines"
 	"github.com/StorScale/storscale-platform/internal/project"
 	"github.com/StorScale/storscale-platform/internal/store"
 )
@@ -287,6 +289,40 @@ func (s *server) project(w http.ResponseWriter, r *http.Request, sess *session) 
 	return nil
 }
 
+// projectAirflow is a project's own Airflow, as the platform's account.
+type projectAirflow struct {
+	password string
+	client   *pipelines.Client
+}
+
+// pipelinesOf is the Airflow a project's pipelines run in, and where people
+// open its UI: the project's own (on Kubernetes, with a repo), or the shared one.
+func (s *server) pipelinesOf(ctx context.Context, v *projectView) (*pipelines.Client, string, error) {
+	pl := v.Spec.Spec.Pipelines
+	if !s.cfg.ProjectAirflows || s.store == nil || pl == nil || pl.Repo == "" {
+		return s.airflow, "", nil
+	}
+	sec, err := s.store.Secret(ctx, v.Spec.AirflowName())
+	if err != nil {
+		return nil, "", err
+	}
+	pw := sec[project.AirflowPlatformPasswordKey]
+	if pw == "" {
+		return nil, "", errorString("the project's Airflow isn't made yet")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.projectAirflows[v.Name]
+	if !ok || a.password != pw { // made again: a new password, and a new token
+		if s.projectAirflows == nil {
+			s.projectAirflows = map[string]projectAirflow{}
+		}
+		a = projectAirflow{password: pw, client: pipelines.New(v.Spec.AirflowURL(), "storscale-platform", pw)}
+		s.projectAirflows[v.Name] = a
+	}
+	return a.client, "/airflow/" + v.Name + "/", nil
+}
+
 // handlePipelines is a project's pipelines, their recent runs, and the newest
 // run's tasks, from Airflow.
 func (s *server) handlePipelines(w http.ResponseWriter, r *http.Request) {
@@ -302,17 +338,26 @@ func (s *server) handlePipelines(w http.ResponseWriter, r *http.Request) {
 	if v == nil {
 		return
 	}
-	ps, err := s.airflow.Of(r.Context(), v.Name, 12)
+	af, ui, err := s.pipelinesOf(r.Context(), v)
+	if err != nil {
+		s.log.Error("pipelines", "project", v.Name, "error", err)
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	ps, err := af.Of(r.Context(), v.Name, 12)
 	if err != nil {
 		s.log.Error("pipelines", "project", v.Name, "error", err)
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
 	}
 	out := map[string]any{"pipelines": ps, "canRun": v.Role == project.Editor || s.isAdmin(sess.User)}
+	if ui != "" {
+		out["airflowPath"] = ui // the project's own Airflow's UI
+	}
 	// The project's pipelines repo, and the files in it Airflow couldn't load.
 	if pl := v.Spec.Spec.Pipelines; pl != nil && pl.Repo != "" {
 		out["repo"] = map[string]string{"url": pl.Repo, "path": pl.Path, "ref": pl.Ref}
-		errs, err := s.airflow.ImportErrors(r.Context(), v.Name)
+		errs, err := af.ImportErrors(r.Context(), v.Name)
 		if err != nil {
 			s.log.Error("import errors", "project", v.Name, "error", err)
 		}
@@ -345,7 +390,12 @@ func (s *server) handleStartRun(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only the project's editors run its pipelines"})
 		return
 	}
-	run, err := s.airflow.Start(r.Context(), v.Name, r.PathValue("pipeline"), sess.User.Username)
+	af, _, err := s.pipelinesOf(r.Context(), v)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	run, err := af.Start(r.Context(), v.Name, r.PathValue("pipeline"), sess.User.Username)
 	if err != nil {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 		return

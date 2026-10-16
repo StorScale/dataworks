@@ -1,0 +1,132 @@
+{{/* A project's own Airflow, as a template the operator fills in for each
+     project with a pipelines repo (internal/reconcile/projectairflow.go):
+     one pod with the API server, the scheduler (LocalExecutor) and the DAG
+     processor, with the project's repo as its one DAG bundle, and a Service.
+     Its UI is at the platform's /airflow/<project>/. Placeholders, in strings:
+     @PROJECT@, @AIRFLOW@ (project-<name>-airflow: the Deployment,
+     Service and Secret), @DATABASE@, @BUNDLES@, @ROLE_GROUPS@, and
+     @MEMORY_<PART>@ / @REQUEST_<PART>@ (API, SCHEDULER, PROCESSOR).
+     Its keys are in its own Secret, which the operator makes; it has none of
+     the platform's, no Kubernetes token, and its database alone. */}}
+{{- define "storscale.airflow.project.env" -}}
+{{- $root := index . 0 }}{{ $part := index . 1 -}}
+image: {{ include "storscale.image" (list $root "airflow") }}
+imagePullPolicy: {{ $root.Values.images.pullPolicy }}
+envFrom:
+  - configMapRef: {name: storscale-config}
+env:
+  {{- $keys := list "DB_PASSWORD" "FERNET_KEY" "SECRET_KEY" "JWT_SECRET" }}
+  {{- if eq $part "init" }}{{ $keys = append $keys "PLATFORM_PASSWORD" }}{{ end }}
+  {{- range $keys }}
+  - {name: {{ . }}, valueFrom: {secretKeyRef: {name: "@AIRFLOW@", key: {{ . }}}}}
+  {{- end }}
+  {{- if eq $part "api-server" }}
+  - {name: AIRFLOW_OAUTH_SECRET, valueFrom: {secretKeyRef: {name: storscale-env, key: AIRFLOW_OAUTH_SECRET}}}
+  {{- end }}
+  - {name: AIRFLOW__CORE__EXECUTOR, value: LocalExecutor}
+  - {name: AIRFLOW__CORE__PARALLELISM, value: "4"}
+  - {name: AIRFLOW__CORE__AUTH_MANAGER, value: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager}
+  - {name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN, value: "postgresql+psycopg2://@DATABASE@:$(DB_PASSWORD)@airflow-db:5432/@DATABASE@"}
+  - {name: AIRFLOW__CORE__FERNET_KEY, value: "$(FERNET_KEY)"}
+  - {name: AIRFLOW__API__SECRET_KEY, value: "$(SECRET_KEY)"}
+  - {name: AIRFLOW__API_AUTH__JWT_SECRET, value: "$(JWT_SECRET)"}
+  - {name: AIRFLOW__API__BASE_URL, value: "{{ include "storscale.url" $root }}/airflow/@PROJECT@"}
+  - {name: AIRFLOW__API__PORT, value: "8090"}
+  - {name: FORWARDED_ALLOW_IPS, value: "*"}
+  - {name: AIRFLOW__CORE__EXECUTION_API_SERVER_URL, value: "http://localhost:8090/airflow/@PROJECT@/execution/"}
+  - {name: AIRFLOW__CORE__HOSTNAME_CALLABLE, value: airflow.utils.net.get_host_ip_address}
+  - {name: AIRFLOW__CORE__LOAD_EXAMPLES, value: "False"}
+  - {name: AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION, value: "False"}
+  - {name: AIRFLOW__DAG_PROCESSOR__DAG_BUNDLE_CONFIG_LIST, value: "@BUNDLES@"}
+  # Sign-in (webserver_config.py): the project's editors operate its
+  # pipelines, its readers watch them; no one else gets in.
+  - {name: AIRFLOW_ROLE_GROUPS, value: "@ROLE_GROUPS@"}
+  - {name: AIRFLOW_SESSION_COOKIE, value: "airflow_session_@PROJECT@"}
+  {{- include "storscale.ca.env" $root | nindent 2 }}
+volumeMounts:
+  - {name: files-airflow, mountPath: /opt/airflow/webserver_config.py, subPath: webserver_config.py}
+  - {name: tls, mountPath: /tls}   # Trino's certificate
+  {{- if $root.Values.pipelines.gitKnownHosts }}
+  - {name: git-known-hosts, mountPath: /etc/storscale/git, readOnly: true}
+  {{- end }}
+  {{- include "storscale.ca.mount" $root | nindent 2 }}
+{{- end }}
+
+{{- define "storscale.airflow.project" -}}
+{{- $labels := dict "app.kubernetes.io/part-of" "storscale-platform" "app.kubernetes.io/managed-by" "platform-operator" "app.kubernetes.io/name" "project-airflow" "platform.storscale.io/project" "@PROJECT@" }}
+{{- $selector := dict "app.kubernetes.io/name" "project-airflow" "platform.storscale.io/project" "@PROJECT@" }}
+deployment:
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: "@AIRFLOW@"
+    labels: {{ toJson $labels }}
+  spec:
+    replicas: 1
+    strategy: {type: Recreate}   # one scheduler at a time
+    progressDeadlineSeconds: {{ .Values.progressDeadlineSeconds }}
+    selector: {matchLabels: {{ toJson $selector }}}
+    template:
+      metadata:
+        labels: {{ toJson $labels }}
+      spec:
+        enableServiceLinks: false
+        automountServiceAccountToken: false
+        initContainers:
+          {{- include "storscale.ca.init" . | nindent 10 }}
+          - name: init
+            {{- include "storscale.airflow.project.env" (list . "init") | nindent 12 }}
+            command: ["bash", "-c"]
+            args:
+              - |
+                airflow db migrate && airflow fab-db migrate &&
+                airflow users create --username storscale-platform --password "$PLATFORM_PASSWORD" \
+                  --firstname StorScale --lastname Platform --email platform@{{ .Values.global.domain }} --role Op >/dev/null 2>&1;
+                airflow users reset-password --username storscale-platform --password "$PLATFORM_PASSWORD" >/dev/null
+            resources: {requests: {cpu: 50m, memory: "@REQUEST_API@"}, limits: {memory: "@MEMORY_API@"}}
+        containers:
+          - name: api-server
+            {{- include "storscale.airflow.project.env" (list . "api-server") | nindent 12 }}
+            args: ["api-server", "--proxy-headers"]
+            ports:
+              - {name: http, containerPort: 8090}
+            readinessProbe:
+              httpGet: {path: /airflow/@PROJECT@/api/v2/monitor/health, port: http}
+              periodSeconds: 5
+              failureThreshold: 60
+            resources: {requests: {cpu: 50m, memory: "@REQUEST_API@"}, limits: {memory: "@MEMORY_API@"}}
+          - name: scheduler
+            {{- include "storscale.airflow.project.env" (list . "scheduler") | nindent 12 }}
+            args: ["scheduler"]
+            resources: {requests: {cpu: 50m, memory: "@REQUEST_SCHEDULER@"}, limits: {memory: "@MEMORY_SCHEDULER@"}}
+          - name: dag-processor
+            {{- include "storscale.airflow.project.env" (list . "dag-processor") | nindent 12 }}
+            args: ["dag-processor"]
+            resources: {requests: {cpu: 20m, memory: "@REQUEST_PROCESSOR@"}, limits: {memory: "@MEMORY_PROCESSOR@"}}
+        volumes:
+          {{- include "storscale.filesVolume" (list . "airflow" "airflow") | nindent 10 }}
+          - {name: tls, secret: {secretName: trino-tls, items: [{key: cert.pem, path: cert.pem}]}}
+          {{- if .Values.pipelines.gitKnownHosts }}
+          - {name: git-known-hosts, configMap: {name: storscale-git-known-hosts}}
+          {{- end }}
+          {{- include "storscale.ca.volumes" . | nindent 10 }}
+service:
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: "@AIRFLOW@"
+    labels: {{ toJson $labels }}
+  spec:
+    selector: {{ toJson $selector }}
+    ports:
+      - {name: http, port: 8090, targetPort: http}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: storscale-airflow-project
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+data:
+  {{- $t := include "storscale.airflow.project" . | fromYaml }}
+  {{- if hasKey $t "Error" }}{{ fail (printf "the project Airflow template: %s" $t.Error) }}{{ end }}
+  template.json: {{ toJson $t | quote }}

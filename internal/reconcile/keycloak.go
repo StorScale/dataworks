@@ -2,6 +2,7 @@ package reconcile
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -10,8 +11,8 @@ import (
 )
 
 // Keycloak is the realm's admin API, as the operator's own client (a service
-// account with realm-management's manage-users, view-users, query-groups and
-// view-clients).
+// account with realm-management's manage-users, view-users, query-groups,
+// view-clients and manage-clients: it makes each project's pipelines client).
 type Keycloak struct {
 	URL, Realm, ClientID, Secret string // URL: Keycloak as the operator reaches it
 
@@ -157,4 +158,58 @@ func (k *Keycloak) syncMembers(ctx context.Context, g *kcGroup, want map[string]
 		}
 	}
 	return nil
+}
+
+// pipelinesMappers are what a pipelines client's tokens carry, as the
+// realm's own airflow-pipelines has them: its groups (Buckets' policies
+// name them) and the lakehouse audience (Trino's and Buckets').
+var pipelinesMappers = []map[string]any{
+	{"name": "groups", "protocol": "openid-connect", "protocolMapper": "oidc-group-membership-mapper",
+		"config": map[string]string{"claim.name": "groups", "full.path": "false", "access.token.claim": "true",
+			"id.token.claim": "true", "userinfo.token.claim": "true"}},
+	{"name": "audience: lakehouse", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper",
+		"config": map[string]string{"included.client.audience": "lakehouse", "access.token.claim": "true", "id.token.claim": "false"}},
+}
+
+func (k *Keycloak) clientUUID(ctx context.Context, clientID string) (string, error) {
+	var clients []struct {
+		ID string `json:"id"`
+	}
+	if err := k.do(ctx, "GET", "/clients?clientId="+url.QueryEscape(clientID), nil, &clients); err != nil || len(clients) == 0 {
+		return "", err
+	}
+	return clients[0].ID, nil
+}
+
+// ensurePipelinesClient makes a confidential client with a service account
+// and this secret (the operator's, kept in a Secret: Keycloak's realm may be
+// imported afresh, and the client made again, with the same secret).
+func (k *Keycloak) ensurePipelinesClient(ctx context.Context, clientID, name, secret string) error {
+	rep := map[string]any{"clientId": clientID, "name": name, "enabled": true, "publicClient": false,
+		"clientAuthenticatorType": "client-secret", "secret": secret, "standardFlowEnabled": false,
+		"directAccessGrantsEnabled": false, "serviceAccountsEnabled": true, "protocolMappers": pipelinesMappers}
+	id, err := k.clientUUID(ctx, clientID)
+	if err != nil {
+		return err
+	}
+	if id == "" {
+		if err := k.do(ctx, "POST", "/clients", rep, nil); err != nil && !isStatus(err, http.StatusConflict) {
+			return fmt.Errorf("client %s: %w", clientID, err)
+		}
+		return nil
+	}
+	delete(rep, "protocolMappers") // kept as made; a PUT doesn't change them
+	rep["id"] = id
+	if err := k.do(ctx, "PUT", "/clients/"+id, rep, nil); err != nil {
+		return fmt.Errorf("client %s: %w", clientID, err)
+	}
+	return nil
+}
+
+func (k *Keycloak) deleteClient(ctx context.Context, clientID string) error {
+	id, err := k.clientUUID(ctx, clientID)
+	if id == "" || err != nil {
+		return err
+	}
+	return k.do(ctx, "DELETE", "/clients/"+id, nil, nil)
 }

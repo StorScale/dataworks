@@ -65,7 +65,7 @@ export type Spec = {
     };
   };
   files?: { bucket?: string };
-  pipelines?: { serviceAccount: string; repo?: string; path?: string; ref?: string; credentials?: { secretRef: string } };
+  pipelines?: { serviceAccount: string; repo?: string; path?: string; ref?: string; credentials?: { secretRef: string }; memory?: string };
 };
 export type Project = { apiVersion: string; kind: string; metadata: { name: string }; spec: Spec };
 export type Part = { system: string; ok: boolean; message: string };
@@ -142,7 +142,7 @@ export type Pipeline = {
 export type PipelinesRepo = { url: string; path?: string; ref?: string };
 export type ImportError = { file: string; error: string };
 export const getPipelines = (name: string) =>
-  api<{ pipelines: Pipeline[]; canRun: boolean; repo?: PipelinesRepo; importErrors?: ImportError[] }>("GET", `/api/projects/${encodeURIComponent(name)}/pipelines`);
+  api<{ pipelines: Pipeline[]; canRun: boolean; repo?: PipelinesRepo; importErrors?: ImportError[]; airflowPath?: string }>("GET", `/api/projects/${encodeURIComponent(name)}/pipelines`);
 export const startRun = (name: string, pipeline: string) =>
   api<{ run: string }>("POST", `/api/projects/${encodeURIComponent(name)}/pipelines/${encodeURIComponent(pipeline)}/runs`);
 

@@ -1,0 +1,174 @@
+package reconcile
+
+import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"regexp"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/StorScale/storscale-platform/internal/project"
+)
+
+// template is the chart's project Airflow, cut down to its placeholders.
+const template = `{
+  "deployment": {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": "@AIRFLOW@",
+    "labels": {"platform.storscale.io/project": "@PROJECT@"}},
+    "spec": {"template": {"spec": {"containers": [
+      {"name": "api-server", "env": [
+        {"name": "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN", "value": "postgresql+psycopg2://@DATABASE@:$(DB_PASSWORD)@airflow-db:5432/@DATABASE@"},
+        {"name": "AIRFLOW__DAG_PROCESSOR__DAG_BUNDLE_CONFIG_LIST", "value": "@BUNDLES@"},
+        {"name": "AIRFLOW_ROLE_GROUPS", "value": "@ROLE_GROUPS@"}],
+       "resources": {"limits": {"memory": "@MEMORY_API@"}, "requests": {"memory": "@REQUEST_API@"}}},
+      {"name": "scheduler", "resources": {"limits": {"memory": "@MEMORY_SCHEDULER@"}}},
+      {"name": "dag-processor", "resources": {"limits": {"memory": "@MEMORY_PROCESSOR@"}}}]}}}},
+  "service": {"apiVersion": "v1", "kind": "Service", "metadata": {"name": "@AIRFLOW@"}}
+}`
+
+func aProject(t *testing.T, name, pipelines string) *project.Project {
+	t.Helper()
+	p, err := project.Parse([]byte(`{"metadata": {"name": "` + name + `"}, "spec": {"members": [{"group": "engineers", "role": "editor"}],
+		"pipelines": ` + pipelines + `}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestAProjectsAirflowIsTheChartsWithItsOwnValues(t *testing.T) {
+	var tpl Template
+	if err := json.Unmarshal([]byte(template), &tpl); err != nil {
+		t.Fatal(err)
+	}
+	pa := &ProjectAirflows{Template: tpl, DefaultMemory: "2Gi"}
+	p := aProject(t, "sales-eu", `{"serviceAccount": "x", "repo": "https://git.example.com/sales/dags.git", "memory": "4Gi"}`)
+	d, svc := pa.objects(&Airflow{DefaultRef: "main"}, p)
+	got, _ := json.Marshal(d)
+	for _, want := range []string{`"name":"project-sales-eu-airflow"`, `"platform.storscale.io/project":"sales-eu"`,
+		`postgresql+psycopg2://airflow_sales_eu:$(DB_PASSWORD)@airflow-db:5432/airflow_sales_eu`,
+		`"memory":"1536Mi"`, `"memory":"768Mi"`, `"memory":"1792Mi"`, // 4Gi: 3/8 for the API server, half of it asked for
+		`\"git_conn_id\":\"git_sales_eu\"`, `\"name\":\"project-sales-eu\"`, `\"tracking_ref\":\"main\"`,
+		`\"sales-eu-editors\":[\"Op\"]`, `\"sales-eu-readers\":[\"Viewer\"]`} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("deployment: no %s in %s", want, got)
+		}
+	}
+	if regexp.MustCompile(`@[A-Z_]+@`).Match(got) || !strings.Contains(string(got), `"AIRFLOW__DATABASE__SQL_ALCHEMY_CONN"`) {
+		t.Errorf("a placeholder left, or Airflow's own setting changed: %s", got)
+	}
+	if svc["metadata"].(map[string]any)["name"] != "project-sales-eu-airflow" {
+		t.Errorf("service: %v", svc)
+	}
+	small := aProject(t, "ads", `{"serviceAccount": "x", "repo": "https://git.example.com/ads.git"}`)
+	m := pa.memory(small)
+	if m["@MEMORY_API@"] != "768Mi" || m["@MEMORY_SCHEDULER@"] != "896Mi" || m["@MEMORY_PROCESSOR@"] != "384Mi" {
+		t.Errorf("the install's 2Gi: %v", m)
+	}
+}
+
+func TestTheConnectionToKeycloakIsTheProjectsOwnClient(t *testing.T) {
+	pa := &ProjectAirflows{PlatformURL: "https://storscale.example.com"}
+	p := aProject(t, "sales", `{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales.git"}`)
+	c, err := pa.keycloakConnection(p, "s3cret")
+	if err != nil || c.ID != "keycloak_pipelines" || c.Host != "storscale.example.com" || c.Port != 0 || c.Schema != "sso" ||
+		c.Login != "project-sales-pipelines" || c.Password != "s3cret" || c.Extra != `{"scheme": "https"}` {
+		t.Errorf("%+v %v", c, err)
+	}
+	pa.PlatformURL = "http://storscale.localhost:8800"
+	if c, _ := pa.keycloakConnection(p, "s"); c.Port != 8800 || c.Extra != `{"scheme": "http"}` {
+		t.Errorf("with a port: %+v", c)
+	}
+}
+
+// fakeKube is Kubernetes' API for Secrets, Services and Deployments.
+type fakeKube struct {
+	mu      sync.Mutex
+	objects map[string]map[string]any // path -> object
+	calls   []string
+}
+
+func (f *fakeKube) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, r.Method+" "+r.URL.Path)
+	body, _ := io.ReadAll(r.Body)
+	switch r.Method {
+	case "GET":
+		o, ok := f.objects[r.URL.Path]
+		if !ok {
+			http.Error(w, `{"message": "not found"}`, http.StatusNotFound)
+			return
+		}
+		json.NewEncoder(w).Encode(o)
+	case "POST":
+		var o map[string]any
+		json.Unmarshal(body, &o)
+		f.objects[r.URL.Path+"/"+o["metadata"].(map[string]any)["name"].(string)] = o
+	case "PATCH":
+		if r.Header.Get("Content-Type") != "application/apply-patch+yaml" || r.URL.Query().Get("fieldManager") != "platform-operator" {
+			http.Error(w, `{"message": "not a server-side apply"}`, http.StatusBadRequest)
+			return
+		}
+		var o map[string]any
+		json.Unmarshal(body, &o)
+		f.objects[r.URL.Path] = o
+	case "DELETE":
+		delete(f.objects, r.URL.Path)
+	}
+}
+
+func TestAProjectsKeysAreMadeOnceAndKept(t *testing.T) {
+	f := &fakeKube{objects: map[string]map[string]any{}}
+	ts := httptest.NewServer(f)
+	defer ts.Close()
+	k := &Kube{URL: ts.URL, Namespace: "storscale", HTTP: ts.Client(), Token: func() (string, error) { return "t", nil }}
+	pa := &ProjectAirflows{Kube: k}
+	p := aProject(t, "sales", `{"serviceAccount": "x", "repo": "https://git.example.com/sales.git"}`)
+	first, err := pa.keys(context.Background(), p)
+	if err != nil || len(first[keyDBPassword]) != 48 || len(first[keyPlatformPassword]) != 48 {
+		t.Fatalf("keys: %v", err)
+	}
+	if f, _ := base64.URLEncoding.DecodeString(first[keyFernet]); len(f) != 32 {
+		t.Errorf("a Fernet key is 32 bytes, URL-safe base64: %d", len(f))
+	}
+	// Kubernetes gives a Secret's data in base64, as it was sent.
+	stored := f.objects["/api/v1/namespaces/storscale/secrets/project-sales-airflow"]
+	again, _ := pa.keys(context.Background(), p)
+	if again[keyDBPassword] != first[keyDBPassword] || stored["metadata"].(map[string]any)["labels"].(map[string]any)["platform.storscale.io/project"] != "sales" {
+		t.Errorf("the keys again: %v, want the same; labels %v", again[keyDBPassword] == first[keyDBPassword], stored["metadata"])
+	}
+}
+
+func TestAProjectWithoutAnAirflowHasNothingToTakeDown(t *testing.T) {
+	f := &fakeKube{objects: map[string]map[string]any{}}
+	ts := httptest.NewServer(f)
+	defer ts.Close()
+	r := &Reconciler{ProjectAirflows: &ProjectAirflows{Kube: &Kube{URL: ts.URL, Namespace: "storscale", HTTP: ts.Client(),
+		Token: func() (string, error) { return "t", nil }}}}
+	p := aProject(t, "sales", `{"serviceAccount": "airflow-pipelines"}`)
+	if err := r.teardownProjectAirflow(context.Background(), p); err != nil || len(f.calls) != 1 {
+		t.Errorf("%v, calls %v: want one look for its Secret, and nothing else (no database, no Keycloak)", err, f.calls)
+	}
+	if r.ownAirflow(p) {
+		t.Error("a project without a repo has no Airflow of its own")
+	}
+	if !r.ownAirflow(aProject(t, "ads", `{"serviceAccount": "x", "repo": "https://git.example.com/ads.git"}`)) {
+		t.Error("a project with a repo, on Kubernetes, has its own")
+	}
+}
+
+func TestTheSharedAirflowTakesNoProjectsRepoWhenEachHasItsOwn(t *testing.T) {
+	sales := sales(t, `{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git"}`)
+	r := &Reconciler{Airflow: &Airflow{DefaultRef: "main"}, ProjectAirflows: &ProjectAirflows{},
+		Store: &memStore{statuses: []*project.Status{{Name: "sales", Phase: project.Ready, Spec: sales,
+			Parts: []project.Part{{System: "airflow", OK: true}}}}}}
+	got, _ := r.Bundles(context.Background())
+	if len(got) != 1 || got[0].Name != "dags-folder" {
+		t.Errorf("bundles %v, want the platform's own only", got)
+	}
+}

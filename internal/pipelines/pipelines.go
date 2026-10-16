@@ -337,12 +337,15 @@ func code(err error) int {
 // platform keeps each project's git credentials in one, encrypted in
 // Airflow's database, for the project's DAG bundle.
 type Connection struct {
-	ID       string `json:"connection_id"`
-	Type     string `json:"conn_type"`
-	Host     string `json:"host,omitempty"`
-	Login    string `json:"login,omitempty"`
-	Password string `json:"password,omitempty"`
-	Extra    string `json:"extra,omitempty"` // JSON
+	ID          string `json:"connection_id"`
+	Type        string `json:"conn_type"`
+	Host        string `json:"host,omitempty"`
+	Login       string `json:"login,omitempty"`
+	Password    string `json:"password,omitempty"`
+	Extra       string `json:"extra,omitempty"` // JSON
+	Schema      string `json:"schema,omitempty"`
+	Port        int    `json:"port,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 // PutConnection makes Airflow hold the connection as given, creating it or

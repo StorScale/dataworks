@@ -120,9 +120,11 @@ storage:
   jupyterhub: 1Gi
   opensearch: 4Gi
 
-# Projects' pipelines repos (their Airflow DAGs, from git).
+# Projects' pipelines repos (their Airflow DAGs, from git). Each project with
+# a repo gets an Airflow of its own, at the platform's /airflow/<project>/.
 pipelines:
   defaultRef: main     # the branch a repo is followed on when its project names none
+  memory: 3Gi          # a project's Airflow's, when it names none (pipelines.memory: 2Gi to 64Gi)
   # The git hosts' SSH keys (an ssh_known_hosts file), for SSH repos:
   #   --set-file pipelines.gitKnownHosts=known_hosts   (ssh-keyscan git.example.com)
   # Without them, a host's key is taken the first time it's seen.

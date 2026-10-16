@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -101,13 +102,16 @@ type Files struct {
 // Pipelines: a Keycloak client whose service account runs the project's
 // pipelines. It reads and writes the tables, and the files under landing/.
 // With a repo, the pipelines' code (Airflow's DAGs) comes from it: Airflow
-// takes it as a DAG bundle of the project's own (BundleName).
+// takes it as a DAG bundle of the project's own (BundleName). On Kubernetes
+// such a project runs its pipelines in an Airflow of its own (AirflowName),
+// as a service account of its own (PipelinesClientID), in Memory.
 type Pipelines struct {
 	ServiceAccount string          `json:"serviceAccount"`        // the Keycloak client's ID
 	Repo           string          `json:"repo,omitempty"`        // a git repo: https://... or ssh, never with credentials in it
 	Path           string          `json:"path,omitempty"`        // the DAGs' folder in it; default the whole repo
 	Ref            string          `json:"ref,omitempty"`         // a branch, tag or commit; default the install's own
 	Credentials    *GitCredentials `json:"credentials,omitempty"` // for a repo that isn't public
+	Memory         string          `json:"memory,omitempty"`      // its Airflow's, as 3Gi or 2560Mi; default the install's
 }
 
 // GitCredentials name where the repo's credentials are kept, never the
@@ -130,6 +134,7 @@ var (
 	scpRepoRE    = regexp.MustCompile(`^[A-Za-z0-9_.-]+@[A-Za-z0-9.-]+:[A-Za-z0-9_.~/-]+$`) // git@host:org/repo.git
 	identifierRE = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
 	principalRE  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@-]{0,99}$`)
+	memoryRE     = regexp.MustCompile(`^([1-9][0-9]{0,5})(Mi|Gi)$`)
 )
 
 // Parse reads a Project from JSON, fills in its defaults and validates it.
@@ -249,10 +254,15 @@ func (p *Project) Validate() error {
 func (pl *Pipelines) problems() []string {
 	var out []string
 	if pl.Repo == "" {
-		if pl.Path != "" || pl.Ref != "" || pl.Credentials != nil {
-			out = append(out, "path, ref and credentials need a repo")
+		if pl.Path != "" || pl.Ref != "" || pl.Credentials != nil || pl.Memory != "" {
+			out = append(out, "path, ref, credentials and memory need a repo")
 		}
 		return out
+	}
+	if pl.Memory != "" {
+		if mi, ok := MiB(pl.Memory); !ok || mi < MinMemoryMiB || mi > MaxMemoryMiB {
+			out = append(out, fmt.Sprintf("memory %q: from 2Gi to 64Gi, as 3Gi or 2560Mi", pl.Memory))
+		}
 	}
 	ssh := false
 	if u, err := url.Parse(pl.Repo); err == nil && (u.Scheme == "https" || u.Scheme == "http" || u.Scheme == "ssh") {
@@ -295,6 +305,48 @@ func (p *Project) BundleName() string { return "project-" + p.Metadata.Name }
 
 // GitConnID is the Airflow connection holding the repo's credentials.
 func (p *Project) GitConnID() string { return "git_" + strings.ReplaceAll(p.Metadata.Name, "-", "_") }
+
+// AirflowName names the project's own Airflow on Kubernetes: its Deployment,
+// Service and Secret. Its UI is at the platform's /airflow/<project>/.
+func (p *Project) AirflowName() string { return "project-" + p.Metadata.Name + "-airflow" }
+
+// AirflowURL is where the platform reaches the project's own Airflow (its API).
+func (p *Project) AirflowURL() string {
+	return "http://" + p.AirflowName() + ":8090/airflow/" + p.Metadata.Name
+}
+
+// AirflowPlatformPasswordKey is the platform account's password in the
+// project's Airflow's Secret (AirflowName), which the operator makes.
+const AirflowPlatformPasswordKey = "PLATFORM_PASSWORD"
+
+// AirflowDatabase is its Airflow's database, and the Postgres user that owns it.
+func (p *Project) AirflowDatabase() string {
+	return "airflow_" + strings.ReplaceAll(p.Metadata.Name, "-", "_")
+}
+
+// PipelinesClientID is the Keycloak client whose service account runs the
+// pipelines of a project with an Airflow of its own: a member of this
+// project alone.
+func (p *Project) PipelinesClientID() string { return "project-" + p.Metadata.Name + "-pipelines" }
+
+// The memory a project's Airflow may have, in MiB.
+const (
+	MinMemoryMiB = 2048
+	MaxMemoryMiB = 64 * 1024
+)
+
+// MiB reads a memory size given as <n>Mi or <n>Gi.
+func MiB(q string) (int, bool) {
+	m := memoryRE.FindStringSubmatch(q)
+	if m == nil {
+		return 0, false
+	}
+	n, _ := strconv.Atoi(m[1])
+	if m[2] == "Gi" {
+		n *= 1024
+	}
+	return n, true
+}
 
 // Hash identifies a spec: the operator applies a project again when it changes.
 func (p *Project) Hash() string {

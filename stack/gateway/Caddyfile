@@ -65,6 +65,13 @@ http://{$STORSCALE_DOMAIN}:{$GATEWAY_PORT} {
 	handle /pipelines/* {
 		import tool airflow:8090
 	}
+	# Each project's own Airflow (on Kubernetes), at /airflow/<project>/: its
+	# Service is project-<project>-airflow. (A project's name is 3 to 40
+	# lowercase letters, digits and dashes.)
+	@projectAirflow path_regexp projectAirflow ^/airflow/([a-z][a-z0-9-]{1,38}[a-z0-9])/
+	handle @projectAirflow {
+		import tool project-{re.projectAirflow.1}-airflow:8090
+	}
 	handle /monitoring/* {
 		import tool grafana:3000
 	}

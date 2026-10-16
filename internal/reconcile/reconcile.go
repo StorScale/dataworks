@@ -22,8 +22,12 @@ type Reconciler struct {
 	Buckets  *Buckets
 	Nessie   *Nessie
 	Airflow  *Airflow // nil: no pipelines from git
-	Store    store.Store
-	Log      *slog.Logger
+	// ProjectAirflows, on Kubernetes, gives each project with a repo an
+	// Airflow of its own; nil (Compose): projects' repos are bundles in the
+	// shared Airflow.
+	ProjectAirflows *ProjectAirflows
+	Store           store.Store
+	Log             *slog.Logger
 	// RangerUserPassword starts the password of people the operator adds to
 	// Ranger (who never sign in to Ranger: Trino's plugin needs them listed).
 	RangerUserPassword string
@@ -52,7 +56,15 @@ func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Sta
 	if p.Spec.Tables != nil {
 		part("nessie", r.Nessie.ensureNamespace(ctx, p.Spec.Tables.Namespace))
 	}
-	if r.Airflow != nil {
+	switch {
+	case r.ownAirflow(p):
+		part("airflow", r.applyProjectAirflow(ctx, p))
+	case r.ProjectAirflows != nil:
+		if err := r.teardownProjectAirflow(ctx, p); err != nil { // the repo went: its Airflow goes
+			part("airflow", err)
+		}
+	}
+	if r.Airflow != nil && !r.ownAirflow(p) {
 		if pl := p.Spec.Pipelines; pl != nil && pl.Repo != "" {
 			part("airflow", r.applyAirflow(ctx, p))
 		} else if err := r.applyAirflow(ctx, p); err != nil && r.Log != nil {
@@ -85,6 +97,9 @@ func (r *Reconciler) Delete(ctx context.Context, p *project.Project) error {
 	keep(r.Ranger.syncPolicies(ctx, p.RangerPrefix(), nil))
 	keep(r.Ranger.syncGroupMembers(ctx, p.Groups(), nil, r.RangerUserPassword))
 	keep(r.Ranger.deleteGroups(ctx, p.Groups()))
+	if r.ProjectAirflows != nil {
+		keep(r.teardownProjectAirflow(ctx, p))
+	}
 	if r.Airflow != nil {
 		keep(r.Airflow.API.DeleteConnection(ctx, p.GitConnID()))
 	}
@@ -148,12 +163,19 @@ func (r *Reconciler) members(ctx context.Context, p *project.Project) (people, e
 		out.list = append(out.list, project.Person{Username: users[id].Username, Role: rl, Via: via[id]})
 	}
 	if pl := p.Spec.Pipelines; pl != nil {
-		sa, err := r.Keycloak.serviceAccount(ctx, pl.ServiceAccount)
+		clientID := pl.ServiceAccount
+		if r.ownAirflow(p) { // its own service account, made with its Airflow's keys
+			if err := r.ProjectAirflows.identity(ctx, r.Keycloak, p); err != nil {
+				return out, fmt.Errorf("the pipelines' service account: %w", err)
+			}
+			clientID = p.PipelinesClientID()
+		}
+		sa, err := r.Keycloak.serviceAccount(ctx, clientID)
 		if err != nil {
 			return out, err
 		}
 		if sa == nil {
-			return out, fmt.Errorf("Keycloak client %q has no service account", pl.ServiceAccount)
+			return out, fmt.Errorf("Keycloak client %q has no service account", clientID)
 		}
 		wanted[p.Group("pipelines")] = map[string]kcUser{sa.ID: *sa}
 		out.list = append(out.list, project.Person{Username: sa.Username, Role: "pipelines"})
@@ -299,4 +321,11 @@ func memberList(st *project.Status) []project.Person {
 		return nil
 	}
 	return st.Members
+}
+
+// ownAirflow says whether the project runs its pipelines in an Airflow of
+// its own: on Kubernetes, with a repo.
+func (r *Reconciler) ownAirflow(p *project.Project) bool {
+	pl := p.Spec.Pipelines
+	return r.ProjectAirflows != nil && pl != nil && pl.Repo != ""
 }
