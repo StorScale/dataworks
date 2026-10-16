@@ -66,6 +66,17 @@ Install with the subcharts on, unless the cluster already runs one: a Spark Oper
 another release installed owns the Spark CRDs (`--set spark-operator.enabled=false`). Helm installs a subchart's CRDs (Buckets' and the
 Spark Operator's) only on a fresh install, never on an upgrade.
 
+The same holds for the platform's own Project definition. **Upgrading,** apply the release's
+CRD first, then upgrade (the chart's `values.yaml` and `--set-file`s as when installing):
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/StorScale/storscale-platform/v0.5.0/deploy/crds/project.yaml
+helm upgrade storscale oci://ghcr.io/storscale/charts/storscale-platform --version 0.5.0 -n storscale -f platform.yaml ...
+```
+
+Without it, Kubernetes silently drops whatever fields the old definition lacks from every
+project (0.4.x's lacks `pipelines.repo` and the rest), and the operator never sees them.
+
 People's password (the example users alice, bob, carol):
 `kubectl -n storscale get secret storscale-env -o jsonpath='{.data.LAKEHOUSE_USER_PASSWORD}' | base64 -d`.
 Every other secret is in the same Secret. They're generated on install and kept on upgrade.
