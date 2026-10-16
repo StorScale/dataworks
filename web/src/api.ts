@@ -166,3 +166,23 @@ export function took(a?: Date, b?: Date): string {
   const s = Math.max(0, Math.round((b.getTime() - a.getTime()) / 1000));
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 }
+
+// --- The platform's health: its services, and the alerts about them -------------------
+
+export type HealthPod = { name: string; node?: string; phase: string; waiting?: string; event?: string };
+export type HealthService = {
+  name: string; label: string; features: string[]; state: "up" | "down" | "unknown";
+  reason?: string; since: string; pods?: HealthPod[]; mutedUntil?: string;
+};
+export type HealthAlert = { title: string; severity: string; facts: [string, string][]; at: string };
+export type Health = {
+  checked: boolean; affected: string[];
+  // administrators only:
+  services?: HealthService[]; alerts?: HealthAlert[];
+  certificate?: { ends: string; error?: string };
+  targets?: { teams: boolean; email?: string[]; error?: string };
+};
+export const getHealth = () => api<Health>("GET", "/api/health");
+export const muteAlerts = (service: string, hours: number) =>
+  api<{ mutedUntil: string }>("POST", "/api/health/mute", { service, hours });
+export const testAlert = () => api<{ targets: Record<string, string> }>("POST", "/api/health/test");

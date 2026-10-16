@@ -9,6 +9,10 @@ rule_files:
   - /etc/prometheus/rules.yaml
 
 scrape_configs:
+  # The platform's services, as platformd checks them (the Health page).
+  - job_name: platform
+    static_configs:
+      - targets: [platformd:9102]
   - job_name: buckets-node
     metrics_path: /minio/v2/metrics/node
     authorization: {credentials_file: /etc/prometheus/token/token}

@@ -39,6 +39,9 @@ spec:
             - {name: AIRFLOW_URL, value: "http://airflow:8090/pipelines"}
             - {name: AIRFLOW_USER, value: storscale-platform}
             - {name: AIRFLOW_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: AIRFLOW_PLATFORM_PASSWORD}}}
+            # The Health page, and alerts (where the platform's Secret storscale-alerts says).
+            - {name: HEALTH, value: "on"}
+            - {name: GATEWAY_HEALTH_URL, value: "http://gateway:{{ .Values.gateway.port }}/healthz"}
             # A project with a repo has an Airflow of its own (project-<name>-airflow).
             - {name: PROJECT_AIRFLOWS, value: "true"}
             - {name: BRAND_NAME, value: {{ .Values.brand.name | quote }}}
@@ -54,6 +57,7 @@ spec:
             {{- include "storscale.ca.env" . | nindent 12 }}
           ports:
             - {name: http, containerPort: 8080}
+            - {name: metrics, containerPort: 9102}   # the checks', for Prometheus
           readinessProbe:
             exec: {command: ["/usr/bin/platformd", "healthcheck"]}
             periodSeconds: 5
@@ -82,6 +86,7 @@ spec:
   selector: {{- include "storscale.selector" (list .Release.Name "platformd") | nindent 4 }}
   ports:
     - {name: http, port: 8080, targetPort: http}
+    - {name: metrics, port: 9102, targetPort: metrics}
 ---
 apiVersion: apps/v1
 kind: Deployment

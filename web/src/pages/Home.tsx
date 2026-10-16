@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ago, Flow, getFlow, getPipelines, getSemantic, listProjects, Pipeline, ProjectView, when } from "../api";
 import { Page } from "../components";
+import { HealthNotice } from "./Health";
 import { checkName, failing, lastProject, Phase, RolePill, Spinner, StateDot, usePlatform, usePoll } from "../lib";
 
 type Summary = { view: ProjectView; flow?: Flow; metrics?: number; pipelines?: Pipeline[] };
@@ -52,6 +53,7 @@ export default function Home() {
         {last && data?.some((d) => d.view.name === last) && <Link className="btn primary" to={`/p/${last}`}>Continue in {last}</Link>}
       </div>
       {error && <div className="banner error">{error}</div>}
+      <HealthNotice />
 
       <div className="grid main-side">
         <div className="stack">

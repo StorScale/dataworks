@@ -72,6 +72,12 @@ func newTestServer(t *testing.T, k *fakeKeycloak) *httptest.Server {
 }
 
 func newTestServerWith(t *testing.T, k *fakeKeycloak, change func(*config)) *httptest.Server {
+	ts, _ := newTestPlatform(t, k, change)
+	return ts
+}
+
+// newTestPlatform is newTestServerWith, with the server itself.
+func newTestPlatform(t *testing.T, k *fakeKeycloak, change func(*config)) (*httptest.Server, *server) {
 	web := t.TempDir()
 	os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html><title>StorScale Platform</title>"), 0o644)
 	cfg := config{
@@ -86,7 +92,7 @@ func newTestServerWith(t *testing.T, k *fakeKeycloak, change func(*config)) *htt
 	}
 	ts := httptest.NewServer(s.routes())
 	t.Cleanup(ts.Close)
-	return ts
+	return ts, s
 }
 
 var noRedirects = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}

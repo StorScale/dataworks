@@ -23,6 +23,9 @@
 //	SEMANTIC_URL          the semantic layer (semanticd), called as the signed-in person
 //	AIRFLOW_URL, AIRFLOW_USER, AIRFLOW_PASSWORD
 //	                      Airflow, for the projects' pipelines, as the platform's Airflow account
+//	HEALTH                on: check the platform's services every few seconds (the Health page),
+//	                      and alert the administrators (where the Secret storscale-alerts says)
+//	METRICS_LISTEN        the checks' metrics, for Prometheus (:9102): never through the gateway
 //
 // `platformd healthcheck` checks a running platformd, for container health checks.
 package main
@@ -98,6 +101,8 @@ type config struct {
 	SemanticURL                                           string
 	AirflowURL, AirflowUser, AirflowPassword              string
 	ProjectAirflows                                       bool   // a project with a repo has its own Airflow (Kubernetes)
+	Health                                                bool   // check the platform's services, and alert (HEALTH=on)
+	MetricsListen                                         string // the checks' metrics, for Prometheus (:9102)
 	BrandName, BrandTitle, BrandLogo, BrandIcon           string // the top bar's corner, the tab (brand.go)
 }
 
@@ -138,7 +143,8 @@ func configFromEnv(get func(string) string) (config, error) {
 		SemanticURL: strings.TrimRight(get("SEMANTIC_URL"), "/"),
 		AirflowURL:  get("AIRFLOW_URL"), AirflowUser: get("AIRFLOW_USER"), AirflowPassword: get("AIRFLOW_PASSWORD"),
 		ProjectAirflows: get("PROJECT_AIRFLOWS") == "true",
-		BrandName:       or("BRAND_NAME", "StorScale"), BrandTitle: get("BRAND_TITLE"),
+		Health:          get("HEALTH") == "on", MetricsListen: or("METRICS_LISTEN", ":9102"),
+		BrandName: or("BRAND_NAME", "StorScale"), BrandTitle: get("BRAND_TITLE"),
 		BrandLogo: get("BRAND_LOGO"), BrandIcon: get("BRAND_ICON"),
 	}
 	c.KeycloakDirectURL = strings.TrimRight(or("KEYCLOAK_DIRECT_URL", c.KeycloakURL), "/")
