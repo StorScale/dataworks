@@ -78,6 +78,7 @@ spec:
             - {name: NOTEBOOK_IMAGE, value: {{ include "storscale.image" (list . "notebook") | quote }}}
             - {name: NOTEBOOK_PULL_POLICY, value: {{ .Values.images.pullPolicy | quote }}}
             - {name: NOTEBOOK_MEMORY, value: {{ .Values.notebooks.memoryLimit | quote }}}
+            - {name: NOTEBOOK_CPUS, value: {{ .Values.notebooks.cpuLimit | quote }}}
             - {name: NOTEBOOK_STORAGE, value: {{ .Values.notebooks.storage | quote }}}
             {{- if include "storscale.ca.enabled" . }}
             # Notebook pods trust the platform's CA too, as the hub does.

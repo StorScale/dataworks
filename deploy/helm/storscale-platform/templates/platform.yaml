@@ -132,6 +132,18 @@ spec:
             - {name: POSTGRES_ADMIN_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: POSTGRES_ADMIN_PASSWORD}}}
             - {name: PIPELINES_DEFAULT_MEMORY, value: {{ .Values.pipelines.memory | quote }}}
             - {name: PLATFORM_URL, value: {{ include "storscale.url" . | quote }}}
+            # Projects' limits: Trino's resource groups (its limits' database), and buckets' sizes.
+            - {name: TRINO_DB_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: TRINO_DB_PASSWORD}}}
+            {{- with .Values.limits }}
+            - {name: LIMITS_PROJECT_QUERIES, value: {{ .project.queries | quote }}}
+            - {name: LIMITS_PROJECT_QUEUED, value: {{ .project.queued | quote }}}
+            - {name: LIMITS_PROJECT_QUERY_MEMORY, value: {{ .project.queryMemory | quote }}}
+            - {name: LIMITS_PROJECT_STORAGE, value: {{ .project.storage | quote }}}
+            - {name: LIMITS_PERSON_QUERIES, value: {{ .person.queries | quote }}}
+            - {name: LIMITS_PERSON_QUEUED, value: {{ .person.queued | quote }}}
+            - {name: LIMITS_TOTAL_QUERIES, value: {{ .total.queries | quote }}}
+            - {name: LIMITS_TOTAL_QUEUED, value: {{ .total.queued | quote }}}
+            {{- end }}
           volumeMounts:
             - {name: airflow-project, mountPath: /etc/storscale/airflow-project, readOnly: true}
           ports:

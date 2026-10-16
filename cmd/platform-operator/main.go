@@ -24,6 +24,12 @@
 //	                                     (airflow-db:5432), as its admin (postgres)
 //	PIPELINES_DEFAULT_MEMORY             a project's Airflow's memory when it names none (3Gi)
 //	PLATFORM_URL                         the platform's address (the pipelines' Keycloak, for them)
+//	TRINO_DB_HOST, TRINO_DB_PASSWORD     Trino's limits (its resource groups' database, trino-db:5432,
+//	                                     as its user trino); none: Trino has no limits but its own
+//	LIMITS_PROJECT_QUERIES, _QUEUED, _QUERY_MEMORY, _STORAGE  a project's limits when it names none
+//	                                     (4, 40, 50%, none); LIMITS_PERSON_QUERIES, _QUEUED, a
+//	                                     person's (4, 100); LIMITS_TOTAL_QUERIES, _QUEUED, the install's
+//	                                     (20, 1000); TRINO_ENVIRONMENT, Trino's node.environment (docker)
 //	PLATFORM_LISTEN                      health checks (:8081), and GET /airflow/bundles: the DAG
 //	                                     bundles Airflow should run (no credentials in it)
 //
@@ -39,11 +45,13 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/StorScale/storscale-platform/internal/pipelines"
+	"github.com/StorScale/storscale-platform/internal/project"
 	"github.com/StorScale/storscale-platform/internal/reconcile"
 	"github.com/StorScale/storscale-platform/internal/store"
 )
@@ -115,6 +123,23 @@ func main() {
 			Host: env("AIRFLOW_DB_HOST", "airflow-db:5432"), Path: "/postgres", RawQuery: "sslmode=disable&connect_timeout=10"}
 		r.ProjectAirflows = &reconcile.ProjectAirflows{Kube: kube, Postgres: &reconcile.Postgres{URL: pg.String()}, Template: t,
 			DefaultMemory: env("PIPELINES_DEFAULT_MEMORY", "3Gi"), PlatformURL: os.Getenv("PLATFORM_URL")}
+	}
+	num := func(k string, def int) int {
+		n, err := strconv.Atoi(os.Getenv(k))
+		if err != nil || n <= 0 {
+			return def
+		}
+		return n
+	}
+	r.DefaultStorage = os.Getenv("LIMITS_PROJECT_STORAGE")
+	if pw := os.Getenv("TRINO_DB_PASSWORD"); pw != "" {
+		db := url.URL{Scheme: "postgres", User: url.UserPassword("trino", pw), Host: env("TRINO_DB_HOST", "trino-db:5432"),
+			Path: "/trino", RawQuery: "sslmode=disable&connect_timeout=10"}
+		r.TrinoLimits = &reconcile.TrinoLimits{URL: db.String(), Environment: env("TRINO_ENVIRONMENT", "docker"),
+			Project: project.Limits{Queries: num("LIMITS_PROJECT_QUERIES", 4), Queued: num("LIMITS_PROJECT_QUEUED", 40),
+				QueryMemory: env("LIMITS_PROJECT_QUERY_MEMORY", "50%")},
+			Person: project.Limits{Queries: num("LIMITS_PERSON_QUERIES", 4), Queued: num("LIMITS_PERSON_QUEUED", 100)},
+			Total:  project.Limits{Queries: num("LIMITS_TOTAL_QUERIES", 20), Queued: num("LIMITS_TOTAL_QUEUED", 1000)}}
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

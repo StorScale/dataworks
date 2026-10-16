@@ -66,6 +66,7 @@ export type Spec = {
   };
   files?: { bucket?: string };
   pipelines?: { serviceAccount: string; repo?: string; path?: string; ref?: string; credentials?: { secretRef: string }; memory?: string };
+  limits?: { queries?: number; queued?: number; queryMemory?: string; storage?: string };
 };
 export type Project = { apiVersion: string; kind: string; metadata: { name: string }; spec: Spec };
 export type Part = { system: string; ok: boolean; message: string };

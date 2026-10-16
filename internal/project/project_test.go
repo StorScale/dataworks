@@ -198,3 +198,31 @@ func TestTheBundleAndConnectionOfAProject(t *testing.T) {
 		t.Errorf("2Gi: %d MiB", mi)
 	}
 }
+
+func TestAProjectsLimits(t *testing.T) {
+	with := func(limits string) error {
+		_, err := Parse([]byte(strings.Replace(sales, `"pipelines": {"serviceAccount": "airflow-pipelines"}`,
+			`"pipelines": {"serviceAccount": "airflow-pipelines"}, "limits": `+limits, 1)))
+		return err
+	}
+	for _, ok := range []string{`{}`, `{"queries": 4, "queued": 40, "queryMemory": "50%", "storage": "500Gi"}`,
+		`{"queryMemory": "4GB"}`, `{"queryMemory": "512MB", "storage": "2Ti"}`} {
+		if err := with(ok); err != nil {
+			t.Errorf("%s: %v", ok, err)
+		}
+	}
+	for _, tc := range []struct{ limits, want string }{
+		{`{"queries": 101}`, "queries 101"},
+		{`{"queued": -1}`, "queued -1"},
+		{`{"queryMemory": "4G"}`, "queryMemory"},
+		{`{"queryMemory": "150%"}`, "queryMemory"},
+		{`{"storage": "500GB"}`, "storage"},
+	} {
+		if err := with(tc.limits); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", tc.limits, err, tc.want)
+		}
+	}
+	if StorageBytes("2Ti") != 2<<40 || StorageBytes("500Gi") != 500<<30 || StorageBytes("") != 0 {
+		t.Errorf("storage in bytes: %d %d", StorageBytes("2Ti"), StorageBytes("500Gi"))
+	}
+}

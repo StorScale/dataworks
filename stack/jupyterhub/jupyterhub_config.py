@@ -64,7 +64,10 @@ if os.environ.get("STORSCALE_K8S") == "true":
     c.KubeSpawner.namespace = os.environ["STORSCALE_NAMESPACE"]
     c.KubeSpawner.image = os.environ["NOTEBOOK_IMAGE"]
     c.KubeSpawner.image_pull_policy = os.environ.get("NOTEBOOK_PULL_POLICY", "IfNotPresent")
+    # Each person's notebook has a person's limits: notebooks serve every
+    # project a person is in, so they aren't a project's.
     c.KubeSpawner.mem_limit = os.environ.get("NOTEBOOK_MEMORY", "1G")
+    c.KubeSpawner.cpu_limit = float(os.environ.get("NOTEBOOK_CPUS", "2"))
     c.KubeSpawner.mem_guarantee = "256M"
     c.KubeSpawner.environment = NOTEBOOK_ENV
     # KubeSpawner passes args only with a command of its own (otherwise it
@@ -93,6 +96,7 @@ else:
     c.DockerSpawner.network_name = "storscale"
     c.DockerSpawner.remove = True
     c.DockerSpawner.mem_limit = "1G"
+    c.DockerSpawner.cpu_limit = float(os.environ.get("NOTEBOOK_CPUS", "2"))
     c.DockerSpawner.volumes = {"storscale-notebooks-{username}": "/home/jovyan/work"}
     c.DockerSpawner.environment = NOTEBOOK_ENV
     c.DockerSpawner.args = NOTEBOOK_ARGS

@@ -13,6 +13,10 @@ import sys
 
 STAGES = {"base": ["realm", "lakehouse", "jupyterhub", "monitoring"], "trino": ["superset", "project"]}
 
+if sys.argv[1] == "trino":   # until Trino runs queries: it refuses them until its limits are written
+    from lakekit import wait_for_trino
+    wait_for_trino()
+
 for step in STAGES[sys.argv[1]]:
     print(f"setup: == {step}", flush=True)
     if subprocess.run([sys.executable, "-u", f"/tools/setup/{step}.py"]).returncode:

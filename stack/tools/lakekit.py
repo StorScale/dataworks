@@ -258,13 +258,19 @@ def token(user):
     return r.json()["access_token"]
 
 
-def sql(user, statement, catalog, schema=None):
-    """Run a statement in Trino as `user`, signed in with their token."""
+def trino_cursor(user, catalog, schema=None, tags=None):
+    """A Trino cursor for `user`, signed in with their token; tags: client
+    tags, as project:<name> (the project's limits)."""
     import trino
     conn = trino.dbapi.connect(host="trino", port=8443, http_scheme="https", user=user,
                                auth=trino.auth.JWTAuthentication(token(user)), verify="/tls/cert.pem",
-                               catalog=catalog, schema=schema)
-    cur = conn.cursor()
+                               catalog=catalog, schema=schema, client_tags=tags)
+    return conn.cursor()
+
+
+def sql(user, statement, catalog, schema=None, tags=None):
+    """Run a statement in Trino as `user`, signed in with their token."""
+    cur = trino_cursor(user, catalog, schema, tags)
     cur.execute(statement)
     return cur.fetchall()
 
@@ -281,9 +287,20 @@ def denied(user, statement, catalog, schema=None):
     return None
 
 
-def wait_for_trino():
+def wait_for_trino(timeout=180):
+    """Until Trino has started and runs a query: it refuses every query until
+    the platform operator has written its limits (its resource groups)."""
     wait_for("Trino", "https://trino:8443/v1/info", ok=lambda r: r.json()["starting"] is False,
              timeout=300, verify="/tls/cert.pem")
+    deadline, last = time.time() + timeout, None
+    while time.time() < deadline:
+        try:
+            sql("bob", "SELECT 1", catalog="iceberg")
+            return
+        except Exception as e:  # noqa: BLE001 (no resource group yet, or Keycloak's token not yet)
+            last = e
+            time.sleep(3)
+    sys.exit(f"setup: Trino runs no queries: {str(last).splitlines()[0][:200] if last else ''}")
 
 
 def s3(**creds):

@@ -80,6 +80,12 @@ func (b *Buckets) putPolicy(ctx context.Context, name string, statements []proje
 	return b.admin(ctx, "PUT", "/add-canned-policy", url.Values{"name": {name}}, doc)
 }
 
+// setQuota sets a bucket's hard size limit in bytes; 0 takes it away.
+func (b *Buckets) setQuota(ctx context.Context, bucket string, bytes int64) error {
+	body, _ := json.Marshal(map[string]any{"quota": bytes, "size": bytes, "quotatype": "hard"})
+	return b.admin(ctx, "PUT", "/set-bucket-quota", url.Values{"bucket": {bucket}}, body)
+}
+
 func (b *Buckets) deletePolicy(ctx context.Context, name string) error {
 	err := b.admin(ctx, "DELETE", "/remove-canned-policy", url.Values{"name": {name}}, nil)
 	if isStatus(err, http.StatusNotFound) || isStatus(err, http.StatusBadRequest) {
