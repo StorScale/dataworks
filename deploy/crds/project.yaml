@@ -114,7 +114,9 @@ spec:
                       type: object
                       required: [secretRef]
                       description: >-
-                        The Secret, in the project's namespace, holding the repo's credentials:
+                        One of the project's connections, holding the repo's credentials: a
+                        Secret in the project's namespace labelled
+                        platform.storscale.io/connection=<project> (any other is refused), with
                         username and password (a token), or sshPrivateKey (the git hosts'
                         keys are the install's).
                       properties:

@@ -26,6 +26,9 @@ func (m *memStore) Statuses(context.Context) ([]*project.Status, error) { return
 func (m *memStore) Secret(_ context.Context, name string) (map[string]string, error) {
 	return m.secrets[name], nil
 }
+func (m *memStore) Connection(_ context.Context, project, name string) (map[string]string, error) {
+	return m.secrets[project+"/"+name], nil
+}
 
 // fakeAirflow is Airflow's API, as far as signing in and connections go.
 type fakeAirflow struct {
@@ -138,7 +141,7 @@ func TestTheOperatorKeepsTheConnection(t *testing.T) {
 	f := &fakeAirflow{conns: map[string]pipelines.Connection{}}
 	ts := httptest.NewServer(f)
 	defer ts.Close()
-	mem := &memStore{secrets: map[string]map[string]string{"sales-git": {"username": "bob", "password": "ghp_token"}}}
+	mem := &memStore{secrets: map[string]map[string]string{"sales/sales-git": {"username": "bob", "password": "ghp_token"}}}
 	r := &Reconciler{Store: mem, Airflow: &Airflow{API: pipelines.New(ts.URL+"/pipelines", "storscale-platform", "pw"), DefaultRef: "main"}}
 	ctx := context.Background()
 	p := sales(t, `{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git", "credentials": {"secretRef": "sales-git"}}`)
@@ -146,7 +149,7 @@ func TestTheOperatorKeepsTheConnection(t *testing.T) {
 	if err := r.applyAirflow(ctx, p); err != nil || f.conns["git_sales"].Password != "ghp_token" {
 		t.Fatalf("first apply: %v %+v", err, f.conns)
 	}
-	mem.secrets["sales-git"]["password"] = "ghp_rotated"
+	mem.secrets["sales/sales-git"]["password"] = "ghp_rotated"
 	if err := r.applyAirflow(ctx, p); err != nil || f.conns["git_sales"].Password != "ghp_rotated" {
 		t.Errorf("a rotated token: %v %+v, want it in Airflow", err, f.conns["git_sales"])
 	}
@@ -178,7 +181,7 @@ func TestAnErrorNeverCarriesTheToken(t *testing.T) {
 		http.Error(w, "refused: "+string(body), http.StatusForbidden) // an answer that echoes the request
 	}))
 	defer ts.Close()
-	r := &Reconciler{Store: &memStore{secrets: map[string]map[string]string{"sales-git": {"password": "ghp_secret"}}},
+	r := &Reconciler{Store: &memStore{secrets: map[string]map[string]string{"sales/sales-git": {"password": "ghp_secret"}}},
 		Airflow: &Airflow{API: pipelines.New(ts.URL+"/pipelines", "storscale-platform", "pw")}}
 	p := sales(t, `{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/sales/dags.git", "credentials": {"secretRef": "sales-git"}}`)
 	err := r.applyAirflow(context.Background(), p)

@@ -58,20 +58,20 @@ def put_project(p):
     r.raise_for_status()
 
 
-def _put(kind, name, body):
+def _put(kind, name, body, labels=None):
     """Create or replace a Secret or ConfigMap."""
     body = {"apiVersion": "v1", "kind": {"secrets": "Secret", "configmaps": "ConfigMap"}[kind],
-            "metadata": {"name": name, "labels": {"app.kubernetes.io/part-of": "storscale-platform"}}, **body}
+            "metadata": {"name": name, "labels": {"app.kubernetes.io/part-of": "storscale-platform", **(labels or {})}}, **body}
     r = _api("PUT", f"{kind}/{name}", json=body)
     if r.status_code == 404:
         r = _api("POST", kind, json=body)
     r.raise_for_status()
 
 
-def put_secret(name, data):
+def put_secret(name, data, labels=None):
     """A Secret of the given files (key -> text)."""
     _put("secrets", name, {"type": "Opaque",
-                           "data": {k: base64.b64encode(v.encode()).decode() for k, v in data.items()}})
+                           "data": {k: base64.b64encode(v.encode()).decode() for k, v in data.items()}}, labels)
 
 
 def get_secret(name):

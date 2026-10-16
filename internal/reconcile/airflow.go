@@ -100,11 +100,11 @@ func (r *Reconciler) putGitConnection(ctx context.Context, api *pipelines.Client
 	var secret map[string]string
 	if pl.Credentials != nil {
 		var err error
-		if secret, err = r.Store.Secret(ctx, pl.Credentials.SecretRef); err != nil {
+		if secret, err = r.Store.Connection(ctx, p.Metadata.Name, pl.Credentials.SecretRef); err != nil {
 			return fmt.Errorf("reading secret %q: %w", pl.Credentials.SecretRef, err)
 		}
 		if secret == nil {
-			return fmt.Errorf("no secret %q (the repo's credentials)", pl.Credentials.SecretRef)
+			return fmt.Errorf("no secret %q (the repo's credentials) among the project's connections", pl.Credentials.SecretRef)
 		}
 	}
 	conn, err := r.Airflow.connection(p, secret)

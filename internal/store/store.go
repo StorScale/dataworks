@@ -39,11 +39,21 @@ type Store interface {
 	PutStatus(ctx context.Context, st *project.Status) error
 	// DeleteStatus says the operator is done with a project: it has undone it.
 	DeleteStatus(ctx context.Context, name string) error
-	// Secret is a secret a project names (its git credentials), as keys and
-	// values: nil, with no error, when there's no such secret. On
+	// Connection is one of a project's connections (credentials it names,
+	// such as its git repo's), as keys and values: nil, with no error, when
+	// the project has none of that name. A project reaches its own only: on
+	// Kubernetes, a Secret labelled ConnectionLabel=<project> (a Secret
+	// without the label, the platform's or another project's, is refused);
+	// otherwise connections/<project>/<name>.json.
+	Connection(ctx context.Context, project, name string) (map[string]string, error)
+	// Secret is one of the platform's own secrets (a project's Airflow's keys,
+	// which the operator makes): nil, with no error, when there's none. On
 	// Kubernetes, a Secret in the namespace; otherwise secrets/<name>.json.
 	Secret(ctx context.Context, name string) (map[string]string, error)
 }
+
+// ConnectionLabel marks a Secret as a project's connection: its value is the project.
+const ConnectionLabel = "platform.storscale.io/connection"
 
 type Bucket struct {
 	c      *minio.Client
@@ -146,13 +156,25 @@ func (s *Bucket) each(ctx context.Context, prefix string, f func([]byte) error) 
 }
 
 func (s *Bucket) Secret(ctx context.Context, name string) (map[string]string, error) {
-	data, err := s.get(ctx, "secrets/"+name+".json")
+	return s.keys(ctx, "secrets/"+name+".json")
+}
+
+func (s *Bucket) Connection(ctx context.Context, project, name string) (map[string]string, error) {
+	if strings.Contains(project+name, "/") { // both are validated names; never a path
+		return nil, errors.New("a connection's name has no slashes")
+	}
+	return s.keys(ctx, "connections/"+project+"/"+name+".json")
+}
+
+// keys reads a JSON object of strings; nil, with no error, when there's none.
+func (s *Bucket) keys(ctx context.Context, key string) (map[string]string, error) {
+	data, err := s.get(ctx, key)
 	if data == nil || err != nil {
 		return nil, err
 	}
 	var out map[string]string
 	if err := json.Unmarshal(data, &out); err != nil {
-		return nil, errors.New("secrets/" + name + ".json: " + err.Error())
+		return nil, errors.New(key + ": " + err.Error())
 	}
 	return out, nil
 }

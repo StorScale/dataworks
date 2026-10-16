@@ -14,6 +14,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
   - A new suite, `pipelines_git`, serves a git repo of its own and checks the whole path: the DAG loads and runs at the commit pushed, the next commit follows, the token shows nowhere, and deleting the project takes its DAGs away. The tools image has git for it; the test pod may write its own Secret.
 
 ### Fixed
+- **A project could name any Secret as its repo's credentials,** the platform's own `storscale-env` among them. Now it reaches only its own connections: on Kubernetes, Secrets labelled `platform.storscale.io/connection=<project>`; in Compose, `connections/<project>/<name>.json` in the platform's bucket. Anything else is refused, naming the Secret but never its contents.
 - **Task logs on Kubernetes:** Airflow's API server fetched a task's log from the scheduler by the pod's name, which the cluster's DNS doesn't know, so logs came back empty (in Airflow's UI too). The scheduler now gives its IP.
 
 ### Changed
