@@ -132,9 +132,14 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R6.23 Alerts naming the project, the person and the query, and a way to stop it.
 - R6.24 A limit, when met, is said plainly where it's met (the SQL page, the notebook, the pipeline's run), naming the limit.
 
+**Decided (2026-10-16)**
+- A query counts against a project when one of its members names it (Trino's client tag `project:<name>`, which the platform's SQL page and metrics set), and all of the project's own pipelines' queries do; everything else counts against its person. A person in two projects chooses by naming one; naming a project they aren't in counts against themselves.
+- Notebooks and their Spark sessions are a person's, not a project's (one notebook serves all of a person's projects): they have a person's limits, memory and CPU.
+
+**Built (2026-10-16):** Trino's resource groups, kept by the operator in a database Trino reads every second (a group per project, per person, and one for the install); each project's bucket's size; a person's notebook's CPU beside its memory; the `limits` suite.
+
 **Open questions**
-- A person in two projects: whose Trino limits does their query count against? (The project they chose on the SQL page, or the one the query's tables belong to.)
-- Hard caps, or fair shares that lend idle capacity?
+- Hard caps, or fair shares that lend idle capacity? (Built: hard caps, with Trino's fair scheduling inside each.)
 
 ### 6.9 Erase a customer
 

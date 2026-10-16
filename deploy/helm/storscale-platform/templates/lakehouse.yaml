@@ -91,6 +91,25 @@ spec:
         {{- include "storscale.ca.init" . | nindent 8 }}
         {{- include "storscale.wait" (list . "setup" (list "job" "setup")) | nindent 8 }}
         {{- include "storscale.wait" (list . "nessie" (list "url" "http://nessie:19120/api/v2/config")) | nindent 8 }}
+        # Its limits' database and user (resource-groups.properties), if they're
+        # missing: as Postgres' admin, who is in this step alone.
+        - name: database
+          image: {{ .Values.upstream.postgres }}
+          command: ["bash", "-c"]
+          args:
+            - |
+              until pg_isready -h trino-db -U postgres -q; do sleep 2; done
+              psql -h trino-db -U postgres -v ON_ERROR_STOP=1 -v pw="$TRINO_DB_PASSWORD" <<'SQL'
+              SELECT 'CREATE ROLE trino LOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'trino') \gexec
+              ALTER ROLE trino PASSWORD :'pw';
+              SELECT 'CREATE DATABASE trino OWNER trino' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'trino') \gexec
+              REVOKE CONNECT, TEMPORARY ON DATABASE trino FROM PUBLIC;
+              SQL
+          env:
+            - {name: PGPASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: POSTGRES_ADMIN_PASSWORD}}}
+            - {name: TRINO_DB_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: TRINO_DB_PASSWORD}}}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
         # Trino's password file (bcrypt): Superset and the catalog sign in to Trino with passwords.
         - name: passwords
           image: {{ include "storscale.image" (list . "tools") }}
@@ -118,7 +137,7 @@ spec:
             periodSeconds: 5
             failureThreshold: 60
           volumeMounts:
-            {{- range $f := list "config.properties" "password-authenticator.properties" "access-control.properties" "ranger-trino-security.xml" "ranger-trino-audit.xml" }}
+            {{- range $f := list "config.properties" "password-authenticator.properties" "access-control.properties" "resource-groups.properties" "ranger-trino-security.xml" "ranger-trino-audit.xml" }}
             - {name: files-trino, mountPath: /etc/trino/{{ $f }}, subPath: {{ $f }}}
             {{- end }}
             - {name: files-trino, mountPath: /etc/trino/catalog, subPath: catalog}

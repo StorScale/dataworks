@@ -229,7 +229,9 @@ def run(c: Caller, project, sql, metrics, limit=MAX_ROWS):
     conn = trino.dbapi.connect(host=env.get("TRINO_HOST", "trino"), port=8443, http_scheme="https",
                                verify=env.get("TRINO_CA", "/tls/cert.pem"), user=c.username,
                                auth=trino.auth.JWTAuthentication(c.token), source=f"storscale-semantic/{c.agent}",
-                               catalog=catalog, schema=schema)
+                               catalog=catalog, schema=schema,
+                               # The project's limits apply (Trino's resource group for it).
+                               client_tags=[f"project:{project}"])
     cur = conn.cursor()
     try:
         cur.execute(note + sql)

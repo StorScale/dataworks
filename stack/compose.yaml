@@ -325,6 +325,8 @@ services:
       # Projects' pipelines repos: their git connections, through the platform's Airflow account.
       AIRFLOW_URL: http://airflow:8090/pipelines
       AIRFLOW_PASSWORD: ${AIRFLOW_PLATFORM_PASSWORD}
+      # Projects' limits: Trino's resource groups, and the projects' buckets' sizes.
+      TRINO_DB_PASSWORD: ${TRINO_DB_PASSWORD}
     depends_on:
       setup: {condition: service_completed_successfully}
       nessie: {condition: service_started}
@@ -478,12 +480,14 @@ services:
       TRINO_S3_SECRET_KEY: ${TRINO_S3_SECRET_KEY}
       TRINO_SHARED_SECRET: ${TRINO_SHARED_SECRET}
       RANGER_PLUGIN_PASSWORD: ${RANGER_PLUGIN_PASSWORD}
+      TRINO_DB_PASSWORD: ${TRINO_DB_PASSWORD}   # its limits' database
     volumes:
       - ./trino/config.properties:/etc/trino/config.properties:ro
       - ./trino/password-authenticator.properties:/etc/trino/password-authenticator.properties:ro
       - ./trino/access-control.properties:/etc/trino/access-control.properties:ro
       - ./trino/ranger-trino-security.xml:/etc/trino/ranger-trino-security.xml:ro
       - ./trino/ranger-trino-audit.xml:/etc/trino/ranger-trino-audit.xml:ro
+      - ./trino/resource-groups.properties:/etc/trino/resource-groups.properties:ro
       - ./trino/catalog:/etc/trino/catalog:ro
       - tls:/etc/trino/tls:ro
       - trino-auth:/etc/trino/auth:ro
@@ -494,8 +498,24 @@ services:
       trino-passwords: {condition: service_completed_successfully}
       setup: {condition: service_completed_successfully}
       nessie: {condition: service_started}
+      trino-db: {condition: service_healthy}
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/v1/info | grep -q '\"starting\":false'"]
+      interval: 5s
+      retries: 60
+
+  # Trino's limits: its resource groups, which the platform operator keeps.
+  trino-db:
+    restart: unless-stopped
+    image: postgres:18-bookworm
+    environment:
+      POSTGRES_DB: trino
+      POSTGRES_USER: trino
+      POSTGRES_PASSWORD: ${TRINO_DB_PASSWORD}
+    volumes:
+      - trino-db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trino -d trino"]
       interval: 5s
       retries: 60
 
@@ -819,6 +839,7 @@ services:
 
 volumes:
   keycloak-db:
+  trino-db:
   catalog:
   openmetadata-db:
   openmetadata-search:

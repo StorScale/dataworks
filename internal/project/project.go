@@ -45,6 +45,19 @@ type Spec struct {
 	Tables      *Tables    `json:"tables,omitempty"`
 	Files       *Files     `json:"files,omitempty"`
 	Pipelines   *Pipelines `json:"pipelines,omitempty"`
+	Limits      *Limits    `json:"limits,omitempty"`
+}
+
+// Limits cap a project's share of the platform, so one project can't slow
+// the others; what it leaves out is the install's default. Queries count
+// against them when a member names the project (Trino's client tag
+// project:<name>, as the platform's SQL page and metrics do), and all its
+// pipelines' queries. Notebooks are a person's, and have a person's limits.
+type Limits struct {
+	Queries     int    `json:"queries,omitempty"`     // Trino queries running at once
+	Queued      int    `json:"queued,omitempty"`      // queries waiting; more are refused
+	QueryMemory string `json:"queryMemory,omitempty"` // Trino memory for its queries: 4GB, or 50% of Trino's
+	Storage     string `json:"storage,omitempty"`     // its bucket's size: 500Gi, 2Ti
 }
 
 // A Member is a Keycloak group, or one person, with a role. A group's members
@@ -137,6 +150,8 @@ var (
 	identifierRE = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
 	principalRE  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@-]{0,99}$`)
 	memoryRE     = regexp.MustCompile(`^([1-9][0-9]{0,5})(Mi|Gi)$`)
+	queryMemRE   = regexp.MustCompile(`^([1-9][0-9]{0,5}(MB|GB)|([1-9][0-9]?|100)%)$`)
+	storageRE    = regexp.MustCompile(`^([1-9][0-9]{0,5})(Gi|Ti)$`)
 )
 
 // Parse reads a Project from JSON, fills in its defaults and validates it.
@@ -246,10 +261,41 @@ func (p *Project) Validate() error {
 			bad("pipelines: %s", e)
 		}
 	}
+	if l := p.Spec.Limits; l != nil {
+		if l.Queries < 0 || l.Queries > 100 {
+			bad("limits: queries %d: from 1 to 100 at once", l.Queries)
+		}
+		if l.Queued < 0 || l.Queued > 1000 {
+			bad("limits: queued %d: up to 1000", l.Queued)
+		}
+		if l.QueryMemory != "" && !queryMemRE.MatchString(l.QueryMemory) {
+			bad("limits: queryMemory %q: as 4GB, 512MB or 50%%", l.QueryMemory)
+		}
+		if l.Storage != "" {
+			if !storageRE.MatchString(l.Storage) {
+				bad("limits: storage %q: as 500Gi or 2Ti", l.Storage)
+			} else if p.Spec.Files == nil {
+				bad("limits: storage needs files (a bucket)")
+			}
+		}
+	}
 	if len(errs) > 0 {
 		return fmt.Errorf("%s", strings.Join(errs, "; "))
 	}
 	return nil
+}
+
+// StorageBytes is a storage limit in bytes: 0 when there's none (or it's not one).
+func StorageBytes(q string) int64 {
+	m := storageRE.FindStringSubmatch(q)
+	if m == nil {
+		return 0
+	}
+	n, _ := strconv.ParseInt(m[1], 10, 64)
+	if m[2] == "Ti" {
+		return n << 40
+	}
+	return n << 30
 }
 
 // problems are what's wrong with the pipelines' repo, path, ref and credentials.

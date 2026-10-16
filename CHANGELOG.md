@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **Limits per project** ([docs/use-cases.md](docs/use-cases.md), 6.8): a project's `limits` (Trino queries at once, queued, memory; its bucket's size) cap its share of the platform, with the install's defaults (`limits` in the chart's values). Trino's resource groups come from a database the operator keeps (`trino-db`), read every second: a group per project, for its members' queries that name it (client tag `project:<name>`, which the SQL page and metrics set) and its own pipelines'; a group per person for the rest; one cap for the install. A refused query names the group whose limit it met. Notebooks have a person's limits: CPU (`notebooks.cpuLimit`) beside memory. The `limits` suite checks where queries run, a refusal, and a bucket's size.
+
 ### Changed
 - **The data as it was, added to the plan and use cases (phase 6, storyboard 6.10):** a table's history on its page; its data as of a date, a month-end close or a delivery; tags that keep a close beyond retention; and deliveries that record what they read, so any file or report can be made again. How this sits with erasure is an open question.
 - **Keycloak keeps its realm, and the realm's ownership is split** ([docs/plan.md](docs/plan.md), "Phase 6: Keycloak for real use"): Keycloak runs in production mode on a database of its own (Compose: `keycloak-db`; Kubernetes: a `keycloak` database on the platform's Postgres, made if missing). It imports `realm.json` only when there's no realm yet. At every install and upgrade a setup step (`setup/realm.py`) keeps the platform's own parts as `realm.json` says: the realm's token settings, each tool's client (its addresses, flows, secret and mappers), the platform's service accounts' roles. People, groups, and whatever an administrator adds stay as they are; a restart no longer signs everyone out or loses them.

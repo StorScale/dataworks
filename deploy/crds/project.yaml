@@ -125,6 +125,23 @@ spec:
                       type: string
                       pattern: '^[1-9][0-9]{0,5}(Mi|Gi)$'
                       description: "The project's own Airflow's memory, from 2Gi to 64Gi; default the install's (pipelines.memory)."
+                limits:
+                  type: object
+                  description: >-
+                    The project's share of the platform, so it can't slow the others; what's left out
+                    is the install's default (limits.project). Trino queries count against it when a
+                    member names the project (client tag project:<name>), and all its pipelines' queries.
+                  properties:
+                    queries: {type: integer, minimum: 0, maximum: 100, description: "Trino queries running at once."}
+                    queued: {type: integer, minimum: 0, maximum: 1000, description: "Queries waiting; more are refused."}
+                    queryMemory:
+                      type: string
+                      pattern: '^([1-9][0-9]{0,5}(MB|GB)|([1-9][0-9]?|100)%)$'
+                      description: "Trino memory for the project's queries: 4GB, or 50% of Trino's."
+                    storage:
+                      type: string
+                      pattern: '^[1-9][0-9]{0,5}(Gi|Ti)$'
+                      description: "Its bucket's size: 500Gi, 2Ti."
             status:
               type: object
               x-kubernetes-preserve-unknown-fields: true

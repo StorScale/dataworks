@@ -22,6 +22,12 @@ type Reconciler struct {
 	Buckets  *Buckets
 	Nessie   *Nessie
 	Airflow  *Airflow // nil: no pipelines from git
+	// DefaultStorage is a project bucket's size limit when it names none
+	// (as 500Gi; "": none).
+	DefaultStorage string
+	// TrinoLimits keeps Trino's resource groups from the projects' limits;
+	// nil: Trino has no limits but its own.
+	TrinoLimits *TrinoLimits
 	// ProjectAirflows, on Kubernetes, gives each project with a repo an
 	// Airflow of its own; nil (Compose): projects' repos are bundles in the
 	// shared Airflow.
@@ -229,6 +235,14 @@ func (r *Reconciler) applyBuckets(ctx context.Context, p *project.Project) error
 		if err := r.Buckets.ensureBucket(ctx, p.Spec.Files.Bucket); err != nil {
 			return err
 		}
+		// Its size limit: the project's, else the install's, else none.
+		storage := r.DefaultStorage
+		if l := p.Spec.Limits; l != nil && l.Storage != "" {
+			storage = l.Storage
+		}
+		if err := r.Buckets.setQuota(ctx, p.Spec.Files.Bucket, project.StorageBytes(storage)); err != nil {
+			return fmt.Errorf("bucket %s's size limit: %w", p.Spec.Files.Bucket, err)
+		}
 	}
 	for _, g := range p.Groups() {
 		var err error
@@ -249,8 +263,21 @@ func (r *Reconciler) applyBuckets(ctx context.Context, p *project.Project) error
 // change without the project changing), and a failed one again after retry.
 func (r *Reconciler) Run(ctx context.Context, every, resync, retry time.Duration) {
 	last := map[string]time.Time{}
+	trinoErr := ""
 	for {
 		r.pass(ctx, last, resync, retry)
+		if r.TrinoLimits != nil {
+			err := r.syncTrinoLimits(ctx)
+			if msg := fmt.Sprint(err); err != nil && msg != trinoErr {
+				r.Log.Warn("Trino's limits", "error", err) // once per new error: Trino may be starting
+			} else if err == nil && trinoErr != "" {
+				r.Log.Info("Trino's limits written")
+			}
+			trinoErr = ""
+			if err != nil {
+				trinoErr = fmt.Sprint(err)
+			}
+		}
 		select {
 		case <-ctx.Done():
 			return
@@ -328,4 +355,12 @@ func memberList(st *project.Status) []project.Person {
 func (r *Reconciler) ownAirflow(p *project.Project) bool {
 	pl := p.Spec.Pipelines
 	return r.ProjectAirflows != nil && pl != nil && pl.Repo != ""
+}
+
+func (r *Reconciler) syncTrinoLimits(ctx context.Context) error {
+	statuses, err := r.Store.Statuses(ctx)
+	if err != nil {
+		return err
+	}
+	return r.TrinoLimits.Sync(ctx, statuses)
 }
