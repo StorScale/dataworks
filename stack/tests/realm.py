@@ -75,7 +75,7 @@ def main():
         lifespan = kc("GET", "").json().get("accessTokenLifespan")
         _, _, roles = operator_roles(kc)
         check("... and puts the platform's parts back: the client's addresses, the token lifespan, the operator's roles",
-              rep["redirectUris"] == platform_want["redirectUris"] and lifespan == want["accessTokenLifespan"] and "manage-clients" in roles,
+              sorted(rep["redirectUris"]) == sorted(platform_want["redirectUris"]) and lifespan == want["accessTokenLifespan"] and "manage-clients" in roles,
               f"redirects {rep['redirectUris']}, lifespan {lifespan}, manage-clients {'back' if 'manage-clients' in roles else 'missing'}")
         check("... and its own mappers stay as realm.json has them",
               {m["name"] for m in platform_want.get("protocolMappers", [])} <= mappers, sorted(mappers))
