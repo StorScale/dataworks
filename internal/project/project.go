@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -46,6 +47,7 @@ type Spec struct {
 	Files       *Files     `json:"files,omitempty"`
 	Pipelines   *Pipelines `json:"pipelines,omitempty"`
 	Limits      *Limits    `json:"limits,omitempty"`
+	Notify      *Notify    `json:"notify,omitempty"`
 }
 
 // Limits cap a project's share of the platform, so one project can't slow
@@ -74,6 +76,25 @@ type Tables struct {
 	Namespace string      `json:"namespace,omitempty"` // default: the project's name
 	Readers   *ReaderView `json:"readers,omitempty"`
 	Checks    []Check     `json:"checks,omitempty"`
+	// Freshness: how recently each table must have changed; a table older
+	// than that is stale, and the project is told (Notify).
+	Freshness []Freshness `json:"freshness,omitempty"`
+}
+
+// Freshness is a table's freshness target: changed within the last Within
+// (as 30m, 24h or 7d).
+type Freshness struct {
+	Table  string `json:"table"`
+	Within string `json:"within"`
+}
+
+// Notify is where the project's alerts go: a failed pipeline, a failing
+// check, a stale table. Teams names one of the project's connections, a
+// Secret holding a Teams channel's Workflows webhook (key webhook); email
+// goes through the install's mail server.
+type Notify struct {
+	Teams string   `json:"teams,omitempty"`
+	Email []string `json:"email,omitempty"`
 }
 
 // A Check is a data-quality test on one of the project's tables. The catalog
@@ -152,6 +173,8 @@ var (
 	memoryRE     = regexp.MustCompile(`^([1-9][0-9]{0,5})(Mi|Gi)$`)
 	queryMemRE   = regexp.MustCompile(`^([1-9][0-9]{0,5}(MB|GB)|([1-9][0-9]?|100)%)$`)
 	storageRE    = regexp.MustCompile(`^([1-9][0-9]{0,5})(Gi|Ti)$`)
+	withinRE     = regexp.MustCompile(`^([1-9][0-9]{0,4})(m|h|d)$`)
+	emailRE      = regexp.MustCompile(`^[^@\s,]+@[^@\s,]+\.[^@\s,]+$`)
 )
 
 // Parse reads a Project from JSON, fills in its defaults and validates it.
@@ -261,6 +284,26 @@ func (p *Project) Validate() error {
 			bad("pipelines: %s", e)
 		}
 	}
+	if t := p.Spec.Tables; t != nil {
+		for _, f := range t.Freshness {
+			if !identifierRE.MatchString(f.Table) {
+				bad("tables: freshness: table %q isn't a table's name", f.Table)
+			}
+			if _, ok := Within(f.Within); !ok {
+				bad("tables: freshness: within %q: as 30m, 24h or 7d", f.Within)
+			}
+		}
+	}
+	if n := p.Spec.Notify; n != nil {
+		if n.Teams != "" && !secretRE.MatchString(n.Teams) {
+			bad("notify: teams %q isn't a connection's name", n.Teams)
+		}
+		for _, e := range n.Email {
+			if !emailRE.MatchString(e) {
+				bad("notify: %q isn't an email address", e)
+			}
+		}
+	}
 	if l := p.Spec.Limits; l != nil {
 		if l.Queries < 0 || l.Queries > 100 {
 			bad("limits: queries %d: from 1 to 100 at once", l.Queries)
@@ -283,6 +326,17 @@ func (p *Project) Validate() error {
 		return fmt.Errorf("%s", strings.Join(errs, "; "))
 	}
 	return nil
+}
+
+// Within reads a freshness target: 30m, 24h, 7d.
+func Within(q string) (time.Duration, bool) {
+	m := withinRE.FindStringSubmatch(q)
+	if m == nil {
+		return 0, false
+	}
+	n, _ := strconv.Atoi(m[1])
+	unit := map[string]time.Duration{"m": time.Minute, "h": time.Hour, "d": 24 * time.Hour}[m[2]]
+	return time.Duration(n) * unit, true
 }
 
 // StorageBytes is a storage limit in bytes: 0 when there's none (or it's not one).

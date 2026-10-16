@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // fakeCatalog answers the three questions Flow asks: a schema's tables, a
@@ -116,5 +117,30 @@ func TestFlowBeforeTheCatalogKnowsTheProject(t *testing.T) {
 	}
 	if _, err := New(ts.URL, filepath.Join(t.TempDir(), "missing"), "trino").Flow(context.Background(), "iceberg", "sales"); err == nil {
 		t.Error("no token: want an error saying the catalog isn't set up")
+	}
+}
+
+func TestATablesLastChangeIsItsCurrentSnapshots(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.EscapedPath() {
+		case "/iceberg/v1/config":
+			if r.URL.Query().Get("warehouse") != "warehouse" {
+				t.Errorf("warehouse %q", r.URL.Query().Get("warehouse"))
+			}
+			w.Write([]byte(`{"defaults": {"prefix": "main|warehouse"}, "overrides": {}}`))
+		case "/iceberg/v1/main%7Cwarehouse/namespaces/sales/tables/orders":
+			w.Write([]byte(`{"metadata": {"current-snapshot-id": 2, "snapshots": [
+				{"snapshot-id": 1, "timestamp-ms": 1760000000000}, {"snapshot-id": 2, "timestamp-ms": 1760640000000}]}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+	at, err := LastChange(context.Background(), ts.Client(), ts.URL+"/iceberg", "warehouse", "sales", "orders")
+	if err != nil || !at.Equal(time.UnixMilli(1760640000000)) {
+		t.Errorf("%v %v, want the current snapshot's time", at, err)
+	}
+	if _, err := LastChange(context.Background(), ts.Client(), ts.URL+"/iceberg", "warehouse", "sales", "nothing"); err == nil {
+		t.Error("no such table: want an error")
 	}
 }

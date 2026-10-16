@@ -148,6 +148,7 @@ a.card:hover { border-color: var(--accent); text-decoration: none; }
 .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; background: var(--faint); }
 .dot.green { background: var(--ok); }
 .dot.red { background: var(--bad); }
+.dot.amber { background: var(--warn-ink); }
 .dot.blue { background: var(--accent); }
 
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 0 16px; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink); text-decoration: none; }

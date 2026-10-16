@@ -12,7 +12,7 @@ import time
 
 from lakekit import load_sales_tables
 
-SUITES = ["realm", "health", "lakehouse", "superset", "airflow", "jupyterhub", "catalog", "semantic", "projects", "pipelines_git", "limits", "monitoring"]
+SUITES = ["realm", "health", "lakehouse", "superset", "airflow", "jupyterhub", "catalog", "semantic", "projects", "project_alerts", "pipelines_git", "limits", "monitoring"]
 FRESH_TABLES = {"superset", "airflow"}
 
 wanted = sys.argv[1:] or SUITES

@@ -66,8 +66,9 @@ type server struct {
 	// password they were made with
 	projectAirflows map[string]projectAirflow
 	brand           brand
-	index           []byte // the web app's index.html, with the brand's title and icon
-	health          *watch // nil: no health checks (HEALTH isn't on)
+	index           []byte         // the web app's index.html, with the brand's title and icon
+	health          *watch         // nil: no health checks (HEALTH isn't on)
+	projectAlerts   *projectAlerts // nil: no project alerts (HEALTH isn't on)
 
 	mu       sync.Mutex
 	sessions map[string]*session
@@ -123,6 +124,7 @@ func newServer(ctx context.Context, cfg config, log *slog.Logger) (*server, erro
 	go s.sweep(ctx)
 	if cfg.Health {
 		s.startHealth(ctx)
+		s.startProjectAlerts(ctx)
 		if cfg.MetricsListen != "" {
 			go s.serveMetrics(ctx, cfg.MetricsListen)
 		}
@@ -151,6 +153,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/projects/{name}/sql", s.handleSemantic)
 	mux.HandleFunc("GET /api/projects/{name}/pipelines", s.handlePipelines)
 	mux.HandleFunc("POST /api/projects/{name}/pipelines/{pipeline}/runs", s.handleStartRun)
+	mux.HandleFunc("GET /api/projects/{name}/alerts", s.handleProjectAlerts)
+	mux.HandleFunc("POST /api/projects/{name}/alerts/mute", s.handleProjectAlerts)
 	mux.HandleFunc("GET /api/health", s.handleHealth)
 	mux.HandleFunc("POST /api/health/{action}", s.handleHealthAction)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
