@@ -154,6 +154,25 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - How long until erased data ages out of backups, and is that acceptable to the privacy team?
 - Who may ask for an erasure: the privacy team's tool only, or administrators too?
 
+### 6.10 The data as it was
+
+1. A client disputes last Monday's file: its totals don't match their system. The account manager opens the delivery on the Deliveries tab (9.1) and chooses **Open the data as sent**. The SQL page opens the tables as they were when the file was made, from the snapshot the delivery recorded, and the file can be made again from them exactly.
+2. Finance signed off the September close on October 3. In January an auditor asks why September's revenue now differs from the report. An analyst opens `orders` as of the close (a tag the close made: `close-2026-09`), compares it with today, and sees which rows changed after it, and which pipeline runs changed them.
+3. A table's page shows its history: each change, when, by which pipeline run or person, and how many rows it added, changed and removed.
+4. History older than the table's retention (6.5) is gone, and the page says so. A tag (a close, a delivery) is kept as long as the project says, so year-end figures stay reproducible.
+5. Looking back never widens access: a reader who sees EU rows and masked card numbers today sees the same in last year's data.
+
+**Requirements**
+- R6.29 A table's history on its page: each change (snapshot), when, by which run or person, and the rows it added, changed and removed.
+- R6.30 Data as of a date, a tag or a snapshot, on the SQL page, in notebooks and dashboards, under today's access rules (masked stays masked, filtered stays filtered).
+- R6.31 Tags for moments that matter (a month-end close, a delivery), made by people or by pipelines, kept for a set time beyond the table's retention.
+- R6.32 Each delivery records the snapshot of every table it read, so its files can be made again exactly (with R9.5).
+
+**Open questions**
+- Erasure against kept history: erasing a person (6.9) must reach old snapshots, but a tagged close is kept so it can be reproduced. Is a close kept with personal columns erased, or with the person's rows removed and the totals noted as changed? This needs the privacy team's and Finance's answer together.
+- How long are closes kept (finance records often seven years), and at what storage cost?
+- Tags across the whole catalog (Nessie: one tag for every table at the close), or per table (Iceberg)?
+
 ---
 
 ## Phase 7: git-native projects
@@ -327,7 +346,7 @@ The company delivers files to clients and partners, and some carry consumer data
 - R9.2 Targets: SFTP (with the host's key checked), S3-compatible buckets of other companies; Azure Blob and Google Cloud Storage later. Credentials and keys from the project's connections (7.6); PGP encryption; a manifest with checksums.
 - R9.3 Checks before sending (row counts, completeness, freshness, the project's checks): a failed check sends nothing.
 - R9.4 Approval of what a delivery sends, and again when that changes; personal columns shown, and needing a named approver.
-- R9.5 A delivery log: every file sent, to whom, when, its size and checksum, kept with the audit log; retries and alerts.
+- R9.5 A delivery log: every file sent, to whom, when, its size and checksum, and the snapshot of each table it read (R6.32), kept with the audit log; retries and alerts.
 
 **Open questions**
 - Which formats and targets do today's deliveries use, and how are they run now (scripts, an MFT product)?
@@ -503,7 +522,7 @@ The company delivers files to clients and partners, and some carry consumer data
 
 | Phase | Storyboards | Its gate tests |
 |---|---|---|
-| 6 | 6.1–6.9 | 6.2 on the real cluster: an upgrade with no lost projects, people or settings; 6.8: a project at its limits leaves another's queries at their usual speed; 6.9: an erasure carried through snapshots and files, and recorded |
+| 6 | 6.1–6.10 | 6.2 on the real cluster: an upgrade with no lost projects, people or settings; 6.8: a project at its limits leaves another's queries at their usual speed; 6.9: an erasure carried through snapshots and files, and recorded; 6.10: a delivery's files made again exactly from the data as it was sent |
 | 7 | 7.1–7.7 | 7.3: a pull request runs on its own data branch, a good one merges, a bad one is refused; 7.6: a private repo connected without access to the cluster |
 | 8 | 8.1–8.3 | 8.1: a database table's changes reach its Iceberg table in minutes, under the project's rules; 8.3: a database queried in place, under the project's rules |
 | 9 | 9.1–9.3 | 9.1: a delivery reaches an SFTP server, encrypted, with its manifest, and a failing check sends nothing; 9.2: the log finds what was sent about a person |
