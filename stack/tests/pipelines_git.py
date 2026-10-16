@@ -282,7 +282,7 @@ def main():
 
         def airflow_part():
             st = ((projects(bob) or {}).get(NAME) or {}).get("status") or {}
-            return next((x for x in st.get("parts", []) if x["system"] == "airflow"), None)
+            return next((x for x in st.get("parts") or [] if x["system"] == "airflow"), None)
         refused = wait(lambda: (lambda x: x if x and not x["ok"] and SECRET in x.get("message", "") else None)(airflow_part()),
                        600 if OWN else 180)
         check("a credential that isn't one of the project's connections is refused",
@@ -291,7 +291,7 @@ def main():
         put_secret()
         p = wait(lambda: (lambda x: x if x and (x.get("status") or {}).get("phase") == "Ready" else None)(
             (projects(bob) or {}).get(NAME)), 600 if OWN else 180)
-        parts = {x["system"]: x for x in ((p or {}).get("status") or {}).get("parts", [])}
+        parts = {x["system"]: x for x in ((p or {}).get("status") or {}).get("parts") or []}
         check("a project names its pipelines repo, and the operator gives it to Airflow",
               put.ok and parts.get("airflow", {}).get("ok"), f"HTTP {put.status_code}, airflow: {parts.get('airflow')}")
         bundles = requests.get(f"{OPERATOR}/airflow/bundles", timeout=10).json()
@@ -299,7 +299,7 @@ def main():
             check("... an Airflow of its own: the shared one doesn't take the repo",
                   all(b["name"] != f"project-{NAME}" for b in bundles) and TOKEN not in json.dumps(bundles),
                   [b["name"] for b in bundles])
-            members = {m["username"]: m["role"] for m in p["status"].get("members", [])}
+            members = {m["username"]: m["role"] for m in p["status"].get("members") or []}
             check("... whose pipelines run as a service account of the project's own",
                   members.get(f"service-account-project-{NAME}-pipelines") == "pipelines"
                   and "service-account-airflow-pipelines" not in members, members)
