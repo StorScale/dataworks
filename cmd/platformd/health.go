@@ -22,7 +22,9 @@ const alertsSecret = "storscale-alerts"
 type watch struct {
 	checker  *health.Checker
 	notifier *health.Notifier
-	link     string // the Health page
+	findings health.Findings // monitoring rules firing, setup steps that gave up
+	kube     *health.Kube    // nil in Compose
+	link     string          // the Health page
 
 	mu      sync.Mutex
 	certEnd time.Time
@@ -71,7 +73,7 @@ func (s *server) startHealth(ctx context.Context) {
 		}}
 	if s.cfg.ProjectStore == "kubernetes" {
 		if k, err := health.NewKube(checks); err == nil {
-			w.checker.Pods = k
+			w.checker.Pods, w.kube = k, k
 		} else {
 			s.log.Warn("health: no reasons from Kubernetes", "error", err)
 		}
@@ -79,6 +81,49 @@ func (s *server) startHealth(ctx context.Context) {
 	s.health = w
 	go w.checker.Run(ctx)
 	go w.watchCert(ctx, s)
+	go w.watchFindings(ctx, s)
+}
+
+// watchFindings follows, every minute, the monitoring rules firing in
+// Prometheus (storage near full, a drive offline: nothing else delivers
+// them) and, on Kubernetes, the setup steps that gave up; and alerts on
+// what starts and what ends.
+func (w *watch) watchFindings(ctx context.Context, s *server) {
+	prom := os.Getenv("PROMETHEUS_URL")
+	if prom == "" {
+		prom = "http://prometheus:9090"
+	}
+	client := &http.Client{Timeout: 15 * time.Second}
+	started := time.Now()
+	for {
+		quiet := time.Since(started) < 5*time.Minute // the platform starting
+		if firing, err := health.PrometheusAlerts(ctx, client, prom); err == nil {
+			on, off := w.findings.Set("prometheus", firing)
+			if !quiet {
+				for _, f := range on {
+					w.send(ctx, s, health.FromFinding(f, false, w.link))
+				}
+				for _, f := range off {
+					w.send(ctx, s, health.FromFinding(f, true, w.link))
+				}
+			}
+		}
+		if w.kube != nil {
+			if failed, err := w.kube.FailedJobs(ctx); err == nil {
+				on, _ := w.findings.Set("jobs", failed)
+				for _, f := range on {
+					if f.Since.After(started) { // not again at every restart
+						w.send(ctx, s, health.FromFinding(f, false, w.link))
+					}
+				}
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Minute):
+		}
+	}
 }
 
 func (w *watch) send(ctx context.Context, s *server, a health.Alert) map[string]error {
@@ -164,6 +209,7 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		cert := map[string]any{"ends": s.health.certEnd, "error": s.health.certErr}
 		s.health.mu.Unlock()
 		out["services"] = services
+		out["findings"] = s.health.findings.All()
 		out["certificate"] = cert
 		out["alerts"] = s.health.notifier.Recent()
 		dest := map[string]any{"teams": targets.TeamsWebhook != "", "email": targets.EmailTo}

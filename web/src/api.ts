@@ -175,10 +175,11 @@ export type HealthService = {
   reason?: string; since: string; pods?: HealthPod[]; mutedUntil?: string;
 };
 export type HealthAlert = { title: string; severity: string; facts: [string, string][]; at: string };
+export type HealthFinding = { key: string; title: string; detail?: string; severity: string; since: string };
 export type Health = {
   checked: boolean; affected: string[];
   // administrators only:
-  services?: HealthService[]; alerts?: HealthAlert[];
+  services?: HealthService[]; alerts?: HealthAlert[]; findings?: HealthFinding[];
   certificate?: { ends: string; error?: string };
   targets?: { teams: boolean; email?: string[]; error?: string };
 };
