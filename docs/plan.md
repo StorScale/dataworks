@@ -120,7 +120,7 @@ The examples already prove every mapping in this list by hand.
 | Flow (visual DAG) | A read-only Flow view drawn from OpenLineage and dbt lineage, with links into each job | MVP (view); an editable Flow is a later gap to build |
 | Code recipes (SQL, Python, PySpark) | Trino, Jupyter, Spark, and dbt models | MVP (Spark later) |
 | Join, group, window and pivot recipes | dbt models, or Trino SQL from a template | Phase 7 (dbt) |
-| Prepare recipe (point-and-click) | Gap to build: a recipe builder that generates SQL | Phase 11 |
+| Prepare recipe (point-and-click) | Gap to build: a recipe builder that generates SQL | Phase 12 |
 | Datasets and connections, Iceberg REST | Trino catalogs, Nessie's Iceberg REST endpoint | MVP |
 | Connectors that bring data in (databases, applications) | Connectors (dlt or Airbyte) and change capture from databases (Debezium), into the project's Iceberg tables | Phase 8 |
 | Semantic Models, AI SQL, agent tools (MCP) | The semantic layer: MetricFlow models, an editor in the shell, and an MCP server that queries as the person or agent asking | Phase 4 |
@@ -132,12 +132,12 @@ The examples already prove every mapping in this list by hand.
 | Code environments, compute on Kubernetes | JupyterHub profiles, images built per project, quotas | MVP |
 | Project version control (git) | Each project's pipelines (and later its whole spec) in its own git repo, readable as code | Phase 7 (DAGs first) |
 | Bundles and Deployer (dev to prod) | Git CI plus a Nessie branch per change, checked, then merged; promotion between installs, with rollback | Phase 7 |
-| LLM Mesh (gateway, cost caps, guardrails) | LiteLLM in front of the models, with a budget per project, and every call audited | Phase 9 |
-| Agents, prompt studio, Knowledge Banks | The MCP server (phase 4), agent identity and audit, Langfuse, pgvector | Phase 9 (agent access to data came in phase 4) |
-| Govern (approvals, registry, standards) | Approvals and a registry for models and agents, in the project | Phase 9 (agents), phase 11 (models) |
-| Usage and cost per project | Trino, Spark and storage use attributed to projects, with budgets, in Grafana | Phase 10 |
-| AutoML, experiment tracking, model registry, drift | MLflow, FLAML, Evidently + Grafana | Phase 11 |
-| Webapps and Dataiku Apps | Simple data apps per project | Phase 11 |
+| LLM Mesh (gateway, cost caps, guardrails) | LiteLLM in front of the models, with a budget per project, and every call audited | Phase 10 |
+| Agents, prompt studio, Knowledge Banks | The MCP server (phase 4), agent identity and audit, Langfuse, pgvector | Phase 10 (agent access to data came in phase 4) |
+| Govern (approvals, registry, standards) | Approvals and a registry for models and agents, in the project | Phase 10 (agents), phase 12 (models) |
+| Usage and cost per project | Trino, Spark and storage use attributed to projects, with budgets, in Grafana | Phase 11 |
+| AutoML, experiment tracking, model registry, drift | MLflow, FLAML, Evidently + Grafana | Phase 12 |
+| Webapps and Dataiku Apps | Simple data apps per project | Phase 12 |
 | Answers, Stories | Not planned yet | Not included |
 
 ## What buyers value (research, 2026-10-15)
@@ -162,7 +162,7 @@ Sources: Dataiku's version 14 and 15 release notes (https://www.dataiku.com/prod
 
 ## Phases
 
-Each phase ends with a gate: an end-to-end test like the examples' `test.py`, run in CI. The use cases and storyboards behind phases 6 to 11, and the requirements they set, are in [use-cases.md](use-cases.md).
+Each phase ends with a gate: an end-to-end test like the examples' `test.py`, run in CI. The use cases and storyboards behind phases 6 to 12, and the requirements they set, are in [use-cases.md](use-cases.md).
 
 | Phase | Deliverable | Gate |
 |---|---|---|
@@ -172,19 +172,19 @@ Each phase ends with a gate: an end-to-end test like the examples' `test.py`, ru
 | 3 | Catalog and lineage: OpenMetadata, OpenLineage from Airflow, Spark and Trino, a Flow view, Soda checks | A pipeline run appears in the lineage graph, column-level; a failing check shows on the dataset |
 | 4 | The semantic layer and agent access (below): MetricFlow models per project, the Semantic layer pages, the MCP server | An agent signed in as alice asks for revenue by region and gets EU only, masked as in Trino; carol's agent gets nothing; bob's metric change shows up in the next answer; Ranger's audit names both the agent and alice |
 | 5 | Kubernetes: the Helm umbrella chart, the Buckets operator, Spark Operator, KubeSpawner | `helm install` on kind gives a healthy install; the phase 1–4 tests pass on it |
-| 6 | Production-ready: Keycloak on a real database, in production mode, and who owns the realm decided; the example users switchable off; one-command upgrades and a tested version matrix; Audit and Health pages (Loki, Grafana); backup and upgrade notes; Iceberg table maintenance (compaction, snapshot expiry, orphan files); high availability and hardening (replicas, network policies, Pod Security, encryption at rest, image scanning and SBOMs); alerts on failed pipelines, failed checks and stale tables; docs on storscale.io/platform | A full upgrade between two releases on a real cluster, with no lost projects, people or settings |
-| 7 | Git-native projects: Airflow DAGs from a git repo per project, first (below), then each project's DAG code kept apart from the others' and from the platform's secrets (below); dbt projects in the same repo, run by Airflow, with their tests and lineage in the catalog; then the project spec in git, with a target per environment; a Nessie branch per change, its pipelines and checks run there before it merges (write, audit, publish); promotion between installs, with rollback | A push to a project's repo runs on its own data branch, passes the checks, and merges to production; a bad change is refused and production is untouched |
-| 8 | Getting data in: connectors (dlt or Airbyte) for applications and files, and change capture from databases (Debezium) into a project's Iceberg tables, set up per project, with their credentials as Secrets | A database table's inserts, updates and deletes reach its Iceberg table within minutes, with lineage, and only the project's people can read it |
-| 9 | Governed AI: agents' identity and audit; an LLM gateway (LiteLLM) with a budget per project; approvals for agents; tests for the semantic layer; the Open Semantic Interchange; classification of columns (personal, financial) in the catalog, with Ranger's policies by tag; an AI assistant for SQL and pipeline code | An agent's answers stay within the caller's policies and the project's budget, and every call is audited; a column newly tagged personal is masked everywhere without a policy written for it |
-| 10 | Usage and cost per project: Trino, Spark and storage use attributed to projects, with budgets and alerts in Grafana | A project's usage and cost show, and crossing its budget alerts |
-| 11 | Self-service and ML: visual prep (a recipe builder that writes SQL); simple data apps; MLflow, with a model registry and approvals | An analyst makes a clean dataset and an app from it without code |
+| 6 | Production-ready: Keycloak on a real database, in production mode, and who owns the realm decided; the example users switchable off; one-command upgrades and a tested version matrix; Audit and Health pages (Loki, Grafana); backup and upgrade notes; Iceberg table maintenance (compaction, snapshot expiry, orphan files); high availability and hardening (replicas, network policies, Pod Security, encryption at rest, image scanning and SBOMs); alerts on failed pipelines, failed checks and stale tables; limits per project (Trino's resource groups, quotas for notebooks, Spark and buckets, Airflow's memory), so one project can't slow the others; retention per table and erasure of a person's data everywhere (consumer data); docs on storscale.io/platform | A full upgrade between two releases on a real cluster, with no lost projects, people or settings |
+| 7 | Git-native projects: Airflow DAGs from a git repo per project, first (below), then each project's DAG code kept apart from the others' and from the platform's secrets (below); dbt projects in the same repo, run by Airflow, with their tests and lineage in the catalog; then the project spec in git, with a target per environment; a Nessie branch per change, its pipelines and checks run there before it merges (write, audit, publish); promotion between installs, with rollback; a Connections tab, where editors give the platform credentials once, kept as the project's Secrets; scheduling a notebook as a pipeline | A push to a project's repo runs on its own data branch, passes the checks, and merges to production; a bad change is refused and production is untouched |
+| 8 | Getting data in: databases queried where they are (Trino catalogs per project, under its rules), first; connectors (dlt or Airbyte) for applications and files, and change capture from databases (Debezium) into a project's Iceberg tables, set up per project, with their credentials from its connections | A database table's inserts, updates and deletes reach its Iceberg table within minutes, with lineage, and only the project's people can read it |
+| 9 | Getting data out: scheduled file deliveries to clients and partners (SFTP, other companies' buckets), with formats, PGP encryption and manifests; checks before sending; approval of what's sent, with personal columns named; a delivery log that finds what was sent about a person; read-only, expiring shares for partners who read in place | A delivery reaches a client's SFTP server, encrypted, with its manifest; a failing check sends nothing; the log answers what was sent about a person |
+| 10 | Governed AI: agents' identity and audit; an LLM gateway (LiteLLM) with a budget per project; approvals for agents; tests for the semantic layer; the Open Semantic Interchange; classification of columns (personal, financial) in the catalog, with Ranger's policies by tag; an AI assistant for SQL and pipeline code | An agent's answers stay within the caller's policies and the project's budget, and every call is audited; a column newly tagged personal is masked everywhere without a policy written for it |
+| 11 | Usage and cost per project: Trino, Spark and storage use attributed to projects, with budgets and alerts in Grafana | A project's usage and cost show, and crossing its budget alerts |
+| 12 | Self-service and ML: visual prep (a recipe builder that writes SQL); simple data apps; MLflow, with a model registry and approvals | An analyst makes a clean dataset and an app from it without code |
 
 **Not yet placed:**
-- **Retention and erasure:** retention per table, and erasing a person's data everywhere (Iceberg deletes, then snapshot expiry and the old files removed), for GDPR and CCPA.
 - **Templates and reuse:** project templates, shared libraries and recipes.
 - **Data products and sharing:** a project publishes a table with an owner, a contract (schema, freshness, quality) and versions; others subscribe, granted access, not copies; sharing outside the company later.
 
-**To decide, with the first teams:** streaming (Kafka, with Flink or Spark, into Iceberg) if something needs data in minutes; Python environments per project and GPUs for data science; a CLI, Terraform provider and published API for managing projects as code; disaster recovery to a second site (Buckets' site replication, a standby catalog).
+**To decide, with the first teams:** saved and shared queries, and query history, on the SQL page; streaming (Kafka, with Flink or Spark, into Iceberg) if something needs data in minutes; Python environments per project and GPUs for data science; a CLI, Terraform provider and published API for managing projects as code; disaster recovery to a second site (Buckets' site replication, a standby catalog).
 
 ## Phase 5: Kubernetes, how
 
@@ -321,3 +321,4 @@ People define what the business means once: entities (customer, order), dimensio
 10. **The roadmap after phase 5 (added 2026-10-15):** from the research above, in this order: production-ready (6), git-native projects (7), getting data in (8), governed AI (9), usage and cost per project (10), self-service and ML (11). Real people come before new features; then what buyers value most where StorScale can lead (git and data branches together, agents under the same policies).
 11. **Airflow takes its DAGs from git as DAG bundles, one per project (added 2026-10-15),** not git-sync: bundles version each run by its commit and take several repos, where git-sync takes one repo and keeps no versions.
 12. **What an install needs before real use (added 2026-10-15):** a review of the repo against the research found no ingestion, no Iceberg table maintenance, single replicas and no network policies, no alerts on data problems, and dbt named in the plan but not run. Maintenance, high availability and hardening, and alerts join phase 6; dbt joins phase 7; getting data in becomes phase 8; classification with policies by tag joins governed AI.
+13. **What commercial platforms have that our users need (added 2026-10-16):** the company delivers files to clients and partners, and holds consumer data; a second team may share the install. So: getting data out becomes phase 9 (governed AI, usage and cost, and self-service move to 10, 11 and 12); limits per project, and retention and erasure, join phase 6; a Connections tab (credentials given to the platform, not to the cluster) and scheduling a notebook join phase 7; querying databases in place (Trino's catalogs) starts phase 8. Saved queries, a CLI and API, and disaster recovery stay to decide.
