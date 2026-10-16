@@ -47,9 +47,14 @@ func LastChange(ctx context.Context, c *http.Client, base, warehouse, namespace,
 	if prefix == "" {
 		prefix, _ = cfg.Defaults["prefix"].(string)
 	}
+	// The prefix goes in the path as the catalog gives it: Nessie's comes
+	// escaped already (main%7Cwarehouse); escaped again it's refused.
+	if strings.ContainsAny(prefix, "/?#") {
+		return time.Time{}, fmt.Errorf("iceberg: the catalog's prefix %q isn't one path segment", prefix)
+	}
 	path := "/v1/"
 	if prefix != "" {
-		path += url.PathEscape(prefix) + "/"
+		path += prefix + "/"
 	}
 	var t struct {
 		Metadata struct {

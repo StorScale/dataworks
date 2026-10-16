@@ -127,7 +127,8 @@ func TestATablesLastChangeIsItsCurrentSnapshots(t *testing.T) {
 			if r.URL.Query().Get("warehouse") != "warehouse" {
 				t.Errorf("warehouse %q", r.URL.Query().Get("warehouse"))
 			}
-			w.Write([]byte(`{"defaults": {"prefix": "main|warehouse"}, "overrides": {}}`))
+			// As Nessie has it: the prefix already escaped, for the path as it is.
+			w.Write([]byte(`{"defaults": {}, "overrides": {"prefix": "main%7Cwarehouse", "nessie.is-nessie-catalog": true}}`))
 		case "/iceberg/v1/main%7Cwarehouse/namespaces/sales/tables/orders":
 			w.Write([]byte(`{"metadata": {"current-snapshot-id": 2, "snapshots": [
 				{"snapshot-id": 1, "timestamp-ms": 1760000000000}, {"snapshot-id": 2, "timestamp-ms": 1760640000000}]}}`))
