@@ -109,8 +109,12 @@ def main():
     check("... by the pipeline sales_ingest", pipeline.get("displayName") == "sales_ingest",
           pipeline.get("fullyQualifiedName", "no pipeline"))
 
-    # 3. The project's checks, run after the pipeline loaded its orders.
-    results = wait(lambda: (lambda c: c if (c.get("sales_orders_card_number_notNull", {}).get("timestamp", 0) > started) else None)(checks(om)), 180)
+    # 3. The project's checks, run after the pipeline loaded its orders. The
+    # catalog's sync runs them every round, and a round that began before
+    # the run's rows were visible still finds no missing card number: wait
+    # for one that has seen them.
+    seen = lambda r: r.get("timestamp", 0) > started and r.get("testCaseStatus") == "Failed"
+    results = wait(lambda: (lambda c: c if seen(c.get("sales_orders_card_number_notNull", {})) else None)(checks(om)), 180)
     results = results or checks(om)
     nulls = results.get("sales_orders_card_number_notNull", {})
     check("the missing card number fails the project's check on orders, saying why",
