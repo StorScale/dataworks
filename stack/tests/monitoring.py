@@ -101,9 +101,13 @@ def grafana_role(user):
 
 def main():
     # 1. Scraping, as a metrics-only user.
-    up = wait(lambda: (lambda r: r if r and len(r) == 3 and all(x["value"][1] == "1" for x in r) else None)(query("up")), 120)
+    up = wait(lambda: (lambda r: r if r and len(r) == 3 and all(x["value"][1] == "1" for x in r) else None)(query('up{job=~"buckets-.*"}')), 120)
     check("Prometheus scrapes Buckets' node, cluster and bucket metrics",
           up is not None, ", ".join(sorted(f"{x['metric']['job']} up" for x in (up or []))) or "not all up")
+    services = wait(lambda: query("platform_service_up") or None, 120) or []
+    check("... and the platform's services, as its Health page checks them",
+          len(services) > 20 and all(x["value"][1] == "1" for x in services),
+          f"{sum(x['value'][1] == '1' for x in services)} of {len(services)} up")
     try:
         s3(aws_access_key_id=env["PROMETHEUS_USER"], aws_secret_access_key=env["PROMETHEUS_SECRET"]).list_objects_v2(Bucket="photos")
         denied = "allowed"
