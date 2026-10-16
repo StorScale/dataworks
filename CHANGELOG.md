@@ -4,6 +4,11 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+- **Keycloak keeps its realm, and the realm's ownership is split** ([docs/plan.md](docs/plan.md), "Phase 6: Keycloak for real use"): Keycloak runs in production mode on a database of its own (Compose: `keycloak-db`; Kubernetes: a `keycloak` database on the platform's Postgres, made if missing). It imports `realm.json` only when there's no realm yet. At every install and upgrade a setup step (`setup/realm.py`) keeps the platform's own parts as `realm.json` says: the realm's token settings, each tool's client (its addresses, flows, secret and mappers), the platform's service accounts' roles. People, groups, and whatever an administrator adds stay as they are; a restart no longer signs everyone out or loses them.
+
+**Upgrading from 0.5.0:** the first start on the new database builds the realm from `realm.json` once more (as every restart did before), so anyone added to Keycloak by hand since it last restarted needs adding again, and everyone signs in again once.
+
 ## [0.5.0] - 2026-10-16
 
 Projects' pipelines from their own git repos, each project in an Airflow of its own on Kubernetes, and Airflow given only the keys it needs.
