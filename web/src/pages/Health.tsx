@@ -36,6 +36,21 @@ export function AdminHealth() {
       </div>
       <ErrorBanner error={actionError} />
 
+      {(data.findings ?? []).length > 0 && (
+        <div className="card" data-testid="health-findings">
+          <div className="card-head"><h2>Other problems</h2><span className="small muted">monitoring rules firing, setup steps that gave up</span></div>
+          <ul className="plain small">
+            {data.findings!.map((f) => (
+              <li key={f.key}>
+                <span className={`pill ${f.severity === "critical" ? "red" : "amber"}`}>{f.severity || "warning"}</span>{" "}
+                <strong>{f.title}</strong> <span className="muted">since {ago(when(f.since))}</span>
+                {f.detail && <div className="muted">{f.detail.startsWith("http") ? <a href={f.detail} target="_blank" rel="noreferrer">What to do</a> : f.detail}</div>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="card flush">
         <table className="t" data-testid="health-services">
           <thead><tr><th>Service</th><th>State</th><th>Why</th><th>Used for</th><th>Alerts</th></tr></thead>

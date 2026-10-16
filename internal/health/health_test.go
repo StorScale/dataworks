@@ -158,3 +158,61 @@ func TestAWebhooksAddressIsNeverInAnError(t *testing.T) {
 		t.Errorf("%v: want an error without the address", err)
 	}
 }
+
+func TestMonitoringRulesFiringAreFindingsThatStartAndEnd(t *testing.T) {
+	firing := `{"data": {"alerts": [
+		{"labels": {"alertname": "BucketsCapacityLow", "severity": "warning", "buckets_cluster": "store"},
+		 "annotations": {"summary": "local/store: 12% of usable capacity left", "runbook_url": "https://x/runbook"},
+		 "state": "firing", "activeAt": "2026-10-16T20:00:00Z"},
+		{"labels": {"alertname": "BucketsDriveOffline"}, "state": "pending", "activeAt": "2026-10-16T20:10:00Z"}]}}`
+	body := firing
+	prom := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/alerts" {
+			t.Errorf("path %s", r.URL.Path)
+		}
+		io.WriteString(w, body)
+	}))
+	defer prom.Close()
+	var f Findings
+	got, err := PrometheusAlerts(context.Background(), prom.Client(), prom.URL)
+	if err != nil || len(got) != 1 || got[0].Title != "BucketsCapacityLow: local/store: 12% of usable capacity left" {
+		t.Fatalf("firing: %+v %v (a pending rule isn't yet)", got, err)
+	}
+	on, off := f.Set("prometheus", got)
+	if len(on) != 1 || len(off) != 0 {
+		t.Errorf("first: %d started, %d ended", len(on), len(off))
+	}
+	on, _ = f.Set("prometheus", got)
+	if len(on) != 0 {
+		t.Error("still firing: nothing new")
+	}
+	body = `{"data": {"alerts": []}}`
+	got, _ = PrometheusAlerts(context.Background(), prom.Client(), prom.URL)
+	_, off = f.Set("prometheus", got)
+	if len(off) != 1 || len(f.All()) != 0 {
+		t.Errorf("resolved: %d ended, %d left", len(off), len(f.All()))
+	}
+	a := FromFinding(off[0], true, "http://x/admin/health")
+	if a.Title != "Resolved: BucketsCapacityLow: local/store: 12% of usable capacity left" || a.Severity != "up" {
+		t.Errorf("the resolved alert: %+v", a)
+	}
+}
+
+func TestASetupStepThatGaveUpIsAFinding(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/apis/batch/v1/namespaces/storscale/jobs" {
+			t.Errorf("path %s", r.URL.Path)
+		}
+		io.WriteString(w, `{"items": [
+			{"metadata": {"name": "setup-13"}, "status": {"conditions": [{"type": "Complete", "status": "True"}]}},
+			{"metadata": {"name": "setup-trino-13"}, "status": {"conditions": [{"type": "Failed", "status": "True",
+			 "reason": "BackoffLimitExceeded", "message": "Job has reached the specified backoff limit", "lastTransitionTime": "2026-10-16T20:00:00Z"}]}}]}`)
+	}))
+	defer api.Close()
+	k := &Kube{URL: api.URL, Namespace: "storscale", HTTP: api.Client(), Token: func() (string, error) { return "t", nil }}
+	got, err := k.FailedJobs(context.Background())
+	if err != nil || len(got) != 1 || got[0].Title != "Setup step setup-trino-13 failed" ||
+		got[0].Detail != "BackoffLimitExceeded: Job has reached the specified backoff limit" {
+		t.Errorf("%+v %v", got, err)
+	}
+}

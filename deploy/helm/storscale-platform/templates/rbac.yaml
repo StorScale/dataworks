@@ -26,9 +26,13 @@ rules:
   - apiGroups: [""]
     resources: [pods]
     verbs: [list, deletecollection]
-  # platformd's Health page: why a service's pods aren't running.
+  # platformd's Health page: why a service's pods aren't running, and
+  # which setup steps gave up.
   - apiGroups: [""]
     resources: [events]
+    verbs: [list]
+  - apiGroups: [batch]
+    resources: [jobs]
     verbs: [list]
   # The operator runs each project's own Airflow (a Deployment and a Service).
   - apiGroups: [""]
