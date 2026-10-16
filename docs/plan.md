@@ -206,6 +206,31 @@ Each phase ends with a gate: an end-to-end test like the examples' `test.py`, ru
   - The setup steps create the `sales` project as a Project resource.
 - Still to come: a Spark suite (the operator is installed, but nothing runs on it yet), and the browser suite's run on a laptop's kind cluster, which runs out of memory in a 10 GB VM; CI runs it.
 
+## Phase 6: Keycloak for real use, how
+
+Today Keycloak runs in development mode and imports the realm (`stack/keycloak/realm.json`) afresh at every start: what anyone changes in it is gone at the next restart, and people are part of the platform's configuration. For real use the realm's ownership is split (decided 2026-10-16):
+
+- **The platform owns its own parts**, kept in git and applied at every install and upgrade:
+  - the realm itself, and the settings the tools rely on (token lifespans, TLS required or not);
+  - its signing key (the chart's: Trino and Buckets keep the keys they've fetched);
+  - the tools' clients (platform, lakehouse, jupyterhub, superset, grafana, airflow, openmetadata, the agents' client): their redirect addresses, flows, secrets (from `storscale-env`) and the mappers the platform needs (groups and audiences in tokens);
+  - its service accounts (the operator's, the shared pipelines') and the roles they're given.
+- **The operator owns what projects make:** each project's groups (`<name>-readers`, `-editors`, `-pipelines`) and, on Kubernetes, its pipelines client. As now.
+- **The organisation owns the people:** users and their credentials, the role groups (`engineers`, `analysts`), identity providers (corporate sign-in), password policy, sessions, MFA and brute-force settings, themes. An upgrade never writes them. The example people (alice, bob, carol) and the role groups are made on a first install only, and only with `examples.users`.
+
+How:
+- **Keycloak** in production mode (`kc.sh start`), on the platform's Postgres (a `keycloak` database and user), behind the gateway (its hostname the platform's `/sso`, proxy headers trusted), health on its management port. One replica; more with the high-availability work.
+- **The platform's part is applied by a setup step** (`setup/keycloak.py`, as the master realm's admin), not by importing the realm, which only ever makes a realm that isn't there:
+  - the realm, if there's none;
+  - each platform client, by its client ID: made if missing, else only the fields the platform sets are changed (redirect addresses, web origins, flows, secret, its own mappers by name); fields and mappers the organisation added stay;
+  - the service accounts' roles: added, never others taken away;
+  - the chart's signing key: present, active, first.
+- **The realm file splits in two:** `platform.json` (settings, clients, service accounts, key) and `examples.json` (the example people and groups).
+- **The same in Compose,** so CI checks an upgrade: the setup step runs twice, and a user, a group and a client mapper added by hand are still there, while a client's changed redirect address is put back.
+- **Moving an install over:** today's realm lives in Keycloak's development database inside its container, and is rebuilt at each restart. The first start on Postgres builds it once more, then keeps it. People added by hand since Keycloak last restarted would need adding again: check before upgrading `storscale-da1`.
+- **Still open:** corporate sign-in (which identity provider, and which of its groups map to the platform's engineers, analysts and administrators: the group names become settings); who approves access requests.
+- **Effort:** about 4 to 6 days.
+
 ## Phase 7: pipelines from git, how
 
 Each project's DAGs come from its own git repo, as an Airflow 3 **DAG bundle** (`GitDagBundle`, from the git provider already in Airflow's image).
