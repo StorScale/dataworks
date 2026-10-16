@@ -2,7 +2,9 @@ package reconcile
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -147,8 +149,23 @@ func fill(v any, repl *strings.Replacer) any {
 	return v
 }
 
-// objects are the project's Airflow's Deployment and Service.
-func (pa *ProjectAirflows) objects(a *Airflow, p *project.Project) (deployment, service map[string]any) {
+// ConnectionsAnnotation, on a project Airflow's pod, says which connections
+// it started with (a keyed hash of them). Airflow's git bundle reads its
+// connection once, as it starts: one that came later, or a rotated token,
+// is only used once the pod starts again.
+const ConnectionsAnnotation = "platform.storscale.io/connections"
+
+// connectionsHash is a keyed hash (HMAC, with the Airflow's own secret key)
+// of its connections: it changes when they do, and says nothing of them.
+func connectionsHash(key string, conns ...pipelines.Connection) string {
+	m := hmac.New(sha256.New, []byte(key))
+	json.NewEncoder(m).Encode(conns)
+	return hex.EncodeToString(m.Sum(nil))[:32]
+}
+
+// objects are the project's Airflow's Deployment, its pod marked with the
+// connections it starts with, and its Service.
+func (pa *ProjectAirflows) objects(a *Airflow, p *project.Project, connections string) (deployment, service map[string]any) {
 	bundles, _ := json.Marshal([]Bundle{a.bundle(p)})
 	roles, _ := json.Marshal(map[string][]string{p.Group(project.Editor): {"Op"}, p.Group(project.Reader): {"Viewer"}})
 	pairs := []string{"@PROJECT@", p.Metadata.Name, "@AIRFLOW@", p.AirflowName(), "@DATABASE@", p.AirflowDatabase(),
@@ -157,7 +174,23 @@ func (pa *ProjectAirflows) objects(a *Airflow, p *project.Project) (deployment, 
 		pairs = append(pairs, k, v)
 	}
 	repl := strings.NewReplacer(pairs...)
-	return fill(pa.Template.Deployment, repl).(map[string]any), fill(pa.Template.Service, repl).(map[string]any)
+	deployment, service = fill(pa.Template.Deployment, repl).(map[string]any), fill(pa.Template.Service, repl).(map[string]any)
+	if connections != "" {
+		if tpl, ok := deployment["spec"].(map[string]any)["template"].(map[string]any); ok {
+			md, _ := tpl["metadata"].(map[string]any)
+			if md == nil {
+				md = map[string]any{}
+				tpl["metadata"] = md
+			}
+			ann, _ := md["annotations"].(map[string]any)
+			if ann == nil {
+				ann = map[string]any{}
+				md["annotations"] = ann
+			}
+			ann[ConnectionsAnnotation] = connections
+		}
+	}
+	return deployment, service
 }
 
 // API is the project's Airflow's REST API, as the platform's account.
@@ -197,7 +230,11 @@ func (r *Reconciler) applyProjectAirflow(ctx context.Context, p *project.Project
 	if err := pa.Postgres.Ensure(ctx, p.AirflowDatabase(), keys[keyDBPassword]); err != nil {
 		return err
 	}
-	deployment, service := pa.objects(r.Airflow, p)
+	started, err := pa.Kube.PodAnnotation(ctx, p.AirflowName(), ConnectionsAnnotation)
+	if err != nil {
+		return err
+	}
+	deployment, service := pa.objects(r.Airflow, p, started)
 	if err := pa.Kube.Apply(ctx, "services", service); err != nil {
 		return err
 	}
@@ -219,6 +256,10 @@ func (r *Reconciler) applyProjectAirflow(ctx context.Context, p *project.Project
 	if err != nil {
 		return err
 	}
+	git, err := r.gitConnection(ctx, p)
+	if err != nil {
+		return err
+	}
 	if err := api.PutConnection(ctx, kc); err != nil {
 		var e *pipelines.APIError
 		if errors.As(err, &e) {
@@ -226,7 +267,19 @@ func (r *Reconciler) applyProjectAirflow(ctx context.Context, p *project.Project
 		}
 		return fmt.Errorf("its Airflow: the connection %s: %v", kc.ID, err)
 	}
-	return r.putGitConnection(ctx, api, p)
+	if err := putConnection(ctx, api, p, git); err != nil {
+		return err
+	}
+	// Started without these connections (its first start, or a token since
+	// rotated): start it again, with them.
+	if want := connectionsHash(keys[keySecret], kc, git); want != started {
+		deployment, _ := pa.objects(r.Airflow, p, want)
+		if err := pa.Kube.Apply(ctx, "deployments", deployment); err != nil {
+			return err
+		}
+		return errors.New("its Airflow is starting again, with its connections")
+	}
+	return nil
 }
 
 // teardownProjectAirflow removes a project's Airflow, if it has one: its

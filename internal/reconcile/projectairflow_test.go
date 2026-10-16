@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/StorScale/storscale-platform/internal/pipelines"
 	"github.com/StorScale/storscale-platform/internal/project"
 )
 
@@ -47,7 +49,7 @@ func TestAProjectsAirflowIsTheChartsWithItsOwnValues(t *testing.T) {
 	}
 	pa := &ProjectAirflows{Template: tpl, DefaultMemory: "2Gi"}
 	p := aProject(t, "sales-eu", `{"serviceAccount": "x", "repo": "https://git.example.com/sales/dags.git", "memory": "4Gi"}`)
-	d, svc := pa.objects(&Airflow{DefaultRef: "main"}, p)
+	d, svc := pa.objects(&Airflow{DefaultRef: "main"}, p, "")
 	got, _ := json.Marshal(d)
 	for _, want := range []string{`"name":"project-sales-eu-airflow"`, `"platform.storscale.io/project":"sales-eu"`,
 		`postgresql+psycopg2://airflow_sales_eu:$(DB_PASSWORD)@airflow-db:5432/airflow_sales_eu`,
@@ -170,5 +172,32 @@ func TestTheSharedAirflowTakesNoProjectsRepoWhenEachHasItsOwn(t *testing.T) {
 	got, _ := r.Bundles(context.Background())
 	if len(got) != 1 || got[0].Name != "dags-folder" {
 		t.Errorf("bundles %v, want the platform's own only", got)
+	}
+}
+
+func TestAProjectsAirflowStartsAgainWhenItsConnectionsChange(t *testing.T) {
+	var tpl Template
+	json.Unmarshal([]byte(template), &tpl)
+	pa := &ProjectAirflows{Template: tpl, DefaultMemory: "2Gi"}
+	p := aProject(t, "sales", `{"serviceAccount": "x", "repo": "https://git.example.com/sales.git"}`)
+	d, _ := pa.objects(&Airflow{DefaultRef: "main"}, p, "abc123")
+	ann := d["spec"].(map[string]any)["template"].(map[string]any)["metadata"].(map[string]any)["annotations"].(map[string]any)
+	if ann[ConnectionsAnnotation] != "abc123" {
+		t.Errorf("the pod's connections: %v", ann)
+	}
+	if d, _ := pa.objects(&Airflow{DefaultRef: "main"}, p, ""); strings.Contains(fmt.Sprint(d), ConnectionsAnnotation) {
+		t.Error("a pod that hasn't started with its connections yet: no annotation")
+	}
+	git := pipelines.Connection{ID: "git_sales", Type: "git", Host: "https://git.example.com/sales.git", Login: "bob", Password: "ghp_one"}
+	first := connectionsHash("key", git)
+	if again := connectionsHash("key", git); again != first || len(first) != 32 {
+		t.Errorf("the same connections, the same hash: %s %s", first, again)
+	}
+	git.Password = "ghp_two"
+	if connectionsHash("key", git) == first {
+		t.Error("a rotated token: want a new hash, and so a restart")
+	}
+	if connectionsHash("other key", git) == connectionsHash("key", git) {
+		t.Error("the hash is keyed: without the Airflow's key it says nothing of the token")
 	}
 }

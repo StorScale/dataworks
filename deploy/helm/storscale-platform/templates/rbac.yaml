@@ -18,6 +18,10 @@ rules:
   - apiGroups: [""]
     resources: [secrets, configmaps]
     verbs: [get, list, create, update]
+  # ... and removes a project's Airflow's keys with it.
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [delete]
   # The setup step starts Buckets' pods afresh if they came up before Keycloak.
   - apiGroups: [""]
     resources: [pods]
