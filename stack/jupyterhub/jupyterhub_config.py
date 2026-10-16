@@ -68,6 +68,7 @@ if os.environ.get("STORSCALE_K8S") == "true":
     # project a person is in, so they aren't a project's.
     c.KubeSpawner.mem_limit = os.environ.get("NOTEBOOK_MEMORY", "1G")
     c.KubeSpawner.cpu_limit = float(os.environ.get("NOTEBOOK_CPUS", "2"))
+    c.KubeSpawner.cpu_guarantee = 0.1   # without it, Kubernetes reserves the whole limit for each notebook
     c.KubeSpawner.mem_guarantee = "256M"
     c.KubeSpawner.environment = NOTEBOOK_ENV
     # KubeSpawner passes args only with a command of its own (otherwise it

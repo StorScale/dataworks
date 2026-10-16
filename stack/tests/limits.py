@@ -44,14 +44,18 @@ def submit(user, statement, tags=None):
 
 
 def advance(q, until, timeout=60):
-    """Follow a query's answers until its state is one of `until`, or it fails."""
-    deadline = time.time() + timeout
+    """Follow a query's answers until its state is one of `until`, or it fails.
+    Trino only queues a statement once its client first asks after it: the
+    first answer, from the POST, always says QUEUED."""
+    deadline, asked = time.time() + timeout, False
     while time.time() < deadline:
         state = q.get("stats", {}).get("state")
-        if state in until or q.get("error") or not q.get("nextUri"):
+        if asked and (state in until or q.get("error") or not q.get("nextUri")):
+            return q
+        if not q.get("nextUri"):
             return q
         r = requests.get(q["nextUri"], headers=q["h"], verify="/tls/cert.pem", timeout=30)
-        q = {"user": q["user"], "h": q["h"], **r.json()}
+        q, asked = {"user": q["user"], "h": q["h"], **r.json()}, True
         time.sleep(0.5)
     return q
 
