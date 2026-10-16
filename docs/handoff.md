@@ -66,16 +66,23 @@ Install with the subcharts on, unless the cluster already runs one: a Spark Oper
 another release installed owns the Spark CRDs (`--set spark-operator.enabled=false`). Helm installs a subchart's CRDs (Buckets' and the
 Spark Operator's) only on a fresh install, never on an upgrade.
 
-The same holds for the platform's own Project definition. **Upgrading,** apply the release's
-CRD first, then upgrade (the chart's `values.yaml` and `--set-file`s as when installing):
+The same holds for the platform's own Project definition: without the new one, Kubernetes
+silently drops whatever fields the old definition lacks from every project (0.4.x's lacks
+`pipelines.repo` and the rest), and the operator never sees them. **Upgrade with
+`storscale upgrade`**, which applies the release's Project definition first, then upgrades the
+chart keeping the values it was installed with (`--reset-then-reuse-values`, so the new
+release's defaults apply to new settings), pins the images to the release, and waits for every
+service. It first checks the release isn't mid-upgrade, isn't going backwards, and that the
+release's images are published; it says what it will do, and asks:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/StorScale/storscale-platform/v0.6.0/deploy/crds/project.yaml
-helm upgrade storscale oci://ghcr.io/storscale/charts/storscale-platform --version 0.6.0 -n storscale -f platform.yaml ...
+storscale upgrade --context <cluster> --version 0.7.0 --dry-run   # check; show the CRD's changes
+storscale upgrade --context <cluster> --version 0.7.0             # then do it
 ```
 
-Without it, Kubernetes silently drops whatever fields the old definition lacks from every
-project (0.4.x's lacks `pipelines.repo` and the rest), and the operator never sees them.
+`-f`, `--set` and `--set-file` change settings over those it was installed with. If it fails,
+it prints the `helm rollback` to the revision before. CI's `kubernetes` job upgrades the last
+release to each commit this way, with a project made under the old one, and runs every suite.
 
 People's password (the example users alice, bob, carol):
 `kubectl -n storscale get secret storscale-env -o jsonpath='{.data.LAKEHOUSE_USER_PASSWORD}' | base64 -d`.

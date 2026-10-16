@@ -7,6 +7,7 @@
 //	storscale test [suite ...]   the end-to-end checks
 //	storscale logs [service]     follow the logs
 //	storscale down [--volumes]   stop it (--volumes also deletes its data)
+//	storscale upgrade            take an installed platform to a newer release (Kubernetes)
 //	storscale version
 package main
 
@@ -17,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 const usage = `storscale runs StorScale Platform on one machine, with Docker Compose, or with
@@ -30,7 +32,23 @@ Usage:
                                 superset, airflow, jupyterhub, catalog, semantic, projects, monitoring)
   storscale logs [service ...]  follow the logs
   storscale down [--volumes]    stop it; --volumes also deletes its data
+  storscale upgrade [flags]     take the platform on a Kubernetes cluster to a newer release:
+                                its Project definition (which Helm never upgrades), then the
+                                chart with the values it was installed with, then it waits for
+                                every service; says what it will do, and asks first
   storscale version
+
+Flags for upgrade:
+  --version V        the release to go to (default: this storscale's, %s)
+  --context C        kubectl's context for the cluster (default: the current one)
+  --namespace N      the platform's namespace (storscale); --release R its Helm release (storscale)
+  -f FILE, --set K=V, --set-file K=PATH
+                     settings to change, over those it was installed with (each may repeat)
+  --dry-run          check, show the Project definition's changes, change nothing
+  --yes              don't ask; --test then run the end-to-end checks (helm test)
+  --dir DIR          go to a checkout's chart instead; on a cluster, with --image-tag V,
+                     published images to run (with --k8s, the checkout's own, built)
+  --force            even to an older release
 
 Flags for every command:
   --dir DIR   use the stack in DIR instead of the one built into storscale (a checkout's
@@ -59,19 +77,34 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 || args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
-		fmt.Print(usage)
+		fmt.Printf(usage, version())
 		return nil
 	}
 	cmd, args := args[0], args[1:]
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
-	fs.Usage = func() { fmt.Fprint(os.Stderr, usage) }
+	fs.Usage = func() { fmt.Fprintf(os.Stderr, usage, version()) }
 	dir := fs.String("dir", "", "use the stack in this directory")
 	port := fs.Int("port", 0, "the platform's port (up)")
 	volumes := fs.Bool("volumes", false, "also delete the platform's data (down)")
 	k8s := fs.Bool("k8s", false, "on a kind cluster, with the Helm chart")
+	var o options
+	fs.StringVar(&o.version, "version", "", "the release (up --k8s, upgrade)")
+	fs.Var((*list)(&o.values), "f", "a values file (upgrade)")
+	fs.Var((*list)(&o.sets), "set", "a setting, K=V (upgrade)")
+	fs.Var((*list)(&o.setFiles), "set-file", "a setting from a file, K=PATH (upgrade)")
+	fs.BoolVar(&o.yes, "yes", false, "don't ask (upgrade)")
+	fs.BoolVar(&o.dryRun, "dry-run", false, "check, change nothing (upgrade)")
+	fs.BoolVar(&o.test, "test", false, "then run the checks (upgrade)")
+	fs.BoolVar(&o.force, "force", false, "even to an older release (upgrade)")
+	fs.StringVar(&o.imageTag, "image-tag", "", "published images to run with --dir (upgrade)")
+	fs.StringVar(&o.kubeCtx, "context", "", "kubectl's context (upgrade)")
+	fs.StringVar(&o.kubeNS, "namespace", "storscale", "the namespace (upgrade)")
+	fs.StringVar(&o.kubeRel, "release", "storscale", "the Helm release (upgrade)")
+	fs.DurationVar(&o.timeout, "timeout", 60*time.Minute, "how long to wait for the services (upgrade)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	o.volumes, o.kind = *volumes, *k8s
 	if cmd == "version" {
 		fmt.Println("storscale", version())
 		return nil
@@ -84,7 +117,11 @@ func run(args []string) error {
 		return err
 	}
 	if *k8s {
-		return newKube(st).do(cmd, st, fs.Args(), *volumes)
+		return newKube(st).do(cmd, st, fs.Args(), o)
+	}
+	if cmd == "upgrade" { // a cluster of the person's own
+		kubeContext, namespace, release = o.kubeCtx, o.kubeNS, o.kubeRel
+		return newKube(st).upgrade(st, o)
 	}
 	switch cmd {
 	case "up":
