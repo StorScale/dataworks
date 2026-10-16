@@ -4,11 +4,13 @@ For whoever picks this up next, person or agent, on a machine that can reach
 the target cluster. Read this, then [plan.md](plan.md) and the
 [CHANGELOG](../CHANGELOG.md).
 
-## Where things stand (2026-10-12)
+## Where things stand (2026-10-16)
 
-- **Release 0.4.2** is phases 0–5 of the plan (the platform, its web app, projects, the
+- **Release 0.5.0** is phases 0–5 of the plan (the platform, its web app, projects, the
   catalog, the semantic layer with MCP for agents, and the Helm chart), ready for a real
-  cluster: behind an ingress that ends TLS, with a private CA, on Buckets 1.19.0.
+  cluster: behind an ingress that ends TLS, with a private CA, on Buckets 1.19.0. It adds
+  phase 7's first part: each project's pipelines from its own git repo, in an Airflow of
+  its own on Kubernetes (plan, "Phase 7: pipelines from git, how").
 - **CI passes on every way of running it:**
   - **`platform`** runs the Compose stack and every suite.
   - **`kubernetes`** installs the chart on kind with `storscale up --k8s`, then runs every
@@ -16,8 +18,8 @@ the target cluster. Read this, then [plan.md](plan.md) and the
   - **`kubernetes-https`** does the same behind HTTPS with a private CA, as on a real cluster
     (`deploy/kind/https.sh`, `https.yaml`): every suite but the browser's.
 - **What's published, and signed:**
-  - The images: `ghcr.io/storscale/platformd:0.4.2` and `ghcr.io/storscale/platform-*:0.4.2`.
-  - The chart: `oci://ghcr.io/storscale/charts/storscale-platform` at version 0.4.2.
+  - The images: `ghcr.io/storscale/platformd:0.5.0` and `ghcr.io/storscale/platform-*:0.5.0`.
+  - The chart: `oci://ghcr.io/storscale/charts/storscale-platform` at version 0.5.0.
 - **Installed on a real cluster:** Kubernetes 1.27, shared with other teams, with
   ingress-nginx and a certificate from a corporate Vault PKI (through cert-manager).
   Every suite but the browser's passes there. That install found the three bugs the
@@ -26,7 +28,8 @@ the target cluster. Read this, then [plan.md](plan.md) and the
 ## Install on a real cluster
 
 Needs about 12–16 GB of memory, 4 or more CPUs, about 60 GB of disk, Helm, and a
-default StorageClass (or set `storage.storageClassName` and `buckets.storageClassName`).
+default StorageClass; and for each project with a pipelines repo, its own Airflow's memory
+(`pipelines.memory`, 3 GB unless the project gives another) (or set `storage.storageClassName` and `buckets.storageClassName`).
 
 With TLS at the Ingress, a certificate from cert-manager, and a private CA, a values file
 such as this one (`platform.yaml`):
@@ -53,7 +56,7 @@ trino:
 ```
 
 ```bash
-helm install storscale oci://ghcr.io/storscale/charts/storscale-platform --version 0.4.2 \
+helm install storscale oci://ghcr.io/storscale/charts/storscale-platform --version 0.5.0 \
   -n storscale --create-namespace -f platform.yaml --set-file global.ca.certs=root-ca.pem
 kubectl -n storscale get pods,jobs,projects -w      # the first install takes 10–20 minutes
 helm test storscale -n storscale --logs --timeout 60m
