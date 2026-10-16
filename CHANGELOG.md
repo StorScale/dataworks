@@ -4,6 +4,15 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-16
+
+Projects' pipelines from their own git repos, each project in an Airflow of its own on Kubernetes, and Airflow given only the keys it needs.
+
+**Upgrading from 0.4.x:**
+- Keycloak's realm gains the operator's `manage-clients` role and the `/airflow/*` sign-in addresses; Keycloak restarts with the upgrade and imports them.
+- A Secret a project names as its repo's credentials must carry the label `platform.storscale.io/connection=<project>` (in Compose: `connections/<project>/<name>.json` in the platform's bucket). Nothing in 0.4.x used them.
+- Each project given a pipelines repo starts an Airflow of its own: 3 GB of memory unless it sets `pipelines.memory`.
+
 ### Added
 - **Projects' pipelines from git (phase 7, first steps):**
   - A project names a git repo for its pipelines (`pipelines.repo`, `path`, `ref`, `credentials.secretRef`); a repo address with credentials in it is refused, and credentials are only ever a Secret's name.
