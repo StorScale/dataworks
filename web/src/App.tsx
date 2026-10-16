@@ -4,6 +4,7 @@ import { session, Session, signIn, signOut, User } from "./api";
 import { ProjectFrame, TopBar } from "./components";
 import { PlatformContext, Spinner, usePlatform } from "./lib";
 import Admin, { AdminAccess, AdminMonitoring, AdminProjects } from "./pages/Admin";
+import { AdminHealth } from "./pages/Health";
 import Data from "./pages/Data";
 import Home from "./pages/Home";
 import Metrics from "./pages/Metrics";
@@ -67,6 +68,7 @@ function Shell() {
           <Route path="projects" element={<AdminProjects />} />
           <Route path="projects/new" element={<ProjectEditor />} />
           <Route path="access" element={<AdminAccess />} />
+          <Route path="health" element={<AdminHealth />} />
           <Route path="monitoring" element={<AdminMonitoring />} />
         </Route>
         <Route path="/tools/:id" element={null} />

@@ -248,3 +248,8 @@ input, select, textarea { font: inherit; color: var(--ink); background: var(--pa
   .page { padding: 16px 16px 48px; }
   .phead .inner { padding: 14px 16px 0; }
 }
+
+/* A plain list: no bullets, a rule between items (the Health page's alerts). */
+ul.plain { list-style: none; padding: 0; margin: 0; }
+ul.plain li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+ul.plain li:last-child { border-bottom: 0; }

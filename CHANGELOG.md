@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **The platform's health, and alerts to its administrators** ([docs/use-cases.md](docs/use-cases.md), 6.4): platformd checks every service every 15 seconds, the same in Compose and on Kubernetes, where a service that's down gets its reason from its pods ("FailedMount: ... can't read superblock"). Administration › Health shows each service, why it's down and what people lose; Home tells everyone what isn't available just now. Administrators are alerted in a Teams channel (its Workflows webhook, as an Adaptive Card) and by email when a service goes down or comes back, and in the last 14 days of the platform's certificate; they can mute a service's alerts and send a test alert. Where alerts go is the platform's Secret `storscale-alerts` (`teamsWebhook`, `emailTo`, `smtpServer`, `smtpFrom`, `smtpUser`, `smtpPassword`). The checks are Prometheus metrics too (`platform_service_up`). The `health` suite checks every service is up, who sees what, muting, and a test alert reaching a Teams webhook.
+
 ## [0.6.0] - 2026-10-16
 
 Keycloak keeps its realm, its people and their sign-ins through restarts, with the realm's ownership split between the platform and the organisation; and limits per project, so no one project slows the others.
