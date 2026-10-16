@@ -14,6 +14,7 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 | **dana** | Data scientist | Notebooks, experiments, and a way to put a model into use. |
 | **frank** | Budget owner (finance) | To know what each project costs, and be told before it overruns. |
 | **an auditor** | Internal audit or compliance | Who did what with which data, and proof that rules held. |
+| **a client** | A client or partner who receives the company's files | Files on time, complete, and only what the contract allows; nothing else. |
 | **agents** | An assistant acting for a person (Claude, an IDE), or one with its own identity | The same data, under the same rules, as the person or role behind them. |
 
 ---
@@ -33,9 +34,11 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R6.3 A first-run Home for someone in no project, saying how to get access.
 - R6.4 Access requests: ask, approve or refuse in the project, with the result applied by the operator and recorded in the audit log.
 
+**Decided (2026-10-16)**
+- The realm's ownership is split: the platform keeps its own parts (the tools' clients, its service accounts, its signing key, the settings it relies on) and applies them at each upgrade; the company owns the people, their sign-in and its policies, which an upgrade never writes (plan, "Phase 6: Keycloak for real use, how").
+
 **Open questions**
-- Who owns the realm after install: the chart (re-applied on upgrade) or the company's administrators (imported once)?
-- Do groups come from the identity provider (and the project maps them), or are they the platform's own?
+- Which identity provider, and do groups come from it (and the project maps them), or are they the platform's own?
 - Who approves: a project's editors, a named owner, or administrators only?
 
 ### 6.2 An upgrade that loses nothing
@@ -115,6 +118,42 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R6.20 Freshness targets per table, in the project; stale tables shown in the catalog and the project's pages.
 - R6.21 Who's told, set per project; alerts muted for a while, recorded.
 
+### 6.8 One project can't slow the others
+
+1. dana's notebook runs a query in a loop, and Trino's load climbs. Meanwhile marketing's nightly pipelines start.
+2. `sales`' share of Trino is capped (its resource group: how many queries at once, how much memory), so marketing's queries run at their usual speed. dana's extra queries wait in sales' own queue.
+3. The platform alerts priya, naming the project, the person and the query. priya, or one of sales' editors, stops it from the Health page.
+4. sales' notebooks and Spark jobs have the project's limits too (CPU, memory, how many at once); its Airflow has the memory the project gives it; its buckets a size quota. Asking for more than a limit is refused with a message naming the limit, not a crash.
+5. When the team grows, priya raises sales' limits in its spec. A project that names none gets the install's defaults.
+
+**Requirements**
+- R6.22 Limits per project, in its spec, with the install's defaults: Trino (queries at once, queued, memory) through a resource group per project; notebooks and Spark (CPU, memory, how many) through Kubernetes quotas; its Airflow's memory (built); its buckets' size (Buckets' quotas).
+- R6.23 Alerts naming the project, the person and the query, and a way to stop it.
+- R6.24 A limit, when met, is said plainly where it's met (the SQL page, the notebook, the pipeline's run), naming the limit.
+
+**Open questions**
+- A person in two projects: whose Trino limits does their query count against? (The project they chose on the SQL page, or the one the query's tables belong to.)
+- Hard caps, or fair shares that lend idle capacity?
+
+### 6.9 Erase a customer
+
+1. A consumer asks to be forgotten. The company's privacy tool asks the platform (by its API), or priya does, to erase customer `C-1042` everywhere.
+2. The platform finds where they are. Each project says which of its tables and file prefixes hold consumer data, and which column identifies the person (`customer_id`); lineage adds what was made from them: `orders`, `customers`, a model's training data, two buckets of files.
+3. It deletes the rows (Iceberg deletes), expires the snapshots that still hold them and removes the old files, and does the same on the data branches. Backups older than the retention window age out.
+4. It records what it erased and when, for the auditor, without recording the data itself, and lists the deliveries (9.2) that carried the person's data, so the company can tell their recipients.
+5. Separately, each night, rows older than a table's retention (say 25 months for campaign responses) are deleted the same way.
+
+**Requirements**
+- R6.25 Each project declares where its consumer data is: the tables, the column that identifies a person, and the files' prefixes; the catalog shows it. Classification (10.5) later finds what's undeclared.
+- R6.26 Erasure by a person's ID across the declared tables and what lineage says came from them, carried through snapshots, data branches and files, within the law's deadline, and recorded without the data; an API for the privacy tool.
+- R6.27 Retention per table (rows older than a set age deleted), applied by the maintenance of 6.5.
+- R6.28 The erasure's record lists the deliveries that carried the person's data (R9.6).
+
+**Open questions**
+- Which laws and deadlines apply (CCPA/CPRA's 45 days, other states', GLBA)?
+- How long until erased data ages out of backups, and is that acceptable to the privacy team?
+- Who may ask for an erasure: the privacy team's tool only, or administrators too?
+
 ---
 
 ## Phase 7: git-native projects
@@ -190,6 +229,33 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R7.16 dbt's tests and lineage in the catalog, beside the checks and lineage the platform already reports.
 - R7.17 Runs of only what changed, and what depends on it, for a pull request.
 
+### 7.6 bob gives the platform a credential
+
+1. sales' repo is private. On sales' Connections tab, bob adds a connection: its name (`sales-dags`), its kind (a git token; an SSH key; later a database user, an SFTP server, a PGP key), and the token, pasted once.
+2. The platform keeps it as a Secret of sales' own; the tab shows its name, kind, who added it and when, never its value. bob picks it for the project's pipelines repo from a list.
+3. Readers see the list, but can't add or change it; carol sees nothing.
+4. bob rotates the token by pasting a new one; Airflow has it within a minute. He removes an old connection; anything still naming it says so.
+5. The same tab holds the database users of 8.1 and 8.3, and the delivery targets and keys of 9.1.
+
+**Requirements**
+- R7.18 A Connections tab per project: editors add, replace and remove credentials (a token; a username and password; an SSH key with its host's key; a PGP key); values written once and never shown again; who and when in the audit log.
+- R7.19 The operator keeps them as Secrets the project owns (labelled with it, removed with it), so nobody needs access to the cluster.
+- R7.20 A project names only its own connections: another project's Secret, or the platform's, is refused.
+
+### 7.7 dana schedules her notebook
+
+1. dana's notebook `churn_features.ipynb` works. In JupyterLab she chooses **Schedule**: daily at 05:00, in project `sales`.
+2. The platform adds a small pipeline to sales' repo, as a pull request if the branch is protected, that runs the notebook (papermill) in the project's own Airflow, as its service account.
+3. Each run keeps its executed notebook (outputs, errors) in the project's bucket, linked from the run on the Pipelines tab.
+4. A failed run tells dana (6.7), with the cell that failed.
+
+**Requirements**
+- R7.21 Scheduling a notebook from JupyterLab: a pipeline in the project's repo that runs it, reviewed like any other change.
+- R7.22 Each run's executed notebook kept, and linked from the run.
+
+**Open questions**
+- The notebook's Python packages: the image's, or an environment per project (see "To decide")?
+
 ---
 
 ## Phase 8: getting data in
@@ -226,11 +292,76 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - Which applications first?
 - dlt (a library, run in Airflow, small) or Airbyte (many connectors, a service of its own to run)?
 
+### 8.3 Query a database where it is
+
+1. Finance's budget figures live in the company's SQL Server. alice needs them beside `orders` today, without a copy.
+2. bob adds the database to sales as a query source: its address, a read-only user from the Connections tab (7.6), and which schemas.
+3. It appears in Trino as a catalog of sales' own (`sales_finance`); alice joins it with `orders` on the SQL page and in Superset.
+4. Ranger's rules apply to it as to the lakehouse: sales' readers see it, others don't; columns may be masked.
+5. When querying it in place is too slow, or too heavy for the source, bob changes it into a source copied by change capture (8.1).
+
+**Requirements**
+- R8.7 Query sources per project: databases (PostgreSQL, SQL Server, Oracle, MySQL) as Trino catalogs, read-only, with credentials from the project's connections.
+- R8.8 The project's access rules on them, in Ranger, and their tables in the catalog.
+- R8.9 Limits on what a query may pull from a source (6.8), so the source's own users aren't slowed.
+
+**Open questions**
+- Trino's dynamic catalogs (added while it runs), or a restart of its coordinator for each new source?
+
 ---
 
-## Phase 9: governed AI
+## Phase 9: getting data out
 
-### 9.1 sam asks a question
+The company delivers files to clients and partners, and some carry consumer data. Getting them out on time, complete, and with only what's allowed, matters as much as getting data in.
+
+### 9.1 A file delivery to a client
+
+1. Each Monday, client Acme gets last week's campaign results: a CSV file per region, compressed and PGP-encrypted with Acme's key, on Acme's SFTP server, with a manifest (files, rows, checksums).
+2. bob sets it up in sales: a delivery, its query or table, the format (CSV, Parquet, fixed width), the files' names (`acme_results_{date}_{region}.csv.gz.pgp`), the schedule, and its target, from the Connections tab (Acme's SFTP host, user and key, and Acme's public key).
+3. Before its first run the delivery is approved. The approval shows which columns go, and which are personal (6.9's declaration, later 10.5's tags): a delivery with personal data needs the project owner's approval and that of the company's named data-protection approver. A change to what it sends needs approving again, and doesn't run until it is.
+4. On Monday at 06:00 it runs as a pipeline in the project's own Airflow, as the project's service account, under the project's access rules. It checks first: rows within the expected range, every region present, the tables fresh. A failing check sends nothing, and alerts (6.7).
+5. The project's Deliveries tab shows each run: what was sent, to whom, sizes and checksums, and the transfer's result. A failed transfer is retried, then alerts.
+
+**Requirements**
+- R9.1 Deliveries per project: a query or table, a format (CSV, Parquet, JSON, fixed width), compression, file names, a schedule; run as pipelines in the project's Airflow.
+- R9.2 Targets: SFTP (with the host's key checked), S3-compatible buckets of other companies; Azure Blob and Google Cloud Storage later. Credentials and keys from the project's connections (7.6); PGP encryption; a manifest with checksums.
+- R9.3 Checks before sending (row counts, completeness, freshness, the project's checks): a failed check sends nothing.
+- R9.4 Approval of what a delivery sends, and again when that changes; personal columns shown, and needing a named approver.
+- R9.5 A delivery log: every file sent, to whom, when, its size and checksum, kept with the audit log; retries and alerts.
+
+**Open questions**
+- Which formats and targets do today's deliveries use, and how are they run now (scripts, an MFT product)?
+- Who is the data-protection approver?
+
+### 9.2 What did we send about this person?
+
+1. A consumer asks what the company shared about them, and with whom; or an erasure (6.9) needs the recipients of their data.
+2. priya searches the delivery log by the person's ID: the deliveries that carried their rows, when, to whom, under which approval.
+3. The answer goes to the privacy team; with an erasure, the recipients are asked to delete.
+
+**Requirements**
+- R9.6 Deliveries of personal data record whose data they carried (the people's IDs, or enough to find them again from the tables' history), for the legal period, searchable by person.
+
+**Open questions**
+- A list of IDs per file is itself personal data: is it kept, or found again by running the delivery's query on the data as it was (Iceberg's time travel), which needs the snapshots kept as long?
+
+### 9.3 A partner reads in place
+
+1. A partner wants a table every day, but would rather read it than receive files.
+2. sales shares `orders_by_region` with the partner: read-only, filtered to the partner's rows, through a credential that expires.
+3. The partner reads it with their own tools. Every read is in the audit log; the share ends on its date, or at once when revoked.
+
+**Requirements**
+- R9.7 Shares with outside parties: read-only access to a table (or files), filtered, time-limited, audited, revocable at once.
+
+**Open questions**
+- Which tools do partners use (Snowflake, Databricks, Spark), and so which protocol: Iceberg's REST catalog, Delta Sharing, or signed links to files?
+
+---
+
+## Phase 10: governed AI
+
+### 10.1 sam asks a question
 
 1. sam asks an assistant (Claude, signed in to the platform as sam): "What was revenue by region last quarter, and why did EU fall?"
 2. The assistant asks the platform's MCP server for the `revenue` metric by region and month. It runs as sam: sam sees the EU only, as on the dashboards, and the numbers match them to the cent.
@@ -239,11 +370,11 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 5. The question's cost (LLM tokens, Trino time) counts against the `sales` project's budget.
 
 **Requirements**
-- R9.1 Every answer from the semantic layer, run as the person, with its definitions cited.
-- R9.2 An LLM gateway (LiteLLM) in front of the models: per project and per person budgets, cost recorded, and guardrails (no secrets or masked values sent out).
-- R9.3 Agents' calls audited with the person behind them (R6.11).
+- R10.1 Every answer from the semantic layer, run as the person, with its definitions cited.
+- R10.2 An LLM gateway (LiteLLM) in front of the models: per project and per person budgets, cost recorded, and guardrails (no secrets or masked values sent out).
+- R10.3 Agents' calls audited with the person behind them (R6.11).
 
-### 9.2 An agent of the project's own
+### 10.2 An agent of the project's own
 
 1. bob sets up a nightly agent for `sales`: it reads the failed checks and posts a summary to the team's chat.
 2. It gets an identity of its own, a service account in the project, and may only read the project's checks and tables.
@@ -251,29 +382,29 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 4. One night it loops. At its budget, the gateway stops it, and bob gets an alert.
 
 **Requirements**
-- R9.4 Agents registered in a project: identity, owner, tools and data allowed, budget.
-- R9.5 Approval before an agent runs; revoking it takes effect at once.
-- R9.6 Spend caps that stop an agent, with an alert.
+- R10.4 Agents registered in a project: identity, owner, tools and data allowed, budget.
+- R10.5 Approval before an agent runs; revoking it takes effect at once.
+- R10.6 Spend caps that stop an agent, with an alert.
 
-### 9.3 A metric change, tested
+### 10.3 A metric change, tested
 
 1. bob changes `revenue` to exclude refunds, in a pull request.
 2. The semantic layer's tests run (as in 7.3): known answers for known questions (EU revenue for September), and a set of plain-language questions whose expected metric calls are checked.
 3. The pull request shows which answers changed. After merge, sam's next question gets the new definition.
 
 **Requirements**
-- R9.7 Tests for the semantic layer: expected values, and expected metric calls for plain-language questions.
+- R10.7 Tests for the semantic layer: expected values, and expected metric calls for plain-language questions.
 
-### 9.4 alice writes SQL with help
+### 10.4 alice writes SQL with help
 
 1. On the SQL page, alice asks the assistant for "orders by region per week with a 4-week moving average".
 2. It writes the SQL from the project's tables and their columns (the catalog), and she runs it as herself.
 3. It never sees data she can't, and its suggestions use only tables she can read.
 
 **Requirements**
-- R9.8 An assistant in the SQL page (and for pipeline code), given the project's schema and run under the person's access.
+- R10.8 An assistant in the SQL page (and for pipeline code), given the project's schema and run under the person's access.
 
-### 9.5 A new column of personal data
+### 10.5 A new column of personal data
 
 1. A source (8.1) gains a column, `customer_email`. Nobody wrote a policy for it.
 2. The catalog's classification finds it holds email addresses and tags it `personal`. The tag goes to Ranger.
@@ -281,39 +412,29 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 4. The project's owner sees the new tag, and can confirm it or correct it.
 
 **Requirements**
-- R9.9 Classification of columns in the catalog (personal, financial, health), automatic and confirmed by people.
-- R9.10 Ranger's policies by tag, with the catalog's tags kept in step, so a newly tagged column is protected without a policy of its own.
+- R10.9 Classification of columns in the catalog (personal, financial, health), automatic and confirmed by people.
+- R10.10 Ranger's policies by tag, with the catalog's tags kept in step, so a newly tagged column is protected without a policy of its own.
 
 ---
 
-## Phase 10: usage and cost per project
+## Phase 11: usage and cost per project
 
-### 10.1 frank's monthly view
+### 11.1 frank's monthly view
 
 1. frank opens the Usage page for `sales`: this month's Trino CPU time, Spark time, storage (by bucket and table), LLM spend, and the trend against last month.
 2. It shows what drives it: the top pipelines, people and queries.
 3. At 80% of the month's budget, frank and the project's owner get an alert.
 
 **Requirements**
-- R10.1 Usage attributed to projects: Trino (query to project, through the person or service account), Spark, Buckets storage, the LLM gateway.
-- R10.2 A rate card (what a CPU-hour, a GB-month and a token cost), set by the install.
-- R10.3 Budgets per project, with alerts.
-
-### 10.2 A runaway query
-
-1. dana's notebook runs a query in a loop. Trino's load climbs.
-2. The platform alerts priya, naming the project, the person, and the query.
-3. Trino's resource group for `sales` already caps its share, so other projects are unaffected; priya can stop the query from the Health page.
-
-**Requirements**
-- R10.4 Trino resource groups per project.
-- R10.5 Alerts naming the project, person and query; a way to stop it.
+- R11.1 Usage attributed to projects: Trino (query to project, through the person or service account), Spark, Buckets storage, the LLM gateway.
+- R11.2 A rate card (what a CPU-hour, a GB-month and a token cost), set by the install.
+- R11.3 Budgets per project, with alerts. (The limits that cap a project's use are 6.8's.)
 
 ---
 
-## Phase 11: self-service and ML
+## Phase 12: self-service and ML
 
-### 11.1 alice cleans a spreadsheet without code
+### 12.1 alice cleans a spreadsheet without code
 
 1. alice uploads a supplier's CSV to the project's landing area. The platform previews it.
 2. She builds a recipe: rename columns, parse dates, drop test rows, remove duplicates, join to `orders` by order ID. Each step previews its result. The SQL it generates is shown beside it.
@@ -321,43 +442,32 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 4. Saved, it's code in the project's repo (as a dbt model), so bob can review and change it like any other.
 
 **Requirements**
-- R11.1 Uploads to the project's landing area, with a preview.
-- R11.2 A recipe builder: steps, each previewed, generating SQL (or a dbt model) kept in the project's repo.
-- R11.3 The result in the catalog with its lineage, and schedulable as a pipeline.
+- R12.1 Uploads to the project's landing area, with a preview.
+- R12.2 A recipe builder: steps, each previewed, generating SQL (or a dbt model) kept in the project's repo.
+- R12.3 The result in the catalog with its lineage, and schedulable as a pipeline.
 
-### 11.2 An app for sam
+### 12.2 An app for sam
 
 1. alice makes a small app from the `revenue` metric: a region filter, a table and a chart.
 2. She shares it with sam, who opens it from Home; it shows what sam may see.
 
 **Requirements**
-- R11.4 Simple data apps per project, built from metrics and tables, run as the person viewing them.
+- R12.4 Simple data apps per project, built from metrics and tables, run as the person viewing them.
 
-### 11.3 dana puts a model into use
+### 12.3 dana puts a model into use
 
 1. dana trains a churn model in a notebook. Each run is tracked (MLflow): parameters, metrics, the data's Nessie commit.
 2. She registers the best one and asks for approval. The project's owner sees its evaluation and approves.
 3. It's used by a pipeline that scores customers nightly, and its drift is monitored.
 
 **Requirements**
-- R11.5 MLflow per project, its runs tied to the data's commit.
-- R11.6 A model registry with approval before use.
-- R11.7 Batch scoring as a pipeline; drift monitored in Grafana.
+- R12.5 MLflow per project, its runs tied to the data's commit.
+- R12.6 A model registry with approval before use.
+- R12.7 Batch scoring as a pipeline; drift monitored in Grafana.
 
 ---
 
 ## Not yet placed
-
-### U.1 Erase a customer
-
-1. A customer asks to be forgotten. priya (or a request from the company's privacy tool) asks the platform to erase customer `C-1042` everywhere.
-2. The platform finds where they are, from the catalog's tags and lineage: `orders`, `customers`, a model's training data, two buckets of files.
-3. It deletes the rows (Iceberg deletes), expires the snapshots that still hold them and removes the old files, and does the same on the data branches. Backups older than the retention window age out.
-4. It records what it erased and when, for the auditor, without recording the data itself.
-
-**Requirements**
-- R-U.1 Erasure across a project's tables and files, found through tags and lineage, carried through snapshots, branches and files, and recorded.
-- R-U.2 Retention per table (delete rows older than a set age), applied by the maintenance of 6.5.
 
 ### U.2 A new team, from a template
 
@@ -381,6 +491,7 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 
 ## To decide, with the first teams
 
+- **The SQL page:** saved and shared queries, and each person's query history.
 - **Streaming:** does anything need data in minutes, not hours? Then Kafka (already needed for 8.1 perhaps), with Flink or Spark streaming into Iceberg.
 - **Data science:** Python environments per project, and GPUs?
 - **Managing as code:** a CLI for projects, a Terraform provider, a published API?
@@ -392,11 +503,12 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 
 | Phase | Storyboards | Its gate tests |
 |---|---|---|
-| 6 | 6.1–6.7 | 6.2 on the real cluster: an upgrade with no lost projects, people or settings |
-| 7 | 7.1–7.5 | 7.3: a pull request runs on its own data branch, a good one merges, a bad one is refused |
-| 8 | 8.1–8.2 | 8.1: a database table's changes reach its Iceberg table in minutes, under the project's rules |
-| 9 | 9.1–9.5 | 9.1 and 9.2: within the person's or agent's rules and budget, every call audited; 9.5: a new personal column masked everywhere |
-| 10 | 10.1–10.2 | 10.1: usage and cost show per project, and a budget alerts |
-| 11 | 11.1–11.3 | 11.1: a clean table from a spreadsheet without code, in the catalog with its lineage |
+| 6 | 6.1–6.9 | 6.2 on the real cluster: an upgrade with no lost projects, people or settings; 6.8: a project at its limits leaves another's queries at their usual speed; 6.9: an erasure carried through snapshots and files, and recorded |
+| 7 | 7.1–7.7 | 7.3: a pull request runs on its own data branch, a good one merges, a bad one is refused; 7.6: a private repo connected without access to the cluster |
+| 8 | 8.1–8.3 | 8.1: a database table's changes reach its Iceberg table in minutes, under the project's rules; 8.3: a database queried in place, under the project's rules |
+| 9 | 9.1–9.3 | 9.1: a delivery reaches an SFTP server, encrypted, with its manifest, and a failing check sends nothing; 9.2: the log finds what was sent about a person |
+| 10 | 10.1–10.5 | 10.1 and 10.2: within the person's or agent's rules and budget, every call audited; 10.5: a new personal column masked everywhere |
+| 11 | 11.1 | 11.1: usage and cost show per project, and a budget alerts |
+| 12 | 12.1–12.3 | 12.1: a clean table from a spreadsheet without code, in the catalog with its lineage |
 
 Each storyboard becomes an end-to-end suite, as the phases before did: the people and agents above, against a real install, in CI.
