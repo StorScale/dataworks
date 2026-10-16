@@ -58,6 +58,16 @@ class Admin:
         return r
 
 
+def same(a, b):
+    """Equal, but a list of strings in any order: Keycloak keeps a client's
+    addresses as a set, and hands them back in an order of its own."""
+    if isinstance(a, list) and isinstance(b, list) and all(isinstance(x, str) for x in a + b):
+        return sorted(a) == sorted(b)
+    if isinstance(a, dict) and isinstance(b, dict):
+        return a.keys() == b.keys() and all(same(a[k], b[k]) for k in a)
+    return a == b
+
+
 def overlay(have, want):
     """have with want's fields set; a map (attributes, a mapper's config) is
     set key by key, so keys Keycloak or an administrator added stay."""
@@ -82,16 +92,16 @@ def apply_client(kc, want):
         return
     have = kc("GET", f"/clients/{cid}").json()
     merged = overlay(have, want)
-    if merged != have:
+    if not same(merged, have):
         kc("PUT", f"/clients/{cid}", json=merged)
-        log(f"realm: client {want['clientId']}: " + ", ".join(sorted(k for k in want if have.get(k) != merged[k])))
+        log(f"realm: client {want['clientId']}: " + ", ".join(sorted(k for k in want if not same(have.get(k), merged[k]))))
     existing = {m["name"]: m for m in kc("GET", f"/clients/{cid}/protocol-mappers/models").json()}
     for m in mappers:
         cur = existing.get(m["name"])
         if cur is None:
             kc("POST", f"/clients/{cid}/protocol-mappers/models", json=m)
             log(f"realm: client {want['clientId']}: mapper {m['name']} added")
-        elif overlay(cur, m) != cur:
+        elif not same(overlay(cur, m), cur):
             kc("PUT", f"/clients/{cid}/protocol-mappers/models/{cur['id']}", json=overlay(cur, m))
             log(f"realm: client {want['clientId']}: mapper {m['name']} put back")
 
