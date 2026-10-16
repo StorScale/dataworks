@@ -42,6 +42,8 @@ spec:
             # The Health page, and alerts (where the platform's Secret storscale-alerts says).
             - {name: HEALTH, value: "on"}
             - {name: GATEWAY_HEALTH_URL, value: "http://gateway:{{ .Values.gateway.port }}/healthz"}
+            # Project alerts: when a project's tables last changed (its freshness targets).
+            - {name: NESSIE_URL, value: "http://nessie:19120"}
             # A project with a repo has an Airflow of its own (project-<name>-airflow).
             - {name: PROJECT_AIRFLOWS, value: "true"}
             - {name: BRAND_NAME, value: {{ .Values.brand.name | quote }}}

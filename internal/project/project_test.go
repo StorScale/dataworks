@@ -3,6 +3,7 @@ package project
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 const sales = `{
@@ -224,5 +225,34 @@ func TestAProjectsLimits(t *testing.T) {
 	}
 	if StorageBytes("2Ti") != 2<<40 || StorageBytes("500Gi") != 500<<30 || StorageBytes("") != 0 {
 		t.Errorf("storage in bytes: %d %d", StorageBytes("2Ti"), StorageBytes("500Gi"))
+	}
+}
+
+func TestFreshnessAndWhereAlertsGo(t *testing.T) {
+	with := func(extra string) error {
+		_, err := Parse([]byte(strings.Replace(sales, `"pipelines": {"serviceAccount": "airflow-pipelines"}`,
+			`"pipelines": {"serviceAccount": "airflow-pipelines"}`+extra, 1)))
+		return err
+	}
+	if err := with(`, "notify": {"teams": "sales-alerts", "email": ["data@example.com"]}`); err != nil {
+		t.Errorf("notify: %v", err)
+	}
+	for _, tc := range []struct{ extra, want string }{
+		{`, "notify": {"teams": "Sales Alerts"}`, "isn't a connection's name"},
+		{`, "notify": {"email": ["not-an-address"]}`, "isn't an email address"},
+	} {
+		if err := with(tc.extra); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: %v, want %q", tc.extra, err, tc.want)
+		}
+	}
+	fresh := strings.Replace(sales, `"tables": {"readers"`, `"tables": {"freshness": [{"table": "orders", "within": "24h"}], "readers"`, 1)
+	if _, err := Parse([]byte(fresh)); err != nil {
+		t.Errorf("freshness: %v", err)
+	}
+	if _, err := Parse([]byte(strings.Replace(fresh, `"24h"`, `"1 day"`, 1))); err == nil || !strings.Contains(err.Error(), "as 30m, 24h or 7d") {
+		t.Errorf("a freshness target that isn't one: %v", err)
+	}
+	if d, ok := Within("7d"); !ok || d != 7*24*time.Hour {
+		t.Errorf("7d: %v", d)
 	}
 }

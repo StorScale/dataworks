@@ -79,6 +79,15 @@ spec:
                               table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                               column: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                               type: {type: string, enum: [MASK, MASK_SHOW_LAST_4, MASK_SHOW_FIRST_4, MASK_HASH, MASK_NULL, MASK_NONE, MASK_DATE_SHOW_YEAR]}
+                    freshness:
+                      type: array
+                      description: How recently each table must have changed; an older one is stale, and the project is told.
+                      items:
+                        type: object
+                        required: [table, within]
+                        properties:
+                          table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                          within: {type: string, pattern: '^[1-9][0-9]{0,4}(m|h|d)$', description: "As 30m, 24h or 7d."}
                     checks:
                       type: array
                       description: Data-quality checks on the tables. The catalog runs them, and shows their results on the tables.
@@ -125,6 +134,15 @@ spec:
                       type: string
                       pattern: '^[1-9][0-9]{0,5}(Mi|Gi)$'
                       description: "The project's own Airflow's memory, from 2Gi to 64Gi; default the install's (pipelines.memory)."
+                notify:
+                  type: object
+                  description: >-
+                    Where the project's alerts go (a failed pipeline, a failing check, a stale table):
+                    teams names one of its connections, holding a Teams channel's Workflows webhook
+                    (key webhook); email goes through the install's mail server.
+                  properties:
+                    teams: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
+                    email: {type: array, items: {type: string}}
                 limits:
                   type: object
                   description: >-

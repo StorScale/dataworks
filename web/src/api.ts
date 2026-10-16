@@ -63,10 +63,12 @@ export type Spec = {
       rowFilters?: { table: string; filter: string }[];
       masks?: { table: string; column: string; type: string }[];
     };
+    freshness?: { table: string; within: string }[];
   };
   files?: { bucket?: string };
   pipelines?: { serviceAccount: string; repo?: string; path?: string; ref?: string; credentials?: { secretRef: string }; memory?: string };
   limits?: { queries?: number; queued?: number; queryMemory?: string; storage?: string };
+  notify?: { teams?: string; email?: string[] };
 };
 export type Project = { apiVersion: string; kind: string; metadata: { name: string }; spec: Spec };
 export type Part = { system: string; ok: boolean; message: string };
@@ -187,3 +189,11 @@ export const getHealth = () => api<Health>("GET", "/api/health");
 export const muteAlerts = (service: string, hours: number) =>
   api<{ mutedUntil: string }>("POST", "/api/health/mute", { service, hours });
 export const testAlert = () => api<{ targets: Record<string, string> }>("POST", "/api/health/test");
+
+// --- A project's alerts: what's wrong in it now, and where it's told ----------------
+
+export type ProjectIssue = { key: string; kind: "pipeline" | "check" | "stale"; title: string; detail?: string; link: string; mutedUntil?: string };
+export type ProjectAlerts = { checked: boolean; issues: ProjectIssue[]; notify?: { teams: boolean; email: string[] } };
+export const getProjectAlerts = (name: string) => api<ProjectAlerts>("GET", `/api/projects/${encodeURIComponent(name)}/alerts`);
+export const muteProjectAlert = (name: string, key: string, hours: number) =>
+  api<ProjectAlerts>("POST", `/api/projects/${encodeURIComponent(name)}/alerts/mute`, { key, hours });

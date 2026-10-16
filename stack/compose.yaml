@@ -263,6 +263,8 @@ services:
       # The Health page, and alerts (where the platform's Secret storscale-alerts says).
       HEALTH: "on"
       GATEWAY_HEALTH_URL: http://gateway:${STORSCALE_PORT}/healthz
+      # Project alerts: when a project's tables last changed (its freshness targets).
+      NESSIE_URL: http://nessie:19120
       PLATFORM_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}
       KEYCLOAK_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}/sso
       KEYCLOAK_DIRECT_URL: http://keycloak:8080/sso

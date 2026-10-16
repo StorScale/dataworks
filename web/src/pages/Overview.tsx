@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ago, deleteProject, Flow, FlowTable, getFlow, getPipelines, getSemantic, took, when } from "../api";
+import { ago, deleteProject, Flow, FlowTable, getFlow, getPipelines, getProjectAlerts, getSemantic, muteProjectAlert, ProjectIssue, took, when } from "../api";
 import { checkName, ErrorBanner, failing, grants, StateDot, usePlatform, usePoll, useProject } from "../lib";
 
 // levels puts each table in a column: sources first, then what's made from them.
@@ -158,6 +158,7 @@ export default function Overview() {
         </div>
 
         <aside className="stack">
+          <Alerts name={name} canMute={view.role === "editor" || admin} />
           <section className="card">
             <div className="card-head"><h2>People</h2><Link to="access" className="small">Access</Link></div>
             {view.status?.members?.length ? (
@@ -205,6 +206,47 @@ export default function Overview() {
         </aside>
       </div>
     </div>
+  );
+}
+
+// Alerts is what's wrong in the project now (a pipeline's run failed, a check
+// failing, a table stale), as the platform tells the project's channel of it.
+function Alerts({ name, canMute }: { name: string; canMute: boolean }) {
+  const { data, error, reload } = usePoll(() => getProjectAlerts(name), [name], 30_000);
+  const [muteError, setMuteError] = useState<string>();
+  if (!data?.checked) return null;
+  const mute = async (i: ProjectIssue, hours: number) => {
+    setMuteError(undefined);
+    try { await muteProjectAlert(name, i.key, hours); reload(); } catch (e) { setMuteError((e as Error).message); }
+  };
+  const path = (link: string) => { try { const u = new URL(link); return u.pathname + u.search; } catch { return link; } };
+  const n = data.notify;
+  const where = [n?.teams && "its Teams channel", n?.email.length && n.email.join(", ")].filter(Boolean).join(" and ");
+  return (
+    <section className="card" data-testid="project-alerts">
+      <h2>Alerts</h2>
+      <ErrorBanner error={error ?? muteError} />
+      {data.issues.length === 0 ? <p className="muted small" style={{ marginTop: 8 }}>Nothing wrong just now.</p> : (
+        <div className="list small" style={{ marginTop: 10 }}>
+          {data.issues.map((i) => (
+            <div key={i.key} className="row" style={{ alignItems: "flex-start" }} data-testid={`issue-${i.key}`}>
+              <span className={`dot ${i.kind === "stale" ? "amber" : "red"}`} style={{ marginTop: 5 }} />
+              <div className="grow">
+                <Link to={path(i.link)}><strong>{i.title}</strong></Link>
+                {i.detail && <div className="muted">{i.detail}</div>}
+                {i.mutedUntil && <div className="muted">Muted until {new Date(i.mutedUntil).toLocaleString()}</div>}
+              </div>
+              {canMute && (i.mutedUntil
+                ? <button className="linkish small" onClick={() => mute(i, 0)}>Unmute</button>
+                : <button className="linkish small" onClick={() => mute(i, 24)} title="No alerts about this for a day">Mute</button>)}
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="muted small" style={{ marginTop: 10 }}>
+        {where ? `Told to ${where}.` : "Not told anywhere yet: the platform's administrators set where, when they edit the project."}
+      </p>
+    </section>
   );
 }
 

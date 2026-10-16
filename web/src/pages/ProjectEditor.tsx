@@ -31,6 +31,12 @@ export default function ProjectEditor() {
   const setMember = (i: number, m: Partial<Member>) => set({ members: spec.members.map((x, j) => (j === i ? { ...x, ...m } : x)) });
   const readers = spec.tables?.readers ?? {};
   const setReaders = (r: typeof readers) => set({ tables: { ...spec.tables, readers: r } });
+  const setNotify = (n: Partial<NonNullable<Spec["notify"]>>) => {
+    const next = { ...spec.notify, ...n };
+    set({ notify: next.teams || next.email?.length ? next : undefined });
+  };
+  const setFreshness = (i: number, f: Partial<{ table: string; within: string }>) =>
+    set({ tables: { ...spec.tables, freshness: spec.tables!.freshness!.map((x, j) => (j === i ? { ...x, ...f } : x)) } });
 
   const save = async () => {
     setSaving(true);
@@ -141,8 +147,32 @@ export default function ProjectEditor() {
           </h2>
           {spec.pipelines && (
             <label>Keycloak client whose service account runs them
-              <input value={spec.pipelines.serviceAccount} placeholder="airflow-pipelines" onChange={(e) => set({ pipelines: { serviceAccount: e.target.value } })} />
+              <input value={spec.pipelines.serviceAccount} placeholder="airflow-pipelines" onChange={(e) => set({ pipelines: { ...spec.pipelines!, serviceAccount: e.target.value } })} />
             </label>
+          )}
+
+          <h2 style={{ marginTop: 20 }}>Alerts</h2>
+          <p className="muted small" style={{ margin: "4px 0 8px" }}>
+            Where the project is told when a pipeline's run fails, a check fails, or a table isn't changed in time.
+          </p>
+          <label>Teams channel: the name of a connection of the project's, holding the channel's webhook
+            <input value={spec.notify?.teams ?? ""} placeholder="alerts" onChange={(e) => setNotify({ teams: e.target.value || undefined })} />
+          </label>
+          <label>Email
+            <input value={(spec.notify?.email ?? []).join(", ")} placeholder="sales-data@example.com" onChange={(e) => setNotify({ email: list(e.target.value).length ? list(e.target.value) : undefined })} />
+          </label>
+          {spec.tables && (
+            <>
+              <div className="small" style={{ marginTop: 8 }}>Tables that must change in time</div>
+              {(spec.tables.freshness ?? []).map((f, i) => (
+                <div key={i} className="row">
+                  <input value={f.table} placeholder="table" onChange={(e) => setFreshness(i, { table: e.target.value })} />
+                  <input value={f.within} placeholder="24h" style={{ width: 90 }} onChange={(e) => setFreshness(i, { within: e.target.value })} />
+                  <button className="btn" onClick={() => set({ tables: { ...spec.tables, freshness: spec.tables!.freshness!.filter((_, j) => j !== i) } })}>Remove</button>
+                </div>
+              ))}
+              <button className="btn" onClick={() => set({ tables: { ...spec.tables, freshness: [...(spec.tables!.freshness ?? []), { table: "", within: "24h" }] } })}>Add a table</button>
+            </>
           )}
         </div>
       )}

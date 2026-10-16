@@ -51,6 +51,7 @@ type Alert struct {
 	Severity string      `json:"severity"` // down, up, warning, test
 	Facts    [][2]string `json:"facts"`    // label, value
 	Link     string      `json:"link"`     // the Health page
+	LinkText string      `json:"-"`        // its button; "Open the Health page" when empty
 	At       time.Time   `json:"at"`
 }
 
@@ -157,7 +158,11 @@ func Card(a Alert) map[string]any {
 	card := map[string]any{"$schema": "http://adaptivecards.io/schemas/adaptive-card.json", "type": "AdaptiveCard",
 		"version": "1.4", "body": body}
 	if a.Link != "" {
-		card["actions"] = []any{map[string]any{"type": "Action.OpenUrl", "title": "Open the Health page", "url": a.Link}}
+		text := a.LinkText
+		if text == "" {
+			text = "Open the Health page"
+		}
+		card["actions"] = []any{map[string]any{"type": "Action.OpenUrl", "title": text, "url": a.Link}}
 	}
 	return map[string]any{"type": "message", "attachments": []any{
 		map[string]any{"contentType": "application/vnd.microsoft.card.adaptive", "content": card}}}
@@ -199,7 +204,11 @@ func (n *Notifier) email(t Targets, a Alert) error {
 	}
 	fmt.Fprintf(&b, "\r\nAt %s.\r\n", a.At.Format("2006-01-02 15:04 MST"))
 	if a.Link != "" {
-		fmt.Fprintf(&b, "The Health page: %s\r\n", a.Link)
+		text := a.LinkText
+		if text == "" {
+			text = "Open the Health page"
+		}
+		fmt.Fprintf(&b, "%s: %s\r\n", text, a.Link)
 	}
 	var auth smtp.Auth
 	if t.SMTPUser != "" {
