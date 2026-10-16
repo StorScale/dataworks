@@ -38,12 +38,14 @@ spec:
           volumeMounts:
             - {name: files-tools, mountPath: /tools}
             - {name: files-projects, mountPath: /projects}
+            - {name: files-keycloak, mountPath: /keycloak}   # realm.json: the platform's parts of the realm
             - {name: tls, mountPath: /tls}
             {{- include "storscale.ca.mount" $root | nindent 12 }}
           {{- include "storscale.resources" (list "50m" "128Mi" "512Mi") | nindent 10 }}
       volumes:
         {{- include "storscale.filesVolume" (list $root "tools" "tools") | nindent 8 }}
         {{- include "storscale.filesVolume" (list $root "projects" "projects") | nindent 8 }}
+        {{- include "storscale.filesVolume" (list $root "keycloak" "keycloak") | nindent 8 }}
         - {name: tls, secret: {secretName: trino-tls}}
         {{- include "storscale.ca.volumes" $root | nindent 8 }}
 {{- end }}

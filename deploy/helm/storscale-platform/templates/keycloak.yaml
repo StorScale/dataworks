@@ -1,5 +1,9 @@
-# Keycloak: sign-in for everything. The realm (stack/keycloak/realm.json) is
-# imported afresh on each start, with the signing key the chart keeps.
+# Keycloak: sign-in for everything. In production mode, on its own database
+# (keycloak, on the platform's Postgres). The realm (stack/keycloak/realm.json),
+# with the signing key the chart keeps, is imported only when there's none
+# yet; after that the realm is kept, and setup (setup/realm.py) keeps the
+# platform's own parts of it up to date: people and their sign-in are the
+# organisation's.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -13,10 +17,29 @@ spec:
   template:
     metadata:
       labels: {{- include "storscale.selector" (list .Release.Name "keycloak") | nindent 8 }}
-      annotations:
-        checksum/realm: {{ .Files.Get "files/keycloak/realm.json" | sha256sum }}
     spec:
       enableServiceLinks: false
+      initContainers:
+        # Its database and user, if they're missing (an install from 0.5.0 or
+        # before, whose Postgres was made without them): as Postgres' admin,
+        # who is in this step alone.
+        - name: database
+          image: {{ .Values.upstream.postgres }}
+          command: ["bash", "-c"]
+          args:
+            - |
+              until pg_isready -h keycloak-db -U postgres -q; do sleep 2; done
+              psql -h keycloak-db -U postgres -v ON_ERROR_STOP=1 -v pw="$KEYCLOAK_DB_PASSWORD" <<'SQL'
+              SELECT 'CREATE ROLE keycloak LOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'keycloak') \gexec
+              ALTER ROLE keycloak PASSWORD :'pw';
+              SELECT 'CREATE DATABASE keycloak OWNER keycloak' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'keycloak') \gexec
+              REVOKE CONNECT, TEMPORARY ON DATABASE keycloak FROM PUBLIC;
+              SQL
+          env:
+            - {name: PGPASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: POSTGRES_ADMIN_PASSWORD}}}
+            - {name: KEYCLOAK_DB_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: KEYCLOAK_DB_PASSWORD}}}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
       containers:
         - name: keycloak
           image: {{ .Values.upstream.keycloak }}
@@ -25,7 +48,7 @@ spec:
             - |
               export KC_SIGNING_KEY="$(grep -v -- ----- /keys/key.pem | tr -d '\n')"
               export KC_SIGNING_CERT="$(grep -v -- ----- /keys/cert.pem | tr -d '\n')"
-              exec /opt/keycloak/bin/kc.sh start-dev --import-realm
+              exec /opt/keycloak/bin/kc.sh start --import-realm
           {{- include "storscale.envFrom" . | nindent 10 }}
           env:
             - {name: JAVA_OPTS_KC_HEAP, value: "-Xms128m -Xmx384m"}
@@ -36,6 +59,12 @@ spec:
             - {name: KC_HTTP_MANAGEMENT_RELATIVE_PATH, value: /}
             - {name: KC_PROXY_HEADERS, value: xforwarded}
             - {name: KC_HEALTH_ENABLED, value: "true"}
+            - {name: KC_HTTP_ENABLED, value: "true"}   # plain HTTP behind the gateway
+            - {name: KC_CACHE, value: local}           # one Keycloak
+            - {name: KC_DB, value: postgres}
+            - {name: KC_DB_URL, value: "jdbc:postgresql://keycloak-db:5432/keycloak"}
+            - {name: KC_DB_USERNAME, value: keycloak}
+            - {name: KC_DB_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: KEYCLOAK_DB_PASSWORD}}}
           ports:
             - {name: http, containerPort: 8080}
             - {name: management, containerPort: 9000}

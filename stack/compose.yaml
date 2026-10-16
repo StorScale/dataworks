@@ -39,6 +39,7 @@ x-urls: &urls
   DASHBOARDS_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}/dashboards
   PIPELINES_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}/pipelines
   MONITORING_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}/monitoring
+  CATALOG_PUBLIC_URL: http://catalog.${STORSCALE_DOMAIN}:${STORSCALE_PORT}   # realm.json's placeholders (setup/realm.py)
 
 x-tools: &tools
   build: ./tools
@@ -184,17 +185,34 @@ services:
     volumes:
       - keycloak-keys:/keys
 
+  # Keycloak's database: the realm, people, sessions, kept through restarts.
+  keycloak-db:
+    restart: unless-stopped
+    image: postgres:18-bookworm
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+    volumes:
+      - keycloak-db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 5s
+      retries: 60
+
   keycloak:
     restart: unless-stopped
     image: quay.io/keycloak/keycloak:26.8.0
-    # The realm (keycloak/realm.json) is imported afresh on each start, with
-    # the signing key from keycloak-keys.
+    # In production mode, on its own database. The realm (keycloak/realm.json),
+    # with the signing key from keycloak-keys, is imported only when there's
+    # none yet; after that the realm is kept, and setup (setup/realm.py) keeps
+    # the platform's own parts of it up to date.
     entrypoint: ["bash", "-c"]
     command:
       - |
         export KC_SIGNING_KEY="$$(grep -v -- ----- /keys/key.pem | tr -d '\n')"
         export KC_SIGNING_CERT="$$(grep -v -- ----- /keys/cert.pem | tr -d '\n')"
-        exec /opt/keycloak/bin/kc.sh start-dev --import-realm
+        exec /opt/keycloak/bin/kc.sh start --import-realm
     environment:
       # Its heap, set: without one, a JVM sizes it from the machine's memory.
       JAVA_OPTS_KC_HEAP: -Xms128m -Xmx384m
@@ -206,6 +224,12 @@ services:
       KC_HTTP_MANAGEMENT_RELATIVE_PATH: /   # its health checks stay at :9000/health
       KC_PROXY_HEADERS: xforwarded
       KC_HEALTH_ENABLED: "true"
+      KC_HTTP_ENABLED: "true"   # plain HTTP behind the gateway
+      KC_CACHE: local           # one Keycloak
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
       # The realm's placeholders: people's password, redirect URIs, client secrets.
       PLATFORM_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}
       CATALOG_PUBLIC_URL: http://catalog.${STORSCALE_DOMAIN}:${STORSCALE_PORT}
@@ -224,6 +248,7 @@ services:
     depends_on:
       gateway: {condition: service_healthy}
       keycloak-keys: {condition: service_completed_successfully}
+      keycloak-db: {condition: service_healthy}
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
       interval: 5s
@@ -395,6 +420,12 @@ services:
   setup:
     <<: *tools
     command: ["python", "-u", "/tools/setup/run.py", "base"]
+    volumes:
+      - ./tools:/tools:ro
+      - ./projects:/projects:ro
+      - ./keycloak:/keycloak:ro   # realm.json: the platform's parts of the realm
+      - tls:/tls
+      - prometheus-token:/token
     depends_on:
       keycloak: {condition: service_healthy}
       buckets: {condition: service_started}
@@ -767,6 +798,7 @@ services:
       - ./tools:/tools:ro
       - ./tests:/tests:ro
       - ./projects:/projects:ro
+      - ./keycloak:/keycloak:ro
       - ./monitoring/dashboards:/dashboards:ro
       - tls:/tls
       - drive3:/drive3
@@ -785,6 +817,7 @@ services:
     profiles: ["test"]
 
 volumes:
+  keycloak-db:
   catalog:
   openmetadata-db:
   openmetadata-search:
