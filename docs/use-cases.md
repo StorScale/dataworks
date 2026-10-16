@@ -35,10 +35,11 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R6.4 Access requests: ask, approve or refuse in the project, with the result applied by the operator and recorded in the audit log.
 
 **Decided (2026-10-16)**
+- The identity provider will be Entra ID. Until real users come, the platform stays in development: the example people stay, and corporate sign-in (R6.1) and turning the examples off (R6.2) wait.
 - The realm's ownership is split: the platform keeps its own parts (the tools' clients, its service accounts, its signing key, the settings it relies on) and applies them at each upgrade; the company owns the people, their sign-in and its policies, which an upgrade never writes (plan, "Phase 6: Keycloak for real use, how").
 
 **Open questions**
-- Which identity provider, and do groups come from it (and the project maps them), or are they the platform's own?
+- Do groups come from Entra ID (and the project maps them), or are they the platform's own?
 - Who approves: a project's editors, a named owner, or administrators only?
 
 ### 6.2 An upgrade that loses nothing
