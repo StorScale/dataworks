@@ -74,7 +74,8 @@ def main():
 
         # 1. Told, once platformd next looks (each minute).
         stale = wait(lambda: next((c for c in cards() if f"{TABLE} is stale" in c), None), 180, every=5)
-        check(f"the channel is told {TABLE} is stale", stale is not None, cards()[-3:] or "nothing received")
+        check(f"the channel is told {TABLE} is stale", stale is not None,
+              {"cards": cards()[-2:], "platformd can't tell": alerts(bob).json().get("unknown")})
         check("... as an Adaptive Card naming the project, and linking to the table",
               stale is not None and "sales: " in stale and f"/p/{PROJECT}/data?table={TABLE}" in stale, (stale or "")[:300])
 

@@ -36,6 +36,7 @@ type projectAlerts struct {
 	issues   map[string]map[string]issue // project -> key -> what's wrong now
 	told     map[string]string           // project -> its notify, as last told (a hash)
 	muted    map[string]time.Time        // project/key -> until
+	unknown  map[string][]string         // project -> what couldn't be looked at, and why
 	checked  bool                        // a first pass done: what was wrong already isn't news
 	http     *http.Client
 	nessie   string // Nessie's Iceberg API (http://nessie:19120/iceberg)
@@ -43,7 +44,7 @@ type projectAlerts struct {
 }
 
 func (s *server) startProjectAlerts(ctx context.Context) {
-	pa := &projectAlerts{issues: map[string]map[string]issue{}, told: map[string]string{}, muted: map[string]time.Time{},
+	pa := &projectAlerts{issues: map[string]map[string]issue{}, told: map[string]string{}, muted: map[string]time.Time{}, unknown: map[string][]string{},
 		http: &http.Client{Timeout: 20 * time.Second}, warehous: "warehouse"}
 	pa.nessie = strings.TrimRight(os.Getenv("NESSIE_URL"), "/")
 	if pa.nessie == "" {
@@ -66,9 +67,8 @@ func (s *server) startProjectAlerts(ctx context.Context) {
 	}()
 }
 
-// issuesOf are a project's issues just now; what couldn't be looked at is left out.
-func (s *server) issuesOf(ctx context.Context, p *project.Project) []issue {
-	var out []issue
+// issuesOf are a project's issues just now, and what couldn't be looked at.
+func (s *server) issuesOf(ctx context.Context, p *project.Project) (out []issue, unknown []string) {
 	link := s.cfg.PlatformURL + "/p/" + p.Metadata.Name
 	if s.airflow != nil && p.Spec.Pipelines != nil {
 		if af, _, err := s.pipelinesOf(ctx, &projectView{Name: p.Metadata.Name, Spec: p}); err == nil {
@@ -107,6 +107,7 @@ func (s *server) issuesOf(ctx context.Context, p *project.Project) []issue {
 			}
 			at, err := catalog.LastChange(ctx, s.projectAlerts.http, s.projectAlerts.nessie, s.projectAlerts.warehous, t.Namespace, f.Table)
 			if err != nil {
+				unknown = append(unknown, fmt.Sprintf("when %s last changed: %v", f.Table, err))
 				continue
 			}
 			if at.IsZero() || time.Since(at) > within {
@@ -121,7 +122,7 @@ func (s *server) issuesOf(ctx context.Context, p *project.Project) []issue {
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
-	return out
+	return out, unknown
 }
 
 func notifyHash(n *project.Notify) string {
@@ -145,7 +146,16 @@ func (pa *projectAlerts) pass(ctx context.Context, s *server) {
 	live := map[string]bool{}
 	for _, p := range projects {
 		live[p.Metadata.Name] = true
-		send := pa.update(p.Metadata.Name, notifyHash(p.Spec.Notify), s.issuesOf(ctx, p))
+		issues, unknown := s.issuesOf(ctx, p)
+		pa.mu.Lock()
+		if strings.Join(unknown, "\n") != strings.Join(pa.unknown[p.Metadata.Name], "\n") {
+			for _, u := range unknown {
+				s.log.Warn("project alerts: can't tell", "project", p.Metadata.Name, "what", u)
+			}
+		}
+		pa.unknown[p.Metadata.Name] = unknown
+		pa.mu.Unlock()
+		send := pa.update(p.Metadata.Name, notifyHash(p.Spec.Notify), issues)
 		if len(send) > 0 {
 			n := &health.Notifier{Targets: func(ctx context.Context) (health.Targets, error) { return s.projectTargets(ctx, p) }}
 			for _, a := range send {
@@ -162,6 +172,7 @@ func (pa *projectAlerts) pass(ctx context.Context, s *server) {
 		if !live[name] {
 			delete(pa.issues, name)
 			delete(pa.told, name)
+			delete(pa.unknown, name)
 		}
 	}
 	pa.checked = true
@@ -292,6 +303,7 @@ func (s *server) handleProjectAlerts(w http.ResponseWriter, r *http.Request) {
 		s.log.Info("project alert muted", "project", v.Name, "key", req.Key, "hours", req.Hours, "by", sess.User.Username)
 	}
 	pa.mu.Lock()
+	unknown := append([]string{}, pa.unknown[v.Name]...)
 	out := []issue{}
 	for _, is := range pa.issues[v.Name] {
 		if t := pa.muted[v.Name+"/"+is.Key]; time.Now().Before(t) {
@@ -306,5 +318,5 @@ func (s *server) handleProjectAlerts(w http.ResponseWriter, r *http.Request) {
 	if n != nil && len(n.Email) > 0 {
 		dest["email"] = n.Email
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"checked": pa.checked, "issues": out, "notify": dest})
+	writeJSON(w, http.StatusOK, map[string]any{"checked": pa.checked, "issues": out, "notify": dest, "unknown": unknown})
 }

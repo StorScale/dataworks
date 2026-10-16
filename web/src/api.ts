@@ -193,7 +193,7 @@ export const testAlert = () => api<{ targets: Record<string, string> }>("POST", 
 // --- A project's alerts: what's wrong in it now, and where it's told ----------------
 
 export type ProjectIssue = { key: string; kind: "pipeline" | "check" | "stale"; title: string; detail?: string; link: string; mutedUntil?: string };
-export type ProjectAlerts = { checked: boolean; issues: ProjectIssue[]; notify?: { teams: boolean; email: string[] } };
+export type ProjectAlerts = { checked: boolean; issues: ProjectIssue[]; notify?: { teams: boolean; email: string[] }; unknown?: string[] };
 export const getProjectAlerts = (name: string) => api<ProjectAlerts>("GET", `/api/projects/${encodeURIComponent(name)}/alerts`);
 export const muteProjectAlert = (name: string, key: string, hours: number) =>
   api<ProjectAlerts>("POST", `/api/projects/${encodeURIComponent(name)}/alerts/mute`, { key, hours });

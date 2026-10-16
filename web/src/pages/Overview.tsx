@@ -243,6 +243,7 @@ function Alerts({ name, canMute }: { name: string; canMute: boolean }) {
           ))}
         </div>
       )}
+      {(data.unknown ?? []).map((u) => <p key={u} className="small" style={{ marginTop: 8, color: "var(--warn-ink)" }}>Can't tell {u}</p>)}
       <p className="muted small" style={{ marginTop: 10 }}>
         {where ? `Told to ${where}.` : "Not told anywhere yet: the platform's administrators set where, when they edit the project."}
       </p>
