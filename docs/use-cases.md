@@ -240,7 +240,7 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 **Requirements**
 - R7.18 A Connections tab per project: editors add, replace and remove credentials (a token; a username and password; an SSH key with its host's key; a PGP key); values written once and never shown again; who and when in the audit log.
 - R7.19 The operator keeps them as Secrets the project owns (labelled with it, removed with it), so nobody needs access to the cluster.
-- R7.20 A project names only its own connections: another project's Secret, or the platform's, is refused.
+- R7.20 A project names only its own connections: another project's Secret, or the platform's, is refused. (Built, 2026-10-16: a Secret must carry the label `platform.storscale.io/connection=<project>`.)
 
 ### 7.7 dana schedules her notebook
 

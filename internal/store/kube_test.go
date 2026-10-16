@@ -213,3 +213,32 @@ func TestASecretIsReadFromTheProjectsNamespace(t *testing.T) {
 		t.Errorf("a missing Secret: %v %v, want nil and no error", got, err)
 	}
 }
+
+func TestAProjectReadsOnlyItsOwnConnections(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/namespaces/storscale/secrets/sales-git":
+			w.Write([]byte(`{"metadata": {"labels": {"platform.storscale.io/connection": "sales"}}, "data": {"password": "Z2hwX3Rva2Vu"}}`))
+		case "/api/v1/namespaces/storscale/secrets/storscale-env": // the platform's own: no label
+			w.Write([]byte(`{"metadata": {"labels": {"app.kubernetes.io/part-of": "storscale-platform"}}, "data": {"BUCKETS_ROOT_PASSWORD": "cm9vdA=="}}`))
+		default:
+			http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
+		}
+	}))
+	defer ts.Close()
+	k := &Kube{URL: ts.URL + "/apis/platform.storscale.io/v1alpha1/namespaces/storscale/projects", HTTP: ts.Client(),
+		Token: func() (string, error) { return "t", nil }}
+	ctx := context.Background()
+	if got, err := k.Connection(ctx, "sales", "sales-git"); err != nil || got["password"] != "ghp_token" {
+		t.Errorf("sales' own: %v %v", got, err)
+	}
+	if got, err := k.Connection(ctx, "marketing", "sales-git"); got != nil || err == nil || !strings.Contains(err.Error(), "isn't one of project marketing's connections") {
+		t.Errorf("another project's: %v %v, want it refused", got, err)
+	}
+	if got, err := k.Connection(ctx, "sales", "storscale-env"); got != nil || err == nil {
+		t.Errorf("the platform's own Secret: %v %v, want it refused", got, err)
+	}
+	if got, err := k.Connection(ctx, "sales", "nothing"); got != nil || err != nil {
+		t.Errorf("none of that name: %v %v, want nil and no error", got, err)
+	}
+}

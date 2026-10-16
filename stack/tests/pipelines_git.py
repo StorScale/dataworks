@@ -23,8 +23,10 @@ them; its UI is at /airflow/pipes/, for its members only; and its DAG code
 can't reach another tool's database. Deleting the project takes its
 Airflow away.
 
-The secret holding the token is the suite's: in Compose an object in the
-platform's bucket (secrets/<name>.json), in Kubernetes a Secret.
+The secret holding the token is the suite's, as one of the project's
+connections: in Compose an object in the platform's bucket
+(connections/<project>/<name>.json), in Kubernetes a Secret labelled
+with the project. One labelled for another project is refused first.
 """
 import html
 import re
@@ -192,20 +194,21 @@ def push(work, files, message):
 # --- The platform and Airflow -------------------------------------------------------
 
 
-def put_secret():
-    """The repo's token, where the operator reads it."""
+def put_secret(project=NAME):
+    """The repo's token, as one of the project's connections: a Secret labelled
+    with the project, or connections/<project>/ in the platform's bucket."""
     data = {"username": USER, "password": TOKEN}
     if k8s.in_cluster():
-        k8s.put_secret(SECRET, data)
+        k8s.put_secret(SECRET, data, labels={"platform.storscale.io/connection": project})
     else:
-        s3_root().put_object(Bucket="storscale-platform", Key=f"secrets/{SECRET}.json", Body=json.dumps(data).encode())
+        s3_root().put_object(Bucket="storscale-platform", Key=f"connections/{project}/{SECRET}.json", Body=json.dumps(data).encode())
 
 
-def delete_secret():
+def delete_secret(project=NAME):
     if k8s.in_cluster():
         k8s._api("DELETE", f"secrets/{SECRET}")
     else:
-        s3_root().delete_object(Bucket="storscale-platform", Key=f"secrets/{SECRET}.json")
+        s3_root().delete_object(Bucket="storscale-platform", Key=f"connections/{project}/{SECRET}.json")
 
 
 def airflow():
@@ -267,7 +270,7 @@ def main():
     repo = f"http://{socket.gethostbyname(socket.gethostname())}:{PORT}/{NAME}.git"
 
     bob = platform("bob")
-    put_secret()
+    put_secret("someone-else")   # first, a credential that isn't the project's
     spec = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": NAME},
             "spec": {"description": "Pipelines from git: the pipelines_git suite's.",
                      "members": [{"group": "engineers", "role": "editor"}],
@@ -276,6 +279,16 @@ def main():
     try:
         # 1. The repo, in Airflow.
         put = bob.put(f"{PLATFORM}/api/projects/{NAME}", data=json.dumps(spec), timeout=30)
+
+        def airflow_part():
+            st = ((projects(bob) or {}).get(NAME) or {}).get("status") or {}
+            return next((x for x in st.get("parts", []) if x["system"] == "airflow"), None)
+        refused = wait(lambda: (lambda x: x if x and not x["ok"] and SECRET in x.get("message", "") else None)(airflow_part()),
+                       600 if OWN else 180)
+        check("a credential that isn't one of the project's connections is refused",
+              refused is not None and TOKEN not in json.dumps(refused), (refused or {}).get("message"))
+        delete_secret("someone-else")
+        put_secret()
         p = wait(lambda: (lambda x: x if x and (x.get("status") or {}).get("phase") == "Ready" else None)(
             (projects(bob) or {}).get(NAME)), 600 if OWN else 180)
         parts = {x["system"]: x for x in ((p or {}).get("status") or {}).get("parts", [])}
@@ -356,6 +369,7 @@ def main():
         bob.delete(f"{PLATFORM}/api/projects/{NAME}", headers={"X-Platform-Request": "1"}, timeout=30)
         went = wait(lambda: NAME not in (projects(bob) or {}), 180)
         delete_secret()
+        delete_secret("someone-else")
     if OWN:
         gone = wait(lambda: not k8s.get_secret(f"project-{NAME}-airflow") and k8s._api(
             "GET", f"deployments/project-{NAME}-airflow", api="apis/apps/v1").status_code == 404, 180)

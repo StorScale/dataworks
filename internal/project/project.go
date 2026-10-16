@@ -115,10 +115,12 @@ type Pipelines struct {
 }
 
 // GitCredentials name where the repo's credentials are kept, never the
-// credentials themselves: a Secret (on Kubernetes, in the project's
-// namespace) with username and password (a token), or sshPrivateKey. The
-// git hosts' SSH keys are the install's (Airflow's known hosts), not a
-// project's.
+// credentials themselves: one of the project's connections (on Kubernetes,
+// a Secret in the project's namespace labelled
+// platform.storscale.io/connection=<project>; a Secret without it, the
+// platform's or another project's, is refused) with username and password
+// (a token), or sshPrivateKey. The git hosts' SSH keys are the install's
+// (Airflow's known hosts), not a project's.
 type GitCredentials struct {
 	SecretRef string `json:"secretRef"`
 }

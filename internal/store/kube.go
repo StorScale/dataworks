@@ -97,19 +97,40 @@ func (k *Kube) call(ctx context.Context, method, path, contentType string, body,
 
 // Secret reads a Secret in the projects' namespace.
 func (k *Kube) Secret(ctx context.Context, name string) (map[string]string, error) {
+	data, _, err := k.secret(ctx, name)
+	return data, err
+}
+
+// Connection reads a Secret labelled as one of the project's connections.
+func (k *Kube) Connection(ctx context.Context, proj, name string) (map[string]string, error) {
+	data, labels, err := k.secret(ctx, name)
+	if data == nil || err != nil {
+		return nil, err
+	}
+	if labels[ConnectionLabel] != proj {
+		return nil, fmt.Errorf("the Secret %q isn't one of project %s's connections (its label %s=%s says so)",
+			name, proj, ConnectionLabel, proj)
+	}
+	return data, nil
+}
+
+func (k *Kube) secret(ctx context.Context, name string) (map[string]string, map[string]string, error) {
 	u := strings.TrimSuffix(strings.Replace(k.URL, "/apis/platform.storscale.io/v1alpha1/", "/api/v1/", 1), "/projects") + "/secrets/" + name
 	var sec struct {
+		Metadata struct {
+			Labels map[string]string `json:"labels"`
+		} `json:"metadata"`
 		Data map[string][]byte `json:"data"` // base64 in JSON: decoded as []byte
 	}
 	found, err := k.do(ctx, "GET", u, "", nil, &sec)
 	if !found || err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	out := map[string]string{}
 	for key, v := range sec.Data {
 		out[key] = string(v)
 	}
-	return out, nil
+	return out, sec.Metadata.Labels, nil
 }
 
 func (k *Kube) do(ctx context.Context, method, url, contentType string, body, out any) (bool, error) {
