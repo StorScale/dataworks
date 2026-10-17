@@ -4,6 +4,16 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-17
+
+The data as it was (tags, each table's history, As of), querying a company database where it is (a project's sources), high availability, disaster recovery (the data copied off the cluster, a restore into a new install), and the rest of Pod Security.
+
+**Upgrading from 0.9.0:**
+- `storscale upgrade --context <cluster> --version 0.10.0`, after a `--dry-run`. Trino restarts, now making catalogs while it runs; JupyterHub's hub takes its files of before once (it now runs unprivileged); a new Trino account, `platform-operator`, gets its password and its Ranger policy from the setup steps. In Compose: `storscale down`, then `up`.
+- Nothing runs more than one pod unless asked: `replicas.*` and `trino.workers` (deploy/kind/ha.yaml shows them).
+- `backup.data` stays off until set; with backups off it does nothing.
+- A project's sources reach their databases from Trino's pods (egress is open): a database behind a firewall needs Trino's nodes let through.
+
 ### Added
 - **The data as it was** ([docs/use-cases.md](docs/use-cases.md), 6.10): a table is read as it was at a commit of the catalog, `"orders#<commit>"`, under its readers' rules. A project's **tags** keep moments (a month-end close, a delivery) as long as asked: its editors make and remove them on the new Tags tab (a name, a moment: now, a date or time, a commit; how long to keep it, as `7y`; a note), they're part of the project (`tables.tags`, so backups keep them), the operator keeps Nessie's tags (`<project>.<name>`) as they say, nightly maintenance removes those past their `keepUntil`, and the audit log records each. Each table's new **History** tab lists its changes, newest first: when, what it did (rows added and removed), who wrote it (from the audit log), the tags on it, each readable as it was then. The SQL page's **As of** reads the project's tables at a tag, a time or a commit. The `history` suite checks it.
 - **High availability:** `replicas.*` runs more than one pod of the gateway, Keycloak (its clustered cache, its pods finding each other through its database), Nessie, semanticd, Superset and Airflow's API, spread across nodes, each with a disruption budget; `trino.workers` adds Trino workers beside the coordinator. CI's HTTPS job runs two of the gateway, Keycloak and Nessie and a worker, removes one pod of each, and checks again. platformd, the operator and the databases stay one each.
