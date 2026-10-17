@@ -62,6 +62,22 @@ def rows(columns="id, amount"):
         return None
 
 
+def show_copy():
+    """The copy's pod as it is, and its log's end: what CI shows when the copy doesn't come."""
+    pods = k8s._api("GET", "pods", params={"labelSelector": "app.kubernetes.io/name=storscale-copy"}).json().get("items", [])
+    for pod in pods:
+        name = pod["metadata"]["name"]
+        for cs in pod.get("status", {}).get("containerStatuses", []):
+            print(f"  {name}: ready={cs.get('ready')} restarts={cs.get('restartCount')} state={json.dumps(cs.get('state'))[:300]}")
+        for previous in ("true", "false"):
+            r = k8s._api("GET", f"pods/{name}/log", params={"tailLines": "80", "previous": previous})
+            if r.ok and r.text.strip():
+                print(f"  --- {name}'s log{' (its last run)' if previous == 'true' else ''}:")
+                print("\n".join("    " + line for line in r.text.splitlines()))
+    if not pods:
+        print("  (no copy pod)")
+
+
 def drop_source():
     # The copy's replication slot first (the database keeps its log for it), then its database.
     try:
@@ -100,6 +116,8 @@ def main():
         check("bob has sales copy a source's table", r.ok, r.text[:200])
         got = wait(lambda: (lambda x: x if x and len(x) == 2 else None)(rows()), 600, every=10)
         check("the table is copied into sales (finance_invoices)", got and [g[0] for g in got] == [1, 2], got)
+        if not got:
+            show_copy()
         parts = {p["system"]: p for p in (bob.get(url, timeout=30).json().get("status") or {}).get("parts", [])}
         check("... and its copy is part of the project's status", parts.get("copy", {}).get("ok"), parts.get("copy"))
 

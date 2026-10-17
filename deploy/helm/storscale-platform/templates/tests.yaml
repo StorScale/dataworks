@@ -19,7 +19,7 @@ rules:
     resources: [pods]
     verbs: [get, list, create, delete]
   - apiGroups: [""]
-    resources: [configmaps, secrets]
+    resources: [configmaps, secrets, pods/log]   # pods' logs: what a suite shows of a pod that failed it
     verbs: [get]
   # The pipelines_git suite's own Secret, its git host's token: that one only
   # (create can't be limited to a name; it's made under this one).
