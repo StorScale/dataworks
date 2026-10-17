@@ -38,7 +38,8 @@ def minutes(within):
 
 def location():
     """Where the table's files are, as the catalog has it: (bucket, prefix)."""
-    prefix = requests.get(f"{NESSIE}/v1/config?warehouse=warehouse", timeout=10).json()["overrides"]["prefix"]
+    cfg = requests.get(f"{NESSIE}/v1/config?warehouse=warehouse", timeout=10).json()
+    prefix = (cfg.get("overrides") or {}).get("prefix") or (cfg.get("defaults") or {}).get("prefix")  # as platformd reads it
     meta = requests.get(f"{NESSIE}/v1/{prefix}/namespaces/{PROJECT}/tables/{TABLE}", timeout=10).json()["metadata"]
     u = urlparse(meta["location"])
     return u.netloc, u.path.strip("/")
