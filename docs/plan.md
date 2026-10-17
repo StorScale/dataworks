@@ -248,8 +248,26 @@ How:
 | Backups: every database (Nessie's catalog now among them, in Postgres) and the Projects and Secrets, nightly, encrypted for a key kept off the cluster; `storscale backup` and `restore`, tested in CI | Built (unreleased), for restoring into the same install; the data in Buckets copied elsewhere, for a lost cluster, to come |
 | High availability and hardening: replicas, network policies, Pod Security, encryption at rest, image scanning and SBOMs | To do |
 | Retention per table and erasure of a person's data | Waiting on decisions: which laws, what deadlines, how kept closes are treated |
-| A table's history and its data as of a date or a close (6.10) | To do; a close is a Nessie tag |
+| A table's history and its data as of a date or a close (6.10) | Designed (below); first, a check that a table read at a reference keeps its masks and filters |
 | Docs on storscale.io/platform | To do |
+
+### The data as it was (use case 6.10), how (design, 2026-10-17)
+
+**Where history lives.** Nessie keeps each table's history as its commits on `main`; the Iceberg metadata it serves holds only the current snapshot, so Trino's `FOR TIMESTAMP AS OF` sees nothing older. Nessie's GC keeps a week of history (`maintenance.history.keep`); a tag keeps what it points to for as long as it exists.
+
+**Reading as of a moment.** Nessie resolves a reference in a table's name, through its Iceberg REST API: `orders@close-2026-09` (a tag or branch), `orders#<commit>` (a commit), `orders#<time>` (a moment on `main`). So Trino reads old data with no catalog of its own: `SELECT ... FROM iceberg.sales."orders@close-2026-09"`. To check first, on a running platform: that Trino passes such a name through as it is (it lowercases identifiers: a tag's name must be lower case, and a time must parse in lower case, or a commit be used instead); and that writes to a tag are refused.
+
+**Access never widens (R6.30), and a gap this shows today.** The operator's Ranger policies name tables exactly, and masks and row filters are keyed on the name. `orders@main` is another name to Ranger: where a project lists its readers' tables (as sales does) it matches nothing and is refused, which is safe; but where a project's readers see all its tables (the `*` policy), it would be allowed **without the table's masks and row filters**. The fix: every table-specific resource the operator writes (a reader's table, a mask, a row filter) also names `<table>@*` and `<table>#*`. A check in the lakehouse suite: alice reads `orders@main` and gets EU rows with card numbers masked, as she does `orders`. **This is first, before anything below: it may be a hole now.**
+
+**Tags (R6.31).** A tag is Nessie's: one name for every table at a moment (a close is the whole catalog at once, which is what Finance means), cheap, and kept by GC. Names are the project's: `sales.close-2026-09` (a project's tags begin with its name; Nessie's tags are the whole catalog's). A project's editors make and remove its tags on a Tags tab, and pipelines through the platform's API (`POST /api/projects/{name}/tags`, as the project's service account). platformd records who made each, why, and until when it's kept (`keep`, as `7y`); the nightly maintenance removes those past it, and the audit log records each.
+
+**A table's history (R6.29).** The table's page gets a History tab: Nessie's commit log for the table (`GET /api/v2/trees/main/history`, filtered to its key), each commit's time and its snapshot summary (rows and files added and removed: Nessie keeps the summary of each commit's snapshot), back as far as GC has kept. Who made a change: Trino commits to Nessie without the person's name, so the page takes it from the audit log (Ranger's record of the write, and its query, at that time) and the pipeline run from Airflow's runs at that time. A tag on the history marks a close. Older than the history kept: the page says so.
+
+**Where it shows.** The SQL page and notebooks get an "as of" choice (a tag, a time, a commit) that writes the name; dashboards query a tag through a dataset's SQL. Deliveries (9.1) record the commit they read, so "open the data as sent" is `orders#<commit>`.
+
+**Open, unchanged:** erasure against kept history (6.9: a close kept with a person's rows removed, or with personal columns erased, and its totals noted) needs the privacy team's and Finance's answer; how long closes are kept (often seven years) sets the storage they hold.
+
+**Order and effort:** (1) the access check and the operator's fix, a day; (2) reading as of a tag, time or commit on the SQL page, with the checks above, a day; (3) tags: API, Tags tab, keep and removal, audit, two days; (4) the History tab, two days.
 
 ### One-command upgrades (built 2026-10-16)
 
