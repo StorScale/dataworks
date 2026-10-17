@@ -79,11 +79,13 @@ jobs:
       - name: The last release
         id: last
         run: |
+          # The newest release that isn't this commit (a release's own tag is).
           git fetch --tags --quiet
-          v=$(git tag --list 'v*' --sort=-v:refname | grep -vx "v$(cat VERSION)" | head -1)
+          v=$(git tag --list 'v*' --sort=-v:refname | grep -vxF -f <(git tag --points-at HEAD; echo none) | head -1)
           echo "the last release: $v"
           echo "version=${v#v}" >> "$GITHUB_OUTPUT"
       - run: bin/storscale up --k8s --version ${{ steps.last.outputs.version }}
+      # Only fields the last release knows (limits came in 0.6.0).
       - name: A project, as the last release keeps it
         run: |
           kubectl --context kind-storscale -n storscale apply -f - <<'YAML'
