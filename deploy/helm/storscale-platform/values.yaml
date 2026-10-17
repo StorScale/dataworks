@@ -137,21 +137,9 @@ pipelines:
 # the person. Notebooks are a person's (notebooks.memoryLimit, cpuLimit).
 
 # Table maintenance: each night at `at` (UTC), platformd compacts every
-# project's small files, expires snapshots older than keepSnapshots (a
-# project's tables.maintenance may say otherwise; tagged snapshots are kept),
-# and removes files no snapshot uses. minRetention is the least any snapshot
-# is kept, whatever a project says: Trino refuses to expire younger ones.
-# The audit log: who changed what in the platform, and every access Trino
-# allowed or refused (Ranger's), in Ranger's Solr, on a volume this size.
-# Kept for keep (the platform's own records; Ranger keeps its own 90 days).
-audit:
-  storage: 5Gi
-  keep: 365d
-
+# project's small files (a project's tables.maintenance may pause it).
 maintenance:
   at: "02:00"
-  keepSnapshots: 7d
-  minRetention: 1d
 
 limits:
   project:

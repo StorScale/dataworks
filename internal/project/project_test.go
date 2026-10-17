@@ -259,19 +259,8 @@ func TestFreshnessAndWhereAlertsGo(t *testing.T) {
 
 func TestMaintenanceSettings(t *testing.T) {
 	p, err := Parse([]byte(`{"apiVersion":"platform.storscale.io/v1alpha1","kind":"Project","metadata":{"name":"sales"},
-		"spec":{"members":[{"group":"engineers","role":"editor"}],"tables":{"maintenance":{"keepSnapshots":"14d","compact":false}}}}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if m := p.Spec.Tables.Maintenance; m.KeepSnapshots != "14d" || m.Compacts() {
-		t.Errorf("maintenance: %+v (compacts %v)", m, m.Compacts())
-	}
-	if !(*Maintenance)(nil).Compacts() || !(&Maintenance{}).Compacts() {
-		t.Error("left out, maintenance compacts")
-	}
-	_, err = Parse([]byte(`{"apiVersion":"platform.storscale.io/v1alpha1","kind":"Project","metadata":{"name":"sales"},
-		"spec":{"members":[{"group":"engineers","role":"editor"}],"tables":{"maintenance":{"keepSnapshots":"a week"}}}}`))
-	if err == nil || !strings.Contains(err.Error(), "keepSnapshots") {
-		t.Errorf("keepSnapshots \"a week\": %v, want refused", err)
+		"spec":{"members":[{"group":"engineers","role":"editor"}],"tables":{"maintenance":{"paused":true}}}}`))
+	if err != nil || !p.Spec.Tables.Maintenance.Paused {
+		t.Fatalf("maintenance: %+v, %v", p.Spec.Tables, err)
 	}
 }

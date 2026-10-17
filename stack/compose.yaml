@@ -282,12 +282,10 @@ services:
       AIRFLOW_USER: storscale-platform
       AIRFLOW_PASSWORD: ${AIRFLOW_PLATFORM_PASSWORD}
       # Table maintenance, each night at MAINTENANCE_AT (UTC), as Trino's
-      # maintenance account; snapshots kept MAINTENANCE_KEEP unless a project
-      # says otherwise, and never less than Trino allows.
+      # maintenance account: every project's small files compacted.
       TRINO_URL: https://trino:8443
       TRINO_CA: /trino-cert/cert.pem
       MAINTENANCE_TRINO_PASSWORD: ${MAINTENANCE_TRINO_PASSWORD}
-      MAINTENANCE_MIN_RETENTION: ${MAINTENANCE_MIN_RETENTION}
       # The audit log, beside Ranger's in its Solr; the platform's records kept a year.
       AUDIT_URL: http://ranger-solr:8983/solr/ranger_audits
       AUDIT_KEEP: 365d
@@ -501,7 +499,6 @@ services:
       TRINO_SHARED_SECRET: ${TRINO_SHARED_SECRET}
       RANGER_PLUGIN_PASSWORD: ${RANGER_PLUGIN_PASSWORD}
       TRINO_DB_PASSWORD: ${TRINO_DB_PASSWORD}   # its limits' database
-      MAINTENANCE_MIN_RETENTION: ${MAINTENANCE_MIN_RETENTION}   # the least a snapshot is kept (iceberg.properties)
     volumes:
       - ./trino/config.properties:/etc/trino/config.properties:ro
       - ./trino/password-authenticator.properties:/etc/trino/password-authenticator.properties:ro

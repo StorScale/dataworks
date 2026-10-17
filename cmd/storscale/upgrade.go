@@ -312,9 +312,6 @@ To undo: %s (the Project definition stays: its new fields are optional)
 `, where, release, namespace, cur.Revision, cur.Status, from, target, tag, strings.Join(append([]string{""}, append(o.values, append(o.sets, o.setFiles...)...)...), "\n               "), undo)
 
 	args := []string{"upgrade", release, chart, "--reset-then-reuse-values", "--set", "images.tag=" + tag, "--timeout", "15m"}
-	if tag == "dev" {
-		args = append(args, devSets...)
-	}
 	for _, f := range o.values {
 		args = append(args, "-f", f)
 	}

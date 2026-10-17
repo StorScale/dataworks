@@ -17,21 +17,21 @@ import (
 
 // Table maintenance: each night, and when a project's editor asks, every
 // table of every project is kept in shape, as the platform's maintenance
-// account in Trino: its small files compacted (optimize), its snapshots
-// older than the project's keepSnapshots expired with the files only they
-// used (expire_snapshots; tagged and branched ones are kept), and files no
-// snapshot uses removed (remove_orphan_files). One project at a time.
+// account in Trino: its small files compacted (optimize). One project at a
+// time. Iceberg's own expire_snapshots and remove_orphan_files don't apply:
+// Nessie keeps a table's history as its commits, shared by every project
+// and kept by its tags and branches, and turns them off (gc.enabled=false);
+// Nessie's GC collects what no reference needs, across the install.
 
 // A tableRun is what maintenance last did to a table.
 type tableRun struct {
 	Table   string        `json:"table"`
 	Started time.Time     `json:"started"`
 	Ended   time.Time     `json:"ended"`
-	Done    []string      `json:"done"`            // the steps that ran: optimize, expire_snapshots, remove_orphan_files
+	Done    []string      `json:"done"`            // the steps that ran: optimize
 	Error   string        `json:"error,omitempty"` // the step that failed, and why
 	Before  catalog.Stats `json:"before"`
 	After   catalog.Stats `json:"after"`
-	Keep    string        `json:"keep"` // the retention it ran with
 }
 
 type maintainer struct {
@@ -39,8 +39,6 @@ type maintainer struct {
 	iceberg *catalog.Iceberg
 	at      int    // minutes after midnight, UTC
 	atText  string // as configured (02:00)
-	keep    string // the install's default keepSnapshots
-	min     string // Trino's least retention (its catalog's expire-snapshots.min-retention)
 
 	mu      sync.Mutex
 	runs    map[string]map[string]tableRun // project -> table -> the last run
@@ -59,17 +57,11 @@ func (s *server) startMaintenance(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("MAINTENANCE_AT: as 02:00 (UTC): %w", err)
 	}
-	keep, min := envOr("MAINTENANCE_KEEP", "7d"), envOr("MAINTENANCE_MIN_RETENTION", "7d")
-	for k, v := range map[string]string{"MAINTENANCE_KEEP": keep, "MAINTENANCE_MIN_RETENTION": min} {
-		if _, ok := project.Within(v); !ok {
-			return fmt.Errorf("%s %q: as 7d or 12h", k, v)
-		}
-	}
 	tc, err := trino.New(envOr("TRINO_URL", "https://trino:8443"), "maintenance", password, os.Getenv("TRINO_CA"))
 	if err != nil {
 		return fmt.Errorf("trino: %w", err)
 	}
-	m := &maintainer{trino: tc, at: at.Hour()*60 + at.Minute(), atText: at.Format("15:04"), keep: keep, min: min,
+	m := &maintainer{trino: tc, at: at.Hour()*60 + at.Minute(), atText: at.Format("15:04"),
 		iceberg: &catalog.Iceberg{HTTP: &http.Client{Timeout: 30 * time.Second},
 			Base: strings.TrimRight(envOr("NESSIE_URL", "http://nessie:19120"), "/") + "/iceberg", Warehouse: envOr("NESSIE_WAREHOUSE", "warehouse")},
 		runs: map[string]map[string]tableRun{}, wake: make(chan struct{}, 1)}
@@ -80,7 +72,7 @@ func (s *server) startMaintenance(ctx context.Context) error {
 	s.maintainer = m
 	go m.schedule(ctx, s)
 	go m.work(ctx, s)
-	s.log.Info("table maintenance", "at", m.atText+" UTC", "keepSnapshots", keep, "minRetention", min)
+	s.log.Info("table maintenance", "at", m.atText+" UTC")
 	return nil
 }
 
@@ -180,20 +172,6 @@ func (m *maintainer) work(ctx context.Context, s *server) {
 	}
 }
 
-// retention is how long a project's snapshots are kept: its own, or the
-// install's; never less than Trino's least (it'd refuse).
-func (m *maintainer) retention(mt *project.Maintenance) (string, time.Duration) {
-	keep := m.keep
-	if mt != nil && mt.KeepSnapshots != "" {
-		keep = mt.KeepSnapshots
-	}
-	d, _ := project.Within(keep)
-	if least, _ := project.Within(m.min); d < least {
-		return m.min, least
-	}
-	return keep, d
-}
-
 func (m *maintainer) keepProject(ctx context.Context, s *server, p *project.Project) {
 	t := p.Spec.Tables
 	if t == nil || (t.Maintenance != nil && t.Maintenance.Paused) {
@@ -204,20 +182,13 @@ func (m *maintainer) keepProject(ctx context.Context, s *server, p *project.Proj
 		s.log.Error("maintenance: the tables", "project", p.Metadata.Name, "error", err)
 		return
 	}
-	keep, d := m.retention(t.Maintenance)
-	threshold := fmt.Sprintf("%ds", int(d.Seconds()))
 	runs := map[string]tableRun{}
 	for _, name := range tables {
-		run := tableRun{Table: name, Started: time.Now().UTC(), Keep: keep, Done: []string{}}
+		run := tableRun{Table: name, Started: time.Now().UTC(), Done: []string{}}
 		run.Before, _ = m.iceberg.Stats(ctx, t.Namespace, name)
 		table := strings.Join([]string{trino.Quote(t.Catalog), trino.Quote(t.Namespace), trino.Quote(name)}, ".")
 		steps := []struct{ name, sql string }{
 			{"optimize", "ALTER TABLE " + table + " EXECUTE optimize"},
-			{"expire_snapshots", "ALTER TABLE " + table + " EXECUTE expire_snapshots(retention_threshold => '" + threshold + "')"},
-			{"remove_orphan_files", "ALTER TABLE " + table + " EXECUTE remove_orphan_files(retention_threshold => '" + threshold + "')"},
-		}
-		if !t.Maintenance.Compacts() {
-			steps = steps[1:]
 		}
 		for _, step := range steps {
 			sctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
@@ -236,8 +207,7 @@ func (m *maintainer) keepProject(ctx context.Context, s *server, p *project.Proj
 			s.log.Error("maintenance", "project", p.Metadata.Name, "table", name, "error", run.Error)
 		} else {
 			s.log.Info("maintenance", "project", p.Metadata.Name, "table", name, "took", run.Ended.Sub(run.Started).Round(time.Second).String(),
-				"files", fmt.Sprintf("%d -> %d", run.Before.DataFiles, run.After.DataFiles),
-				"snapshots", fmt.Sprintf("%d -> %d", run.Before.Snapshots, run.After.Snapshots))
+				"files", fmt.Sprintf("%d -> %d", run.Before.DataFiles, run.After.DataFiles))
 		}
 		m.mu.Lock()
 		if m.runs[p.Metadata.Name] == nil {
@@ -330,13 +300,11 @@ func (s *server) handleMaintenance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t := v.Spec.Spec.Tables
-	out := map[string]any{"enabled": true, "at": m.atText + " UTC", "minRetention": m.min, "state": m.state(v.Name), "tables": []any{}}
+	out := map[string]any{"enabled": true, "at": m.atText + " UTC", "state": m.state(v.Name), "tables": []any{}}
 	if t == nil {
 		writeJSON(w, http.StatusOK, out)
 		return
 	}
-	keep, _ := m.retention(t.Maintenance)
-	out["keepSnapshots"], out["compact"] = keep, t.Maintenance.Compacts()
 	out["paused"] = t.Maintenance != nil && t.Maintenance.Paused
 	names, err := m.iceberg.Tables(r.Context(), t.Namespace)
 	if err != nil {

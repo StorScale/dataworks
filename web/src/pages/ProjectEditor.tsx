@@ -183,17 +183,7 @@ export default function ProjectEditor() {
           {spec.tables && (
             <>
               <h2 style={{ marginTop: 20 }}>Table maintenance</h2>
-              <p className="muted small" style={{ margin: "4px 0 8px" }}>
-                Each night: small files compacted, snapshots older than this expired (tagged ones are kept), files no snapshot uses removed.
-                How long snapshots are kept is how far back the data as it was goes. Left empty, the install's default.
-              </p>
-              <label>Keep snapshots for
-                <input value={spec.tables.maintenance?.keepSnapshots ?? ""} placeholder="7d" style={{ width: 120 }}
-                  onChange={(e) => setMaintenance({ keepSnapshots: e.target.value || undefined })} />
-              </label>
-              <label className="row" style={{ flexDirection: "row", gap: 8 }}>
-                <input type="checkbox" checked={spec.tables.maintenance?.compact ?? true} onChange={(e) => setMaintenance({ compact: e.target.checked ? undefined : false })} /> Compact small files
-              </label>
+              <p className="muted small" style={{ margin: "4px 0 8px" }}>Each night, the tables' small files are compacted into larger ones.</p>
               <label className="row" style={{ flexDirection: "row", gap: 8 }}>
                 <input type="checkbox" checked={!!spec.tables.maintenance?.paused} onChange={(e) => setMaintenance({ paused: e.target.checked || undefined })} /> Paused
               </label>

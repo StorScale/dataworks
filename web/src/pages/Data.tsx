@@ -9,7 +9,7 @@ type Tab = (typeof TABS)[number];
 
 // Data is a project's tables: their columns, a look at their rows (as you,
 // so your filters and masks apply), where they come from, their checks, and
-// how they're stored (their files and snapshots, as maintenance keeps them).
+// how they're stored (their files, as maintenance keeps them).
 export default function Data() {
   const { name, view } = useProject();
   const { admin } = usePlatform();
@@ -140,9 +140,9 @@ export default function Data() {
 }
 
 const size = (b: number) => b >= 1 << 30 ? `${(b / (1 << 30)).toFixed(1)} GB` : b >= 1 << 20 ? `${(b / (1 << 20)).toFixed(1)} MB` : `${Math.round(b / 1024)} KB`;
-const counts = (s: TableStats) => `${s.dataFiles} files, ${size(s.bytes)}, ${s.snapshots} snapshots`;
+const counts = (s: TableStats) => `${s.dataFiles} files, ${size(s.bytes)}`;
 
-// Storage is a table's files and snapshots now, and what maintenance last did.
+// Storage is a table's files now, and what maintenance last did.
 function Storage({ project, table, canRun }: { project: string; table: string; canRun: boolean }) {
   const m = usePoll(() => getMaintenance(project), [project], 15_000);
   const [error, setError] = useState<string>();
@@ -165,16 +165,12 @@ function Storage({ project, table, canRun }: { project: string; table: string; c
             <div className="note">{size(now.bytes)}{now.dataFiles ? `, ${size(now.bytes / now.dataFiles)} each on average` : ""}</div></div>
           <div className="card tile"><div className="label">Rows</div><div className="value">{now.rows.toLocaleString()}</div>
             <div className="note">{now.deleteFiles ? `${now.deleteFiles} delete files` : "last changed " + ago(when(now.lastChange))}</div></div>
-          <div className="card tile"><div className="label">Snapshots</div><div className="value">{now.snapshots}</div>
-            <div className="note">back to {when(now.oldest)?.toLocaleString() ?? "–"}</div></div>
         </div>
       ) : <p className="muted">The catalog has no snapshot of this table yet.</p>}
       {!d.enabled ? <p className="muted small">Table maintenance isn't set up on this install.</p> : (
         <>
           <p className="small">
-            {d.paused ? "Maintenance is paused for this project's tables." : <>
-              Each night at {d.at}, {d.compact ? "small files are compacted, " : ""}snapshots older than {d.keepSnapshots} are
-              expired (tagged ones are kept), and files no snapshot uses are removed. The data as it was goes back {d.keepSnapshots}.</>}
+            {d.paused ? "Maintenance is paused for this project's tables." : <>Each night at {d.at}, the project's small files are compacted into larger ones.</>}
           </p>
           {run ? (
             <div className={`banner ${run.error ? "warn" : "info"}`} data-testid="last-run">

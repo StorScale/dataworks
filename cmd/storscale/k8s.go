@@ -31,10 +31,6 @@ var (
 	release     = "storscale"
 )
 
-// devSets are a checkout's install's settings beside its images: snapshots
-// may expire after a minute, so the maintenance suite sees them go.
-var devSets = []string{"--set", "maintenance.minRetention=1m"}
-
 // kubeArgs are kubectl's flags for the platform's cluster and namespace.
 func kubeArgs(args ...string) []string {
 	var out []string
@@ -166,7 +162,7 @@ func (k *kube) up(st *stack, ver string) error {
 		if err := run1(filepath.Join(k.checkout, "deploy", "kind", "images.sh"), kindCluster); err != nil {
 			return err
 		}
-		chart, extra = filepath.Join(k.checkout, "deploy", "helm", "storscale-platform"), append([]string{"--set", "images.tag=dev"}, devSets...)
+		chart, extra = filepath.Join(k.checkout, "deploy", "helm", "storscale-platform"), []string{"--set", "images.tag=dev"}
 		run1("helm", "repo", "add", "spark-operator", "https://kubeflow.github.io/spark-operator", "--force-update")
 		if err := run1("helm", "dependency", "build", chart); err != nil {
 			return err
