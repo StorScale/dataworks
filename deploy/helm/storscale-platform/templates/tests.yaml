@@ -116,13 +116,13 @@ spec:
   containers:
     - name: browser
       image: mcr.microsoft.com/playwright/python:v1.63.0-noble
-      securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
+      securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 1001, runAsGroup: 1001, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}   # pwuser
       command: ["sh", "-c"]
       args:
         - |
           f=/etc/storscale-tests/suites
           if [ -f $f ] && ! grep -qw shell $f; then exit 0; fi
-          pip install -q --root-user-action=ignore playwright==1.63.0 && exec python -u /tests/shell.py
+          pip install -q --user playwright==1.63.0 && exec python -u /tests/shell.py
       {{- include "storscale.envFrom" . | nindent 6 }}
       env:
         - {name: SHELL_SWITCH, value: "0"}

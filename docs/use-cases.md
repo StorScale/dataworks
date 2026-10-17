@@ -184,6 +184,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R6.31 Tags for moments that matter (a month-end close, a delivery), made by people or by pipelines, kept for a set time beyond the table's retention.
 - R6.32 Each delivery records the snapshot of every table it read, so its files can be made again exactly (with R9.5).
 
+**Built (2026-10-17):** a table is read as it was at a commit of the catalog, `"orders#<commit>"`, under its readers' rules (the operator's Ranger policies name it too). A project's tags (`tables.tags`) keep moments as long as asked: its editors make and remove them on its Tags tab, the operator keeps Nessie's tags as they say, nightly maintenance removes those past their keep, and the audit log records each. Each table's History tab lists its changes (when, rows added and removed, who wrote it, from the audit log, and the tags on it), each readable as it was; the SQL page reads the project's tables as of a tag, a time or a commit. Not yet: a picker in notebooks and dashboards (they name the table at its commit), deliveries recording their commit (R6.32, with 9.1), and the open questions above.
+
 **Open questions**
 - Erasure against kept history: erasing a person (6.9) must reach old snapshots, but a tagged close is kept so it can be reproduced. Is a close kept with personal columns erased, or with the person's rows removed and the totals noted as changed? This needs the privacy team's and Finance's answer together.
 - How long are closes kept (finance records often seven years), and at what storage cost?

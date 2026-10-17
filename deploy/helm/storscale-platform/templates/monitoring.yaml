@@ -24,7 +24,7 @@ spec:
       containers:
         - name: prometheus
           image: {{ .Values.upstream.prometheus }}
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 65534, runAsGroup: 65534, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           args: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
           ports:
             - {name: http, containerPort: 9090}
@@ -70,7 +70,7 @@ spec:
       containers:
         - name: grafana
           image: {{ .Values.upstream.grafana }}
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 472, runAsGroup: 472, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           env:
             - {name: GF_SERVER_ROOT_URL, value: "{{ include "storscale.url" . }}/monitoring/"}
             - {name: GF_SERVER_SERVE_FROM_SUB_PATH, value: "true"}

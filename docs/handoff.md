@@ -101,6 +101,17 @@ storscale restore --context <cluster> --key ~/storscale-backup-keys/storscale-ba
 They go to the platform's own Buckets unless `backup.s3` names another S3 endpoint, which
 a real install should: a lost cluster takes its own Buckets with it.
 
+**A cluster lost:** with `backup.s3` elsewhere and `backup.data.enabled` (the data copied there
+nightly), install the platform afresh on a new cluster with the same `backup.*` settings and
+certificate, then
+
+```bash
+storscale restore --context <new cluster> --key <dir>/storscale-backup-key.pem --into-new
+```
+
+copies the data back, restores every database, gives each database role its password of then,
+puts the backup's Secrets back, restarts Buckets and runs the setup steps again.
+
 People's password (the example users alice, bob, carol):
 `kubectl -n storscale get secret storscale-env -o jsonpath='{.data.LAKEHOUSE_USER_PASSWORD}' | base64 -d`.
 Every other secret is in the same Secret. They're generated on install and kept on upgrade.

@@ -59,7 +59,7 @@ spec:
       containers:
         - name: opensearch
           image: {{ include "storscale.image" (list . "opensearch") }}
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           env:
             - {name: discovery.type, value: single-node}
@@ -116,7 +116,7 @@ spec:
         {{- include "storscale.wait" (list . "db" (list "tcp" "openmetadata-db:5432")) | nindent 8 }}
         - name: migrate
           image: {{ .Values.upstream.openmetadata }}
-          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           command: ["./bootstrap/openmetadata-ops.sh", "migrate"]
           env: {{- include "storscale.openmetadata.env" . | nindent 12 }}
           {{- include "storscale.resources" (list "100m" "512Mi" "1Gi") | nindent 10 }}
@@ -158,7 +158,7 @@ spec:
       containers:
         - name: openmetadata
           image: {{ .Values.upstream.openmetadata }}
-          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           env:
             {{- include "storscale.openmetadata.env" . | nindent 12 }}
             {{- include "storscale.ca.env" . | nindent 12 }}

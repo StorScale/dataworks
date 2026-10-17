@@ -10,6 +10,7 @@ metadata:
   name: keycloak
   labels: {{- include "storscale.labels" . | nindent 4 }}
 spec:
+  replicas: {{ include "storscale.replicas" (list . "keycloak") }}
   progressDeadlineSeconds: {{ .Values.progressDeadlineSeconds }}
   selector:
     matchLabels: {{- include "storscale.selector" (list .Release.Name "keycloak") | nindent 6 }}
@@ -18,6 +19,7 @@ spec:
     metadata:
       labels: {{- include "storscale.selector" (list .Release.Name "keycloak") | nindent 8 }}
     spec:
+      {{- include "storscale.spread" (list . "keycloak") | nindent 6 }}
       enableServiceLinks: false
       initContainers:
         # Its database and user, if they're missing (an install from 0.5.0 or
@@ -44,7 +46,7 @@ spec:
       containers:
         - name: keycloak
           image: {{ .Values.upstream.keycloak }}
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           command: ["bash", "-c"]
           args:
             - |
@@ -62,7 +64,11 @@ spec:
             - {name: KC_PROXY_HEADERS, value: xforwarded}
             - {name: KC_HEALTH_ENABLED, value: "true"}
             - {name: KC_HTTP_ENABLED, value: "true"}   # plain HTTP behind the gateway
+            {{- if eq (include "storscale.replicas" (list . "keycloak")) "1" }}
             - {name: KC_CACHE, value: local}           # one Keycloak
+            {{- else }}
+            - {name: KC_CACHE, value: ispn}            # its pods share sessions; they find each other through its database
+            {{- end }}
             - {name: KC_DB, value: postgres}
             - {name: KC_DB_URL, value: "jdbc:postgresql://keycloak-db:5432/keycloak"}
             - {name: KC_DB_USERNAME, value: keycloak}

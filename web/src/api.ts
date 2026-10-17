@@ -226,3 +226,28 @@ export const getProjectAudit = (name: string, f: AuditFilter) =>
 export const getAudit = (f: AuditFilter & { project?: string }) =>
   api<{ enabled: boolean; events: AuditEvent[]; more?: boolean }>("GET", `/api/audit?${auditParams(f)}`);
 export const auditCSV = (f: AuditFilter & { project?: string }) => `/api/audit?${auditParams({ ...f, format: "csv" } as AuditFilter)}`;
+
+// --- The data as it was: a project's tags, a table's history, a moment's commit ---------
+
+export type Moment = { commit: string; time?: string; label: string };
+export const asOf = (name: string, at: string) => api<Moment>("GET", `/api/projects/${encodeURIComponent(name)}/asof?at=${encodeURIComponent(at)}`);
+export type Tag = { name: string; commit: string; keepUntil: string; note?: string; by?: string; nessie: string; inPlace: boolean };
+export const getTags = (name: string) => api<{ tags: Tag[]; keepHistory: string }>("GET", `/api/projects/${encodeURIComponent(name)}/tags`);
+export const makeTag = (name: string, tag: { name: string; at: string; keep: string; note: string }) =>
+  api<Tag>("POST", `/api/projects/${encodeURIComponent(name)}/tags`, tag);
+export const removeTag = (name: string, tag: string) => api<void>("DELETE", `/api/projects/${encodeURIComponent(name)}/tags/${encodeURIComponent(tag)}`);
+export type Change = {
+  hash: string; time: string; message: string; author?: string; keys?: string[];
+  stats?: TableStats & { operation?: string; addedRows: number; deletedRows: number; addedFiles: number; deletedFiles: number };
+  tags?: string[]; who?: string; kept: boolean; query: string;
+};
+export const getHistory = (name: string, table: string) =>
+  api<{ table: string; changes: Change[]; keepHistory: string }>("GET", `/api/projects/${encodeURIComponent(name)}/history?table=${encodeURIComponent(table)}`);
+
+// atCommit names the project's tables in a query as they were at a commit
+// ("orders#<commit>": Nessie reads it so), or as they are (commit "").
+export function atCommit(sql: string, tables: string[], commit: string): string {
+  return sql.replace(/\b(from|join)(\s+)((?:"?[a-z_][a-z0-9_]*"?\.){0,2})"?([a-z_][a-z0-9_]*)(?:#[0-9a-f]+)?"?/gi,
+    (whole, kw: string, sp: string, prefix: string, t: string) =>
+      tables.includes(t.toLowerCase()) ? `${kw}${sp}${prefix}${commit ? `"${t.toLowerCase()}#${commit}"` : t.toLowerCase()}` : whole);
+}

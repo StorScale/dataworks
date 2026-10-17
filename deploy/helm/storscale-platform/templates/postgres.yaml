@@ -34,10 +34,11 @@ spec:
       labels: {{- include "storscale.selector" (list .Release.Name "postgres") | nindent 8 }}
     spec:
       enableServiceLinks: false
+      securityContext: {fsGroup: 999}   # postgres': its data (999's already) stays its own
       containers:
         - name: postgres
           image: {{ .Values.upstream.postgres }}
-          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 999, runAsGroup: 999, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           args: ["postgres", "-c", "work_mem=10MB", "-c", "max_connections=200"]
           env:
             - {name: POSTGRES_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: POSTGRES_ADMIN_PASSWORD}}}

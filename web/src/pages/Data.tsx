@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { ago, getFlow, getMaintenance, runMaintenance, runSQL, SQLAnswer, TableStats, when } from "../api";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { ago, getFlow, getHistory, getMaintenance, runMaintenance, runSQL, SQLAnswer, TableStats, when } from "../api";
 import { CheckPill, checkName, ErrorBanner, failing, limits, maskLabel, Spinner, usePlatform, usePoll, useProject } from "../lib";
 import { FlowStrip } from "./Overview";
 
-const TABS = ["columns", "preview", "lineage", "quality", "storage"] as const;
+const TABS = ["columns", "preview", "lineage", "quality", "history", "storage"] as const;
 type Tab = (typeof TABS)[number];
 
 // Data is a project's tables: their columns, a look at their rows (as you,
@@ -131,6 +131,7 @@ export default function Data() {
                 </table>
               )
             )}
+            {tab === "history" && <History project={name} table={table.name} key={table.name} />}
             {tab === "storage" && <Storage project={name} table={table.name} canRun={view?.role === "editor" || admin} />}
           </div>
         </section>
@@ -149,6 +150,42 @@ function duration(iso: string): string {
   return [part(d, "day"), part(h, "hour"), part(mi, "minute")].filter(Boolean).join(" ") || iso;
 }
 const counts = (s: TableStats) => `${s.dataFiles} files, ${size(s.bytes)}`;
+
+// History is a table's changes, newest first: when, what each did, who made
+// it, the project's tags on it; each can be read as it was then (as you, with
+// your filters and masks).
+function History({ project, table }: { project: string; table: string }) {
+  const h = usePoll(() => getHistory(project, table), [project, table], 30_000);
+  const navigate = useNavigate();
+  if (h.error && !h.data) return <div style={{ padding: 20 }}><ErrorBanner error={h.error} /></div>;
+  if (!h.data) return <div style={{ padding: 20 }}><Spinner /></div>;
+  const read = (q: string) => navigate(`/p/${project}/sql?sql=${encodeURIComponent(`SELECT *\nFROM ${q}\nLIMIT 100`)}`);
+  return (
+    <div style={{ padding: 20 }} className="stack" data-testid="history">
+      <p className="small muted" style={{ margin: 0 }}>
+        Each change to the table, newest first.{h.data.keepHistory && h.data.keepHistory !== "0s" ? ` The data as it was is kept ${h.data.keepHistory.replace(/h0m0s$/, "h")} back, and as long as a tag holds it.` : ""}
+      </p>
+      {h.data.changes.length === 0 ? <p className="muted">No changes recorded in the history kept.</p> : (
+        <table className="t" data-testid="changes">
+          <thead><tr><th>When</th><th>What</th><th>Who</th><th></th></tr></thead>
+          <tbody>
+            {h.data.changes.map((c) => (
+              <tr key={c.hash}>
+                <td className="small" style={{ whiteSpace: "nowrap" }}>{new Date(c.time).toLocaleString()}<div className="muted mono">{c.hash.slice(0, 12)}</div></td>
+                <td className="small">
+                  {c.stats ? <>{c.stats.operation ?? "change"}: {c.stats.addedRows ? `+${c.stats.addedRows} rows` : ""} {c.stats.deletedRows ? `−${c.stats.deletedRows} rows` : ""} ({c.stats.rows} then)</> : <span className="muted">{c.message}</span>}
+                  {(c.tags ?? []).map((t) => <span key={t} className="pill blue" style={{ marginLeft: 6 }}>{t}</span>)}
+                </td>
+                <td className="small">{c.who || <span className="muted">–</span>}</td>
+                <td>{c.kept ? <button className="linkish small" onClick={() => read(c.query)}>Read it as it was</button> : <span className="muted small">past the history kept</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
 
 // Storage is a table's files now, and what maintenance last did.
 function Storage({ project, table, canRun }: { project: string; table: string; canRun: boolean }) {

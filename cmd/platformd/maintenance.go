@@ -96,6 +96,7 @@ func (m *maintainer) schedule(ctx context.Context, s *server) {
 		}
 		m.mu.Unlock()
 		if due {
+			s.expireTags(ctx)
 			if projects, err := s.store.Projects(ctx); err == nil {
 				for _, p := range projects {
 					m.enqueue(p.Metadata.Name)
@@ -293,6 +294,7 @@ func (s *server) handleMaintenance(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": "the project's tables have no maintenance (none, or paused)"})
 			return
 		}
+		s.expireTags(r.Context()) // tags past their keepUntil, as the nightly round does
 		if m.enqueue(v.Name) {
 			s.log.Info("maintenance asked for", "project", v.Name, "by", sess.User.Username)
 			s.record(r, sess.User.Username, "maintenance.asked", "project:"+v.Name, "")

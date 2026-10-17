@@ -8,7 +8,8 @@ phases around storscale backup and storscale restore, as CI does.
     storscale test --k8s restore_check     all of it back
 
 The places: Nessie's catalog (a tag), Keycloak's database (a person),
-Ranger's (a policy), and the Projects (a project, applied again).
+Ranger's (a policy), the Projects (a project, applied again), and the data
+(a file in sales' bucket, copied off and back: storscale restore --data).
 """
 import json
 import os
@@ -16,13 +17,21 @@ import sys
 
 import requests
 
-from lakekit import KEYCLOAK, REALM, allow, check, env, finish, ranger, res, sql
+from lakekit import KEYCLOAK, REALM, allow, check, env, finish, ranger, res, s3_root, sql
 
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
 NESSIE = "http://nessie:19120/api/v2"
 TAG, PERSON, POLICY, PROJECT = "restore-check", "restore-check", "restore-check: a policy kept", "restore-check"
+FILE = ("sales", "restore-check/kept.txt")
+
+
+def file():
+    try:
+        return s3_root().get_object(Bucket=FILE[0], Key=FILE[1])["Body"].read().decode()
+    except Exception:  # noqa: BLE001 (gone)
+        return None
 
 
 def keycloak():
@@ -74,6 +83,8 @@ def mark():
     r = bob.put(f"{PLATFORM}/api/projects/{PROJECT}", data=json.dumps(spec), timeout=30)
     ready = wait(lambda: (project(bob) or {}).get("status", {}).get("phase") == "Ready", 180, every=5)
     check("a project, applied", r.ok and ready, r.text[:200])
+    s3_root().put_object(Bucket=FILE[0], Key=FILE[1], Body=b"kept by a backup")
+    check("a file in sales' bucket (the data)", file() == "kept by a backup")
 
 
 def damage():
@@ -94,6 +105,8 @@ def damage():
     bob.delete(f"{PLATFORM}/api/projects/{PROJECT}", timeout=30)
     gone = wait(lambda: project(bob) is None, 180, every=5)
     check("the project is gone (undone by the operator)", gone)
+    s3_root().delete_object(Bucket=FILE[0], Key=FILE[1])
+    check("the file is gone", file() is None)
 
 
 def restored():
@@ -103,6 +116,7 @@ def restored():
     bob = platform("bob")
     ready = wait(lambda: (project(bob) or {}).get("status", {}).get("phase") == "Ready", 300, every=5)
     check("the project is back, and applied", ready, project(bob))
+    check("the file is back in sales' bucket (the data, copied back)", file() == "kept by a backup", file())
     rows = sql("bob", "SELECT count(*) FROM orders", "iceberg", "sales")
     check("the tables still read (the catalog in step with the data)", rows and rows[0][0] > 0, rows)
     # Leave nothing behind.

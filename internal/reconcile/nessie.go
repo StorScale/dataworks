@@ -4,6 +4,10 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"time"
+
+	"github.com/StorScale/storscale-platform/internal/catalog"
+	"github.com/StorScale/storscale-platform/internal/project"
 )
 
 // Nessie is the catalog's Iceberg REST API.
@@ -41,4 +45,50 @@ func (n *Nessie) ensureNamespace(ctx context.Context, namespace string) error {
 		return nil
 	}
 	return err
+}
+
+func (n *Nessie) api() *catalog.Nessie {
+	return &catalog.Nessie{HTTP: &http.Client{Timeout: 30 * time.Second}, Base: n.URL + "/api/v2"}
+}
+
+// syncTags makes the project's Nessie tags (<project>.<name>) as its spec
+// says: each at its commit; those no longer listed removed. Tags not the
+// project's (another prefix) are left alone.
+func (n *Nessie) syncTags(ctx context.Context, p *project.Project) error {
+	api := n.api()
+	have, err := api.Tags(ctx, p.Metadata.Name+".")
+	if err != nil {
+		return err
+	}
+	byName := map[string]catalog.Ref{}
+	for _, r := range have {
+		byName[r.Name] = r
+	}
+	want := map[string]bool{}
+	if t := p.Spec.Tables; t != nil {
+		for _, tg := range t.Tags {
+			name := p.NessieTag(tg)
+			want[name] = true
+			cur, ok := byName[name]
+			if ok && cur.Hash == tg.Commit {
+				continue
+			}
+			if ok { // moved: Nessie's tags are made again
+				if err := api.Untag(ctx, name, cur.Hash); err != nil {
+					return err
+				}
+			}
+			if _, err := api.Tag(ctx, name, tg.Commit); err != nil {
+				return err
+			}
+		}
+	}
+	for name, r := range byName {
+		if !want[name] {
+			if err := api.Untag(ctx, name, r.Hash); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

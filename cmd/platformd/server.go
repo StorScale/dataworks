@@ -72,6 +72,7 @@ type server struct {
 	projectAlerts   *projectAlerts // nil: no project alerts (HEALTH isn't on)
 	maintainer      *maintainer    // nil: no table maintenance (no MAINTENANCE_TRINO_PASSWORD)
 	audit           *audit.Log     // nil: no audit log (no AUDIT_URL)
+	history         *history       // the catalog's history: tags, as-of, a table's changes
 
 	mu       sync.Mutex
 	sessions map[string]*session
@@ -131,6 +132,7 @@ func newServer(ctx context.Context, cfg config, log *slog.Logger) (*server, erro
 	if err := s.startAudit(); err != nil {
 		return nil, err
 	}
+	s.startHistory()
 	if cfg.Health {
 		s.startHealth(ctx)
 		s.startProjectAlerts(ctx)
@@ -162,6 +164,11 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/projects/{name}/sql", s.handleSemantic)
 	mux.HandleFunc("GET /api/projects/{name}/pipelines", s.handlePipelines)
 	mux.HandleFunc("POST /api/projects/{name}/pipelines/{pipeline}/runs", s.handleStartRun)
+	mux.HandleFunc("GET /api/projects/{name}/asof", s.handleAsOf)
+	mux.HandleFunc("GET /api/projects/{name}/tags", s.handleTags)
+	mux.HandleFunc("POST /api/projects/{name}/tags", s.handleTags)
+	mux.HandleFunc("DELETE /api/projects/{name}/tags/{tag}", s.handleTags)
+	mux.HandleFunc("GET /api/projects/{name}/history", s.handleHistory)
 	mux.HandleFunc("GET /api/projects/{name}/audit", s.handleProjectAudit)
 	mux.HandleFunc("GET /api/audit", s.handleAudit)
 	mux.HandleFunc("GET /api/projects/{name}/maintenance", s.handleMaintenance)

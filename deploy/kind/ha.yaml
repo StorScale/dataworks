@@ -1,0 +1,10 @@
+# High availability on kind: two of each service whose loss people would
+# notice first, and a Trino worker beside the coordinator. CI's HTTPS job
+# installs with it, then takes one pod of each away and checks again.
+#   STORSCALE_K8S_VALUES="deploy/kind/https.yaml deploy/kind/ha.yaml" storscale up --dir stack --k8s
+replicas:
+  gateway: 2
+  keycloak: 2
+  nessie: 2
+trino:
+  workers: 1

@@ -14,10 +14,11 @@ spec:
       labels: {{- include "storscale.selector" (list .Release.Name "ranger-db") | nindent 8 }}
     spec:
       enableServiceLinks: false
+      securityContext: {fsGroup: 999}   # postgres': its data (999's already) stays its own
       containers:
         - name: postgres
           image: {{ .Values.upstream.rangerDb }}
-          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 999, runAsGroup: 999, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           env:
             - {name: POSTGRES_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: RANGER_PASSWORD}}}
             - {name: RANGER_DB_USER, value: rangeradmin}
@@ -71,7 +72,7 @@ spec:
       containers:
         - name: solr
           image: {{ .Values.upstream.rangerSolr }}
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 8983, runAsGroup: 8983, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           args: ["solr-precreate", "ranger_audits", "/opt/solr/server/solr/configsets/ranger_audits/"]
           env:
             - {name: SOLR_HEAP, value: 256m}
@@ -123,7 +124,7 @@ spec:
       containers:
         - name: ranger
           image: {{ .Values.upstream.rangerAdmin }}
-          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}   # its image runs as ranger
           # Ranger's start script pins a 1 GB heap (-Xms1g -Xmx1g): 512 MB is
           # plenty for the platform's policies.
           command: ["bash", "-c"]

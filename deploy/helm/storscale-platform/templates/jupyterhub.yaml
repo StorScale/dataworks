@@ -63,7 +63,7 @@ spec:
     spec:
       enableServiceLinks: false
       serviceAccountName: jupyterhub
-      securityContext: {fsGroup: 0}
+      securityContext: {fsGroup: 65532}   # the hub's: its database and cookie secret
       initContainers:
         {{- include "storscale.ca.init" . | nindent 8 }}
         {{- include "storscale.wait" (list . "setup" (list "job" "setup")) | nindent 8 }}
@@ -71,7 +71,7 @@ spec:
       containers:
         - name: hub
           image: {{ include "storscale.image" (list . "jupyterhub") }}
-          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           command: ["jupyterhub", "-f", "/etc/jupyterhub/jupyterhub_config.py"]
           {{- include "storscale.envFrom" . | nindent 10 }}

@@ -81,7 +81,24 @@ type Tables struct {
 	Freshness []Freshness `json:"freshness,omitempty"`
 	// Maintenance: how the platform keeps the tables in shape each night.
 	Maintenance *Maintenance `json:"maintenance,omitempty"`
+	// Tags: moments of the tables kept (a month-end close, a delivery), each
+	// a Nessie tag (<project>.<name>) at a commit, kept until KeepUntil,
+	// whatever the history kept otherwise. The operator keeps Nessie's as
+	// these say; nightly maintenance removes those past KeepUntil.
+	Tags []Tag `json:"tags,omitempty"`
 }
+
+// A Tag is a moment of every table, kept: the catalog at a commit.
+type Tag struct {
+	Name      string `json:"name"`      // close-2026-09: Nessie's is <project>.<name>
+	Commit    string `json:"commit"`    // the catalog's commit (main) it keeps
+	KeepUntil string `json:"keepUntil"` // a date, 2033-10-03
+	Note      string `json:"note,omitempty"`
+	By        string `json:"by,omitempty"` // who made it
+}
+
+// NessieTag is a tag's name in Nessie: the project's name, then its own.
+func (p *Project) NessieTag(t Tag) string { return p.Metadata.Name + "." + t.Name }
 
 // Maintenance is the nightly upkeep of a project's tables: small files
 // compacted into larger ones. (Their history, and files nothing uses, are
@@ -183,6 +200,8 @@ var (
 	memoryRE     = regexp.MustCompile(`^([1-9][0-9]{0,5})(Mi|Gi)$`)
 	queryMemRE   = regexp.MustCompile(`^([1-9][0-9]{0,5}(MB|GB)|([1-9][0-9]?|100)%)$`)
 	storageRE    = regexp.MustCompile(`^([1-9][0-9]{0,5})(Gi|Ti)$`)
+	tagNameRE    = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+	commitRE     = regexp.MustCompile(`^[0-9a-f]{16,64}$`)
 	withinRE     = regexp.MustCompile(`^([1-9][0-9]{0,4})(m|h|d)$`)
 	emailRE      = regexp.MustCompile(`^[^@\s,]+@[^@\s,]+\.[^@\s,]+$`)
 )
@@ -302,6 +321,23 @@ func (p *Project) Validate() error {
 			if _, ok := Within(f.Within); !ok {
 				bad("tables: freshness: within %q: as 30m, 24h or 7d", f.Within)
 			}
+		}
+		seen := map[string]bool{}
+		for _, tg := range t.Tags {
+			switch {
+			case !tagNameRE.MatchString(tg.Name):
+				bad("tables: tags: %q isn't a tag's name (lower case letters, digits and -)", tg.Name)
+			case seen[tg.Name]:
+				bad("tables: tags: %q twice", tg.Name)
+			case !commitRE.MatchString(tg.Commit):
+				bad("tables: tags: %s: commit %q isn't a Nessie commit", tg.Name, tg.Commit)
+			case len(tg.Note) > 500:
+				bad("tables: tags: %s: a note of at most 500 characters", tg.Name)
+			}
+			if _, err := time.Parse("2006-01-02", tg.KeepUntil); err != nil {
+				bad("tables: tags: %s: keepUntil %q: a date, as 2033-10-03", tg.Name, tg.KeepUntil)
+			}
+			seen[tg.Name] = true
 		}
 	}
 	if n := p.Spec.Notify; n != nil {
