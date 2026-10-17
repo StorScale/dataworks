@@ -595,6 +595,7 @@ services:
       TRINO_DB_PASSWORD: ${TRINO_DB_PASSWORD}   # its limits' database
     volumes:
       - ./trino/config.properties:/etc/trino/config.properties:ro
+      - ./trino/catalog-store.properties:/etc/trino/catalog-store.properties:ro
       - ./trino/password-authenticator.properties:/etc/trino/password-authenticator.properties:ro
       - ./trino/access-control.properties:/etc/trino/access-control.properties:ro
       - ./trino/ranger-trino-security.xml:/etc/trino/ranger-trino-security.xml:ro
