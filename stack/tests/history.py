@@ -52,8 +52,10 @@ def main():
         q(f"INSERT INTO {TABLE} VALUES (2)")
 
         # 2. The table's history.
-        h = bob.get(f"{url}/history", params={"table": TABLE}, timeout=60).json()
-        changes = h.get("changes", [])
+        # Who wrote each change comes from the audit log, which Trino's Ranger
+        # plugin writes in batches: a few seconds behind.
+        hist = lambda: bob.get(f"{url}/history", params={"table": TABLE}, timeout=60).json().get("changes", [])
+        changes = wait(lambda: (lambda cs: cs if any(c.get("who") for c in cs[:2]) else None)(hist()), 90, every=5) or hist()
         check("the table's history has its changes, newest first", len(changes) >= 2 and changes[0]["time"] >= changes[1]["time"],
               [(c["hash"][:8], c.get("stats", {}).get("addedRows")) for c in changes[:4]])
         check("... the newest added a row", (changes[0].get("stats") or {}).get("addedRows") == 1, changes[:1])
