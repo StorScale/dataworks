@@ -289,6 +289,8 @@ services:
       # The audit log, beside Ranger's in its Solr; the platform's records kept a year.
       AUDIT_URL: http://ranger-solr:8983/solr/ranger_audits
       AUDIT_KEEP: 365d
+      # How far back the tables' history goes (Nessie's GC), to say so.
+      MAINTENANCE_KEEP_HISTORY: ${NESSIE_GC_KEEP}
     volumes:
       - catalog:/catalog:ro
       - trino-cert:/trino-cert:ro   # Trino's certificate, not its key
@@ -475,6 +477,39 @@ services:
 
   # Trino's self-signed certificate (Trino accepts tokens only over HTTPS),
   # and a copy of the certificate alone, for Airflow (trino-cert).
+  # Nessie's GC: the tables' history older than NESSIE_GC_KEEP, and files no
+  # branch or tag needs, deleted from the warehouse, across the install (a
+  # tag, such as a month-end close, keeps what it points to). Daily at 03:30
+  # UTC, after the tables' compaction; or every NESSIE_GC_EVERY seconds.
+  nessie-gc:
+    restart: unless-stopped
+    image: ghcr.io/projectnessie/nessie-gc:0.108.8
+    entrypoint: ["bash", "-c"]
+    command:
+      - |
+        while true; do
+          if [ -n "$$NESSIE_GC_EVERY" ]; then
+            sleep "$$NESSIE_GC_EVERY"
+          else
+            now=$$(date -u +%s); next=$$(date -u -d "today 03:30" +%s)
+            [ "$$next" -gt "$$now" ] || next=$$((next + 86400))
+            sleep $$((next - now))
+          fi
+          echo "nessie-gc: collecting what's older than $$NESSIE_GC_KEEP"
+          java -jar /nessie-gc.jar gc --uri http://nessie:19120/api/v2 --inmemory --default-cutoff "$$NESSIE_GC_KEEP" \
+            --iceberg s3.endpoint=http://buckets:9000/,s3.path-style-access=true \
+            && echo "nessie-gc: done" || echo "nessie-gc: failed"
+        done
+    environment:
+      NESSIE_GC_KEEP: ${NESSIE_GC_KEEP}
+      NESSIE_GC_EVERY: ${NESSIE_GC_EVERY}
+      AWS_ACCESS_KEY_ID: ${NESSIE_S3_ACCESS_KEY}   # Nessie's own account: the warehouse, nothing else
+      AWS_SECRET_ACCESS_KEY: ${NESSIE_S3_SECRET_KEY}
+      AWS_REGION: us-east-1
+      JAVA_TOOL_OPTIONS: -Xmx384m
+    depends_on:
+      nessie: {condition: service_started}
+
   tls:
     <<: *tools
     command: ["sh", "-c", "(test -s /tls/trino.pem || (openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj /CN=trino -addext subjectAltName=DNS:trino,DNS:localhost -keyout /tls/key.pem -out /tls/cert.pem && cat /tls/key.pem /tls/cert.pem > /tls/trino.pem && chmod 644 /tls/*.pem)) && cp /tls/cert.pem /cert/cert.pem && chmod 644 /cert/cert.pem"]

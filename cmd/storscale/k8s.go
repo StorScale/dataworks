@@ -31,6 +31,11 @@ var (
 	release     = "storscale"
 )
 
+// devSets are a checkout's install's settings beside its images: Nessie's
+// GC every three minutes, keeping two minutes' history, so the maintenance
+// suite sees history go.
+var devSets = []string{"--set", "maintenance.history.keep=PT2M", "--set", "maintenance.history.schedule=*/3 * * * *"}
+
 // kubeArgs are kubectl's flags for the platform's cluster and namespace.
 func kubeArgs(args ...string) []string {
 	var out []string
@@ -162,7 +167,7 @@ func (k *kube) up(st *stack, ver string) error {
 		if err := run1(filepath.Join(k.checkout, "deploy", "kind", "images.sh"), kindCluster); err != nil {
 			return err
 		}
-		chart, extra = filepath.Join(k.checkout, "deploy", "helm", "storscale-platform"), []string{"--set", "images.tag=dev"}
+		chart, extra = filepath.Join(k.checkout, "deploy", "helm", "storscale-platform"), append([]string{"--set", "images.tag=dev"}, devSets...)
 		run1("helm", "repo", "add", "spark-operator", "https://kubeflow.github.io/spark-operator", "--force-update")
 		if err := run1("helm", "dependency", "build", chart); err != nil {
 			return err

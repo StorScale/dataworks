@@ -51,6 +51,7 @@ spec:
             - {name: TRINO_CA, value: /trino-cert/cert.pem}
             - {name: MAINTENANCE_TRINO_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: MAINTENANCE_TRINO_PASSWORD}}}
             - {name: MAINTENANCE_AT, value: {{ .Values.maintenance.at | quote }}}
+            - {name: MAINTENANCE_KEEP_HISTORY, value: {{ .Values.maintenance.history.keep | quote }}}
             # The audit log, beside Ranger's in its Solr (audit.*).
             - {name: AUDIT_URL, value: "http://ranger-solr:8983/solr/ranger_audits"}
             - {name: AUDIT_KEEP, value: {{ .Values.audit.keep | quote }}}

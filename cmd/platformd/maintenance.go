@@ -39,6 +39,7 @@ type maintainer struct {
 	iceberg *catalog.Iceberg
 	at      int    // minutes after midnight, UTC
 	atText  string // as configured (02:00)
+	history string // how far back the tables' history goes (Nessie's GC: P7D)
 
 	mu      sync.Mutex
 	runs    map[string]map[string]tableRun // project -> table -> the last run
@@ -61,7 +62,7 @@ func (s *server) startMaintenance(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("trino: %w", err)
 	}
-	m := &maintainer{trino: tc, at: at.Hour()*60 + at.Minute(), atText: at.Format("15:04"),
+	m := &maintainer{trino: tc, at: at.Hour()*60 + at.Minute(), atText: at.Format("15:04"), history: os.Getenv("MAINTENANCE_KEEP_HISTORY"),
 		iceberg: &catalog.Iceberg{HTTP: &http.Client{Timeout: 30 * time.Second},
 			Base: strings.TrimRight(envOr("NESSIE_URL", "http://nessie:19120"), "/") + "/iceberg", Warehouse: envOr("NESSIE_WAREHOUSE", "warehouse")},
 		runs: map[string]map[string]tableRun{}, wake: make(chan struct{}, 1)}
@@ -300,7 +301,7 @@ func (s *server) handleMaintenance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t := v.Spec.Spec.Tables
-	out := map[string]any{"enabled": true, "at": m.atText + " UTC", "state": m.state(v.Name), "tables": []any{}}
+	out := map[string]any{"enabled": true, "at": m.atText + " UTC", "state": m.state(v.Name), "tables": []any{}, "keepHistory": m.history}
 	if t == nil {
 		writeJSON(w, http.StatusOK, out)
 		return

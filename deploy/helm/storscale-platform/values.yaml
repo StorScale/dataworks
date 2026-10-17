@@ -55,6 +55,7 @@ upstream:
   rangerDb: apache/ranger-db:2.9.0
   rangerSolr: apache/ranger-solr:2.9.0
   nessie: ghcr.io/projectnessie/nessie:0.108.8
+  nessieGc: ghcr.io/projectnessie/nessie-gc:0.108.8
   trino: trinodb/trino:483
   openmetadata: docker.getcollate.io/openmetadata/server:2.0.4
   prometheus: prom/prometheus:v3.13.4
@@ -138,9 +139,15 @@ audit:
   keep: 365d
 
 # Table maintenance: each night at `at` (UTC), platformd compacts every
-# project's small files (a project's tables.maintenance may pause it).
+# project's small files (a project's tables.maintenance may pause it). Then
+# Nessie's GC (history.schedule) deletes the tables' history older than
+# history.keep (ISO 8601: P7D, a week) and files no branch or tag needs,
+# across the install; a tag, as a month-end close, keeps what it points to.
 maintenance:
   at: "02:00"
+  history:
+    keep: P7D
+    schedule: "30 3 * * *"
 
 # Limits, so no one project or person slows the others. A project's own
 # (spec.limits) replace these; Trino queries count against a project when one

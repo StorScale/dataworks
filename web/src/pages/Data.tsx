@@ -140,6 +140,14 @@ export default function Data() {
 }
 
 const size = (b: number) => b >= 1 << 30 ? `${(b / (1 << 30)).toFixed(1)} GB` : b >= 1 << 20 ? `${(b / (1 << 20)).toFixed(1)} MB` : `${Math.round(b / 1024)} KB`;
+// duration is an ISO 8601 duration (P7D, PT12H) in words.
+function duration(iso: string): string {
+  const m = iso.match(/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?)?$/);
+  if (!m) return iso;
+  const [d, h, mi] = [m[1], m[2], m[3]].map((x) => Number(x ?? 0));
+  const part = (n: number, unit: string) => (n ? `${n} ${unit}${n === 1 ? "" : "s"}` : "");
+  return [part(d, "day"), part(h, "hour"), part(mi, "minute")].filter(Boolean).join(" ") || iso;
+}
 const counts = (s: TableStats) => `${s.dataFiles} files, ${size(s.bytes)}`;
 
 // Storage is a table's files now, and what maintenance last did.
@@ -171,6 +179,7 @@ function Storage({ project, table, canRun }: { project: string; table: string; c
         <>
           <p className="small">
             {d.paused ? "Maintenance is paused for this project's tables." : <>Each night at {d.at}, the project's small files are compacted into larger ones.</>}
+            {d.keepHistory && <> The data as it was goes back {duration(d.keepHistory)} (tags, such as a month-end close, are kept however old).</>}
           </p>
           {run ? (
             <div className={`banner ${run.error ? "warn" : "info"}`} data-testid="last-run">
