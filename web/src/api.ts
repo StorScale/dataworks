@@ -64,6 +64,7 @@ export type Spec = {
       masks?: { table: string; column: string; type: string }[];
     };
     freshness?: { table: string; within: string }[];
+    maintenance?: { keepSnapshots?: string; compact?: boolean; paused?: boolean };
   };
   files?: { bucket?: string };
   pipelines?: { serviceAccount: string; repo?: string; path?: string; ref?: string; credentials?: { secretRef: string }; memory?: string };
@@ -197,3 +198,15 @@ export type ProjectAlerts = { checked: boolean; issues: ProjectIssue[]; notify?:
 export const getProjectAlerts = (name: string) => api<ProjectAlerts>("GET", `/api/projects/${encodeURIComponent(name)}/alerts`);
 export const muteProjectAlert = (name: string, key: string, hours: number) =>
   api<ProjectAlerts>("POST", `/api/projects/${encodeURIComponent(name)}/alerts/mute`, { key, hours });
+
+// --- Table maintenance: compaction, snapshot expiry, orphan files -------------------
+
+export type TableStats = { dataFiles: number; bytes: number; rows: number; snapshots: number; oldest: string; lastChange: string; refs: number; deleteFiles: number };
+export type TableRun = { table: string; started: string; ended: string; done: string[]; error?: string; before: TableStats; after: TableStats; keep: string };
+export type Maintenance = {
+  enabled: boolean; at?: string; minRetention?: string; state?: "idle" | "queued" | "running";
+  keepSnapshots?: string; compact?: boolean; paused?: boolean;
+  tables: { name: string; now?: TableStats; lastRun?: TableRun }[];
+};
+export const getMaintenance = (name: string) => api<Maintenance>("GET", `/api/projects/${encodeURIComponent(name)}/maintenance`);
+export const runMaintenance = (name: string) => api<{ state: string }>("POST", `/api/projects/${encodeURIComponent(name)}/maintenance`);

@@ -25,17 +25,21 @@ from lakekit import (BASE_POLICIES, RANGER, allow, bucket_rw, ensure_buckets_ide
 
 ICEBERG = "iceberg"
 CATALOG_USER = "openmetadata"  # the catalog's service user: it reads every table, to describe and check them
-POLICIES = [{**p, "policyItems": p["policyItems"] + ([allow(["execute"], users=[CATALOG_USER])] if p["name"] == "run queries" else [])}
+# platformd's table maintenance: it may alter every table (Trino's optimize,
+# expire_snapshots and remove_orphan_files are table procedures, which need
+# alter), and read none.
+MAINTENANCE_USER = "maintenance"
+POLICIES = [{**p, "policyItems": p["policyItems"] + ([allow(["execute"], users=[CATALOG_USER, MAINTENANCE_USER])] if p["name"] == "run queries" else [])}
             for p in BASE_POLICIES] + [
     # Everyone may see that the catalog is there; engineers may add namespaces
     # to it. What's in a namespace is up to its project. (Ranger allows one
     # access policy per resource, so the catalog's policy has an item per group.)
     {"name": "iceberg catalog", "resources": res(catalog=ICEBERG),
-     "policyItems": [allow(["all"], groups=["engineers"]), allow(["use", "show"], groups=["analysts", "pipelines"], users=[CATALOG_USER])]},
+     "policyItems": [allow(["all"], groups=["engineers"]), allow(["use", "show"], groups=["analysts", "pipelines"], users=[CATALOG_USER, MAINTENANCE_USER])]},
     {"name": "catalog: every namespace", "resources": res(catalog=ICEBERG, schema="*"),
-     "policyItems": [allow(["use", "show"], users=[CATALOG_USER])]},
+     "policyItems": [allow(["use", "show"], users=[CATALOG_USER, MAINTENANCE_USER])]},
     {"name": "catalog: every table", "resources": res(catalog=ICEBERG, schema="*", table="*", column="*"),
-     "policyItems": [allow(["select", "show"], users=[CATALOG_USER])]},
+     "policyItems": [allow(["select", "show"], users=[CATALOG_USER]), allow(["alter"], users=[MAINTENANCE_USER])]},
     # The catalog's information_schema, which tools read to list tables and
     # columns (Superset does, to check a dataset). Trino filters it down to
     # what each person may see anyway.
@@ -57,10 +61,12 @@ if __name__ == "__main__":
     ensure_buckets_identity()
     wait_for("Ranger", f"{RANGER}/login.jsp")  # unauthenticated: five failed sign-ins lock Ranger's admin
     sync_people({**keycloak_people(), "service-account-airflow-pipelines": ["pipelines"]})
-    if CATALOG_USER not in {u["name"] for u in ranger("GET", "/service/xusers/users?pageSize=1000")["vXUsers"]}:
-        ranger("POST", "/service/xusers/secure/users", json={
-            "name": CATALOG_USER, "firstName": "OpenMetadata", "password": env["RANGER_PASSWORD"] + "om",
-            "userRoleList": ["ROLE_USER"], "status": 1, "userSource": 1})
+    known = {u["name"] for u in ranger("GET", "/service/xusers/users?pageSize=1000")["vXUsers"]}
+    for name, first, suffix in [(CATALOG_USER, "OpenMetadata", "om"), (MAINTENANCE_USER, "Table maintenance", "mt")]:
+        if name not in known:  # Ranger's own sign-in for them is never used: they sign in to Trino
+            ranger("POST", "/service/xusers/secure/users", json={
+                "name": name, "firstName": first, "password": env["RANGER_PASSWORD"] + suffix,
+                "userRoleList": ["ROLE_USER"], "status": 1, "userSource": 1})
     # Superset's policies are the trino stage's (superset.py): kept here, so
     # an upgrade, which runs both stages again, never drops them for a while.
     setup_ranger(POLICIES, keep=("superset:", "BI tools:"))

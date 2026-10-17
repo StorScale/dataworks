@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { getFlow, runSQL, SQLAnswer } from "../api";
-import { CheckPill, checkName, ErrorBanner, failing, limits, maskLabel, Spinner, usePoll, useProject } from "../lib";
+import { ago, getFlow, getMaintenance, runMaintenance, runSQL, SQLAnswer, TableStats, when } from "../api";
+import { CheckPill, checkName, ErrorBanner, failing, limits, maskLabel, Spinner, usePlatform, usePoll, useProject } from "../lib";
 import { FlowStrip } from "./Overview";
 
-const TABS = ["columns", "preview", "lineage", "quality"] as const;
+const TABS = ["columns", "preview", "lineage", "quality", "storage"] as const;
 type Tab = (typeof TABS)[number];
 
 // Data is a project's tables: their columns, a look at their rows (as you,
-// so your filters and masks apply), where they come from, and their checks.
+// so your filters and masks apply), where they come from, their checks, and
+// how they're stored (their files and snapshots, as maintenance keeps them).
 export default function Data() {
   const { name, view } = useProject();
+  const { admin } = usePlatform();
   const spec = view?.spec?.spec;
   const [params, setParams] = useSearchParams();
   const flow = usePoll(() => getFlow(name), [name], 30_000);
@@ -129,9 +131,68 @@ export default function Data() {
                 </table>
               )
             )}
+            {tab === "storage" && <Storage project={name} table={table.name} canRun={view?.role === "editor" || admin} />}
           </div>
         </section>
       </div>
+    </div>
+  );
+}
+
+const size = (b: number) => b >= 1 << 30 ? `${(b / (1 << 30)).toFixed(1)} GB` : b >= 1 << 20 ? `${(b / (1 << 20)).toFixed(1)} MB` : `${Math.round(b / 1024)} KB`;
+const counts = (s: TableStats) => `${s.dataFiles} files, ${size(s.bytes)}, ${s.snapshots} snapshots`;
+
+// Storage is a table's files and snapshots now, and what maintenance last did.
+function Storage({ project, table, canRun }: { project: string; table: string; canRun: boolean }) {
+  const m = usePoll(() => getMaintenance(project), [project], 15_000);
+  const [error, setError] = useState<string>();
+  if (m.error && !m.data) return <div style={{ padding: 20 }}><ErrorBanner error={m.error} /></div>;
+  if (!m.data) return <div style={{ padding: 20 }}><Spinner /></div>;
+  const d = m.data;
+  const t = d.tables.find((x) => x.name === table);
+  const now = t?.now;
+  const run = t?.lastRun;
+  const ask = async () => {
+    setError(undefined);
+    try { await runMaintenance(project); m.reload(); } catch (e) { setError((e as Error).message); }
+  };
+  return (
+    <div style={{ padding: 20 }} className="stack" data-testid="storage">
+      <ErrorBanner error={error} />
+      {now ? (
+        <div className="grid tiles">
+          <div className="card tile"><div className="label">Data files</div><div className="value">{now.dataFiles}</div>
+            <div className="note">{size(now.bytes)}{now.dataFiles ? `, ${size(now.bytes / now.dataFiles)} each on average` : ""}</div></div>
+          <div className="card tile"><div className="label">Rows</div><div className="value">{now.rows.toLocaleString()}</div>
+            <div className="note">{now.deleteFiles ? `${now.deleteFiles} delete files` : "last changed " + ago(when(now.lastChange))}</div></div>
+          <div className="card tile"><div className="label">Snapshots</div><div className="value">{now.snapshots}</div>
+            <div className="note">back to {when(now.oldest)?.toLocaleString() ?? "–"}</div></div>
+        </div>
+      ) : <p className="muted">The catalog has no snapshot of this table yet.</p>}
+      {!d.enabled ? <p className="muted small">Table maintenance isn't set up on this install.</p> : (
+        <>
+          <p className="small">
+            {d.paused ? "Maintenance is paused for this project's tables." : <>
+              Each night at {d.at}, {d.compact ? "small files are compacted, " : ""}snapshots older than {d.keepSnapshots} are
+              expired (tagged ones are kept), and files no snapshot uses are removed. The data as it was goes back {d.keepSnapshots}.</>}
+          </p>
+          {run ? (
+            <div className={`banner ${run.error ? "warn" : "info"}`} data-testid="last-run">
+              <strong>{run.error ? "Its last maintenance failed" : "Last kept"} {ago(when(run.ended))}</strong>{" "}
+              {run.error ? <span className="mono small">{run.error}</span> :
+                <span className="small">{counts(run.before)} → {counts(run.after)}, in {Math.max(1, Math.round((when(run.ended)!.getTime() - when(run.started)!.getTime()) / 1000))}s</span>}
+            </div>
+          ) : <p className="muted small">Not kept since the platform last started.</p>}
+          {canRun && !d.paused && (
+            <div className="row">
+              <button className="btn" onClick={ask} disabled={d.state !== "idle"} data-testid="run-maintenance">
+                {d.state === "running" ? "Keeping the tables…" : d.state === "queued" ? "Waiting its turn…" : "Run now"}
+              </button>
+              <span className="muted small">All of the project's tables, one at a time.</span>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

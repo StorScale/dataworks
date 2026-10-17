@@ -282,6 +282,9 @@ func (s *server) serveMetrics(ctx context.Context, addr string) {
 		if s.health != nil {
 			fmt.Fprint(w, s.health.checker.Metrics())
 		}
+		if s.maintainer != nil {
+			fmt.Fprint(w, s.maintainer.metrics())
+		}
 	})
 	hs := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() { <-ctx.Done(); hs.Close() }()

@@ -79,7 +79,22 @@ type Tables struct {
 	// Freshness: how recently each table must have changed; a table older
 	// than that is stale, and the project is told (Notify).
 	Freshness []Freshness `json:"freshness,omitempty"`
+	// Maintenance: how the platform keeps the tables in shape each night.
+	Maintenance *Maintenance `json:"maintenance,omitempty"`
 }
+
+// Maintenance is the nightly upkeep of a project's tables: small files
+// compacted into larger ones; snapshots older than KeepSnapshots expired
+// (tagged and branched ones are kept), with the files only they used; files
+// no snapshot uses removed. What's left out is the install's default.
+type Maintenance struct {
+	KeepSnapshots string `json:"keepSnapshots,omitempty"` // as 7d or 12h: how far back the data as it was goes
+	Compact       *bool  `json:"compact,omitempty"`       // default true
+	Paused        bool   `json:"paused,omitempty"`        // none for now
+}
+
+// Compacts says whether maintenance compacts the tables' files.
+func (m *Maintenance) Compacts() bool { return m == nil || m.Compact == nil || *m.Compact }
 
 // Freshness is a table's freshness target: changed within the last Within
 // (as 30m, 24h or 7d).
@@ -291,6 +306,11 @@ func (p *Project) Validate() error {
 			}
 			if _, ok := Within(f.Within); !ok {
 				bad("tables: freshness: within %q: as 30m, 24h or 7d", f.Within)
+			}
+		}
+		if m := t.Maintenance; m != nil && m.KeepSnapshots != "" {
+			if _, ok := Within(m.KeepSnapshots); !ok {
+				bad("tables: maintenance: keepSnapshots %q: as 7d or 12h", m.KeepSnapshots)
 			}
 		}
 	}

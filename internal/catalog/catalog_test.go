@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -120,22 +121,34 @@ func TestFlowBeforeTheCatalogKnowsTheProject(t *testing.T) {
 	}
 }
 
-func TestATablesLastChangeIsItsCurrentSnapshots(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// nessie answers as Nessie's Iceberg REST API does: the prefix escaped
+// already, a value that isn't text, and pages of tables.
+func nessie(t *testing.T) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.EscapedPath() {
 		case "/iceberg/v1/config":
 			if r.URL.Query().Get("warehouse") != "warehouse" {
 				t.Errorf("warehouse %q", r.URL.Query().Get("warehouse"))
 			}
-			// As Nessie has it: the prefix already escaped, for the path as it is.
 			w.Write([]byte(`{"defaults": {}, "overrides": {"prefix": "main%7Cwarehouse", "nessie.is-nessie-catalog": true}}`))
+		case "/iceberg/v1/main%7Cwarehouse/namespaces/sales/tables":
+			if r.URL.Query().Get("pageToken") == "" {
+				w.Write([]byte(`{"identifiers": [{"namespace": ["sales"], "name": "payroll"}], "next-page-token": "p2"}`))
+			} else {
+				w.Write([]byte(`{"identifiers": [{"namespace": ["sales"], "name": "orders"}]}`))
+			}
 		case "/iceberg/v1/main%7Cwarehouse/namespaces/sales/tables/orders":
-			w.Write([]byte(`{"metadata": {"current-snapshot-id": 2, "snapshots": [
-				{"snapshot-id": 1, "timestamp-ms": 1760000000000}, {"snapshot-id": 2, "timestamp-ms": 1760640000000}]}}`))
+			w.Write([]byte(`{"metadata": {"current-snapshot-id": 2, "refs": {"main": {}, "close-2026-09": {}}, "snapshots": [
+				{"snapshot-id": 1, "timestamp-ms": 1760000000000, "summary": {"total-data-files": "40"}},
+				{"snapshot-id": 2, "timestamp-ms": 1760640000000, "summary": {"total-data-files": "3", "total-files-size": "3145728", "total-records": "1200", "total-delete-files": "1"}}]}}`))
 		default:
 			http.NotFound(w, r)
 		}
 	}))
+}
+
+func TestATablesLastChangeIsItsCurrentSnapshots(t *testing.T) {
+	ts := nessie(t)
 	defer ts.Close()
 	at, err := LastChange(context.Background(), ts.Client(), ts.URL+"/iceberg", "warehouse", "sales", "orders")
 	if err != nil || !at.Equal(time.UnixMilli(1760640000000)) {
@@ -143,5 +156,23 @@ func TestATablesLastChangeIsItsCurrentSnapshots(t *testing.T) {
 	}
 	if _, err := LastChange(context.Background(), ts.Client(), ts.URL+"/iceberg", "warehouse", "sales", "nothing"); err == nil {
 		t.Error("no such table: want an error")
+	}
+}
+
+func TestANamespacesTablesAndWhatTheyHold(t *testing.T) {
+	ts := nessie(t)
+	defer ts.Close()
+	ic := &Iceberg{HTTP: ts.Client(), Base: ts.URL + "/iceberg", Warehouse: "warehouse"}
+	tables, err := ic.Tables(context.Background(), "sales")
+	if err != nil || strings.Join(tables, ",") != "orders,payroll" {
+		t.Errorf("tables: %v, %v; want both pages', in order", tables, err)
+	}
+	if none, err := ic.Tables(context.Background(), "marketing"); none != nil || err != nil {
+		t.Errorf("a namespace not made yet: %v, %v; want none", none, err)
+	}
+	st, err := ic.Stats(context.Background(), "sales", "orders")
+	if err != nil || st.DataFiles != 3 || st.Bytes != 3<<20 || st.Rows != 1200 || st.Snapshots != 2 || st.Refs != 2 ||
+		st.DeleteFiles != 1 || !st.Oldest.Equal(time.UnixMilli(1760000000000)) || !st.LastChange.Equal(time.UnixMilli(1760640000000)) {
+		t.Errorf("stats: %+v, %v", st, err)
 	}
 }

@@ -95,6 +95,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R6.15 Retention of snapshots per project and table (time travel kept as long as asked, no longer).
 - R6.16 Each table's health (files, snapshots, size, last maintenance) on the Health page.
 
+**Built (2026-10-17):** each night at `maintenance.at` (UTC) platformd keeps every project's tables, one project at a time, as Trino's `maintenance` account (Ranger lets it alter every table and read none): `optimize` compacts small files, `expire_snapshots` drops snapshots older than the project's `tables.maintenance.keepSnapshots` (default the install's, 7 days) with the files only they used, keeping tagged and branched ones, and `remove_orphan_files` removes files no snapshot uses. A project may turn compaction off, or pause maintenance. No snapshot is kept less than the install's `maintenance.minRetention` (a day; a checkout's own install a minute), as Trino allows no less. Each table's Storage tab shows its files, size, rows and snapshots and what maintenance last did; editors ask for a run now. A run that fails alerts the project (6.7), and the runs are Prometheus metrics. The `maintenance` suite checks compaction, expiry and an orphan's removal. Not yet: the branches of closed changes (7.3, none yet), retention per table (R6.15 is per project), the tables' health on the administrators' Health page and flags for a table growing out of line, and the last runs kept across a restart of platformd (the table's files and snapshots, read from the catalog, are).
+
 ### 6.6 A node fails
 
 1. One of the cluster's nodes is drained for maintenance, or fails.
