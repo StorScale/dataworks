@@ -72,6 +72,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R6.10 An Audit page: filter by person, agent, project, table, tool, time and outcome; export.
 - R6.11 Each event names the agent and the person it acted for.
 
+**Built (2026-10-17):** the audit log is Ranger's Solr (`ranger_audits`), not Loki: Ranger already records there every access Trino allows or refuses, with the policy that decided it, and platformd now writes its own records beside them in Ranger's fields (who signed in or was turned away; a project created, changed, saying which parts, or deleted; a pipeline run started; an alert muted or tested; maintenance asked for), so Ranger's own Audit page shows both. Solr keeps them on a volume of its own (`audit.storage`); the platform's records are kept `audit.keep` (a year), Ranger's its default 90 days. A project's Audit tab, for its editors, shows its own records and every access to its tables; Administration › Audit shows the platform's, filtered by person, text, outcome, source and dates, and exports CSV. The `audit` suite checks a change, a refusal, who may read it, the export, and a sign-in. Not yet: Keycloak's and Buckets' events (R6.9), agents named apart from the person they act for (R6.11: today an agent's query is the person's), which tool a query came from, and how long auditors need records kept (open: a year is a guess).
+
 ### 6.4 Something is wrong (this happened, 2026-10-14)
 
 1. After an upgrade, the catalog's search store can't mount its volume on its new node. Nothing in the platform says so: the catalog's pages just fail.

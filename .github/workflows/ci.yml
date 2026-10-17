@@ -152,7 +152,7 @@ jobs:
       - run: kind create cluster --name storscale --config deploy/kind/cluster.yaml --wait 180s
       - run: deploy/kind/https.sh "$STORSCALE_DOMAIN" storscale
       - run: bin/storscale up --dir stack --k8s
-      - run: bin/storscale test --dir stack --k8s realm health lakehouse superset airflow jupyterhub catalog semantic projects project_alerts maintenance pipelines_git limits monitoring
+      - run: bin/storscale test --dir stack --k8s realm health lakehouse superset airflow jupyterhub catalog semantic projects project_alerts audit maintenance pipelines_git limits monitoring
       - name: What went wrong
         if: failure()
         run: deploy/kind/diagnose.sh

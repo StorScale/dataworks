@@ -49,13 +49,16 @@ spec:
   ports:
     - {name: postgres, port: 5432, targetPort: postgres}
 ---
+# Solr keeps the audit log: Ranger's (every access Trino allowed or refused)
+# and the platform's own (who changed what). On a volume of its own, so the
+# log outlives the pod.
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: ranger-solr
   labels: {{- include "storscale.labels" . | nindent 4 }}
 spec:
-  progressDeadlineSeconds: {{ .Values.progressDeadlineSeconds }}
+  serviceName: ranger-solr
   selector:
     matchLabels: {{- include "storscale.selector" (list .Release.Name "ranger-solr") | nindent 6 }}
   template:
@@ -63,6 +66,7 @@ spec:
       labels: {{- include "storscale.selector" (list .Release.Name "ranger-solr") | nindent 8 }}
     spec:
       enableServiceLinks: false
+      securityContext: {fsGroup: 8983}   # Solr's user: its volume is its own
       containers:
         - name: solr
           image: {{ .Values.upstream.rangerSolr }}
@@ -71,7 +75,20 @@ spec:
             - {name: SOLR_HEAP, value: 256m}
           ports:
             - {name: solr, containerPort: 8983}
+          readinessProbe:
+            httpGet: {path: /solr/ranger_audits/admin/ping, port: solr}
+            periodSeconds: 10
+          volumeMounts:
+            - {name: data, mountPath: /var/solr}
           {{- include "storscale.resources" (list "50m" "384Mi" "640Mi") | nindent 10 }}
+  volumeClaimTemplates:
+    - metadata: {name: data}
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.storage.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources: {requests: {storage: {{ .Values.audit.storage }}}}
 ---
 apiVersion: v1
 kind: Service

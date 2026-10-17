@@ -256,8 +256,10 @@ func (s *server) handleHealthAction(w http.ResponseWriter, r *http.Request) {
 		}
 		s.health.notifier.Mute(req.Service, until)
 		s.log.Info("alerts muted", "service", req.Service, "until", until, "by", sess.User.Username)
+		s.record(r, sess.User.Username, "alert.muted", "platform/service:"+req.Service, fmt.Sprintf("for %g hours", req.Hours))
 		writeJSON(w, http.StatusOK, map[string]any{"service": req.Service, "mutedUntil": until})
 	case "test":
+		s.record(r, sess.User.Username, "alert.tested", "platform", "")
 		errs := s.health.send(r.Context(), s, health.Alert{Title: "A test alert from the platform", Severity: "test",
 			Facts: [][2]string{{"Sent by", sess.User.Username}, {"Address", s.cfg.PlatformURL}}, Link: s.health.link, At: time.Now().UTC()})
 		res := map[string]string{}

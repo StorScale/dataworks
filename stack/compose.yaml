@@ -288,12 +288,16 @@ services:
       TRINO_CA: /trino-cert/cert.pem
       MAINTENANCE_TRINO_PASSWORD: ${MAINTENANCE_TRINO_PASSWORD}
       MAINTENANCE_MIN_RETENTION: ${MAINTENANCE_MIN_RETENTION}
+      # The audit log, beside Ranger's in its Solr; the platform's records kept a year.
+      AUDIT_URL: http://ranger-solr:8983/solr/ranger_audits
+      AUDIT_KEEP: 365d
     volumes:
       - catalog:/catalog:ro
       - trino-cert:/trino-cert:ro   # Trino's certificate, not its key
     depends_on:
       keycloak: {condition: service_healthy}
       tls: {condition: service_completed_successfully}
+      ranger-solr: {condition: service_started}
     healthcheck:
       test: ["CMD", "/usr/bin/platformd", "healthcheck"]
       interval: 5s
@@ -402,6 +406,8 @@ services:
     command: ["solr-precreate", "ranger_audits", "/opt/solr/server/solr/configsets/ranger_audits/"]
     environment:
       SOLR_HEAP: 256m
+    volumes:
+      - ranger-audits:/var/solr   # the audit log: Ranger's, and the platform's own
 
   ranger-admin:
     restart: unless-stopped
@@ -867,6 +873,7 @@ volumes:
   nessie-data:
   tls:
   trino-cert:
+  ranger-audits:
   trino-auth:
   prometheus-token:
   jupyterhub-data:

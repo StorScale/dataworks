@@ -53,6 +53,9 @@ spec:
             - {name: MAINTENANCE_AT, value: {{ .Values.maintenance.at | quote }}}
             - {name: MAINTENANCE_KEEP, value: {{ .Values.maintenance.keepSnapshots | quote }}}
             - {name: MAINTENANCE_MIN_RETENTION, value: {{ .Values.maintenance.minRetention | quote }}}
+            # The audit log, beside Ranger's in its Solr (audit.*).
+            - {name: AUDIT_URL, value: "http://ranger-solr:8983/solr/ranger_audits"}
+            - {name: AUDIT_KEEP, value: {{ .Values.audit.keep | quote }}}
             - {name: BRAND_NAME, value: {{ .Values.brand.name | quote }}}
             {{- with .Values.brand.title }}
             - {name: BRAND_TITLE, value: {{ . | quote }}}

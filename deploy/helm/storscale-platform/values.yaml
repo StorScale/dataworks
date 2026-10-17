@@ -141,6 +141,13 @@ pipelines:
 # project's tables.maintenance may say otherwise; tagged snapshots are kept),
 # and removes files no snapshot uses. minRetention is the least any snapshot
 # is kept, whatever a project says: Trino refuses to expire younger ones.
+# The audit log: who changed what in the platform, and every access Trino
+# allowed or refused (Ranger's), in Ranger's Solr, on a volume this size.
+# Kept for keep (the platform's own records; Ranger keeps its own 90 days).
+audit:
+  storage: 5Gi
+  keep: 365d
+
 maintenance:
   at: "02:00"
   keepSnapshots: 7d

@@ -151,6 +151,7 @@ func (s *server) handlePutProject(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 		return
 	}
+	before, _ := s.store.Project(r.Context(), p.Metadata.Name)
 	if err := s.store.PutProject(r.Context(), p); err != nil {
 		var refused *store.APIError
 		if errors.As(err, &refused) && refused.Code >= 400 && refused.Code < 500 && refused.Code != http.StatusForbidden {
@@ -163,6 +164,7 @@ func (s *server) handlePutProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Info("project saved", "project", p.Metadata.Name, "by", sess.User.Username)
+	s.record(r, sess.User.Username, "project.saved", "project:"+p.Metadata.Name, changes(before, p))
 	writeJSON(w, http.StatusOK, projectView{Name: p.Metadata.Name, Spec: p})
 }
 
@@ -185,6 +187,7 @@ func (s *server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Info("project deleted", "project", name, "by", sess.User.Username)
+	s.record(r, sess.User.Username, "project.deleted", "project:"+name, "")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -401,5 +404,6 @@ func (s *server) handleStartRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Info("pipeline run started", "project", v.Name, "pipeline", r.PathValue("pipeline"), "run", run, "by", sess.User.Username)
+	s.record(r, sess.User.Username, "pipeline.started", "project:"+v.Name+"/pipeline:"+r.PathValue("pipeline"), "run "+run)
 	writeJSON(w, http.StatusOK, map[string]string{"run": run})
 }
