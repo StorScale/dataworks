@@ -238,6 +238,10 @@ def run(browser, switch=True, start_run=True):
     press(page, "[data-testid=definitions-toggle]")
     page.wait_for_selector("[data-testid=semantic-yaml]", timeout=60_000)
     metrics = page.inner_text("[data-testid=metrics]")
+    try:  # editable once the page knows bob's role (it loads beside the definitions)
+        page.wait_for_selector("[data-testid=semantic-yaml]:not([readonly])", timeout=15_000)
+    except Exception:  # noqa: BLE001 (the check says so)
+        pass
     check("... and its metrics, whose definitions bob can change", "revenue" in metrics and "order_count" in metrics
           and page.get_attribute("[data-testid=semantic-yaml]", "readonly") is None, " ".join(metrics.split())[:80])
     page.goto(f"{PLATFORM}/p/sales/pipelines")
