@@ -13,7 +13,7 @@ import (
 // copy is written alongside, and brought in step on every Projects.
 type Mirror struct {
 	Store
-	Copy *Bucket
+	Copy Store // a Bucket
 }
 
 func (m *Mirror) Projects(ctx context.Context) ([]*project.Project, error) {
@@ -51,6 +51,33 @@ func (m *Mirror) DeleteProject(ctx context.Context, name string) error {
 		return err
 	}
 	return m.Copy.DeleteProject(ctx, name)
+}
+
+// Statuses are Store's, and the copy's of projects Store no longer has: one
+// deleted before the operator could undo it (made without its finalizer),
+// whose access the operator must still take out.
+func (m *Mirror) Statuses(ctx context.Context) ([]*project.Status, error) {
+	sts, err := m.Store.Statuses(ctx)
+	if err != nil {
+		return nil, err
+	}
+	copies, err := m.Copy.Statuses(ctx)
+	if err != nil {
+		return sts, nil // the copy's are extra: Store's are the ones that count
+	}
+	seen := map[string]bool{}
+	for _, st := range sts {
+		seen[st.Name] = true
+	}
+	for _, c := range copies {
+		if seen[c.Name] {
+			continue
+		}
+		if p, err := m.Store.Project(ctx, c.Name); err == nil && p == nil {
+			sts = append(sts, c) // gone from Store, yet not undone
+		}
+	}
+	return sts, nil
 }
 
 func (m *Mirror) PutStatus(ctx context.Context, st *project.Status) error {

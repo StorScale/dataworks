@@ -242,3 +242,65 @@ func TestAProjectReadsOnlyItsOwnConnections(t *testing.T) {
 		t.Errorf("none of that name: %v %v, want nil and no error", got, err)
 	}
 }
+
+// A project made with kubectl has no finalizer: the operator gives it one as
+// it applies it, so deleting it waits for the operator to undo it.
+func TestAProjectMadeWithKubectlIsKeptUntilUndone(t *testing.T) {
+	k, f := newKube(t)
+	ctx := context.Background()
+	f.items["sales"] = map[string]any{"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project",
+		"metadata": map[string]any{"name": "sales", "resourceVersion": "1"},
+		"spec":     map[string]any{"members": []any{map[string]any{"group": "engineers", "role": "editor"}}}}
+	if err := k.PutStatus(ctx, &project.Status{Name: "sales", Phase: project.Ready}); err != nil {
+		t.Fatal(err)
+	}
+	if fin, _ := f.items["sales"]["metadata"].(map[string]any)["finalizers"].([]any); !slices.Contains(fin, any(Finalizer)) {
+		t.Fatalf("after the operator applied it, finalizers: %v, want %s", fin, Finalizer)
+	}
+	k.DeleteProject(ctx, "sales")
+	if _, ok := f.items["sales"]; !ok {
+		t.Error("deleted at once: the operator never undoes it")
+	}
+}
+
+// copyStore is a Mirror's copy: statuses only.
+type copyStore struct {
+	Store
+	statuses map[string]*project.Status
+}
+
+func (c *copyStore) Statuses(context.Context) ([]*project.Status, error) {
+	var out []*project.Status
+	for _, st := range c.statuses {
+		out = append(out, st)
+	}
+	return out, nil
+}
+
+func (c *copyStore) DeleteStatus(_ context.Context, name string) error {
+	delete(c.statuses, name)
+	return nil
+}
+
+// One deleted before it had a finalizer is gone from Kubernetes, but its
+// status (and spec) is still in the copy: the operator must undo it.
+func TestAMirrorStillHasTheStatusOfAProjectGoneWithoutUndo(t *testing.T) {
+	k, _ := newKube(t)
+	ctx := context.Background()
+	p := sales(t, "")
+	k.PutProject(ctx, p)
+	k.PutStatus(ctx, &project.Status{Name: "sales", Phase: project.Ready, Spec: p})
+	gone := &project.Status{Name: "upgrade-check", Phase: project.Ready, Spec: p}
+	m := &Mirror{Store: k, Copy: &copyStore{statuses: map[string]*project.Status{
+		"sales": {Name: "sales", Phase: project.Ready, Spec: p}, "upgrade-check": gone}}}
+	sts, err := m.Statuses(ctx)
+	if err != nil || len(sts) != 2 || sts[1] != gone {
+		t.Fatalf("statuses: %+v, %v; want sales's (from Kubernetes) and upgrade-check's (from the copy)", sts, err)
+	}
+	if err := m.DeleteStatus(ctx, "upgrade-check"); err != nil {
+		t.Fatal(err)
+	}
+	if sts, _ := m.Statuses(ctx); len(sts) != 1 {
+		t.Errorf("once undone: %+v, want sales's only", sts)
+	}
+}
