@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { getFlow, runSQL, SQLAnswer } from "../api";
+import { asOf, atCommit, getFlow, Moment, runSQL, SQLAnswer } from "../api";
 import { ErrorBanner, limits, maskLabel, usePoll, useProject } from "../lib";
 import { Results } from "./Data";
 
@@ -12,7 +12,9 @@ export default function SQL() {
   const [params] = useSearchParams();
   const flow = usePoll(() => getFlow(name), [name]);
   const starter = (t: string) => `SELECT *\nFROM ${t}\nLIMIT 100`;
-  const [sql, setSql] = useState(params.get("table") ? starter(params.get("table")!) : "");
+  const [sql, setSql] = useState(params.get("sql") ?? (params.get("table") ? starter(params.get("table")!) : ""));
+  const [at, setAt] = useState("");
+  const [moment, setMoment] = useState<Moment>();
   const [answer, setAnswer] = useState<SQLAnswer>();
   const [error, setError] = useState<string>();
   const [running, setRunning] = useState(false);
@@ -42,6 +44,23 @@ export default function SQL() {
     requestAnimationFrame(() => { el.focus(); el.setSelectionRange(a + text.length, a + text.length); });
   };
   const lines = sql.split("\n").length;
+  const names = tables.map((t) => t.name);
+  // As of a moment: the project's tables in the query named at its commit.
+  const readAsOf = async () => {
+    setError(undefined);
+    if (!at.trim() || at.trim() === "now") {
+      setMoment(undefined);
+      setSql(atCommit(sql, names, ""));
+      return;
+    }
+    try {
+      const m = await asOf(name, at.trim());
+      setMoment(m);
+      setSql(atCommit(sql, names, m.commit));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
 
   return (
     <div className="page">
@@ -96,6 +115,14 @@ export default function SQL() {
             <div className="small muted" style={{ padding: "6px 16px", borderTop: "1px solid var(--line-soft)" }}>
               ⌘/Ctrl + Enter runs it. One statement at a time; the project's own table names are enough.
             </div>
+            <form className="row" style={{ padding: "8px 16px", borderTop: "1px solid var(--line-soft)", gap: 8, flexWrap: "wrap" }}
+              onSubmit={(e) => { e.preventDefault(); readAsOf(); }} data-testid="as-of">
+              <label className="row small" style={{ flexDirection: "row", gap: 6 }}>As of
+                <input value={at} onChange={(e) => setAt(e.target.value)} placeholder="now, a tag, 2026-09-30, a commit" style={{ width: 260 }} aria-label="As of" />
+              </label>
+              <button className="btn" type="submit">Read the tables then</button>
+              {moment && <span className="small muted">as of {moment.label}: commit <span className="mono">{moment.commit.slice(0, 12)}</span>{moment.time ? `, ${new Date(moment.time).toLocaleString()}` : ""}</span>}
+            </form>
           </div>
           <ErrorBanner error={error} />
           {answer && <div className="card flush"><Results answer={answer} testid="sql-result" /></div>}

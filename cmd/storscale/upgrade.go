@@ -37,6 +37,8 @@ type options struct {
 	keyFile    string // restore: the backup key
 	backupName string // restore: which backup (latest)
 	outDir     string // backup keygen: where to write the key pair
+	withData   bool   // restore: copy the data back too (backup.data)
+	intoNew    bool   // restore: into another install than the one backed up
 }
 
 // list is a flag that may be given more than once.

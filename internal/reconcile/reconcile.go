@@ -60,7 +60,11 @@ func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Sta
 	}
 	part("buckets", r.applyBuckets(ctx, p))
 	if p.Spec.Tables != nil {
-		part("nessie", r.Nessie.ensureNamespace(ctx, p.Spec.Tables.Namespace))
+		err := r.Nessie.ensureNamespace(ctx, p.Spec.Tables.Namespace)
+		if err == nil {
+			err = r.Nessie.syncTags(ctx, p)
+		}
+		part("nessie", err)
 	}
 	switch {
 	case r.ownAirflow(p):
@@ -112,6 +116,15 @@ func (r *Reconciler) Delete(ctx context.Context, p *project.Project) error {
 	for _, g := range p.Groups() {
 		keep(r.Keycloak.deleteGroup(ctx, g))
 		keep(r.Buckets.deletePolicy(ctx, g))
+	}
+	if r.Nessie != nil { // its tags go with it (the history they kept, after GC's while)
+		gone := *p
+		if gone.Spec.Tables != nil {
+			t := *gone.Spec.Tables
+			t.Tags = nil
+			gone.Spec.Tables = &t
+		}
+		keep(r.Nessie.syncTags(ctx, &gone))
 	}
 	if len(errs) > 0 {
 		return fmt.Errorf("%v", errs)

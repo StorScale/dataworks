@@ -23,7 +23,7 @@ spec:
       containers:
         - name: platformd
           image: {{ include "storscale.image" (list . "platformd") }}
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           env:
             - {name: PLATFORM_URL, value: {{ include "storscale.url" . | quote }}}
@@ -125,7 +125,7 @@ spec:
       containers:
         - name: operator
           image: {{ include "storscale.image" (list . "platformd") }}
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           command: ["/usr/bin/platform-operator"]
           env:
@@ -192,6 +192,7 @@ metadata:
   name: semanticd
   labels: {{- include "storscale.labels" . | nindent 4 }}
 spec:
+  replicas: {{ include "storscale.replicas" (list . "semanticd") }}
   progressDeadlineSeconds: {{ .Values.progressDeadlineSeconds }}
   selector:
     matchLabels: {{- include "storscale.selector" (list .Release.Name "semanticd") | nindent 6 }}
@@ -199,6 +200,7 @@ spec:
     metadata:
       labels: {{- include "storscale.selector" (list .Release.Name "semanticd") | nindent 8 }}
     spec:
+      {{- include "storscale.spread" (list . "semanticd") | nindent 6 }}
       enableServiceLinks: false
       serviceAccountName: storscale
       initContainers:
@@ -207,7 +209,7 @@ spec:
       containers:
         - name: semanticd
           image: {{ include "storscale.image" (list . "semanticd") }}
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           env:
             - {name: KEYCLOAK_URL, value: "{{ include "storscale.url" . }}/sso"}

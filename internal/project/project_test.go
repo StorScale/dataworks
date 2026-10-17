@@ -272,3 +272,28 @@ func TestMaintenanceSettings(t *testing.T) {
 		t.Fatalf("maintenance: %+v, %v", p.Spec.Tables, err)
 	}
 }
+
+func TestTags(t *testing.T) {
+	spec := func(tags string) error {
+		_, err := Parse([]byte(`{"apiVersion":"platform.storscale.io/v1alpha1","kind":"Project","metadata":{"name":"sales"},
+			"spec":{"members":[{"group":"engineers","role":"editor"}],"tables":{"tags":` + tags + `}}}`))
+		return err
+	}
+	if err := spec(`[{"name":"close-2026-09","commit":"0123456789abcdef0123","keepUntil":"2033-10-03","note":"September","by":"bob"}]`); err != nil {
+		t.Errorf("a tag: %v", err)
+	}
+	for _, bad := range []string{
+		`[{"name":"Close","commit":"0123456789abcdef","keepUntil":"2033-10-03"}]`,
+		`[{"name":"close","commit":"main","keepUntil":"2033-10-03"}]`,
+		`[{"name":"close","commit":"0123456789abcdef","keepUntil":"7y"}]`,
+		`[{"name":"close","commit":"0123456789abcdef","keepUntil":"2033-10-03"},{"name":"close","commit":"0123456789abcdef","keepUntil":"2033-10-03"}]`,
+	} {
+		if spec(bad) == nil {
+			t.Errorf("%s: want refused", bad)
+		}
+	}
+	p, _ := Parse([]byte(`{"apiVersion":"platform.storscale.io/v1alpha1","kind":"Project","metadata":{"name":"sales"},"spec":{"members":[{"group":"engineers","role":"editor"}]}}`))
+	if got := p.NessieTag(Tag{Name: "close-2026-09"}); got != "sales.close-2026-09" {
+		t.Errorf("Nessie's name: %s", got)
+	}
+}

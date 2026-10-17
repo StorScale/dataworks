@@ -113,6 +113,13 @@ type Stats struct {
 	LastChange  time.Time `json:"lastChange"`  // the current snapshot's
 	Refs        int       `json:"refs"`        // branches and tags, main among them
 	DeleteFiles int64     `json:"deleteFiles"` // position and equality deletes
+	// The current snapshot's change: what it did (append, overwrite,
+	// delete), and the rows and files it added and removed.
+	Operation    string `json:"operation,omitempty"`
+	AddedRows    int64  `json:"addedRows"`
+	DeletedRows  int64  `json:"deletedRows"`
+	AddedFiles   int64  `json:"addedFiles"`
+	DeletedFiles int64  `json:"deletedFiles"`
 }
 
 type tableMetadata struct {
@@ -160,6 +167,9 @@ func (ic *Iceberg) Stats(ctx context.Context, namespace, table string) (Stats, e
 			st.LastChange = at
 			st.DataFiles, st.Bytes, st.Rows = num(s.Summary, "total-data-files"), num(s.Summary, "total-files-size"), num(s.Summary, "total-records")
 			st.DeleteFiles = num(s.Summary, "total-delete-files")
+			st.Operation = s.Summary["operation"]
+			st.AddedRows, st.DeletedRows = num(s.Summary, "added-records"), num(s.Summary, "deleted-records")
+			st.AddedFiles, st.DeletedFiles = num(s.Summary, "added-data-files"), num(s.Summary, "deleted-data-files")
 		}
 	}
 	return st, nil

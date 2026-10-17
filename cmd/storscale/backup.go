@@ -27,6 +27,7 @@ import (
 
 const (
 	backupCron   = "storscale-backup"
+	dataCron     = "storscale-backup-data" // the data itself, copied off the cluster (backup.data)
 	restoreKey   = "storscale-restore-key"
 	restoreSaved = "storscale-restore-replicas" // the Deployments' replicas while a restore runs
 )
@@ -133,11 +134,22 @@ func backupNow() error {
 	if _, err := kubeOut("get", "cronjob", backupCron); err != nil {
 		return errors.New("backups aren't set up here: give the chart backup.certificate (storscale backup keygen makes one)")
 	}
-	name := "storscale-backup-now-" + time.Now().UTC().Format("20060102-150405")
+	stamp := time.Now().UTC().Format("20060102-150405")
+	name := "storscale-backup-now-" + stamp
 	if err := kubectl("create", "job", name, "--from=cronjob/"+backupCron); err != nil {
 		return err
 	}
-	return waitJob(name, 60*time.Minute, "dump", "backup")
+	if err := waitJob(name, 60*time.Minute, "dump", "backup"); err != nil {
+		return err
+	}
+	if _, err := kubeOut("get", "cronjob", dataCron); err != nil {
+		return nil // the data isn't copied here (backup.data)
+	}
+	name = "storscale-backup-data-now-" + stamp
+	if err := kubectl("create", "job", name, "--from=cronjob/"+dataCron); err != nil {
+		return err
+	}
+	return waitJob(name, 6*time.Hour, "data")
 }
 
 // certOf is the backup certificate the cluster encrypts for.
@@ -213,7 +225,7 @@ func deployments() (map[string]int, error) {
 // restoreJob is the restore's Job, built from the backup CronJob's own pod
 // (its images, settings and volumes): the backup fetched and decrypted, the
 // databases put back, then the Projects and Secrets.
-func restoreJob(name, backup string, cronJSON []byte) ([]byte, error) {
+func restoreJob(name, backup string, cronJSON, dataJSON []byte, intoNew bool) ([]byte, error) {
 	out := cronJSON
 	var cron struct {
 		Spec struct {
@@ -266,7 +278,23 @@ func restoreJob(name, backup string, cronJSON []byte) ([]byte, error) {
 	fetch := with(tools, "fetch", []string{"python", "-u", "/tools/backup.py", "fetch", backup}, keyMount)
 	databases := with(dump, "databases", []string{"bash", "-c", restoreScript})
 	apply := with(tools, "apply", []string{"python", "-u", "/tools/backup.py", "apply"})
-	pod["initContainers"] = append(keep, fetch, databases)
+	steps := append(keep, fetch)
+	if dataJSON != nil { // the data copied back first: the catalog restored next points at it
+		data, err := dataStep(dataJSON)
+		if err != nil {
+			return nil, err
+		}
+		steps = append(steps, data)
+	}
+	steps = append(steps, databases)
+	if intoNew {
+		for _, c := range []map[string]any{fetch, apply} {
+			env, _ := c["env"].([]any)
+			c["env"] = append(append([]any{}, env...), map[string]any{"name": "INTO_NEW", "value": "1"})
+		}
+		steps = append(steps, with(dump, "roles", []string{"bash", "-c", rolesScript}))
+	}
+	pod["initContainers"] = steps
 	pod["containers"] = []any{apply}
 	vols, _ := pod["volumes"].([]any)
 	pod["volumes"] = append(vols, map[string]any{"name": "restore-key", "secret": map[string]any{"secretName": restoreKey}})
@@ -280,6 +308,56 @@ func restoreJob(name, backup string, cronJSON []byte) ([]byte, error) {
 	}
 	return json.Marshal(job)
 }
+
+// dataStep is the data copy's container (the storscale-backup-data
+// CronJob's), the other way: each bucket copied back from backup.s3.
+func dataStep(dataJSON []byte) (map[string]any, error) {
+	var cron struct {
+		Spec struct {
+			JobTemplate struct {
+				Spec struct {
+					Template struct {
+						Spec struct {
+							Containers []map[string]any `json:"containers"`
+						} `json:"spec"`
+					} `json:"template"`
+				} `json:"spec"`
+			} `json:"jobTemplate"`
+		} `json:"spec"`
+	}
+	if err := json.Unmarshal(dataJSON, &cron); err != nil {
+		return nil, err
+	}
+	cs := cron.Spec.JobTemplate.Spec.Template.Spec.Containers
+	if len(cs) == 0 {
+		return nil, errors.New("the CronJob storscale-backup-data has no container")
+	}
+	c := map[string]any{}
+	for k, v := range cs[0] {
+		c[k] = v
+	}
+	c["name"], c["command"] = "data", []string{"sh", "-c", dataRestoreScript}
+	delete(c, "args")
+	return c, nil
+}
+
+// dataRestoreScript copies each bucket's copy back into Buckets.
+const dataRestoreScript = `set -eu
+mc alias set src http://buckets:9000 "$BUCKETS_ROOT_USER" "$BUCKETS_ROOT_PASSWORD" >/dev/null
+mc alias set dst "$BACKUP_ENDPOINT" "$BACKUP_ACCESS_KEY" "$BACKUP_SECRET_KEY" >/dev/null
+for b in $(mc ls "dst/$BACKUP_BUCKET/data/" | awk '{print $NF}' | tr -d /); do
+  echo "data: $b"
+  mc mb --ignore-existing "src/$b" >/dev/null
+  mc mirror --overwrite --quiet "dst/$BACKUP_BUCKET/data/$b" "src/$b"
+done
+echo "data: copied back"`
+
+// rolesScript gives each database role the backup's password (roles.sql,
+// which fetch wrote from the backup's storscale-env), as the admin of now.
+const rolesScript = `set -euo pipefail
+psql -h postgres -U postgres -v ON_ERROR_STOP=1 -q -f /backup/roles.sql
+PGPASSWORD="$RANGER_PASSWORD" psql -h ranger-db -U postgres -v ON_ERROR_STOP=1 -q -f /backup/ranger-roles.sql
+echo "the roles have the backup's passwords"`
 
 // restoreScript puts every database back from its dump, as Postgres' admin:
 // each dropped whole and made again from the dump, with its owner and
@@ -338,6 +416,23 @@ func restore(o options) error {
 	} else if replicas, err = deployments(); err != nil {
 		return err
 	}
+	var dataJSON []byte
+	if o.withData || o.intoNew {
+		if dataJSON, err = kubeOut("get", "cronjob", dataCron, "-o", "json"); err != nil {
+			return errors.New("--data: the data isn't copied off this install (backup.data), so there's none to copy back")
+		}
+	}
+	data := "The data in Buckets stays as it is."
+	if dataJSON != nil {
+		data = "The data in Buckets is copied back from its copy first."
+	}
+	into := ""
+	if o.intoNew {
+		into = `
+  Into another install than the one backed up (--into-new): each database
+  role is given its password of then, the backup's storscale-env put back,
+  Buckets restarted and the setup steps run again, so every account matches.`
+	}
 	fmt.Printf(`
 Restore the platform from a backup
   cluster      %s, namespace %s
@@ -346,9 +441,9 @@ Restore the platform from a backup
   database is replaced by the backup's (Keycloak's people, Nessie's catalog,
   Airflow, Superset, OpenMetadata, Ranger's policies...); the backup's Projects
   and Secrets are put back; then everything starts again. What changed since
-  the backup is lost. The data in Buckets stays as it is.
+  the backup is lost. %s%s
 
-`, kubeContext, namespace, name, len(replicas))
+`, kubeContext, namespace, name, len(replicas), data, into)
 	if !o.yes {
 		fmt.Print("Go ahead? [y/N] ")
 		answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
@@ -384,14 +479,22 @@ Restore the platform from a backup
 	if err != nil {
 		return errors.New("backups aren't set up here (no CronJob storscale-backup)")
 	}
-	job, err := restoreJob(jobName, name, cronJSON)
+	job, err := restoreJob(jobName, name, cronJSON, dataJSON, o.intoNew)
 	if err != nil {
 		return err
 	}
 	if err := applyJSON(job); err != nil {
 		return err
 	}
-	jobErr := waitJob(jobName, 60*time.Minute, "fetch", "databases", "apply")
+	logs := []string{"fetch"}
+	if dataJSON != nil {
+		logs = append(logs, "data")
+	}
+	logs = append(logs, "databases")
+	if o.intoNew {
+		logs = append(logs, "roles")
+	}
+	jobErr := waitJob(jobName, 6*time.Hour, append(logs, "apply")...)
 
 	fmt.Println("\n3. Starting everything again")
 	for d, n := range replicas {
@@ -402,6 +505,18 @@ Restore the platform from a backup
 	kubectl("delete", "configmap", restoreSaved, "--ignore-not-found")
 	if jobErr != nil {
 		return fmt.Errorf("the restore failed: %w (the platform was started again; its databases may be part restored: restore again)", jobErr)
+	}
+	if o.intoNew {
+		// Buckets takes its root account (buckets-root, put back) as it
+		// starts; the setup steps give Buckets' and Keycloak's accounts the
+		// backup's secrets again.
+		fmt.Println("\n4. Buckets started again, and the setup steps run again")
+		if err := kubectl("delete", "pod", "-l", "buckets.io/cluster=buckets", "--wait=false"); err != nil {
+			return err
+		}
+		if err := rerunSetup(); err != nil {
+			return fmt.Errorf("restored, but the setup steps didn't run again: %w", err)
+		}
 	}
 	if err := waitReady(o.timeout); err != nil {
 		return fmt.Errorf("restored, but %w", err)
@@ -429,4 +544,80 @@ func waitStopped(limit time.Duration) error {
 		}
 		time.Sleep(5 * time.Second)
 	}
+}
+
+// rerunSetup runs the release's setup steps again (setup, setup-trino), as
+// copies of their Jobs of the current revision.
+func rerunSetup() error {
+	out, err := kubeOut("get", "jobs", "-o", "json")
+	if err != nil {
+		return err
+	}
+	var list struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(out, &list); err != nil {
+		return err
+	}
+	stamp := time.Now().UTC().Format("20060102-150405")
+	for _, step := range []string{"setup", "setup-trino"} {
+		job := latestRevision(list.Items, step)
+		if job == nil {
+			return fmt.Errorf("no Job %s-<revision>", step)
+		}
+		copy, err := jobCopy(job, step+"-again-"+stamp)
+		if err != nil {
+			return err
+		}
+		if err := applyJSON(copy); err != nil {
+			return err
+		}
+		if err := waitJob(step+"-again-"+stamp, 30*time.Minute, "setup"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// latestRevision is the Job <step>-<n> with the highest n.
+func latestRevision(jobs []map[string]any, step string) map[string]any {
+	var best map[string]any
+	bestN := -1
+	for _, j := range jobs {
+		md, _ := j["metadata"].(map[string]any)
+		name, _ := md["name"].(string)
+		rest, ok := strings.CutPrefix(name, step+"-")
+		if !ok {
+			continue
+		}
+		n := 0
+		if _, err := fmt.Sscanf(rest, "%d", &n); err != nil || fmt.Sprint(n) != rest {
+			continue // setup-trino-14 is not setup-<n>
+		}
+		if n > bestN {
+			best, bestN = j, n
+		}
+	}
+	return best
+}
+
+// jobCopy is a Job made again under another name: what Kubernetes set on it
+// (its selector, its pods' controller labels) left out.
+func jobCopy(job map[string]any, name string) ([]byte, error) {
+	spec, _ := job["spec"].(map[string]any)
+	tmpl, _ := spec["template"].(map[string]any)
+	tmd, _ := tmpl["metadata"].(map[string]any)
+	if labels, ok := tmd["labels"].(map[string]any); ok {
+		for _, k := range []string{"controller-uid", "batch.kubernetes.io/controller-uid", "job-name", "batch.kubernetes.io/job-name"} {
+			delete(labels, k)
+		}
+	}
+	newSpec := map[string]any{"backoffLimit": spec["backoffLimit"], "template": tmpl}
+	md, _ := job["metadata"].(map[string]any)
+	labels, _ := md["labels"].(map[string]any)
+	for _, k := range []string{"controller-uid", "batch.kubernetes.io/controller-uid", "job-name", "batch.kubernetes.io/job-name"} {
+		delete(labels, k)
+	}
+	return json.Marshal(map[string]any{"apiVersion": "batch/v1", "kind": "Job",
+		"metadata": map[string]any{"name": name, "labels": labels}, "spec": newSpec})
 }

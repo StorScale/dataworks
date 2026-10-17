@@ -79,6 +79,18 @@ spec:
                               table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                               column: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                               type: {type: string, enum: [MASK, MASK_SHOW_LAST_4, MASK_SHOW_FIRST_4, MASK_HASH, MASK_NULL, MASK_NONE, MASK_DATE_SHOW_YEAR]}
+                    tags:
+                      description: "Moments of the tables kept (a month-end close, a delivery): each a Nessie tag (<project>.<name>) at a commit of the catalog, kept until keepUntil, whatever history is kept otherwise."
+                      type: array
+                      items:
+                        type: object
+                        required: [name, commit, keepUntil]
+                        properties:
+                          name: {type: string, pattern: '^[a-z0-9][a-z0-9-]{0,62}$'}
+                          commit: {type: string, pattern: '^[0-9a-f]{16,64}$', description: "The catalog's commit (on main) the tag keeps."}
+                          keepUntil: {type: string, pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$', description: "A date: the tag is removed after it."}
+                          note: {type: string, maxLength: 500}
+                          by: {type: string, maxLength: 100, description: "Who made it."}
                     maintenance:
                       description: "How the platform keeps the tables in shape each night: small files compacted."
                       type: object

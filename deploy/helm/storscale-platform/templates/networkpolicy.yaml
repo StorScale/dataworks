@@ -135,4 +135,7 @@ spec:
       from:
         {{- include "storscale.np.from" (list "gateway" "platformd" "platform-operator" "semanticd" "grafana" "jupyterhub"
               "catalog-sync" "airflow" "openmetadata" "setup") | nindent 8 }}
+    # Its own pods, when there are more than one: their shared caches (JGroups).
+    - from:
+        {{- include "storscale.np.from" (list "keycloak") | nindent 8 }}
 {{- end }}

@@ -8,6 +8,11 @@ are dumped (the backup CronJob, and the restore Job storscale restore makes).
                                     with the restore key, unpacked into /backup
     python backup.py apply          its Projects and Secrets put back
 
+INTO_NEW=1 (storscale restore --into-new, into an install other than the
+one backed up): fetch also writes, from the backup's storscale-env, the SQL
+that gives each database role its password of then (roles.sql; never
+printed), and apply puts storscale-env back too.
+
 A backup is backups/<time>.tar.gz.cms in the backup bucket: a tar.gz in a CMS
 envelope (AES-256-GCM, its key for the certificate's RSA key), which openssl
 alone opens: openssl cms -decrypt -binary -inform DER -inkey KEY -recip CERT.
@@ -130,20 +135,57 @@ def fetch(name):
         t.extractall("/", filter="data")  # into /backup (the archive's root)
     with open(f"{WORK}/name", "w") as f:
         f.write(name)
+    if os.environ.get("INTO_NEW") == "1":
+        roles()
     log(f"fetched {name}")
+
+
+# Each database role, and the storscale-env key holding its password.
+PLATFORM_ROLES = {"postgres": "POSTGRES_ADMIN_PASSWORD", "airflow": "AIRFLOW_DB_PASSWORD", "superset": "SUPERSET_DB_PASSWORD",
+                  "openmetadata_user": "OPENMETADATA_DB_PASSWORD", "keycloak": "KEYCLOAK_DB_PASSWORD",
+                  "nessie": "NESSIE_DB_PASSWORD", "trino": "TRINO_DB_PASSWORD"}
+RANGER_ROLES = {"postgres": "RANGER_PASSWORD", "rangeradmin": "RANGER_PASSWORD"}
+
+
+def roles():
+    """The SQL giving each role the backup's password (the install restored
+    into made its own): roles.sql for the platform's Postgres, ranger-roles.sql
+    for Ranger's. Only the restore Job's emptyDir holds them."""
+    import base64
+    with open(f"{WORK}/secrets.json") as f:
+        env = next((s.get("data", {}) for s in json.load(f) if s["metadata"]["name"] == "storscale-env"), None)
+    if env is None:
+        sys.exit("backup: the backup has no storscale-env: it can't go into another install")
+    lit = lambda v: "'" + v.replace("'", "''") + "'"
+    for path, mapping in ((f"{WORK}/roles.sql", PLATFORM_ROLES), (f"{WORK}/ranger-roles.sql", RANGER_ROLES)):
+        lines = []
+        for role, key in mapping.items():
+            if key not in env:
+                continue
+            pw = base64.b64decode(env[key]).decode()
+            if "$storscale$" in pw:
+                sys.exit(f"backup: {key} holds $storscale$, which this SQL can't quote")
+            lines.append(f"DO $storscale$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname = {lit(role)}) THEN "
+                         f"EXECUTE format('ALTER ROLE %I PASSWORD %L', {lit(role)}, {lit(pw)}); END IF; END $storscale$;")
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write("\n".join(lines) + "\n")
+    log("the roles' passwords of the backup, for the databases (not shown)")
 
 
 def apply():
     """The backup's Projects put back as they were (a project made since is
     left as it is); its Secrets put back where they're missing or differ,
-    but for storscale-env, which a restore into the same install keeps."""
+    but for storscale-env, which a restore into the same install keeps (and
+    one into another install puts back too, INTO_NEW)."""
     with open(f"{WORK}/projects.json") as f:
         projects = json.load(f)
     with open(f"{WORK}/secrets.json") as f:
         secrets = json.load(f)
+    into_new = os.environ.get("INTO_NEW") == "1"
     for s in secrets:
         name = s["metadata"]["name"]
-        if name == "storscale-env":
+        if name == "storscale-env" and not into_new:
             continue
         r = k8s._api("GET", f"secrets/{name}")
         if r.status_code == 200 and r.json().get("data") == s.get("data"):

@@ -108,3 +108,4 @@ c.JupyterHub.hub_ip = "0.0.0.0"
 c.JupyterHub.hub_connect_ip = "jupyterhub"
 c.JupyterHub.cookie_secret_file = "/srv/jupyterhub/data/cookie_secret"
 c.JupyterHub.db_url = "sqlite:////srv/jupyterhub/data/jupyterhub.sqlite"
+c.ConfigurableHTTPProxy.pid_file = "/tmp/jupyterhub-proxy.pid"   # the hub runs as an unprivileged user

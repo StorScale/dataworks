@@ -215,3 +215,23 @@ resources:
     matchExpressions:
       - {key: app.kubernetes.io/name, operator: In, values: {{ toJson . }}}
 {{- end }}
+
+{{/* A service's replicas (replicas.<name>, default 1). */}}
+{{- define "storscale.replicas" -}}
+{{- $root := index . 0 -}}{{- $name := index . 1 -}}
+{{- index $root.Values.replicas $name | default 1 -}}
+{{- end }}
+
+{{/* A replicated service's pods spread across nodes, where nodes allow
+     (a single-node cluster still runs them). */}}
+{{- define "storscale.spread" -}}
+{{- $root := index . 0 -}}{{- $name := index . 1 -}}
+{{- if gt (int (include "storscale.replicas" .)) 1 }}
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels: {{- include "storscale.selector" (list $root.Release.Name $name) | nindent 8 }}
+{{- end }}
+{{- end }}

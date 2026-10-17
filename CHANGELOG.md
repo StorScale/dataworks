@@ -4,6 +4,14 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **The data as it was** ([docs/use-cases.md](docs/use-cases.md), 6.10): a table is read as it was at a commit of the catalog, `"orders#<commit>"`, under its readers' rules. A project's **tags** keep moments (a month-end close, a delivery) as long as asked: its editors make and remove them on the new Tags tab (a name, a moment: now, a date or time, a commit; how long to keep it, as `7y`; a note), they're part of the project (`tables.tags`, so backups keep them), the operator keeps Nessie's tags (`<project>.<name>`) as they say, nightly maintenance removes those past their `keepUntil`, and the audit log records each. Each table's new **History** tab lists its changes, newest first: when, what it did (rows added and removed), who wrote it (from the audit log), the tags on it, each readable as it was then. The SQL page's **As of** reads the project's tables at a tag, a time or a commit. The `history` suite checks it.
+- **High availability:** `replicas.*` runs more than one pod of the gateway, Keycloak (its clustered cache, its pods finding each other through its database), Nessie, semanticd, Superset and Airflow's API, spread across nodes, each with a disruption budget; `trino.workers` adds Trino workers beside the coordinator. CI's HTTPS job runs two of the gateway, Keycloak and Nessie and a worker, removes one pod of each, and checks again. platformd, the operator and the databases stay one each.
+- **Disaster recovery:** `backup.data` copies every bucket (the lake, the projects', the platform's) to `backup.s3`, nightly, what changed, never deleting there; `storscale restore --data` copies them back, and `--into-new` restores into another install than the one backed up (a cluster lost): the data copied back, the databases, each database role given its password of then, the backup's Secrets (`storscale-env` among them) put back, Buckets restarted and the setup steps run again so every account matches. CI copies the data and checks a file comes back with `--data`; `--into-new` is checked in parts (its Job's steps, the roles' SQL), not yet end to end.
+
+### Changed
+- **Pod security, the rest:** every container drops every capability. The Postgres servers run as `postgres` (999) from the start; the gateway (Caddy) and JupyterHub's hub as an unprivileged user (Caddy keeps the bind-port capability its binary carries); the browser checks as Playwright's own user; and every image whose user is known runs with it declared (`runAsNonRoot`). Short of Kubernetes' restricted standard still: OpenMetadata and Ranger's admin, whose images' user ids aren't known here (docs/plan.md).
+
 ## [0.9.0] - 2026-10-17
 
 Backups and restore, Nessie's catalog in Postgres, network policies and Pod Security, images scanned; and a security fix: a table read as it was keeps its readers' masks and row filters.

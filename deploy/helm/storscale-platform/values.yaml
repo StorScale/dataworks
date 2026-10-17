@@ -90,6 +90,11 @@ trino:
     type: NodePort
     nodePort: 30443   # kind maps the host's port 8443 here
   memory: 1536Mi      # its heap is 80% of this
+  # Workers beside the coordinator, which then plans and hands out queries'
+  # tasks: more of them, more queries at once (and no one pod's loss stops
+  # them). 0: the coordinator does the work itself.
+  workers: 0
+  workerMemory: ""    # default: memory, above
 
 # How long a Deployment may take to become ready before Kubernetes calls its
 # rollout failed (its default is 10 minutes). On a first install, services
@@ -132,6 +137,19 @@ pipelines:
   # Without them, a host's key is taken the first time it's seen.
   gitKnownHosts: ""
 
+# High availability: how many pods of each stateless service, spread across
+# nodes, each with a disruption budget when more than one. Nessie runs more
+# than one only after the upgrade that moves its catalog into Postgres
+# (0.9.0). Keycloak's pods find each other through its database. platformd
+# and the operator stay one each, as do the databases (see docs/plan.md).
+replicas:
+  gateway: 1
+  keycloak: 1
+  nessie: 1
+  semanticd: 1
+  superset: 1
+  airflow: 1
+
 # Network policies: nothing reaches the platform's pods unless it should.
 # The gateway takes connections from anywhere (it's the way in), Trino's
 # 8443 too (JDBC clients); the databases, Ranger's audit index, the
@@ -167,6 +185,14 @@ backup:
     endpoint: ""
     region: us-east-1
     secretName: ""
+  # The data itself, for when the cluster is lost: every bucket (the lake,
+  # the projects', the platform's) copied to backup.s3, nightly, what changed
+  # since. Needs backup.s3.endpoint: a copy kept in the cluster's own Buckets
+  # protects from nothing (allowInternal: for tests alone).
+  data:
+    enabled: false
+    schedule: "30 4 * * *"
+    allowInternal: false
 
 # Table maintenance: each night at `at` (UTC), platformd compacts every
 # project's small files (a project's tables.maintenance may pause it). Then

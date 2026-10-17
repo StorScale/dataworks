@@ -19,6 +19,7 @@ metadata:
   name: nessie
   labels: {{- include "storscale.labels" . | nindent 4 }}
 spec:
+  replicas: {{ include "storscale.replicas" (list . "nessie") }}
   progressDeadlineSeconds: {{ .Values.progressDeadlineSeconds }}
   selector:
     matchLabels: {{- include "storscale.selector" (list .Release.Name "nessie") | nindent 6 }}
@@ -27,6 +28,7 @@ spec:
     metadata:
       labels: {{- include "storscale.selector" (list .Release.Name "nessie") | nindent 8 }}
     spec:
+      {{- include "storscale.spread" (list . "nessie") | nindent 6 }}
       enableServiceLinks: false
       serviceAccountName: storscale
       securityContext: {fsGroup: 185}
@@ -52,12 +54,13 @@ spec:
             - {name: NESSIE_DB_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: NESSIE_DB_PASSWORD}}}
           resources:
             requests: {cpu: 10m, memory: 32Mi}
+        {{- if eq (include "storscale.replicas" (list . "nessie")) "1" }}   {{/* RocksDB's volume is one pod's */}}
         # Before 0.9.0 the catalog was in RocksDB, on nessie-data: moved into
         # Postgres once, here, while Nessie is stopped (Recreate), then the
         # RocksDB files are renamed, never read again (kept for a rollback).
         - name: move
           image: {{ .Values.upstream.nessieAdmin }}
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 185, runAsGroup: 185, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           command: ["bash", "-c"]
           args:
             - |
@@ -78,10 +81,11 @@ spec:
           resources:
             requests: {cpu: 50m, memory: 256Mi}
             limits: {memory: 640Mi}
+        {{- end }}
       containers:
         - name: nessie
           image: {{ .Values.upstream.nessie }}
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 185, runAsGroup: 185, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           env:
             - {name: JAVA_OPTS_APPEND, value: "-Xms64m -Xmx256m"}
             {{- include "storscale.nessieDb" . | nindent 12 }}
@@ -102,7 +106,9 @@ spec:
             failureThreshold: 60
           {{- include "storscale.resources" (list "50m" "320Mi" "512Mi") | nindent 10 }}
       volumes:
+        {{- if eq (include "storscale.replicas" (list . "nessie")) "1" }}
         - {name: data, persistentVolumeClaim: {claimName: nessie-data}}
+        {{- end }}
         {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 8 }}
 ---
 apiVersion: v1
@@ -173,7 +179,7 @@ spec:
       containers:
         - name: trino
           image: {{ .Values.upstream.trino }}
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           {{- include "storscale.envFrom" . | nindent 10 }}
           {{- /* It fetches Keycloak's keys at the public address. */}}
           {{- with include "storscale.ca.env" . }}
@@ -231,6 +237,70 @@ spec:
       {{- if and (eq .Values.trino.service.type "NodePort") .Values.trino.service.nodePort }}
       nodePort: {{ .Values.trino.service.nodePort }}
       {{- end }}
+{{- if gt (int .Values.trino.workers) 0 }}
+---
+# Trino's workers (trino.workers): they run queries' tasks, which the
+# coordinator (trino, above) plans, checks against Ranger and hands out;
+# they find it at its address, and speak to it with the shared secret.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trino-worker
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+data:
+  config.properties: |
+    coordinator=false
+    http-server.http.port=8080
+    discovery.uri=http://trino:8080
+    internal-communication.shared-secret=${ENV:TRINO_SHARED_SECRET}
+    query.max-memory=1GB
+    query.max-memory-per-node=512MB
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trino-worker
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.trino.workers }}
+  progressDeadlineSeconds: {{ .Values.progressDeadlineSeconds }}
+  selector:
+    matchLabels: {{- include "storscale.selector" (list .Release.Name "trino-worker") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "storscale.selector" (list .Release.Name "trino-worker") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "storscale.filesConfigMap" (list . "trino" "trino") | sha256sum }}
+    spec:
+      enableServiceLinks: false
+      automountServiceAccountToken: false
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {{- include "storscale.selector" (list .Release.Name "trino-worker") | nindent 14 }}
+      containers:
+        - name: trino
+          image: {{ .Values.upstream.trino }}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          {{- include "storscale.envFrom" . | nindent 10 }}
+          ports:
+            - {name: http, containerPort: 8080}
+          readinessProbe:
+            exec: {command: ["sh", "-c", "curl -sf http://localhost:8080/v1/info | grep -q '\"starting\":false'"]}
+            periodSeconds: 5
+            failureThreshold: 60
+          volumeMounts:
+            - {name: config, mountPath: /etc/trino/config.properties, subPath: config.properties}
+            - {name: files-trino, mountPath: /etc/trino/catalog, subPath: catalog}
+          resources:
+            requests: {cpu: 250m, memory: {{ .Values.trino.workerMemory | default .Values.trino.memory }}}
+            limits: {memory: {{ .Values.trino.workerMemory | default .Values.trino.memory }}}
+      volumes:
+        - {name: config, configMap: {name: trino-worker}}
+        {{- include "storscale.filesVolume" (list . "trino" "trino") | nindent 8 }}
+{{- end }}
 ---
 # Nessie's GC: the tables' history older than maintenance.history.keep, and
 # files no branch or tag needs, deleted from the warehouse, as Nessie's own
@@ -259,7 +329,7 @@ spec:
           containers:
             - name: gc
               image: {{ .Values.upstream.nessieGc }}
-              securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+              securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 185, runAsGroup: 185, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
               args: ["gc", "--uri", "http://nessie:19120/api/v2", "--inmemory",
                      "--default-cutoff", {{ .Values.maintenance.history.keep | quote }},
                      "--iceberg", "s3.endpoint=http://buckets:9000/,s3.path-style-access=true"]

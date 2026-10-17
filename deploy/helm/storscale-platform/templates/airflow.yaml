@@ -12,7 +12,7 @@
 {{- $root := index . 0 }}{{ $part := index . 1 -}}
 image: {{ include "storscale.image" (list $root "airflow") }}
 imagePullPolicy: {{ $root.Values.images.pullPolicy }}
-securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 50000, runAsGroup: 50000, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
 envFrom:
   - configMapRef: {name: storscale-config}
 env:
@@ -111,6 +111,7 @@ metadata:
   name: airflow
   labels: {{- include "storscale.labels" . | nindent 4 }}
 spec:
+  replicas: {{ include "storscale.replicas" (list . "airflow") }}
   progressDeadlineSeconds: {{ .Values.progressDeadlineSeconds }}
   selector:
     matchLabels: {{- include "storscale.selector" (list .Release.Name "airflow") | nindent 6 }}
@@ -120,6 +121,7 @@ spec:
       annotations:
         checksum/config: {{ include "storscale.filesConfigMap" (list . "airflow" "airflow") | sha256sum }}
     spec:
+      {{- include "storscale.spread" (list . "airflow") | nindent 6 }}
       enableServiceLinks: false
       serviceAccountName: storscale-airflow
       initContainers:

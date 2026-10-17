@@ -78,4 +78,64 @@ spec:
             - {name: cert, secret: {secretName: storscale-backup-cert}}
             {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 12 }}
             {{- include "storscale.ca.volumes" . | nindent 12 }}
+{{- if .Values.backup.data.enabled }}
+{{- if and (not .Values.backup.s3.endpoint) (not .Values.backup.data.allowInternal) }}
+{{- fail "backup.data copies the data off the cluster: give backup.s3.endpoint (an S3 elsewhere), or backup.data.allowInternal for a test" }}
+{{- end }}
+---
+# The data itself (backup.data): every bucket but the backups' copied to
+# backup.s3 (under data/<bucket>), what changed since the last copy. Never
+# deleted there: a source emptied by mistake can't empty its copy.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: storscale-backup-data
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.backup.data.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels: {{- include "storscale.selector" (list .Release.Name "storscale-backup-data") | nindent 12 }}
+        spec:
+          enableServiceLinks: false
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          initContainers:
+            {{- include "storscale.ca.init" . | nindent 12 }}
+          containers:
+            - name: data
+              image: {{ include "storscale.image" (list . "tools") }}
+              securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+              imagePullPolicy: {{ .Values.images.pullPolicy }}
+              command: ["sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  mc alias set src http://buckets:9000 "$BUCKETS_ROOT_USER" "$BUCKETS_ROOT_PASSWORD" >/dev/null
+                  mc alias set dst "$BACKUP_ENDPOINT" "$BACKUP_ACCESS_KEY" "$BACKUP_SECRET_KEY" >/dev/null
+                  for b in $(mc ls src | awk '{print $NF}' | tr -d /); do
+                    [ "$b" = "$BACKUP_BUCKET" ] && continue
+                    echo "data: $b"
+                    mc mirror --overwrite --quiet "src/$b" "dst/$BACKUP_BUCKET/data/$b"
+                  done
+                  echo "data: copied"
+              env:
+                {{- include "storscale.backup.env" . | nindent 16 }}
+                - {name: BUCKETS_ROOT_USER, valueFrom: {secretKeyRef: {name: storscale-env, key: BUCKETS_ROOT_USER}}}
+                - {name: BUCKETS_ROOT_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: BUCKETS_ROOT_PASSWORD}}}
+                {{- include "storscale.ca.env" . | nindent 16 }}
+              {{- with include "storscale.ca.mount" . }}
+              volumeMounts: {{- . | nindent 16 }}
+              {{- end }}
+              {{- include "storscale.resources" (list "50m" "128Mi" "512Mi") | nindent 14 }}
+          {{- with include "storscale.ca.volumes" . }}
+          volumes: {{- . | nindent 12 }}
+          {{- end }}
+{{- end }}
 {{- end }}

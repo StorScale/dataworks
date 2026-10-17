@@ -40,10 +40,13 @@ Usage:
   storscale backup keygen --out DIR
                                 the key pair backups are encrypted with: the certificate for
                                 the chart, the key for a restore (keep it off the cluster)
-  storscale restore --key FILE [--backup NAME]
-                                put a backup (the latest by default) back into the install it
-                                came from: stops everything, restores every database and the
-                                Projects and Secrets, starts everything again; asks first
+  storscale restore --key FILE [--backup NAME] [--data] [--into-new]
+                                put a backup (the latest by default) back: stops everything,
+                                restores every database and the Projects and Secrets, starts
+                                everything again; asks first. --data copies the data back from
+                                its copy too (backup.data); --into-new is for an install other
+                                than the one backed up (a cluster lost): the backup's passwords
+                                and accounts come back with it (implies --data)
   storscale version
 
 Flags for upgrade:
@@ -113,6 +116,8 @@ func run(args []string) error {
 	fs.StringVar(&o.keyFile, "key", "", "the backup key (restore)")
 	fs.StringVar(&o.backupName, "backup", "", "which backup: its name, or latest (restore)")
 	fs.StringVar(&o.outDir, "out", "", "where to write the key pair (backup keygen)")
+	fs.BoolVar(&o.withData, "data", false, "copy the data back too (restore)")
+	fs.BoolVar(&o.intoNew, "into-new", false, "into another install than the one backed up (restore)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}

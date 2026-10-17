@@ -5,6 +5,7 @@ metadata:
   name: gateway
   labels: {{- include "storscale.labels" . | nindent 4 }}
 spec:
+  replicas: {{ include "storscale.replicas" (list . "gateway") }}
   progressDeadlineSeconds: {{ .Values.progressDeadlineSeconds }}
   selector:
     matchLabels: {{- include "storscale.selector" (list .Release.Name "gateway") | nindent 6 }}
@@ -14,11 +15,12 @@ spec:
       annotations:
         checksum/config: {{ .Files.Get "files/gateway/Caddyfile" | sha256sum }}
     spec:
+      {{- include "storscale.spread" (list . "gateway") | nindent 6 }}
       enableServiceLinks: false
       containers:
         - name: caddy
           image: {{ .Values.upstream.caddy }}
-          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL], add: [NET_BIND_SERVICE]}, seccompProfile: {type: RuntimeDefault}}   # its binary carries that capability
           args: ["caddy", "run", "--config", "/etc/storscale/Caddyfile", "--adapter", "caddyfile"]
           env:
             - {name: STORSCALE_DOMAIN, value: {{ .Values.global.domain | quote }}}
@@ -35,9 +37,13 @@ spec:
           volumeMounts:
             - {name: files-gateway, mountPath: /etc/storscale}
             - {name: files-gateway, mountPath: /srv/_storscale, subPath: catalog}
+            - {name: caddy-data, mountPath: /data}       # XDG_DATA_HOME, XDG_CONFIG_HOME
+            - {name: caddy-config, mountPath: /config}
           {{- include "storscale.resources" (list "20m" "32Mi" "128Mi") | nindent 10 }}
       volumes:
         {{- include "storscale.filesVolume" (list . "gateway" "gateway") | nindent 8 }}
+        - {name: caddy-data, emptyDir: {}}
+        - {name: caddy-config, emptyDir: {}}
 ---
 apiVersion: v1
 kind: Service

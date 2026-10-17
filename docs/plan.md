@@ -245,26 +245,23 @@ How:
 | The tables' history and files nothing uses, collected by Nessie's GC, kept as long as the install says | Built (unreleased): Iceberg's own expiry doesn't apply to Nessie's tables |
 | The audit log: the platform's records beside Ranger's, per project and for administrators, with export | Built (unreleased); use case 6.3; Keycloak's and Buckets' events, and agents apart from people, to come |
 | The example users switchable off | Next, before Entra ID |
-| Backups: every database (Nessie's catalog now among them, in Postgres) and the Projects and Secrets, nightly, encrypted for a key kept off the cluster; `storscale backup` and `restore`, tested in CI | Built (unreleased), for restoring into the same install; the data in Buckets copied elsewhere, for a lost cluster, to come |
-| High availability and hardening: replicas, network policies, Pod Security, encryption at rest, image scanning and SBOMs | Network policies, Pod Security (baseline enforced; restricted for most, the rest listed below), image scanning (SBOMs and signing were already) built, unreleased; replicas and encryption at rest to do |
+| Backups: every database (Nessie's catalog now among them, in Postgres) and the Projects and Secrets, nightly, encrypted for a key kept off the cluster; `storscale backup` and `restore`, tested in CI | In 0.9.0; the data copied off the cluster (`backup.data`) and a restore into another install (`--into-new`) built since (unreleased): `--into-new` checked in parts, not end to end |
+| High availability and hardening: replicas, network policies, Pod Security, encryption at rest, image scanning and SBOMs | Network policies, Pod Security (baseline enforced), image scanning in 0.9.0; replicas of the stateless services and Trino workers built (unreleased); platformd's and the databases' replicas, and encryption at rest, to do |
 | Retention per table and erasure of a person's data | Waiting on decisions: which laws, what deadlines, how kept closes are treated |
-| A table's history and its data as of a date or a close (6.10) | Designed (below); first, a check that a table read at a reference keeps its masks and filters |
+| A table's history and its data as of a date or a close (6.10) | Built (unreleased): tags, the History tab, As of on the SQL page; the access fix released in 0.9.0 |
 | Docs on storscale.io/platform | To do |
 
 ### Pod security: what's left (2026-10-17)
 
-Every container runs without privilege escalation, with the default seccomp profile; the namespace enforces Pod Security's baseline standard and warns of the restricted one. These still fall short of restricted (they keep their capabilities, or run as root), each with what it would take:
+Every container runs without privilege escalation, with the default seccomp profile and every capability dropped; the namespace enforces Pod Security's baseline standard and warns of the restricted one. The Postgres servers run as `postgres` (999), the gateway and JupyterHub's hub as an unprivileged user, and every image whose user id is known has it declared (`runAsNonRoot`). Short of the restricted standard still, each with what it would take:
 
 | Container | Why | What it would take |
 |---|---|---|
-| `postgres` (the platform's), `ranger-db` | The images start as root, take the data directory, then run as `postgres` (999) | Run as 999 from the start, with `fsGroup: 999` (the volumes' files are 999's already); check an upgrade on a volume made before |
-| `gateway` (Caddy) | Caddy's image runs as root | Run as a user of its own, with its data and config directories on emptyDirs (8800 needs no privilege) |
-| `openmetadata`, `openmetadata-migrate` | The image runs as root | Run as a user of its own, if the image allows (its logs and temp files); else a derived image |
-| `jupyterhub` (the hub) | The image runs as root | Run as a user of its own, with `fsGroup` on its volume (the hub's database and cookie secret) |
-| `ranger-admin` | The image's start scripts run as root, then switch user | A derived image that starts as the ranger user; the most work |
-| `storscale-test-browser` | Playwright's image runs as root | Only for the checks: as root it stays |
+| `openmetadata`, `openmetadata-migrate` | The image's user id isn't known here | Read it from the image (or a derived image with one), then declare it |
+| `ranger-admin` | Its image runs as `ranger`, by name: Kubernetes can't verify a name | Its uid from the image, declared |
+| The Buckets operator | Its subchart's own settings | Its values, if it has them |
 
-Done since: the Postgres client steps (each database's making, the backup's dump, the restore) run as the image's `postgres` user, capabilities dropped. **Then:** enforce restricted, once the rest are done.
+**Then:** enforce restricted.
 
 ### The data as it was (use case 6.10), how (design, 2026-10-17)
 
@@ -282,7 +279,7 @@ Done since: the Postgres client steps (each database's making, the backup's dump
 
 **Open, unchanged:** erasure against kept history (6.9: a close kept with a person's rows removed, or with personal columns erased, and its totals noted) needs the privacy team's and Finance's answer; how long closes are kept (often seven years) sets the storage they hold.
 
-**Order and effort:** (1) the access check and the operator's fix, a day; (2) reading as of a tag, time or commit on the SQL page, with the checks above, a day; (3) tags: API, Tags tab, keep and removal, audit, two days; (4) the History tab, two days.
+**Order and effort:** (1) the access check and the operator's fix, a day; (2) reading as of a tag, time or commit on the SQL page, with the checks above, a day; (3) tags: API, Tags tab, keep and removal, audit, two days; (4) the History tab, two days. **Built (2026-10-17):** all four. Tags are the project's (`tables.tags`: a name, a commit, keepUntil, a note, who), the operator keeps Nessie's as they say; the platform turns a tag or a time into its commit. Not yet: notebooks and dashboards read as of a moment by the name alone (no picker), and deliveries (9.1) recording their commit.
 
 ### One-command upgrades (built 2026-10-16)
 

@@ -1,0 +1,18 @@
+{{- /* High availability (replicas.*): a service run in more than one pod keeps
+     one through a node's draining (a PodDisruptionBudget). platformd and the
+     operator stay one each (platformd keeps sessions and its schedules in
+     memory), and so do the databases. */}}
+{{- range $name, $n := .Values.replicas }}
+{{- if gt (int $n) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  labels: {{- include "storscale.labels" $ | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {{- include "storscale.selector" (list $.Release.Name $name) | nindent 6 }}
+{{- end }}
+{{- end }}
