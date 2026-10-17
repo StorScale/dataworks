@@ -11,4 +11,8 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir trino==0.340.0 boto3==1.43.108 requests==2.34.2 pyspark-client==4.1.3 websocket-client==1.9.2 mcp==2.3.0
 COPY --from=mc /go/bin/mc /usr/local/bin/mc
+# Kubernetes runs it as an unprivileged user (65532): a home, and a working
+# directory, any user may write to.
+ENV HOME=/tmp
+RUN mkdir -p /work && chmod 1777 /work
 WORKDIR /work

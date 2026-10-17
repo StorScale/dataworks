@@ -36,6 +36,20 @@ var (
 // suite sees history go.
 var devSets = []string{"--set", "maintenance.history.keep=PT2M", "--set", "maintenance.history.schedule=*/3 * * * *"}
 
+// podSecurity makes the platform's namespace, if it's missing, and labels it
+// for Pod Security admission: baseline enforced, restricted warned of.
+func podSecurity() error {
+	ns, err := exec.Command("kubectl", kubeArgs("create", "namespace", namespace, "--dry-run=client", "-o", "yaml")...).Output()
+	if err != nil {
+		return err
+	}
+	if err := applyJSON(ns); err != nil {
+		return err
+	}
+	return run1("kubectl", kubeArgs("label", "namespace", namespace, "--overwrite",
+		"pod-security.kubernetes.io/enforce=baseline", "pod-security.kubernetes.io/warn=restricted", "pod-security.kubernetes.io/audit=restricted")...)
+}
+
 // kubeArgs are kubectl's flags for the platform's cluster and namespace.
 func kubeArgs(args ...string) []string {
 	var out []string
@@ -181,6 +195,12 @@ func (k *kube) up(st *stack, ver string) error {
 	// Helm installs a chart's CRDs once and never upgrades them: an older
 	// one drops the fields it lacks from every project.
 	if err := applyCRDs(crds); err != nil {
+		return err
+	}
+	// Pod Security: the namespace refuses what breaks the baseline standard
+	// (privileged pods, the host's network or files), and warns of what
+	// breaks the restricted one.
+	if err := podSecurity(); err != nil {
 		return err
 	}
 	if err := helm(args...); err != nil {

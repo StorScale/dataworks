@@ -85,7 +85,7 @@ data:
 - name: wait-{{ $name }}
   image: {{ include "storscale.image" (list $root "tools") }}
   imagePullPolicy: {{ $root.Values.images.pullPolicy }}
-  securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
+  securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
   command: ["python", "-u", "/tools/wait.py"]
   args: {{ toJson $args }}
   env:
@@ -125,7 +125,7 @@ data:
 - name: ca-bundle
   image: {{ include "storscale.image" (list . "tools") }}
   imagePullPolicy: {{ .Values.images.pullPolicy }}
-  securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
+  securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
   command: ["sh", "-c"]
   args:
     - cat /etc/ssl/certs/ca-certificates.crt /ca-in/ca.crt /ca-trino/cert.pem > /ca/ca-certificates.crt &&

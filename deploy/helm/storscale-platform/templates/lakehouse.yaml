@@ -160,7 +160,7 @@ spec:
         # Trino's password file (bcrypt): Superset, the catalog and platformd's table maintenance sign in to Trino with passwords.
         - name: passwords
           image: {{ include "storscale.image" (list . "tools") }}
-          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           command: ["sh", "-c"]
           args:
