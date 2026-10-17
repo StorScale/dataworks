@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf16"
 
 	"github.com/StorScale/storscale-platform/internal/project"
 	"github.com/StorScale/storscale-platform/internal/trino"
@@ -23,13 +24,15 @@ import (
 // operator's own Trino account asks (CREATE CATALOG), and Ranger decides
 // who may read them (the project's policies).
 //
-// A source's connection (its URL, user and password) never goes into the
-// statement, which Trino logs and Ranger's audit records: it goes into
-// Files, which Trino reads at Dir, and the statement names the files
-// (${FILE:...}, which Trino resolves as it makes the catalog). Each version
-// of a source's connection has files of its own (named with its hash), so a
-// catalog made again for a changed one waits until Trino sees the new files,
-// never making it from the old.
+// A source's user and password never go into the statement, which Trino
+// logs and Ranger's audit records: they go into a credentials file, in
+// Files, which Trino reads at Dir, and the statement names the file (the
+// JDBC connectors' credential-provider.type=FILE, read as the catalog is
+// made). Only its URL is in the statement: where the database is, which
+// holds no credentials (a url with a password in it is refused). Each
+// version of a source's connection has a file of its own (named with its
+// hash), so a catalog made again for a changed one waits until Trino sees
+// the new file, never making it from the old.
 type TrinoSources struct {
 	Trino *trino.Client
 	Files SourceFiles
@@ -44,8 +47,8 @@ type SourceFiles interface {
 	Write(ctx context.Context, files map[string]string) error // all of them: what's left out goes
 }
 
-// The files of a catalog: <catalog>.<hash>.{url,user,password}, the
-// connection; and <catalog>.project, <catalog>.made, which project it's for
+// The files of a catalog: <catalog>.<hash>.properties, the connection's
+// user and password; and <catalog>.project, <catalog>.made, which project it's for
 // and the hash the catalog was last made with.
 const (
 	projectSuffix = ".project"
@@ -69,6 +72,9 @@ func jdbcURL(kind string, conn map[string]string) (string, error) {
 	if u := conn["url"]; u != "" {
 		if !strings.HasPrefix(u, "jdbc:") {
 			return "", errors.New("its url isn't a JDBC URL (jdbc:...)")
+		}
+		if strings.Contains(strings.ToLower(u), "password") || strings.ContainsAny(u, "\r\n") {
+			return "", errors.New("its url holds a password (or a line break): the password goes in password, which Trino never logs")
 		}
 		return u, nil
 	}
@@ -168,7 +174,7 @@ func (s *TrinoSources) sync(ctx context.Context, proj string, want map[string]so
 		}
 		h := c.hash()
 		next[cat+projectSuffix] = proj
-		next[cat+"."+h+".url"], next[cat+"."+h+".user"], next[cat+"."+h+".password"] = c.url, c.user, c.password
+		next[cat+"."+h+".properties"] = "connection-user=" + propValue(c.user) + "\nconnection-password=" + propValue(c.password) + "\n"
 		if m := files[cat+madeSuffix]; m != "" {
 			next[cat+madeSuffix] = m
 		}
@@ -201,7 +207,7 @@ func (s *TrinoSources) sync(ctx context.Context, proj string, want map[string]so
 				continue
 			}
 		}
-		if _, err := s.Trino.Exec(ctx, s.createCatalog(cat, c.connector, h)); err != nil {
+		if _, err := s.Trino.Exec(ctx, s.createCatalog(cat, c, h)); err != nil {
 			errs = append(errs, fmt.Errorf("source catalog %s: %w (Trino may not see its connection yet: the next pass tries again)", cat, err))
 			continue
 		}
@@ -215,14 +221,43 @@ func (s *TrinoSources) sync(ctx context.Context, proj string, want map[string]so
 	return errors.Join(errs...)
 }
 
-// createCatalog is the statement making a catalog: the connection named by
-// its files, never written into it.
-func (s *TrinoSources) createCatalog(cat, connector, hash string) string {
-	file := func(what string) string {
-		return "'${FILE:" + filepath.Join(s.Dir, cat+"."+hash+"."+what) + "}'"
+// createCatalog is the statement making a catalog: its URL, and its user
+// and password by the file holding them, never written into it.
+func (s *TrinoSources) createCatalog(cat string, c sourceConn, hash string) string {
+	lit := func(v string) string { return "'" + strings.ReplaceAll(v, "'", "''") + "'" }
+	return fmt.Sprintf(`CREATE CATALOG %s USING %s WITH ("connection-url" = %s, "credential-provider.type" = 'FILE', "connection-credential-file" = %s)`,
+		trino.Quote(cat), c.connector, lit(c.url), lit(filepath.Join(s.Dir, cat+"."+hash+".properties")))
+}
+
+// propValue is a value as a Java properties file holds it.
+func propValue(v string) string {
+	var b strings.Builder
+	for i, r := range v {
+		switch {
+		case r == '\\':
+			b.WriteString(`\\`)
+		case r == '\n':
+			b.WriteString(`\n`)
+		case r == '\r':
+			b.WriteString(`\r`)
+		case r == '\t':
+			b.WriteString(`\t`)
+		case i == 0 && (r == ' ' || r == '\f'):
+			b.WriteString(`\`)
+			b.WriteRune(r)
+		case r < 0x20 || r > 0x7e: // ASCII alone, whatever charset reads it
+			if r > 0xffff {
+				for _, u := range utf16.Encode([]rune{r}) {
+					fmt.Fprintf(&b, `\u%04x`, u)
+				}
+			} else {
+				fmt.Fprintf(&b, `\u%04x`, r)
+			}
+		default:
+			b.WriteRune(r)
+		}
 	}
-	return fmt.Sprintf(`CREATE CATALOG %s USING %s WITH ("connection-url" = %s, "connection-user" = %s, "connection-password" = %s)`,
-		trino.Quote(cat), connector, file("url"), file("user"), file("password"))
+	return b.String()
 }
 
 // catalogs are Trino's catalogs (all those the operator's account may see:
