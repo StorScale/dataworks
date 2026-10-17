@@ -175,6 +175,18 @@ spec:
                       kind: {type: string, enum: [postgresql, mysql, sqlserver, oracle]}
                       connection: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
                       readers: {type: boolean, description: "Its readers may read it too; default false (editors and pipelines only)."}
+                      copy:
+                        type: object
+                        description: >-
+                          Its tables copied into the project's by change capture (Kubernetes): a first copy,
+                          then every change, within minutes; each as <source>_<table> in the project's namespace.
+                          Its account needs the database's change log (PostgreSQL REPLICATION and wal_level=logical,
+                          SQL Server CDC, MySQL's row binlog).
+                        required: [tables]
+                        properties:
+                          tables:
+                            type: array
+                            items: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}\.[a-z_][a-z0-9_]{0,62}$'}
                       schemas:
                         type: array
                         description: The only schemas of it the project may read; default all.

@@ -185,9 +185,13 @@ export default function ProjectEditor() {
           <p className="muted small" style={{ margin: "4px 0 8px" }}>
             The company's databases, queried where they are: each a read-only catalog the project's editors and pipelines may read
             (its readers too, where ticked). The connection is one of the project's, with the database's read-only account.
+            Tables to copy come into the project's own as &lt;source&gt;_&lt;table&gt;, every change within minutes; their account then needs
+            the database's change log (PostgreSQL: REPLICATION, and wal_level=logical; SQL Server: CDC on the tables; MySQL: the row binlog),
+            which its administrator grants.
           </p>
           {(spec.sources ?? []).map((s, i) => (
-            <div key={i} className="row" data-testid="source">
+            <div key={i} className="stack" style={{ gap: 6 }}>
+            <div className="row" data-testid="source">
               <input value={s.name} placeholder="finance" style={{ width: 140 }} aria-label="Source name" onChange={(e) => setSource(i, { name: e.target.value })} />
               <select value={s.kind} aria-label="Kind" onChange={(e) => setSource(i, { kind: e.target.value as Source["kind"] })}>
                 {(["postgresql", "mysql", "sqlserver", "oracle"] as const).map((k) => <option key={k} value={k}>{k}</option>)}
@@ -195,11 +199,43 @@ export default function ProjectEditor() {
               <input value={s.connection} placeholder="connection" aria-label="Connection" onChange={(e) => setSource(i, { connection: e.target.value })} />
               <input value={(s.schemas ?? []).join(", ")} placeholder="schemas: all" aria-label="Schemas" title="Only these schemas (default all)"
                 onChange={(e) => setSource(i, { schemas: list(e.target.value).length ? list(e.target.value) : undefined })} />
+              {s.kind !== "oracle" && (
+                <input value={(s.copy?.tables ?? []).join(", ")} placeholder="copy: schema.table, …" aria-label="Tables to copy"
+                  title="Copied into the project's tables by change capture, as <source>_<table>: every change within minutes (Kubernetes)"
+                  onChange={(e) => setSource(i, { copy: list(e.target.value).length ? { tables: list(e.target.value) } : undefined })} />
+              )}
               <label className="row small" style={{ flexDirection: "row", gap: 6 }}>
-                <input type="checkbox" checked={!!s.readers} onChange={(e) => setSource(i, { readers: e.target.checked || undefined })} /> Readers
+                <input type="checkbox" checked={!!s.readers} onChange={(e) => setSource(i, e.target.checked ? { readers: true } : { readers: undefined, masks: undefined, rowFilters: undefined })} /> Readers
               </label>
               {s.name && <span className="small muted mono">{sourceCatalog(p.metadata.name || "project", s)}</span>}
               <button className="btn" onClick={() => set({ sources: (spec.sources ?? []).filter((_, j) => j !== i).length ? spec.sources!.filter((_, j) => j !== i) : undefined })}>Remove</button>
+            </div>
+            {s.readers && (
+              <div style={{ paddingLeft: 16 }}>
+                <div className="small muted">What its readers see: tables as schema.table</div>
+                {(s.rowFilters ?? []).map((f, k) => (
+                  <div key={`f${k}`} className="row">
+                    <input value={f.table} placeholder="schema.table" aria-label="Row filter table" onChange={(e) => setSource(i, { rowFilters: s.rowFilters!.map((x, j) => (j === k ? { ...x, table: e.target.value } : x)) })} />
+                    <input className="grow" value={f.filter} placeholder="region = 'EU'" aria-label="Row filter" onChange={(e) => setSource(i, { rowFilters: s.rowFilters!.map((x, j) => (j === k ? { ...x, filter: e.target.value } : x)) })} />
+                    <button className="linkish" onClick={() => setSource(i, { rowFilters: s.rowFilters!.filter((_, j) => j !== k).length ? s.rowFilters!.filter((_, j) => j !== k) : undefined })}>Remove</button>
+                  </div>
+                ))}
+                {(s.masks ?? []).map((m, k) => (
+                  <div key={`m${k}`} className="row">
+                    <input value={m.table} placeholder="schema.table" aria-label="Mask table" onChange={(e) => setSource(i, { masks: s.masks!.map((x, j) => (j === k ? { ...x, table: e.target.value } : x)) })} />
+                    <input value={m.column} placeholder="column" aria-label="Mask column" onChange={(e) => setSource(i, { masks: s.masks!.map((x, j) => (j === k ? { ...x, column: e.target.value } : x)) })} />
+                    <select value={m.type} aria-label="Mask type" onChange={(e) => setSource(i, { masks: s.masks!.map((x, j) => (j === k ? { ...x, type: e.target.value } : x)) })}>
+                      {MASK_TYPES.map((t) => <option key={t}>{t}</option>)}
+                    </select>
+                    <button className="linkish" onClick={() => setSource(i, { masks: s.masks!.filter((_, j) => j !== k).length ? s.masks!.filter((_, j) => j !== k) : undefined })}>Remove</button>
+                  </div>
+                ))}
+                <div className="row">
+                  <button className="btn" onClick={() => setSource(i, { rowFilters: [...(s.rowFilters ?? []), { table: "", filter: "" }] })}>Add a row filter</button>
+                  <button className="btn" onClick={() => setSource(i, { masks: [...(s.masks ?? []), { table: "", column: "", type: "MASK" }] })}>Add a mask</button>
+                </div>
+              </div>
+            )}
             </div>
           ))}
           <button className="btn" onClick={() => set({ sources: [...(spec.sources ?? []), { name: "", kind: "postgresql", connection: "" }] })}>Add a source</button>

@@ -58,6 +58,7 @@ upstream:
   nessieGc: ghcr.io/projectnessie/nessie-gc:0.108.8
   nessieAdmin: ghcr.io/projectnessie/nessie-server-admin:0.108.8
   trino: trinodb/trino:483
+  debezium: ghcr.io/memiiso/debezium-server-iceberg:1.2.0.Final   # a project's sources' copies (change capture into Iceberg)
   openmetadata: docker.getcollate.io/openmetadata/server:2.0.4
   prometheus: prom/prometheus:v3.13.4
   grafana: grafana/grafana:13.0.10
@@ -136,6 +137,18 @@ pipelines:
   #   --set-file pipelines.gitKnownHosts=known_hosts   (ssh-keyscan git.example.com)
   # Without them, a host's key is taken the first time it's seen.
   gitKnownHosts: ""
+
+# Projects' sources copied into their tables by change capture (use case 8.1):
+# a pod per copying source, which the operator makes.
+copy:
+  memory: 1Gi
+  commitEvery: 30   # seconds at most between a change and its commit to the table
+
+# The platform's Postgres with wal_level=logical: a source on it can be copied
+# (CI's checks use one). Off: it costs WAL, and the platform's own databases
+# aren't sources.
+postgres:
+  logicalReplication: false
 
 # High availability: how many pods of each stateless service, spread across
 # nodes, each with a disruption budget when more than one. Nessie runs more

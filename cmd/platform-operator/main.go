@@ -164,6 +164,21 @@ func main() {
 		}
 		r.Sources = &reconcile.TrinoSources{Trino: tc, Files: files, Dir: env("TRINO_SOURCES_DIR", "/etc/trino/sources")}
 	}
+	// On Kubernetes, the projects' sources copied into their tables, a pod
+	// each, from the chart's template (COPY_TEMPLATE).
+	if tpl := os.Getenv("COPY_TEMPLATE"); tpl != "" {
+		t, err := reconcile.LoadCopyTemplate(tpl)
+		if err != nil {
+			log.Error("copy template", "error", err)
+			os.Exit(2)
+		}
+		kube, err := reconcile.NewKube()
+		if err != nil {
+			log.Error("kubernetes", "error", err)
+			os.Exit(2)
+		}
+		r.Copies = &reconcile.Copies{Kube: kube, Nessie: r.Nessie, Template: t, CommitEvery: num("COPY_COMMIT_EVERY", 30)}
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	go func() {

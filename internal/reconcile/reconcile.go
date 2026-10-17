@@ -7,8 +7,10 @@ package reconcile
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sort"
 	"time"
 
@@ -31,6 +33,9 @@ type Reconciler struct {
 	// Sources keeps Trino's catalogs of the projects' sources; nil: Trino
 	// makes none (catalog management isn't dynamic, or no operator account).
 	Sources *TrinoSources
+	// Copies copies projects' sources into their tables (Kubernetes); nil:
+	// a source that asks to be copied is told it can't be, here.
+	Copies *Copies
 	// ProjectAirflows, on Kubernetes, gives each project with a repo an
 	// Airflow of its own; nil (Compose): projects' repos are bundles in the
 	// shared Airflow.
@@ -78,6 +83,18 @@ func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Sta
 			r.Log.Warn("removing the sources' catalogs", "project", p.Metadata.Name, "error", err)
 		}
 	}
+	copying := slices.ContainsFunc(p.Spec.Sources, func(s project.Source) bool { return s.Copy != nil })
+	switch {
+	case r.Copies != nil:
+		conns := func(name string) (map[string]string, error) { return r.Store.Connection(ctx, p.Metadata.Name, name) }
+		if err := r.Copies.Apply(ctx, p, conns); copying {
+			part("copy", err)
+		} else if err != nil && r.Log != nil {
+			r.Log.Warn("removing the sources' copies", "project", p.Metadata.Name, "error", err)
+		}
+	case copying:
+		part("copy", errors.New("copying a source needs Kubernetes (Compose can't start its pods)"))
+	}
 	switch {
 	case r.ownAirflow(p):
 		part("airflow", r.applyProjectAirflow(ctx, p))
@@ -119,6 +136,9 @@ func (r *Reconciler) Delete(ctx context.Context, p *project.Project) error {
 	keep(r.Ranger.syncPolicies(ctx, p.RangerPrefix(), nil))
 	if r.Sources != nil {
 		keep(r.Sources.Remove(ctx, p.Metadata.Name))
+	}
+	if r.Copies != nil { // its tables stay, as its data does
+		keep(r.Copies.Remove(ctx, p))
 	}
 	keep(r.Ranger.syncGroupMembers(ctx, p.Groups(), nil, r.RangerUserPassword))
 	keep(r.Ranger.deleteGroups(ctx, p.Groups()))

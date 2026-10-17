@@ -1,0 +1,64 @@
+{{/* A project's source copied into its tables (use case 8.1), as a template
+     the operator fills in for each copying source (internal/reconcile/copies.go):
+     Debezium Server with its Iceberg sink, reading the database's change log
+     and writing the project's Iceberg tables through Nessie's REST catalog, as
+     the copies' own Buckets account. Placeholders, in strings: @NAME@
+     (copy-<project>-<source>: the Deployment, and the Secret holding its
+     settings, application.properties, the source's password among them),
+     @PROJECT@, @SOURCE@, @CONFIG@ (a hash of its settings: a change starts it
+     again). Its offsets and schema history are Iceberg tables (storscale_cdc),
+     so it keeps no volume. */}}
+{{- define "storscale.copy" -}}
+{{- $labels := dict "app.kubernetes.io/part-of" "storscale-platform" "app.kubernetes.io/managed-by" "platform-operator" "app.kubernetes.io/name" "storscale-copy" "platform.storscale.io/project" "@PROJECT@" "platform.storscale.io/source" "@SOURCE@" }}
+{{- $selector := dict "app.kubernetes.io/name" "storscale-copy" "platform.storscale.io/project" "@PROJECT@" "platform.storscale.io/source" "@SOURCE@" }}
+deployment:
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: "@NAME@"
+    labels: {{ toJson $labels }}
+  spec:
+    replicas: 1
+    strategy: {type: Recreate}   # one reader of the change log at a time
+    progressDeadlineSeconds: {{ .Values.progressDeadlineSeconds }}
+    selector: {matchLabels: {{ toJson $selector }}}
+    template:
+      metadata:
+        labels: {{ toJson $labels }}
+        annotations: {platform.storscale.io/config: "@CONFIG@"}
+      spec:
+        enableServiceLinks: false
+        automountServiceAccountToken: false
+        containers:
+          - name: debezium
+            image: {{ .Values.upstream.debezium }}
+            securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 185, runAsGroup: 185, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+            env:
+              # Buckets, as the copies' own account (the warehouse, nothing else).
+              - {name: AWS_ACCESS_KEY_ID, valueFrom: {secretKeyRef: {name: storscale-env, key: COPY_S3_ACCESS_KEY}}}
+              - {name: AWS_SECRET_ACCESS_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: COPY_S3_SECRET_KEY}}}
+              - {name: AWS_REGION, value: us-east-1}
+              - {name: JAVA_OPTS, value: "-XX:MaxRAMPercentage=70"}
+            ports:
+              - {name: http, containerPort: 8080}
+            readinessProbe:
+              httpGet: {path: /q/health/ready, port: http}
+              periodSeconds: 10
+              failureThreshold: 60
+            volumeMounts:
+              - {name: config, mountPath: /debezium/config, readOnly: true}
+              - {name: data, mountPath: /debezium/data}
+            resources: {requests: {cpu: 50m, memory: {{ .Values.copy.memory }}}, limits: {memory: {{ .Values.copy.memory }}}}
+        volumes:
+          - {name: config, secret: {secretName: "@NAME@"}}
+          - {name: data, emptyDir: {}}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: storscale-copy
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+data:
+  {{- $t := include "storscale.copy" . | fromYaml }}
+  {{- if hasKey $t "Error" }}{{ fail (printf "the copy template: %s" $t.Error) }}{{ end }}
+  template.json: {{ toJson $t | quote }}

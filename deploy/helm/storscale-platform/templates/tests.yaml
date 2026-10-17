@@ -28,7 +28,7 @@ rules:
     verbs: [create]
   - apiGroups: [""]
     resources: [secrets]
-    resourceNames: [storscale-test-git, storscale-alerts, storscale-test-alerts, storscale-test-source]   # the health suites put back what was there
+    resourceNames: [storscale-test-git, storscale-alerts, storscale-test-alerts, storscale-test-source, storscale-test-copy]   # the health suites put back what was there
     verbs: [update, delete]
   # ... and the project Airflow the operator makes for it (its memory).
   - apiGroups: [apps]

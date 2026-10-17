@@ -103,6 +103,7 @@ export function grants(name: string, spec: Spec) {
   const readerTables = r?.tables?.length ? r.tables.join(", ") : "every table";
   const cat = (x: { name: string }) => `${name.replace(/-/g, "_")}_${x.name}`;
   const sources = (spec.sources ?? []).filter((x) => x.name);
+  const copies = sources.flatMap((x) => (x.copy?.tables ?? []).map((t) => `${x.name}_${t.split(".").pop()}`));
   const read = (xs: typeof sources) => (xs.length ? [`Read the source${xs.length > 1 ? "s" : ""} ${xs.map(cat).join(", ")} (not write)`] : []);
   const narrowing = [
     ...(r?.rowFilters ?? []).map((f) => `${f.table}: only rows where ${f.filter}`),
@@ -113,13 +114,18 @@ export function grants(name: string, spec: Spec) {
       role: "Editors",
       key: "editor",
       group: `${name}-editors`,
-      items: [ns && `Create, change and drop tables in ${ns}`, bucket && `Read and write the ${bucket} bucket`, spec.pipelines && "Run the project's pipelines", ...read(sources), "Change the project's metrics"].filter(Boolean) as string[],
+      items: [ns && `Create, change and drop tables in ${ns}`, bucket && `Read and write the ${bucket} bucket`, spec.pipelines && "Run the project's pipelines", ...read(sources),
+        ...(copies.length ? [`Copies of sources' tables in ${ns ?? name}: ${copies.join(", ")}, as any table of the project`] : []), "Change the project's metrics"].filter(Boolean) as string[],
     },
     {
       role: "Readers",
       key: "reader",
       group: `${name}-readers`,
-      items: [ns && `Read ${readerTables} in ${ns}`, ...narrowing, bucket && `Read the ${bucket} bucket`, ...read(sources.filter((x) => x.readers)), "Ask for the project's metrics"].filter(Boolean) as string[],
+      items: [ns && `Read ${readerTables} in ${ns}`, ...narrowing, bucket && `Read the ${bucket} bucket`, ...read(sources.filter((x) => x.readers)),
+        ...sources.filter((x) => x.readers).flatMap((x) => [
+          ...(x.rowFilters ?? []).map((f) => `${cat(x)}.${f.table}: only rows where ${f.filter}`),
+          ...(x.masks ?? []).map((m) => `${cat(x)}.${m.table}.${m.column} masked (${maskLabel(m.type)})`),
+        ]), "Ask for the project's metrics"].filter(Boolean) as string[],
     },
     ...(spec.pipelines
       ? [{

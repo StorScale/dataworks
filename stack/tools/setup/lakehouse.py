@@ -66,7 +66,9 @@ if __name__ == "__main__":
         accounts=[(env["TRINO_S3_ACCESS_KEY"], env["TRINO_S3_SECRET_KEY"], "lakehouse-engine"),
                   (env["NESSIE_S3_ACCESS_KEY"], env["NESSIE_S3_SECRET_KEY"], "lakehouse-engine"),
                   (env["PLATFORM_STORE_ACCESS_KEY"], env["PLATFORM_STORE_SECRET_KEY"], "platform-store"),
-                  (env["BACKUP_S3_ACCESS_KEY"], env["BACKUP_S3_SECRET_KEY"], "backup-store")])
+                  (env["BACKUP_S3_ACCESS_KEY"], env["BACKUP_S3_SECRET_KEY"], "backup-store"),
+                  # The projects' sources' copies (change capture) write their tables.
+                  (env["COPY_S3_ACCESS_KEY"], env["COPY_S3_SECRET_KEY"], "lakehouse-engine")])
     ensure_buckets_identity()
     wait_for("Ranger", f"{RANGER}/login.jsp")  # unauthenticated: five failed sign-ins lock Ranger's admin
     sync_people({**keycloak_people(), "service-account-airflow-pipelines": ["pipelines"]})

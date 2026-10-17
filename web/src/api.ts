@@ -76,6 +76,7 @@ export type Spec = {
 export type Source = {
   name: string; kind: "postgresql" | "mysql" | "sqlserver" | "oracle"; connection: string; readers?: boolean; schemas?: string[];
   masks?: { table: string; column: string; type: string }[]; rowFilters?: { table: string; filter: string }[];
+  copy?: { tables: string[] };
 };
 export const sourceCatalog = (project: string, s: { name: string }) => `${project.replace(/-/g, "_")}_${s.name}`;
 export type Project = { apiVersion: string; kind: string; metadata: { name: string }; spec: Spec };
