@@ -115,7 +115,11 @@ jobs:
           LAST: ${{ steps.last.outputs.version }}
         run: |
           old=$(docker exec storscale-control-plane crictl images | awk -v t="$LAST" '$1 ~ /^ghcr\.io\/storscale\// && $2 == t {print $1":"$2}')
-          [ -z "$old" ] || docker exec storscale-control-plane crictl rmi $old
+          # One at a time, with time to (crictl's own limit is 2s); best effort:
+          # it only makes room.
+          for i in $old; do
+            docker exec storscale-control-plane crictl --timeout 120s rmi "$i" || echo "::warning::couldn't remove $i"
+          done
           df -h /
       - run: bin/storscale test --dir stack --k8s
       - name: What went wrong
