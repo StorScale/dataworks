@@ -66,6 +66,18 @@ spec:
       securityContext: {fsGroup: 65532}   # the hub's: its database and cookie secret
       initContainers:
         {{- include "storscale.ca.init" . | nindent 8 }}
+        # Before 0.10.0 the hub ran as root: its files on an install from
+        # then are root's, and the hub, now 65532, can't read them (fsGroup
+        # doesn't reach every volume type). Given to it, once; a no-op after.
+        - name: data-owner
+          image: {{ include "storscale.image" (list . "tools") }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          securityContext: {allowPrivilegeEscalation: false, runAsUser: 0, runAsNonRoot: false, capabilities: {drop: [ALL], add: [CHOWN, DAC_OVERRIDE, FOWNER]}, seccompProfile: {type: RuntimeDefault}}
+          command: ["sh", "-c", "find /data ! -uid 65532 -exec chown 65532:65532 {} +"]
+          volumeMounts:
+            - {name: data, mountPath: /data}
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
         {{- include "storscale.wait" (list . "setup" (list "job" "setup")) | nindent 8 }}
         {{- include "storscale.wait" (list . "keycloak" (list "url" "http://keycloak:9000/health/ready")) | nindent 8 }}
       containers:
