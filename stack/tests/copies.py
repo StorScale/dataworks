@@ -118,8 +118,10 @@ def main():
         check("the table is copied into sales (finance_invoices)", got and [g[0] for g in got] == [1, 2], got)
         if not got:
             show_copy()
-        parts = {p["system"]: p for p in (bob.get(url, timeout=30).json().get("status") or {}).get("parts", [])}
-        check("... and its copy is part of the project's status", parts.get("copy", {}).get("ok"), parts.get("copy"))
+        # The operator sees it running at its next pass (failed parts are tried again within seconds).
+        part = lambda: next((p for p in (bob.get(url, timeout=30).json().get("status") or {}).get("parts", []) if p["system"] == "copy"), {})
+        ok = wait(lambda: part().get("ok"), 120, every=5)
+        check("... and its copy is part of the project's status", ok, part())
 
         # 2. Changes, within a minute or two.
         source(["INSERT INTO public.invoices VALUES (3, 5.25, 'third')", "UPDATE public.invoices SET amount = 11.00 WHERE id = 1",
