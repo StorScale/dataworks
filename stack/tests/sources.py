@@ -9,7 +9,8 @@ the platform's own Postgres (Trino's limits' database, as its own account):
   1. bob (an editor) reads the source's table through its catalog;
   2. he can't write to it;
   3. alice (a reader) can't read it, until the source says readers may;
-  4. the connection's password is in no statement Ranger's audit holds;
+  4. the connection's password is in no statement Ranger's audit holds
+     (it's in a credentials file Trino reads);
   5. the source removed, its catalog goes.
 
 The sales spec, the connection and the source's table are put back after.
@@ -101,7 +102,7 @@ def main():
         docs = wait(audited, 90, every=5) or []
         stmts = [d.get("reqData", "") for d in docs]
         check("Ranger audited the operator making the catalog, the password in none of it",
-              docs and not any(DB["password"] in json.dumps(d) for d in docs) and all("${FILE:" in s for s in stmts if "CREATE CATALOG" in s),
+              docs and not any(DB["password"] in json.dumps(d) for d in docs) and all("connection-credential-file" in s for s in stmts if "CREATE CATALOG" in s),
               [(d.get("access"), d.get("reqData", "")[:160]) for d in docs[:3]])
 
         # 5. Gone with the source.

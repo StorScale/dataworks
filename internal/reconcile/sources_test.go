@@ -87,23 +87,27 @@ func TestSourcesCatalogs(t *testing.T) {
 	if !ft.catalogs["sales_finance"] {
 		t.Fatalf("no catalog: %v", ft.stmts)
 	}
+	made := ft.stmts[len(ft.stmts)-1]
 	for _, st := range ft.stmts {
-		if strings.Contains(st, "s3cret") || strings.Contains(st, "db.example.com") {
-			t.Errorf("the connection is in a statement: %s", st)
+		if strings.Contains(st, "s3cret") || strings.Contains(st, "reader") {
+			t.Errorf("the user or password is in a statement: %s", st)
 		}
 	}
 	have, _ := files.Read(ctx)
-	var url string
+	var creds string
 	for k, v := range have {
-		if strings.HasSuffix(k, ".url") {
-			url = v
-			if !strings.Contains(ft.stmts[len(ft.stmts)-1], "${FILE:/etc/trino/sources/"+k+"}") {
-				t.Errorf("the statement doesn't name %s: %s", k, ft.stmts[len(ft.stmts)-1])
+		if strings.HasSuffix(k, ".properties") {
+			creds = v
+			if !strings.Contains(made, `"connection-credential-file" = '/etc/trino/sources/`+k+`'`) {
+				t.Errorf("the statement doesn't name %s: %s", k, made)
 			}
 		}
 	}
-	if url != "jdbc:postgresql://db.example.com:5432/finance" || have["sales_finance.project"] != "sales" {
+	if creds != "connection-user=reader\nconnection-password=s3cret\n" || have["sales_finance.project"] != "sales" {
 		t.Errorf("files: %v", have)
+	}
+	if !strings.Contains(made, `"connection-url" = 'jdbc:postgresql://db.example.com:5432/finance'`) {
+		t.Errorf("the URL: %s", made)
 	}
 
 	// Nothing changed: nothing made again.
@@ -131,7 +135,7 @@ func TestSourcesCatalogs(t *testing.T) {
 		t.Errorf("made with the new password: %v", err)
 	}
 	have, _ = files.Read(ctx)
-	if n := len(have); n != 5 { // url, user, password, project, made: the old version's gone
+	if n := len(have); n != 3 { // credentials, project, made: the old version's gone
 		t.Errorf("want one version's files: %v", have)
 	}
 
@@ -164,9 +168,20 @@ func TestJDBCURL(t *testing.T) {
 			t.Errorf("%s %v: %s, %v", c.kind, c.conn, got, err)
 		}
 	}
-	for _, conn := range []map[string]string{{"database": "fin"}, {"host": "pg"}, {"host": "pg;x=1", "database": "fin"}, {"url": "http://pg"}} {
+	for _, conn := range []map[string]string{{"database": "fin"}, {"host": "pg"}, {"host": "pg;x=1", "database": "fin"}, {"url": "http://pg"},
+		{"url": "jdbc:postgresql://pg/fin?user=x&password=y"}} {
 		if _, err := jdbcURL("postgresql", conn); err == nil {
 			t.Errorf("%v: want refused", conn)
+		}
+	}
+}
+
+func TestPropValue(t *testing.T) {
+	for in, want := range map[string]string{
+		`pa=ss:word`: `pa=ss:word`, ` lead`: `\ lead`, `back\slash`: `back\\slash`, "two\nlines": `two\nlines`, "café": `caf\u00e9`,
+	} {
+		if got := propValue(in); got != want {
+			t.Errorf("%q: %s, want %s", in, got, want)
 		}
 	}
 }
