@@ -301,7 +301,23 @@ func (k *Kube) PutStatus(ctx context.Context, st *project.Status) error {
 	var status map[string]any
 	json.Unmarshal(body, &status)
 	status["memberCount"] = len(st.Members)
-	_, err = k.call(ctx, "PATCH", "/"+st.Name+"/status", "application/merge-patch+json", map[string]any{"status": status}, nil)
+	if _, err = k.call(ctx, "PATCH", "/"+st.Name+"/status", "application/merge-patch+json", map[string]any{"status": status}, nil); err != nil {
+		return err
+	}
+	return k.keep(ctx, st.Name)
+}
+
+// keep gives a project the operator's finalizer if it hasn't one: one made
+// with kubectl rather than through the platform, say. Without it, deleting
+// the project removes it at once, before the operator takes its access out
+// of Keycloak, Ranger and Buckets.
+func (k *Kube) keep(ctx context.Context, name string) error {
+	r, err := k.get(ctx, name)
+	if r == nil || err != nil || r.Metadata.DeletionTimestamp != "" || slices.Contains(r.Metadata.Finalizers, Finalizer) {
+		return err
+	}
+	_, err = k.call(ctx, "PATCH", "/"+name, "application/merge-patch+json", map[string]any{"metadata": map[string]any{
+		"finalizers": append(slices.Clone(r.Metadata.Finalizers), Finalizer), "resourceVersion": r.Metadata.ResourceVersion}}, nil)
 	return err
 }
 
