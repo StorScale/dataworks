@@ -84,6 +84,83 @@ spec:
                       type: object
                       properties:
                         paused: {type: boolean, description: "No maintenance for now."}
+                    freshness:
+                      type: array
+                      description: How recently each table must have changed; an older one is stale, and the project is told.
+                      items:
+                        type: object
+                        required: [table, within]
+                        properties:
+                          table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                          within: {type: string, pattern: '^[1-9][0-9]{0,4}(m|h|d)$', description: "As 30m, 24h or 7d."}
+                    checks:
+                      type: array
+                      description: Data-quality checks on the tables. The catalog runs them, and shows their results on the tables.
+                      items:
+                        type: object
+                        required: [table, check]
+                        properties:
+                          table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                          column: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                          check: {type: string, enum: [unique, notNull, rowCount]}
+                          min: {type: integer}
+                          max: {type: integer}
+                files:
+                  type: object
+                  description: A bucket in Buckets.
+                  properties:
+                    bucket: {type: string, pattern: '^[a-z][a-z0-9-]{1,38}[a-z0-9]$'}
+                pipelines:
+                  type: object
+                  required: [serviceAccount]
+                  description: >-
+                    The Keycloak client whose service account runs the project's pipelines, and
+                    the git repo their code (Airflow's DAGs) comes from.
+                  properties:
+                    serviceAccount: {type: string, maxLength: 100}
+                    repo:
+                      type: string
+                      maxLength: 500
+                      description: An https:// or ssh address of a git repo, never with credentials in it.
+                    path: {type: string, maxLength: 200, description: "The DAGs' folder in the repo; default the whole repo."}
+                    ref: {type: string, maxLength: 200, description: "A branch, tag or commit; default the install's own."}
+                    credentials:
+                      type: object
+                      required: [secretRef]
+                      description: >-
+                        One of the project's connections, holding the repo's credentials: a
+                        Secret in the project's namespace labelled
+                        platform.storscale.io/connection=<project> (any other is refused), with
+                        username and password (a token), or sshPrivateKey (the git hosts'
+                        keys are the install's).
+                      properties:
+                        secretRef: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
+                    memory:
+                      type: string
+                      pattern: '^[1-9][0-9]{0,5}(Mi|Gi)$'
+                      description: "The project's own Airflow's memory, from 2Gi to 64Gi; default the install's (pipelines.memory)."
+                notify:
+                  type: object
+                  description: >-
+                    Where the project's alerts go (a failed pipeline, a failing check, a stale table):
+                    teams names one of its connections, holding a Teams channel's Workflows webhook
+                    (key webhook); email goes through the install's mail server.
+                  properties:
+                    teams: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
+                    email: {type: array, items: {type: string}}
+                limits:
+                  type: object
+                  description: >-
+                    The project's share of the platform, so it can't slow the others; what's left out
+                    is the install's default (limits.project). Trino queries count against it when a
+                    member names the project (client tag project:<name>), and all its pipelines' queries.
+                  properties:
+                    queries: {type: integer, minimum: 0, maximum: 100, description: "Trino queries running at once."}
+                    queued: {type: integer, minimum: 0, maximum: 1000, description: "Queries waiting; more are refused."}
+                    queryMemory:
+                      type: string
+                      pattern: '^([1-9][0-9]{0,5}(MB|GB)|([1-9][0-9]?|100)%)$'
+                      description: "Trino memory for the project's queries: 4GB, or 50% of Trino's."
                     storage:
                       type: string
                       pattern: '^[1-9][0-9]{0,5}(Gi|Ti)$'
