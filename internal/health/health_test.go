@@ -206,13 +206,18 @@ func TestASetupStepThatGaveUpIsAFinding(t *testing.T) {
 		io.WriteString(w, `{"items": [
 			{"metadata": {"name": "setup-13"}, "status": {"conditions": [{"type": "Complete", "status": "True"}]}},
 			{"metadata": {"name": "setup-trino-13"}, "status": {"conditions": [{"type": "Failed", "status": "True",
-			 "reason": "BackoffLimitExceeded", "message": "Job has reached the specified backoff limit", "lastTransitionTime": "2026-10-16T20:00:00Z"}]}}]}`)
+			 "reason": "BackoffLimitExceeded", "message": "Job has reached the specified backoff limit", "lastTransitionTime": "2026-10-16T20:00:00Z"}]}},
+			{"metadata": {"name": "nessie-gc-29870364", "ownerReferences": [{"kind": "CronJob", "name": "nessie-gc"}]}, "status": {"conditions": [{"type": "Failed", "status": "True",
+			 "reason": "BackoffLimitExceeded", "message": "Job has reached the specified backoff limit", "lastTransitionTime": "2026-10-17T03:30:00Z"}]}}]}`)
 	}))
 	defer api.Close()
 	k := &Kube{URL: api.URL, Namespace: "storscale", HTTP: api.Client(), Token: func() (string, error) { return "t", nil }}
 	got, err := k.FailedJobs(context.Background())
-	if err != nil || len(got) != 1 || got[0].Title != "Setup step setup-trino-13 failed" ||
+	if err != nil || len(got) != 2 || got[0].Title != "Setup step setup-trino-13 failed" ||
 		got[0].Detail != "BackoffLimitExceeded: Job has reached the specified backoff limit" {
-		t.Errorf("%+v %v", got, err)
+		t.Fatalf("%+v %v", got, err)
+	}
+	if got[1].Title != "Scheduled job nessie-gc failed (run nessie-gc-29870364)" {
+		t.Errorf("a scheduled job's run: %q", got[1].Title)
 	}
 }

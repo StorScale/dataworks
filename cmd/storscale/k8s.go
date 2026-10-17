@@ -336,7 +336,10 @@ func failedJob() (string, string) {
 	var list struct {
 		Items []struct {
 			Metadata struct {
-				Name string `json:"name"`
+				Name            string `json:"name"`
+				OwnerReferences []struct {
+					Kind string `json:"kind"`
+				} `json:"ownerReferences"`
 			} `json:"metadata"`
 			Status struct {
 				Conditions []struct{ Type, Status, Reason, Message string } `json:"conditions"`
@@ -345,6 +348,9 @@ func failedJob() (string, string) {
 	}
 	json.Unmarshal(out, &list)
 	for _, j := range list.Items {
+		if len(j.Metadata.OwnerReferences) > 0 && j.Metadata.OwnerReferences[0].Kind == "CronJob" {
+			continue // a scheduled job's run (Nessie's GC), not a setup step: it runs again
+		}
 		for _, c := range j.Status.Conditions {
 			if c.Type == "Failed" && c.Status == "True" {
 				return j.Metadata.Name, strings.TrimSpace(c.Reason + ": " + c.Message)
