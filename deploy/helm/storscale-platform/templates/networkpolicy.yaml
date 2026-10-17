@@ -1,0 +1,138 @@
+{{- /* Network policies (networkPolicies.enabled): nothing reaches a pod of
+     the release's namespace unless a policy here lets it. The gateway, the
+     way in, takes connections from anywhere, and Trino's TLS port, for JDBC
+     clients outside; the stores (Postgres, Ranger's database and audit
+     index, the catalog's search index) and Keycloak take them only from
+     the workloads that use them; every other service, from the namespace's
+     own pods. Egress is open. */}}
+{{- if .Values.networkPolicies.enabled }}
+{{- $protected := list "postgres" "ranger-db" "ranger-solr" "openmetadata-search" "keycloak" }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: storscale-default-deny
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+---
+# Every service but the stores and Keycloak: from the namespace's own pods
+# (pods without the name label too: notebooks, Buckets' pool).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: storscale-within
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: NotIn, values: {{ toJson $protected }}}
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{podSelector: {}}]
+---
+# The way in: the ingress controller, or the NodePort.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: storscale-gateway
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "storscale.selector" (list .Release.Name "gateway") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{port: 8800}]
+---
+# Trino for JDBC and CLI clients outside (TLS, and sign-in, on 8443).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: storscale-trino-clients
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "storscale.selector" (list .Release.Name "trino") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{port: 8443}]
+---
+# The platform's Postgres: each tool's database, to that tool; the backups;
+# platformd's health check (a TCP connect).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: storscale-postgres
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "storscale.selector" (list .Release.Name "postgres") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{port: 5432}]
+      from:
+        {{- include "storscale.np.from" (list "keycloak" "nessie" "trino" "platform-operator" "platformd"
+              "airflow" "airflow-scheduler" "airflow-dag-processor" "airflow-init" "project-airflow"
+              "superset" "superset-init" "openmetadata" "openmetadata-migrate" "storscale-backup" "storscale-restore") | nindent 8 }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: storscale-ranger-db
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "storscale.selector" (list .Release.Name "ranger-db") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{port: 5432}]
+      from:
+        {{- include "storscale.np.from" (list "ranger-admin" "platformd" "storscale-backup" "storscale-restore") | nindent 8 }}
+---
+# Ranger's audit index: Trino writes to it, Ranger's admin and platformd
+# read it (and the checks).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: storscale-ranger-solr
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "storscale.selector" (list .Release.Name "ranger-solr") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{port: 8983}]
+      from:
+        {{- include "storscale.np.from" (list "trino" "ranger-admin" "platformd" "storscale-test") | nindent 8 }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: storscale-openmetadata-search
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "storscale.selector" (list .Release.Name "openmetadata-search") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{port: 9200}]
+      from:
+        {{- include "storscale.np.from" (list "openmetadata" "openmetadata-migrate" "platformd") | nindent 8 }}
+---
+# Keycloak: the services that call it directly (the rest go through the
+# gateway, as people do), and their wait for it to be ready.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: storscale-keycloak
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "storscale.selector" (list .Release.Name "keycloak") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{port: 8080}, {port: 9000}]
+      from:
+        {{- include "storscale.np.from" (list "gateway" "platformd" "platform-operator" "semanticd" "grafana" "jupyterhub"
+              "catalog-sync" "airflow" "openmetadata" "setup") | nindent 8 }}
+{{- end }}

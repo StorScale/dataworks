@@ -132,6 +132,15 @@ pipelines:
   # Without them, a host's key is taken the first time it's seen.
   gitKnownHosts: ""
 
+# Network policies: nothing reaches the platform's pods unless it should.
+# The gateway takes connections from anywhere (it's the way in), Trino's
+# 8443 too (JDBC clients); the databases, Ranger's audit index, the
+# catalog's search index and Keycloak only from the services that use them;
+# every other service only from the namespace's own pods. Needs a CNI that
+# enforces them (most do; kind's does).
+networkPolicies:
+  enabled: true
+
 # The audit log: who changed what in the platform, and every access Trino
 # allowed or refused (Ranger's), in Ranger's Solr, on a volume this size.
 # Kept for keep (the platform's own records; Ranger keeps its own 90 days).

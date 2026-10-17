@@ -204,3 +204,12 @@ resources:
 - {name: BACKUP_SECRET_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: BACKUP_S3_SECRET_KEY}}}
 {{- end }}
 {{- end }}
+
+{{/* A network policy's sources: the pods of these workloads (by their
+     app.kubernetes.io/name), whatever their release label (the operator's
+     project Airflows have none). */}}
+{{- define "storscale.np.from" -}}
+- podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: In, values: {{ toJson . }}}
+{{- end }}

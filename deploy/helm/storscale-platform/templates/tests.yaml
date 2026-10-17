@@ -48,7 +48,9 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: storscale-test
-  labels: {{- include "storscale.labels" . | nindent 4 }}
+  labels:
+    {{- include "storscale.labels" . | nindent 4 }}
+    app.kubernetes.io/name: storscale-test   # for the network policies
   annotations:
     helm.sh/hook: test
     helm.sh/hook-weight: "2"
@@ -100,7 +102,9 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: storscale-test-browser
-  labels: {{- include "storscale.labels" . | nindent 4 }}
+  labels:
+    {{- include "storscale.labels" . | nindent 4 }}
+    app.kubernetes.io/name: storscale-test-browser   # for the network policies
   annotations:
     helm.sh/hook: test
     helm.sh/hook-weight: "1"
