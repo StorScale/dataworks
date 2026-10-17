@@ -161,6 +161,38 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: cosign sign --yes "${{ steps.tags.outputs.image }}@${{ steps.merge.outputs.digest }}"
 
+  # Each image scanned for known vulnerabilities (Trivy): all of them to the
+  # repository's Security tab, the high and critical ones with a fix in the
+  # run's summary. A report, not a gate: most come from the upstream bases.
+  scan:
+    needs: merge
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # the Security tab
+    strategy:
+      fail-fast: false
+      matrix:
+        name: [platformd, platform-tools, platform-airflow, platform-superset, platform-jupyterhub,
+               platform-notebook, platform-opensearch, platform-semanticd, platform-catalog-sync]
+    steps:
+      - name: Scan
+        run: |
+          if [[ $GITHUB_REF == refs/tags/v* ]]; then tag=${GITHUB_REF_NAME#v}; else tag=${GITHUB_SHA::8}; fi
+          image="$REGISTRY/${{ matrix.name }}:$tag"
+          trivy() { docker run --rm -v "$PWD:/out" -v trivy-cache:/root/.cache aquasec/trivy:0.65.0 "$@"; }
+          trivy image --quiet --scanners vuln --format sarif --output /out/trivy.sarif "$image"
+          {
+            echo "### ${{ matrix.name }}: high and critical vulnerabilities with a fix"
+            echo '```'
+            trivy image --quiet --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL --format table "$image"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy.sarif
+          category: ${{ matrix.name }}
+
   # The chart, at the release's version: its images are that version's.
   chart:
     needs: merge
