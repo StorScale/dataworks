@@ -274,7 +274,9 @@ func restoreJob(name, backup string, cronJSON []byte) ([]byte, error) {
 	job := map[string]any{
 		"apiVersion": "batch/v1", "kind": "Job",
 		"metadata": map[string]any{"name": name, "labels": map[string]any{"app.kubernetes.io/part-of": "storscale-platform"}},
-		"spec":     map[string]any{"backoffLimit": 0, "template": map[string]any{"spec": pod}},
+		"spec": map[string]any{"backoffLimit": 0, "template": map[string]any{
+			"metadata": map[string]any{"labels": map[string]any{"app.kubernetes.io/name": "storscale-restore"}}, // for the network policies
+			"spec":     pod}},
 	}
 	return json.Marshal(job)
 }
