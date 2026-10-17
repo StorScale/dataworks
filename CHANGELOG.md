@@ -4,6 +4,17 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-17
+
+Backups and restore, Nessie's catalog in Postgres, network policies and Pod Security, images scanned; and a security fix: a table read as it was keeps its readers' masks and row filters.
+
+**Upgrading from 0.8.0:**
+- `storscale upgrade --context <cluster> --version 0.9.0`, after a `--dry-run`. Nessie's catalog moves from RocksDB into Postgres once, before Nessie starts; the RocksDB files stay on `nessie-data` as `catalog-rocksdb-moved` (to roll back to 0.8.0, rename them back to `catalog`). In Compose: `storscale down`, then `up`.
+- Network policies are on: they need the cluster's network plugin to enforce them (without one they do nothing). `networkPolicies.enabled: false` turns them off.
+- Label the namespace for Pod Security: `kubectl label namespace storscale --overwrite pod-security.kubernetes.io/enforce=baseline pod-security.kubernetes.io/warn=restricted`.
+- Backups stay off until there's a certificate (`storscale backup keygen`; `backup.certificate`), and the key that opens them is kept off the cluster.
+- The security fix applies when the operator next applies each project (within its resync, or on any change).
+
 ### Added
 - **Backups, and restoring from one** (Kubernetes): each night (`backup.schedule`) a CronJob dumps every database (the platform's Postgres, with Nessie's catalog, Keycloak, Airflow, Superset and OpenMetadata, and Ranger's), exports the Projects and Secrets, and keeps them in `backup.bucket` (the newest `backup.keep`), encrypted for `backup.certificate` (a tar.gz in a CMS envelope, AES-256-GCM: `openssl cms -decrypt` opens it). Off until there's a certificate: `storscale backup keygen --out DIR` makes the pair; the key, which a restore needs, belongs somewhere else than the cluster. Backups go to the platform's own Buckets, as an account of their own, unless `backup.s3` names another S3 endpoint (a lost cluster takes its own Buckets with it). `storscale backup` takes one now; `storscale restore --key KEY [--backup NAME]` puts one back into the install it came from: every Deployment stopped (their replicas saved, so a restore cut off can be finished), the databases restored, the Projects and Secrets put back, everything started again. The Health page says when the last backup succeeded, and the administrators are alerted when none has for a day; a failed run alerts too. CI backs up, removes a Nessie tag, a Keycloak person, a Ranger policy and a project, restores, and checks them back. Not yet: the data in Buckets copied elsewhere, without which a lost cluster can't be restored from a backup.
 
