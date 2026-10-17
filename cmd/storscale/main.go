@@ -36,6 +36,14 @@ Usage:
                                 its Project definition (which Helm never upgrades), then the
                                 chart with the values it was installed with, then it waits for
                                 every service; says what it will do, and asks first
+  storscale backup [flags]      take a backup now, as the nightly one (Kubernetes; backup.* in the chart)
+  storscale backup keygen --out DIR
+                                the key pair backups are encrypted with: the certificate for
+                                the chart, the key for a restore (keep it off the cluster)
+  storscale restore --key FILE [--backup NAME]
+                                put a backup (the latest by default) back into the install it
+                                came from: stops everything, restores every database and the
+                                Projects and Secrets, starts everything again; asks first
   storscale version
 
 Flags for upgrade:
@@ -49,6 +57,7 @@ Flags for upgrade:
   --dir DIR          go to a checkout's chart instead; on a cluster, with --image-tag V,
                      published images to run (with --k8s, the checkout's own, built)
   --force            even to an older release
+  (backup and restore take --context, --namespace and --yes too, or --k8s for kind's)
 
 Flags for every command:
   --dir DIR   use the stack in DIR instead of the one built into storscale (a checkout's
@@ -101,6 +110,9 @@ func run(args []string) error {
 	fs.StringVar(&o.kubeNS, "namespace", "storscale", "the namespace (upgrade)")
 	fs.StringVar(&o.kubeRel, "release", "storscale", "the Helm release (upgrade)")
 	fs.DurationVar(&o.timeout, "timeout", 60*time.Minute, "how long to wait for the services (upgrade)")
+	fs.StringVar(&o.keyFile, "key", "", "the backup key (restore)")
+	fs.StringVar(&o.backupName, "backup", "", "which backup: its name, or latest (restore)")
+	fs.StringVar(&o.outDir, "out", "", "where to write the key pair (backup keygen)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -119,8 +131,20 @@ func run(args []string) error {
 	if *k8s {
 		return newKube(st).do(cmd, st, fs.Args(), o)
 	}
-	if cmd == "upgrade" { // a cluster of the person's own
+	if cmd == "backup" && fs.Arg(0) == "keygen" { // its flags follow it
+		if err := fs.Parse(fs.Args()[1:]); err != nil {
+			return err
+		}
+		return keygen(o.outDir)
+	}
+	if cmd == "upgrade" || cmd == "backup" || cmd == "restore" { // a cluster of the person's own
 		kubeContext, namespace, release = o.kubeCtx, o.kubeNS, o.kubeRel
+		switch cmd {
+		case "backup":
+			return backupNow()
+		case "restore":
+			return restore(o)
+		}
 		return newKube(st).upgrade(st, o)
 	}
 	switch cmd {

@@ -1,0 +1,243 @@
+{
+ "apiVersion": "batch/v1",
+ "kind": "CronJob",
+ "metadata": {
+  "name": "storscale-backup",
+  "labels": {
+   "app.kubernetes.io/part-of": "storscale-platform",
+   "app.kubernetes.io/instance": "x",
+   "app.kubernetes.io/managed-by": "Helm",
+   "helm.sh/chart": "storscale-platform-0.8.0"
+  }
+ },
+ "spec": {
+  "schedule": "0 4 * * *",
+  "concurrencyPolicy": "Forbid",
+  "successfulJobsHistoryLimit": 2,
+  "failedJobsHistoryLimit": 2,
+  "jobTemplate": {
+   "spec": {
+    "backoffLimit": 1,
+    "template": {
+     "metadata": {
+      "labels": {
+       "app.kubernetes.io/instance": "x",
+       "app.kubernetes.io/name": "storscale-backup"
+      }
+     },
+     "spec": {
+      "enableServiceLinks": false,
+      "serviceAccountName": "storscale",
+      "restartPolicy": "Never",
+      "initContainers": [
+       {
+        "name": "dump",
+        "image": "postgres:18-bookworm",
+        "command": [
+         "bash",
+         "-c"
+        ],
+        "args": [
+         "set -euo pipefail\nmkdir -p /backup/postgres\nfor db in $(psql -h postgres -U postgres -Atc \"SELECT datname FROM pg_database WHERE NOT datistemplate AND datname <> 'postgres'\"); do\n  echo \"dumping $db\"\n  pg_dump -h postgres -U postgres -Fc -f \"/backup/postgres/$db.dump\" \"$db\"\ndone\necho \"dumping ranger\"\nPGPASSWORD=\"$RANGER_PASSWORD\" pg_dump -h ranger-db -U postgres -Fc -f /backup/ranger.dump ranger\n"
+        ],
+        "env": [
+         {
+          "name": "PGPASSWORD",
+          "valueFrom": {
+           "secretKeyRef": {
+            "name": "storscale-env",
+            "key": "POSTGRES_ADMIN_PASSWORD"
+           }
+          }
+         },
+         {
+          "name": "RANGER_PASSWORD",
+          "valueFrom": {
+           "secretKeyRef": {
+            "name": "storscale-env",
+            "key": "RANGER_PASSWORD"
+           }
+          }
+         }
+        ],
+        "volumeMounts": [
+         {
+          "name": "backup",
+          "mountPath": "/backup"
+         }
+        ],
+        "resources": {
+         "requests": {
+          "cpu": "50m",
+          "memory": "64Mi"
+         }
+        }
+       }
+      ],
+      "containers": [
+       {
+        "name": "backup",
+        "image": "ghcr.io/storscale/platform-tools:0.8.0",
+        "imagePullPolicy": "IfNotPresent",
+        "command": [
+         "python",
+         "-u",
+         "/tools/backup.py",
+         "run"
+        ],
+        "env": [
+         {
+          "name": "STORSCALE_K8S",
+          "value": "true"
+         },
+         {
+          "name": "STORSCALE_VERSION",
+          "value": "0.8.0"
+         },
+         {
+          "name": "BACKUP_BUCKET",
+          "value": "storscale-backups"
+         },
+         {
+          "name": "BACKUP_KEEP",
+          "value": "14"
+         },
+         {
+          "name": "BACKUP_ENDPOINT",
+          "value": "http://buckets:9000"
+         },
+         {
+          "name": "BACKUP_REGION",
+          "value": "us-east-1"
+         },
+         {
+          "name": "BACKUP_ACCESS_KEY",
+          "valueFrom": {
+           "secretKeyRef": {
+            "name": "storscale-env",
+            "key": "BACKUP_S3_ACCESS_KEY"
+           }
+          }
+         },
+         {
+          "name": "BACKUP_SECRET_KEY",
+          "valueFrom": {
+           "secretKeyRef": {
+            "name": "storscale-env",
+            "key": "BACKUP_S3_SECRET_KEY"
+           }
+          }
+         }
+        ],
+        "volumeMounts": [
+         {
+          "name": "backup",
+          "mountPath": "/backup"
+         },
+         {
+          "name": "files-tools",
+          "mountPath": "/tools"
+         },
+         {
+          "name": "cert",
+          "mountPath": "/backup-cert",
+          "readOnly": true
+         }
+        ],
+        "resources": {
+         "requests": {
+          "cpu": "50m",
+          "memory": "128Mi"
+         },
+         "limits": {
+          "memory": "512Mi"
+         }
+        }
+       }
+      ],
+      "volumes": [
+       {
+        "name": "backup",
+        "emptyDir": {}
+       },
+       {
+        "name": "cert",
+        "secret": {
+         "secretName": "storscale-backup-cert"
+        }
+       },
+       {
+        "name": "files-tools",
+        "configMap": {
+         "name": "files-tools",
+         "items": [
+          {
+           "key": "Dockerfile",
+           "path": "Dockerfile"
+          },
+          {
+           "key": "airflow_bundles.py",
+           "path": "airflow_bundles.py"
+          },
+          {
+           "key": "backup.py",
+           "path": "backup.py"
+          },
+          {
+           "key": "get_token.py",
+           "path": "get_token.py"
+          },
+          {
+           "key": "k8s.py",
+           "path": "k8s.py"
+          },
+          {
+           "key": "lakekit.py",
+           "path": "lakekit.py"
+          },
+          {
+           "key": "setup__jupyterhub.py",
+           "path": "setup/jupyterhub.py"
+          },
+          {
+           "key": "setup__lakehouse.py",
+           "path": "setup/lakehouse.py"
+          },
+          {
+           "key": "setup__monitoring.py",
+           "path": "setup/monitoring.py"
+          },
+          {
+           "key": "setup__project.py",
+           "path": "setup/project.py"
+          },
+          {
+           "key": "setup__realm.py",
+           "path": "setup/realm.py"
+          },
+          {
+           "key": "setup__run.py",
+           "path": "setup/run.py"
+          },
+          {
+           "key": "setup__superset.py",
+           "path": "setup/superset.py"
+          },
+          {
+           "key": "traffic.py",
+           "path": "traffic.py"
+          },
+          {
+           "key": "wait.py",
+           "path": "wait.py"
+          }
+         ]
+        }
+       }
+      ]
+     }
+    }
+   }
+  }
+ }
+}

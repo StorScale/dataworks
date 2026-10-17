@@ -139,6 +139,26 @@ audit:
   storage: 5Gi
   keep: 365d
 
+# Backups: each night (schedule, UTC) every database (the platform's Postgres,
+# Nessie's catalog among them, and Ranger's) is dumped, and the Projects and
+# Secrets exported, packed, encrypted for `certificate` and kept in `bucket`
+# (the newest `keep`). Off until `certificate` is set: make a key pair with
+#   storscale backup keygen --out DIR
+# then --set-file backup.certificate=DIR/storscale-backup-cert.pem, and keep
+# DIR/storscale-backup-key.pem somewhere else than this cluster: without it,
+# no backup can be restored. s3: where; "" is the platform's own Buckets
+# (which a lost cluster takes with it), else an S3 endpoint with a Secret
+# (s3.secretName) holding accessKey and secretKey.
+backup:
+  certificate: ""
+  schedule: "0 4 * * *"
+  keep: 14
+  bucket: storscale-backups
+  s3:
+    endpoint: ""
+    region: us-east-1
+    secretName: ""
+
 # Table maintenance: each night at `at` (UTC), platformd compacts every
 # project's small files (a project's tables.maintenance may pause it). Then
 # Nessie's GC (history.schedule) deletes the tables' history older than

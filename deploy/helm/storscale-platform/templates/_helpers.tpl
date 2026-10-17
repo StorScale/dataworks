@@ -186,3 +186,21 @@ resources:
 - {name: quarkus.datasource.postgresql.username, value: nessie}
 - {name: quarkus.datasource.postgresql.password, valueFrom: {secretKeyRef: {name: storscale-env, key: NESSIE_DB_PASSWORD}}}
 {{- end }}
+
+{{/* Where backups go, and as whom (backup.s3): the platform's own Buckets,
+     as the backups' own account, unless backup.s3 names another place. */}}
+{{- define "storscale.backup.env" -}}
+- {name: STORSCALE_K8S, value: "true"}
+- {name: STORSCALE_VERSION, value: {{ .Chart.AppVersion | quote }}}
+- {name: BACKUP_BUCKET, value: {{ .Values.backup.bucket | quote }}}
+- {name: BACKUP_KEEP, value: {{ .Values.backup.keep | quote }}}
+- {name: BACKUP_ENDPOINT, value: {{ .Values.backup.s3.endpoint | default "http://buckets:9000" | quote }}}
+- {name: BACKUP_REGION, value: {{ .Values.backup.s3.region | quote }}}
+{{- if .Values.backup.s3.secretName }}
+- {name: BACKUP_ACCESS_KEY, valueFrom: {secretKeyRef: {name: {{ .Values.backup.s3.secretName }}, key: accessKey}}}
+- {name: BACKUP_SECRET_KEY, valueFrom: {secretKeyRef: {name: {{ .Values.backup.s3.secretName }}, key: secretKey}}}
+{{- else }}
+- {name: BACKUP_ACCESS_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: BACKUP_S3_ACCESS_KEY}}}
+- {name: BACKUP_SECRET_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: BACKUP_S3_SECRET_KEY}}}
+{{- end }}
+{{- end }}

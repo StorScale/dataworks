@@ -229,6 +229,13 @@ func (k *kube) do(cmd string, st *stack, args []string, o options) error {
 		return k.up(st, ver)
 	case "upgrade":
 		return k.upgrade(st, o)
+	case "backup":
+		if len(args) > 0 && args[0] == "keygen" {
+			return keygen(o.outDir)
+		}
+		return backupNow()
+	case "restore":
+		return restore(o)
 	case "status":
 		return kubectl("get", "pods,jobs,projects,bucketsclusters")
 	case "urls":

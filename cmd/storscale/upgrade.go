@@ -19,21 +19,24 @@ import (
 
 // options are the flags of a command.
 type options struct {
-	version  string   // up --k8s, upgrade: a published release (storscale's own when empty)
-	volumes  bool     // down
-	values   []string // upgrade: -f files
-	sets     []string // upgrade: --set k=v
-	setFiles []string // upgrade: --set-file k=path
-	yes      bool     // upgrade: without asking
-	dryRun   bool     // upgrade: check, and change nothing
-	test     bool     // upgrade: then run the end-to-end checks
-	force    bool     // upgrade: even to an older version
-	imageTag string   // upgrade --dir on a cluster: the published images to run
-	kubeCtx  string   // upgrade: the cluster (kubectl's context)
-	kubeNS   string   // upgrade: the namespace
-	kubeRel  string   // upgrade: the Helm release
-	kind     bool     // --k8s: the kind cluster storscale makes
-	timeout  time.Duration
+	version    string   // up --k8s, upgrade: a published release (storscale's own when empty)
+	volumes    bool     // down
+	values     []string // upgrade: -f files
+	sets       []string // upgrade: --set k=v
+	setFiles   []string // upgrade: --set-file k=path
+	yes        bool     // upgrade: without asking
+	dryRun     bool     // upgrade: check, and change nothing
+	test       bool     // upgrade: then run the end-to-end checks
+	force      bool     // upgrade: even to an older version
+	imageTag   string   // upgrade --dir on a cluster: the published images to run
+	kubeCtx    string   // upgrade: the cluster (kubectl's context)
+	kubeNS     string   // upgrade: the namespace
+	kubeRel    string   // upgrade: the Helm release
+	kind       bool     // --k8s: the kind cluster storscale makes
+	timeout    time.Duration
+	keyFile    string // restore: the backup key
+	backupName string // restore: which backup (latest)
+	outDir     string // backup keygen: where to write the key pair
 }
 
 // list is a flag that may be given more than once.

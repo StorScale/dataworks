@@ -30,6 +30,7 @@ type watch struct {
 	certEnd time.Time
 	certErr string
 	certSay time.Time // when the certificate was last alerted on
+	backups health.Backups
 }
 
 func (s *server) startHealth(ctx context.Context) {
@@ -109,6 +110,18 @@ func (w *watch) watchFindings(ctx context.Context, s *server) {
 			}
 		}
 		if w.kube != nil {
+			if b, err := w.kube.Backups(ctx); err == nil {
+				w.mu.Lock()
+				w.backups = b
+				w.mu.Unlock()
+				on, off := w.findings.Set("backups", b.Overdue(time.Now(), 26*time.Hour))
+				for _, f := range on {
+					w.send(ctx, s, health.FromFinding(f, false, w.link))
+				}
+				for _, f := range off {
+					w.send(ctx, s, health.FromFinding(f, true, w.link))
+				}
+			}
 			if failed, err := w.kube.FailedJobs(ctx); err == nil {
 				on, _ := w.findings.Set("jobs", failed)
 				for _, f := range on {
@@ -207,7 +220,9 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		targets, terr := s.health.notifier.Targets(r.Context())
 		s.health.mu.Lock()
 		cert := map[string]any{"ends": s.health.certEnd, "error": s.health.certErr}
+		backups := s.health.backups
 		s.health.mu.Unlock()
+		out["backups"] = backups
 		out["services"] = services
 		out["findings"] = s.health.findings.All()
 		out["certificate"] = cert
