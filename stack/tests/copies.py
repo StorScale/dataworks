@@ -38,11 +38,13 @@ PASSWORD = "copy-check-" + str(int(time.time()))
 
 def admin(statements, db="postgres"):
     conn = psycopg2.connect(host="postgres", dbname=db, user="postgres", password=env["POSTGRES_ADMIN_PASSWORD"], connect_timeout=10)
-    conn.autocommit = True
-    with conn, conn.cursor() as cur:
-        for s in statements:
-            cur.execute(s)
-    conn.close()
+    conn.autocommit = True  # DROP DATABASE runs outside a transaction ("with conn" would open one)
+    try:
+        with conn.cursor() as cur:
+            for s in statements:
+                cur.execute(s)
+    finally:
+        conn.close()
 
 
 def source(statements):
