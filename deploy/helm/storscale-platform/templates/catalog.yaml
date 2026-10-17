@@ -124,7 +124,7 @@ spec:
         # Once the migration has finished: the server waits for this mark.
         - name: done
           image: {{ include "storscale.image" (list . "tools") }}
-          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           command: ["python", "/tools/k8s.py", "done", "openmetadata-migrate"]
           env:
@@ -208,7 +208,7 @@ spec:
       containers:
         - name: sync
           image: {{ include "storscale.image" (list . "catalogSync") }}
-          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           env:
             - {name: KEYCLOAK_DIRECT_URL, value: "http://keycloak:8080/sso"}
