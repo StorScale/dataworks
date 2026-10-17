@@ -282,16 +282,19 @@ func restoreJob(name, backup string, cronJSON []byte) ([]byte, error) {
 }
 
 // restoreScript puts every database back from its dump, as Postgres' admin:
-// each in one transaction, its objects dropped first.
+// each dropped whole and made again from the dump, with its owner and
+// rights (pg_restore --clean can't drop a partitioned table's inherited
+// constraints, as OpenMetadata's have). A restore cut off is run again.
 const restoreScript = `set -euo pipefail
 for f in /backup/postgres/*.dump; do
   db=$(basename "$f" .dump)
   echo "restoring $db"
-  psql -h postgres -U postgres -Atc "SELECT 1 FROM pg_database WHERE datname = '$db'" | grep -q 1 || createdb -h postgres -U postgres "$db"
-  pg_restore -h postgres -U postgres --clean --if-exists --single-transaction --exit-on-error -d "$db" "$f"
+  psql -h postgres -U postgres -v ON_ERROR_STOP=1 -qc "DROP DATABASE IF EXISTS \"$db\" WITH (FORCE)"
+  pg_restore -h postgres -U postgres --create --exit-on-error -d postgres "$f"
 done
 echo "restoring ranger"
-PGPASSWORD="$RANGER_PASSWORD" pg_restore -h ranger-db -U postgres --clean --if-exists --single-transaction --exit-on-error -d ranger /backup/ranger.dump
+PGPASSWORD="$RANGER_PASSWORD" psql -h ranger-db -U postgres -v ON_ERROR_STOP=1 -qc "DROP DATABASE IF EXISTS ranger WITH (FORCE)"
+PGPASSWORD="$RANGER_PASSWORD" pg_restore -h ranger-db -U postgres --create --exit-on-error -d postgres /backup/ranger.dump
 echo "databases restored"`
 
 // restore puts a backup back into the install it came from: everything

@@ -88,7 +88,7 @@ func TestTheRestoreJobIsTheBackupsPodTheOtherWay(t *testing.T) {
 	if got := strings.Join(pod.InitContainers[0].Command, " "); got != "python -u /tools/backup.py fetch 20261017T040000Z" {
 		t.Errorf("fetch: %s", got)
 	}
-	if !strings.Contains(strings.Join(pod.InitContainers[1].Command, " "), "pg_restore -h postgres") ||
+	if !strings.Contains(strings.Join(pod.InitContainers[1].Command, " "), "pg_restore -h postgres -U postgres --create") ||
 		!strings.Contains(pod.InitContainers[1].Image, "postgres") {
 		t.Errorf("databases: %s %v", pod.InitContainers[1].Image, pod.InitContainers[1].Command)
 	}
