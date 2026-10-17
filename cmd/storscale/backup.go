@@ -285,6 +285,7 @@ func restoreJob(name, backup string, cronJSON []byte) ([]byte, error) {
 // each dropped whole and made again from the dump, with its owner and
 // rights (pg_restore --clean can't drop a partitioned table's inherited
 // constraints, as OpenMetadata's have). A restore cut off is run again.
+// set -o pipefail: a pg_restore or psql that fails in a pipe fails it.
 const restoreScript = `set -euo pipefail
 for f in /backup/postgres/*.dump; do
   db=$(basename "$f" .dump)
@@ -293,8 +294,11 @@ for f in /backup/postgres/*.dump; do
   pg_restore -h postgres -U postgres --create --exit-on-error -d postgres "$f"
 done
 echo "restoring ranger"
-PGPASSWORD="$RANGER_PASSWORD" psql -h ranger-db -U postgres -v ON_ERROR_STOP=1 -qc "DROP DATABASE IF EXISTS ranger WITH (FORCE)"
-PGPASSWORD="$RANGER_PASSWORD" pg_restore -h ranger-db -U postgres --create --exit-on-error -d postgres /backup/ranger.dump
+# Ranger's Postgres is older (13) than these tools (18), whose SQL sets
+# transaction_timeout (17 and on): as SQL, without that, any other error stopping it.
+export PGPASSWORD="$RANGER_PASSWORD"
+psql -h ranger-db -U postgres -v ON_ERROR_STOP=1 -qc "DROP DATABASE IF EXISTS ranger WITH (FORCE)"
+pg_restore --create -f - /backup/ranger.dump | grep -v '^SET transaction_timeout' | psql -h ranger-db -U postgres -v ON_ERROR_STOP=1 -q -d postgres
 echo "databases restored"`
 
 // restore puts a backup back into the install it came from: everything
