@@ -55,13 +55,24 @@ type Spec struct {
 // catalog of the project's own (SourceCatalog), which its editors, and its
 // readers if Readers says so, may read and no one may write. Connection
 // names one of the project's connections (host, port, database, username,
-// password: a read-only account of the database's own).
+// password: a read-only account of the database's own). Schemas, if given,
+// are the only ones it may read (default all). Masks and RowFilters narrow
+// what its readers see, as a project's tables' do; their tables are
+// schema.table.
 type Source struct {
-	Name       string `json:"name"`
-	Kind       string `json:"kind"`
-	Connection string `json:"connection"`
-	Readers    bool   `json:"readers,omitempty"`
+	Name       string      `json:"name"`
+	Kind       string      `json:"kind"`
+	Connection string      `json:"connection"`
+	Readers    bool        `json:"readers,omitempty"`
+	Schemas    []string    `json:"schemas,omitempty"`
+	Masks      []Mask      `json:"masks,omitempty"`
+	RowFilters []RowFilter `json:"rowFilters,omitempty"`
 }
+
+// CatalogUser is the catalog's (OpenMetadata's) Trino account: it may see
+// what's in a source (its schemas, tables and columns), to describe them,
+// and read none of its data.
+const CatalogUser = "openmetadata"
 
 // SourceKinds are the databases a source may be (Trino's connectors).
 var SourceKinds = []string{"postgresql", "mysql", "sqlserver", "oracle"}
@@ -211,21 +222,22 @@ type GitCredentials struct {
 var MaskTypes = []string{"MASK", "MASK_SHOW_LAST_4", "MASK_SHOW_FIRST_4", "MASK_HASH", "MASK_NULL", "MASK_NONE", "MASK_DATE_SHOW_YEAR"}
 
 var (
-	nameRE       = regexp.MustCompile(`^[a-z][a-z0-9-]{1,38}[a-z0-9]$`)
-	secretRE     = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$`)
-	gitPathRE    = regexp.MustCompile(`^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`)
-	gitRefRE     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_./-]{0,199}$`)
-	scpRepoRE    = regexp.MustCompile(`^[A-Za-z0-9_.-]+@[A-Za-z0-9.-]+:[A-Za-z0-9_.~/-]+$`) // git@host:org/repo.git
-	identifierRE = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
-	principalRE  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@-]{0,99}$`)
-	memoryRE     = regexp.MustCompile(`^([1-9][0-9]{0,5})(Mi|Gi)$`)
-	queryMemRE   = regexp.MustCompile(`^([1-9][0-9]{0,5}(MB|GB)|([1-9][0-9]?|100)%)$`)
-	storageRE    = regexp.MustCompile(`^([1-9][0-9]{0,5})(Gi|Ti)$`)
-	tagNameRE    = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
-	sourceNameRE = regexp.MustCompile(`^[a-z][a-z0-9_]{0,19}$`)
-	commitRE     = regexp.MustCompile(`^[0-9a-f]{16,64}$`)
-	withinRE     = regexp.MustCompile(`^([1-9][0-9]{0,4})(m|h|d)$`)
-	emailRE      = regexp.MustCompile(`^[^@\s,]+@[^@\s,]+\.[^@\s,]+$`)
+	nameRE        = regexp.MustCompile(`^[a-z][a-z0-9-]{1,38}[a-z0-9]$`)
+	secretRE      = regexp.MustCompile(`^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$`)
+	gitPathRE     = regexp.MustCompile(`^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$`)
+	gitRefRE      = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_./-]{0,199}$`)
+	scpRepoRE     = regexp.MustCompile(`^[A-Za-z0-9_.-]+@[A-Za-z0-9.-]+:[A-Za-z0-9_.~/-]+$`) // git@host:org/repo.git
+	identifierRE  = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
+	principalRE   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._@-]{0,99}$`)
+	memoryRE      = regexp.MustCompile(`^([1-9][0-9]{0,5})(Mi|Gi)$`)
+	queryMemRE    = regexp.MustCompile(`^([1-9][0-9]{0,5}(MB|GB)|([1-9][0-9]?|100)%)$`)
+	storageRE     = regexp.MustCompile(`^([1-9][0-9]{0,5})(Gi|Ti)$`)
+	tagNameRE     = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+	schemaTableRE = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}\.[a-z_][a-z0-9_]{0,62}$`)
+	sourceNameRE  = regexp.MustCompile(`^[a-z][a-z0-9_]{0,19}$`)
+	commitRE      = regexp.MustCompile(`^[0-9a-f]{16,64}$`)
+	withinRE      = regexp.MustCompile(`^([1-9][0-9]{0,4})(m|h|d)$`)
+	emailRE       = regexp.MustCompile(`^[^@\s,]+@[^@\s,]+\.[^@\s,]+$`)
 )
 
 // Parse reads a Project from JSON, fills in its defaults and validates it.
@@ -386,6 +398,27 @@ func (p *Project) Validate() error {
 		}
 		if !secretRE.MatchString(src.Connection) {
 			bad("sources: %s: connection %q isn't a connection's name", src.Name, src.Connection)
+		}
+		for _, sc := range src.Schemas {
+			if !identifierRE.MatchString(sc) || sc == "information_schema" {
+				bad("sources: %s: schema %q isn't an identifier", src.Name, sc)
+			}
+		}
+		if (len(src.Masks) > 0 || len(src.RowFilters) > 0) && !src.Readers {
+			bad("sources: %s: masks and row filters are what readers see, and its readers can't read it (readers: true)", src.Name)
+		}
+		for _, f := range src.RowFilters {
+			if !schemaTableRE.MatchString(f.Table) || strings.TrimSpace(f.Filter) == "" {
+				bad("sources: %s: a row filter needs a table, as schema.table, and a condition: %q", src.Name, f.Table)
+			}
+		}
+		for _, m := range src.Masks {
+			if !schemaTableRE.MatchString(m.Table) || !identifierRE.MatchString(m.Column) {
+				bad("sources: %s: a mask needs a table, as schema.table, and a column: %q.%q", src.Name, m.Table, m.Column)
+			}
+			if !slices.Contains(MaskTypes, m.Type) {
+				bad("sources: %s: mask type %q must be one of %s", src.Name, m.Type, strings.Join(MaskTypes, ", "))
+			}
 		}
 	}
 	if l := p.Spec.Limits; l != nil {
@@ -694,11 +727,46 @@ func (p *Project) sourcePolicies() []RangerPolicy {
 			}
 			return its
 		}
+		// Its schemas, or all; information_schema with them (Trino shows
+		// in it only what each person may see).
+		schemas := []string{"*"}
+		if len(src.Schemas) > 0 {
+			schemas = append(sorted(src.Schemas), "information_schema")
+		}
+		catalogUser := RangerItem{Groups: []string{}, Users: []string{CatalogUser}}
+		see := func(its []RangerItem, accesses ...string) []RangerItem {
+			it := catalogUser
+			for _, a := range accesses {
+				it.Accesses = append(it.Accesses, RangerAccess{Type: a, IsAllowed: true})
+			}
+			return append(its, it)
+		}
+		inSchemas := func(kv ...string) map[string]RangerResource {
+			r := resources(append([]string{"catalog", cat, "schema", "-"}, kv...)...)
+			r["schema"] = RangerResource{Values: schemas}
+			return r
+		}
 		out = append(out,
-			RangerPolicy{Name: named, Description: desc, Resources: resources("catalog", cat), PolicyItems: items("use", "show")},
-			RangerPolicy{Name: named + ":schemas", Description: desc, Resources: resources("catalog", cat, "schema", "*"), PolicyItems: items("use", "show")},
+			RangerPolicy{Name: named, Description: desc, Resources: resources("catalog", cat), PolicyItems: see(items("use", "show"), "use", "show")},
+			RangerPolicy{Name: named + ":schemas", Description: desc, Resources: inSchemas(), PolicyItems: see(items("use", "show"), "use", "show")},
 			RangerPolicy{Name: named + ":tables", Description: desc,
-				Resources: resources("catalog", cat, "schema", "*", "table", "*", "column", "*"), PolicyItems: items("select", "show")})
+				Resources: inSchemas("table", "*", "column", "*"), PolicyItems: see(items("select", "show"), "show")})
+		for _, m := range src.Masks {
+			sc, tb, _ := strings.Cut(m.Table, ".")
+			it := allow(p.Group(Reader), "select")
+			it.DataMaskInfo = &RangerMask{DataMaskType: m.Type}
+			out = append(out, RangerPolicy{Name: named + ":mask:" + m.Table + "." + m.Column, PolicyType: 1, Description: desc,
+				Resources:           resources("catalog", cat, "schema", sc, "table", tb, "column", m.Column),
+				DataMaskPolicyItems: []RangerItem{it}})
+		}
+		for _, f := range src.RowFilters {
+			sc, tb, _ := strings.Cut(f.Table, ".")
+			it := allow(p.Group(Reader), "select")
+			it.RowFilterInfo = &RangerRowFilter{FilterExpr: f.Filter}
+			out = append(out, RangerPolicy{Name: named + ":filter:" + f.Table, PolicyType: 2, Description: desc,
+				Resources:            resources("catalog", cat, "schema", sc, "table", tb),
+				RowFilterPolicyItems: []RangerItem{it}})
+		}
 	}
 	return out
 }

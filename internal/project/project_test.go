@@ -353,3 +353,45 @@ func TestSources(t *testing.T) {
 		t.Errorf("crm's catalog policy: %v", r)
 	}
 }
+
+func TestASourcesSchemasMasksAndFilters(t *testing.T) {
+	parse := func(src string) (*Project, error) {
+		return Parse([]byte(`{"apiVersion":"platform.storscale.io/v1alpha1","kind":"Project","metadata":{"name":"sales"},
+			"spec":{"members":[{"group":"engineers","role":"editor"}],"sources":[` + src + `]}}`))
+	}
+	p, err := parse(`{"name":"finance","kind":"postgresql","connection":"fin","readers":true,"schemas":["ledger","budget"],
+		"masks":[{"table":"ledger.accounts","column":"iban","type":"MASK_SHOW_LAST_4"}],"rowFilters":[{"table":"budget.lines","filter":"region = 'EU'"}]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]RangerPolicy{}
+	for _, rp := range p.RangerPolicies() {
+		byName[rp.Name] = rp
+	}
+	if got := byName["project:sales:source:finance:tables"].Resources["schema"].Values; !slices.Equal(got, []string{"budget", "ledger", "information_schema"}) {
+		t.Errorf("its schemas: %v", got)
+	}
+	m := byName["project:sales:source:finance:mask:ledger.accounts.iban"]
+	if m.PolicyType != 1 || m.Resources["schema"].Values[0] != "ledger" || m.Resources["table"].Values[0] != "accounts" ||
+		m.DataMaskPolicyItems[0].Groups[0] != "sales-readers" {
+		t.Errorf("mask: %+v", m)
+	}
+	if f := byName["project:sales:source:finance:filter:budget.lines"]; f.PolicyType != 2 || f.RowFilterPolicyItems[0].RowFilterInfo.FilterExpr != "region = 'EU'" {
+		t.Errorf("filter: %+v", f)
+	}
+	// The catalog sees what's there, and reads nothing.
+	for _, it := range byName["project:sales:source:finance:tables"].PolicyItems {
+		if slices.Contains(it.Users, CatalogUser) && (len(it.Accesses) != 1 || it.Accesses[0].Type != "show") {
+			t.Errorf("the catalog's access: %+v", it.Accesses)
+		}
+	}
+	for _, bad := range []string{
+		`{"name":"finance","kind":"postgresql","connection":"fin","masks":[{"table":"ledger.accounts","column":"iban","type":"MASK"}]}`,
+		`{"name":"finance","kind":"postgresql","connection":"fin","readers":true,"masks":[{"table":"accounts","column":"iban","type":"MASK"}]}`,
+		`{"name":"finance","kind":"postgresql","connection":"fin","schemas":["Ledger"]}`,
+	} {
+		if _, err := parse(bad); err == nil {
+			t.Errorf("%s: want refused", bad)
+		}
+	}
+}

@@ -175,6 +175,29 @@ spec:
                       kind: {type: string, enum: [postgresql, mysql, sqlserver, oracle]}
                       connection: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
                       readers: {type: boolean, description: "Its readers may read it too; default false (editors and pipelines only)."}
+                      schemas:
+                        type: array
+                        description: The only schemas of it the project may read; default all.
+                        items: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                      rowFilters:
+                        type: array
+                        description: What its readers see of a table (schema.table), as a SQL condition.
+                        items:
+                          type: object
+                          required: [table, filter]
+                          properties:
+                            table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}\.[a-z_][a-z0-9_]{0,62}$'}
+                            filter: {type: string, minLength: 1}
+                      masks:
+                        type: array
+                        description: Columns its readers see masked (the table as schema.table).
+                        items:
+                          type: object
+                          required: [table, column, type]
+                          properties:
+                            table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}\.[a-z_][a-z0-9_]{0,62}$'}
+                            column: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                            type: {type: string, enum: [MASK, MASK_SHOW_LAST_4, MASK_SHOW_FIRST_4, MASK_HASH, MASK_NULL, MASK_NONE, MASK_DATE_SHOW_YEAR]}
                 limits:
                   type: object
                   description: >-

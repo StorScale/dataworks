@@ -6,8 +6,10 @@ Every round, it:
      /catalog/token, for the services that report to the catalog (Airflow's
      lineage, platformd's Flow view); in Kubernetes, to the Secret
      catalog-token, which they mount there;
-  2. ingests Trino's tables (the iceberg catalog) as the database service
-     "trino", so every table, column and schema is in the catalog;
+  2. ingests Trino's tables (the iceberg catalog, and each project's
+     sources' catalogs) as the database service "trino", so every table,
+     column and schema is in the catalog (its Trino account may see what's
+     in a source, and read none of it);
   3. runs each project's checks (spec.tables.checks) as OpenMetadata tests on
      its tables, which shows their results on the tables.
 
@@ -19,6 +21,7 @@ Metadata is ingested every METADATA_EVERY seconds; checks run every round.
 import json
 import logging
 import os
+import re
 import sys
 import time
 
@@ -78,15 +81,25 @@ def trino_connection():
     return {"config": {
         "type": "Trino", "hostPort": "trino:8443", "username": "openmetadata",
         "authType": {"password": env["OPENMETADATA_TRINO_PASSWORD"]},
-        "catalog": "iceberg",
         "connectionArguments": {"http_scheme": "https", "verify": "/tls/cert.pem"},
     }}
 
 
+def catalogs():
+    """The Trino catalogs to describe: the lakehouse's, and the projects' sources'."""
+    out = ["iceberg"]
+    for p in projects():
+        prefix = p["metadata"]["name"].replace("-", "_")
+        out += [f"{prefix}_{s['name']}" for s in p.get("spec", {}).get("sources") or []]
+    return out
+
+
 def ingest_metadata(token):
+    include = [f"^{re.escape(c)}$" for c in catalogs()]
     workflow = MetadataWorkflow.create({
         "source": {"type": "trino", "serviceName": SERVICE, "serviceConnection": trino_connection(),
                    "sourceConfig": {"config": {"type": "DatabaseMetadata", "markDeletedTables": True,
+                                               "databaseFilterPattern": {"includes": include},
                                                "includeViews": True,
                                                "schemaFilterPattern": {"excludes": ["information_schema", "system"]}}}},
         "sink": {"type": "metadata-rest", "config": {}},
