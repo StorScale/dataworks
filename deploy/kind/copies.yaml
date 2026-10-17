@@ -1,0 +1,5 @@
+# Change capture on kind: the platform's Postgres with wal_level=logical, so the
+# copies suite can copy a source on it (a real install's sources are the
+# company's databases, not the platform's). CI's HTTPS job installs with it.
+postgres:
+  logicalReplication: true

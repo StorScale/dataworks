@@ -39,7 +39,7 @@ spec:
         - name: postgres
           image: {{ .Values.upstream.postgres }}
           securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 999, runAsGroup: 999, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
-          args: ["postgres", "-c", "work_mem=10MB", "-c", "max_connections=200"]
+          args: ["postgres", "-c", "work_mem=10MB", "-c", "max_connections=200"{{ if .Values.postgres.logicalReplication }}, "-c", "wal_level=logical"{{ end }}]
           env:
             - {name: POSTGRES_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: POSTGRES_ADMIN_PASSWORD}}}
             - {name: AIRFLOW_DB_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: AIRFLOW_DB_PASSWORD}}}

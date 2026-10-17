@@ -185,3 +185,38 @@ func TestPropValue(t *testing.T) {
 		}
 	}
 }
+
+func TestCopyProperties(t *testing.T) {
+	p, err := project.Parse([]byte(`{"apiVersion":"platform.storscale.io/v1alpha1","kind":"Project","metadata":{"name":"sales"},
+		"spec":{"members":[{"group":"engineers","role":"editor"}],"tables":{},
+		"sources":[{"name":"finance","kind":"postgresql","connection":"fin","copy":{"tables":["public.invoices","ledger.accounts"]}}]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &Copies{CommitEvery: 30}
+	props, err := c.properties(p, p.Spec.Sources[0], map[string]string{"host": "pg", "database": "fin", "username": "cdc", "password": "pa=ss\\word"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"debezium.source.connector.class=io.debezium.connector.postgresql.PostgresConnector\n",
+		"debezium.source.table.include.list=public.invoices,ledger.accounts\n",
+		"debezium.source.slot.name=storscale_sales_finance\n",
+		"debezium.source.database.password=pa=ss\\\\word\n",
+		"debezium.sink.iceberg.table-namespace=sales\n",
+		"debezium.sink.iceberg.table-prefix=finance_\n",
+		"debezium.sink.iceberg.format-version=2\n",
+		"debezium.source.offset.storage.iceberg.table-namespace=storscale_cdc\n",
+		"debezium.sink.batch.batch-size-wait.max-wait-ms=30000\n",
+	} {
+		if !strings.Contains(props, want) {
+			t.Errorf("no %q in:\n%s", want, props)
+		}
+	}
+	if _, err := c.properties(p, p.Spec.Sources[0], map[string]string{"url": "jdbc:postgresql://pg/fin", "username": "u", "password": "p"}); err == nil {
+		t.Error("a url alone: want refused")
+	}
+	if got := identifier("storscale_" + strings.Repeat("x", 70)); len(got) != 63 {
+		t.Errorf("identifier: %d characters", len(got))
+	}
+}

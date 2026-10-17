@@ -116,6 +116,7 @@ spec:
       labels: {{- include "storscale.selector" (list .Release.Name "platform-operator") | nindent 8 }}
       annotations:
         checksum/airflow-project: {{ include "storscale.airflow.project" . | sha256sum }}
+        checksum/copy: {{ include "storscale.copy" . | sha256sum }}
     spec:
       enableServiceLinks: false
       serviceAccountName: storscale
@@ -170,9 +171,13 @@ spec:
             - {name: TRINO_CA, value: /trino-cert/cert.pem}
             - {name: OPERATOR_TRINO_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: OPERATOR_TRINO_PASSWORD}}}
             - {name: SOURCES_SECRET, value: trino-sources}
+            # Projects' sources copied into their tables (templates/copy.yaml).
+            - {name: COPY_TEMPLATE, value: /etc/storscale/copy/template.json}
+            - {name: COPY_COMMIT_EVERY, value: {{ .Values.copy.commitEvery | quote }}}
           volumeMounts:
             - {name: airflow-project, mountPath: /etc/storscale/airflow-project, readOnly: true}
             - {name: trino-cert, mountPath: /trino-cert, readOnly: true}
+            - {name: copy, mountPath: /etc/storscale/copy, readOnly: true}
           ports:
             - {name: health, containerPort: 8081}
           readinessProbe:
@@ -183,6 +188,7 @@ spec:
         {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 8 }}
         - {name: airflow-project, configMap: {name: storscale-airflow-project}}
         - {name: trino-cert, secret: {secretName: trino-tls, items: [{key: cert.pem, path: cert.pem}]}}
+        - {name: copy, configMap: {name: storscale-copy}}
 ---
 apiVersion: v1
 kind: Service

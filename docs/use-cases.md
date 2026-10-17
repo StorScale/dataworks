@@ -311,9 +311,7 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R8.3 The source as the tables' lineage in the catalog; the project's access rules on them.
 - R8.4 Lag and errors per source, shown and alerted.
 
-**Open questions**
-- Which databases first?
-- Kafka in the platform (for change capture and, later, streaming), or Debezium Server writing to Iceberg without it?
+**Decided (2026-10-17):** Debezium Server writing to Iceberg, without Kafka (Kafka when streaming needs it); PostgreSQL, SQL Server and MySQL first, Oracle after.
 
 ### 8.2 An application's data
 

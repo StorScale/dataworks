@@ -40,7 +40,7 @@ rules:
     verbs: [get, create, patch, delete]
   - apiGroups: [apps]
     resources: [deployments]
-    verbs: [get, create, patch, delete]
+    verbs: [get, list, create, patch, delete]
   - apiGroups: [platform.storscale.io]
     resources: [projects]
     verbs: [get, list, watch, create, update, patch, delete]
