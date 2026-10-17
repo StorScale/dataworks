@@ -177,3 +177,12 @@ resources:
   requests: {cpu: {{ index . 0 }}, memory: {{ index . 1 }}}
   limits: {memory: {{ index . 2 }}}
 {{- end }}
+
+{{/* Nessie's version store: its database on the platform's Postgres. */}}
+{{- define "storscale.nessieDb" -}}
+- {name: nessie.version.store.type, value: JDBC2}
+- {name: nessie.version.store.persist.jdbc.datasource, value: postgresql}
+- {name: quarkus.datasource.postgresql.jdbc.url, value: "jdbc:postgresql://nessie-db:5432/nessie"}
+- {name: quarkus.datasource.postgresql.username, value: nessie}
+- {name: quarkus.datasource.postgresql.password, valueFrom: {secretKeyRef: {name: storscale-env, key: NESSIE_DB_PASSWORD}}}
+{{- end }}

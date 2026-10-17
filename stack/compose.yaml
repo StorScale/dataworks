@@ -455,28 +455,68 @@ services:
       ranger-admin: {condition: service_healthy}
 
   # --- Tables: Nessie (the Iceberg catalog) and Trino --------------------------------
+  # Nessie keeps the catalog (every table, its history, branches and tags)
+  # in a Postgres of its own, which the backups dump with the others.
+  nessie-db:
+    restart: unless-stopped
+    image: postgres:18-bookworm
+    environment:
+      POSTGRES_DB: nessie
+      POSTGRES_USER: nessie
+      POSTGRES_PASSWORD: ${NESSIE_DB_PASSWORD}
+    volumes:
+      - nessie-db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nessie -d nessie"]
+      interval: 5s
+      retries: 60
+
+  # Before 0.9.0 the catalog was in RocksDB, on nessie-data: moved into
+  # Postgres once, while Nessie is stopped (storscale down, then up, does),
+  # then the RocksDB files are renamed, never read again (kept for a rollback).
+  nessie-move:
+    image: ghcr.io/projectnessie/nessie-server-admin:0.108.8
+    entrypoint: ["bash", "-c"]
+    command:
+      - |
+        if [ ! -d /home/nessie/catalog ]; then echo "nessie-move: no RocksDB catalog to move"; exit 0; fi
+        set -e
+        echo "nessie-move: exporting the RocksDB catalog"
+        java -Dnessie.version.store.type=ROCKSDB -Dnessie.version.store.persist.rocks.database-path=/home/nessie/catalog \
+          -jar /deployments/quarkus-run.jar export --path /home/nessie/rocksdb-export.zip
+        echo "nessie-move: importing it into Postgres"
+        java -jar /deployments/quarkus-run.jar import --path /home/nessie/rocksdb-export.zip --erase-before-import
+        mv /home/nessie/catalog /home/nessie/catalog-rocksdb-moved
+        echo "nessie-move: done; the RocksDB files are kept in catalog-rocksdb-moved"
+    environment: &nessie-db
+      nessie.version.store.type: JDBC2
+      nessie.version.store.persist.jdbc.datasource: postgresql
+      quarkus.datasource.postgresql.jdbc.url: jdbc:postgresql://nessie-db:5432/nessie
+      quarkus.datasource.postgresql.username: nessie
+      quarkus.datasource.postgresql.password: ${NESSIE_DB_PASSWORD}
+    volumes:
+      - nessie-data:/home/nessie
+    depends_on:
+      nessie-db: {condition: service_healthy}
+
   nessie:
     restart: unless-stopped
     image: ghcr.io/projectnessie/nessie:0.108.8
     environment:
-      - JAVA_OPTS_APPEND=-Xms64m -Xmx256m
-      - nessie.version.store.type=ROCKSDB
-      - nessie.version.store.persist.rocks.database-path=/home/nessie/catalog
-      - nessie.catalog.default-warehouse=warehouse
-      - nessie.catalog.warehouses.warehouse.location=s3://warehouse/
-      - nessie.catalog.service.s3.default-options.endpoint=http://buckets:9000/
-      - nessie.catalog.service.s3.default-options.region=us-east-1
-      - nessie.catalog.service.s3.default-options.path-style-access=true
-      - nessie.catalog.service.s3.default-options.access-key=urn:nessie-secret:quarkus:nessie.catalog.secrets.access-key
-      - nessie.catalog.secrets.access-key.name=${NESSIE_S3_ACCESS_KEY}
-      - nessie.catalog.secrets.access-key.secret=${NESSIE_S3_SECRET_KEY}
-    volumes:
-      - nessie-data:/home/nessie
+      <<: *nessie-db
+      JAVA_OPTS_APPEND: -Xms64m -Xmx256m
+      nessie.catalog.default-warehouse: warehouse
+      nessie.catalog.warehouses.warehouse.location: s3://warehouse/
+      nessie.catalog.service.s3.default-options.endpoint: http://buckets:9000/
+      nessie.catalog.service.s3.default-options.region: us-east-1
+      nessie.catalog.service.s3.default-options.path-style-access: "true"
+      nessie.catalog.service.s3.default-options.access-key: urn:nessie-secret:quarkus:nessie.catalog.secrets.access-key
+      nessie.catalog.secrets.access-key.name: ${NESSIE_S3_ACCESS_KEY}
+      nessie.catalog.secrets.access-key.secret: ${NESSIE_S3_SECRET_KEY}
     depends_on:
       setup: {condition: service_completed_successfully}
+      nessie-move: {condition: service_completed_successfully}
 
-  # Trino's self-signed certificate (Trino accepts tokens only over HTTPS),
-  # and a copy of the certificate alone, for Airflow (trino-cert).
   # Nessie's GC: the tables' history older than NESSIE_GC_KEEP, and files no
   # branch or tag needs, deleted from the warehouse, across the install (a
   # tag, such as a month-end close, keeps what it points to). Daily at 03:30
@@ -510,6 +550,8 @@ services:
     depends_on:
       nessie: {condition: service_started}
 
+  # Trino's self-signed certificate (Trino accepts tokens only over HTTPS),
+  # and a copy of the certificate alone, for Airflow (trino-cert).
   tls:
     <<: *tools
     command: ["sh", "-c", "(test -s /tls/trino.pem || (openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj /CN=trino -addext subjectAltName=DNS:trino,DNS:localhost -keyout /tls/key.pem -out /tls/cert.pem && cat /tls/key.pem /tls/cert.pem > /tls/trino.pem && chmod 644 /tls/*.pem)) && cp /tls/cert.pem /cert/cert.pem && chmod 644 /cert/cert.pem"]
@@ -892,6 +934,7 @@ services:
 
 volumes:
   keycloak-db:
+  nessie-db:
   trino-db:
   catalog:
   openmetadata-db:

@@ -62,7 +62,7 @@ spec:
         storageClassName: {{ . }}
         {{- end }}
         resources: {requests: {storage: {{ .Values.storage.postgres }}}}
-{{- range $name := list "postgres" "airflow-db" "superset-db" "openmetadata-db" "keycloak-db" "trino-db" }}
+{{- range $name := list "postgres" "airflow-db" "superset-db" "openmetadata-db" "keycloak-db" "trino-db" "nessie-db" }}
 ---
 apiVersion: v1
 kind: Service

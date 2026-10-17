@@ -1,4 +1,6 @@
-# The lakehouse's tables: Nessie (the Iceberg catalog) and Trino.
+# The lakehouse's tables: Nessie (the Iceberg catalog) and Trino. Nessie
+# keeps the catalog in the platform's Postgres (nessie-db); nessie-data held
+# it in RocksDB before 0.9.0, and keeps those files, moved aside.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -30,13 +32,56 @@ spec:
       securityContext: {fsGroup: 185}
       initContainers:
         {{- include "storscale.wait" (list . "setup" (list "job" "setup")) | nindent 8 }}
+        # Nessie's database on the platform's Postgres, made if it's missing
+        # (an install from before 0.9.0 has none), as Postgres' admin.
+        - name: database
+          image: {{ .Values.upstream.postgres }}
+          command: ["bash", "-c"]
+          args:
+            - |
+              until pg_isready -h nessie-db -U postgres -q; do sleep 2; done
+              psql -h nessie-db -U postgres -v ON_ERROR_STOP=1 -v pw="$NESSIE_DB_PASSWORD" <<'SQL'
+              SELECT 'CREATE ROLE nessie LOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'nessie') \gexec
+              ALTER ROLE nessie PASSWORD :'pw';
+              SELECT 'CREATE DATABASE nessie OWNER nessie' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'nessie') \gexec
+              REVOKE CONNECT, TEMPORARY ON DATABASE nessie FROM PUBLIC;
+              SQL
+          env:
+            - {name: PGPASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: POSTGRES_ADMIN_PASSWORD}}}
+            - {name: NESSIE_DB_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: NESSIE_DB_PASSWORD}}}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+        # Before 0.9.0 the catalog was in RocksDB, on nessie-data: moved into
+        # Postgres once, here, while Nessie is stopped (Recreate), then the
+        # RocksDB files are renamed, never read again (kept for a rollback).
+        - name: move
+          image: {{ .Values.upstream.nessieAdmin }}
+          command: ["bash", "-c"]
+          args:
+            - |
+              if [ ! -d /home/nessie/catalog ]; then echo "nessie-move: no RocksDB catalog to move"; exit 0; fi
+              set -e
+              echo "nessie-move: exporting the RocksDB catalog"
+              java -Dnessie.version.store.type=ROCKSDB -Dnessie.version.store.persist.rocks.database-path=/home/nessie/catalog \
+                -jar /deployments/quarkus-run.jar export --path /home/nessie/rocksdb-export.zip
+              echo "nessie-move: importing it into Postgres"
+              java -jar /deployments/quarkus-run.jar import --path /home/nessie/rocksdb-export.zip --erase-before-import
+              mv /home/nessie/catalog /home/nessie/catalog-rocksdb-moved
+              echo "nessie-move: done; the RocksDB files are kept in catalog-rocksdb-moved"
+          env:
+            {{- include "storscale.nessieDb" . | nindent 12 }}
+            - {name: JAVA_TOOL_OPTIONS, value: "-Xmx384m"}
+          volumeMounts:
+            - {name: data, mountPath: /home/nessie}
+          resources:
+            requests: {cpu: 50m, memory: 256Mi}
+            limits: {memory: 640Mi}
       containers:
         - name: nessie
           image: {{ .Values.upstream.nessie }}
           env:
             - {name: JAVA_OPTS_APPEND, value: "-Xms64m -Xmx256m"}
-            - {name: nessie.version.store.type, value: ROCKSDB}
-            - {name: nessie.version.store.persist.rocks.database-path, value: /home/nessie/catalog}
+            {{- include "storscale.nessieDb" . | nindent 12 }}
             - {name: nessie.catalog.default-warehouse, value: warehouse}
             - {name: nessie.catalog.warehouses.warehouse.location, value: "s3://warehouse/"}
             - {name: nessie.catalog.service.s3.default-options.endpoint, value: "http://buckets:9000/"}
@@ -52,8 +97,6 @@ spec:
             httpGet: {path: /q/health/ready, port: management}
             periodSeconds: 5
             failureThreshold: 60
-          volumeMounts:
-            - {name: data, mountPath: /home/nessie}
           {{- include "storscale.resources" (list "50m" "320Mi" "512Mi") | nindent 10 }}
       volumes:
         - {name: data, persistentVolumeClaim: {claimName: nessie-data}}
