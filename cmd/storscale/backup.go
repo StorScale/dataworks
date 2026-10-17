@@ -294,11 +294,15 @@ for f in /backup/postgres/*.dump; do
   pg_restore -h postgres -U postgres --create --exit-on-error -d postgres "$f"
 done
 echo "restoring ranger"
-# Ranger's Postgres is older (13) than these tools (18), whose SQL sets
-# transaction_timeout (17 and on): as SQL, without that, any other error stopping it.
+# Ranger's Postgres is older (13) than these tools (18), which write what
+# 13 doesn't know (CREATE DATABASE ... LOCALE_PROVIDER, SET transaction_timeout):
+# the database made here, with its owner, then its contents as SQL, less that.
 export PGPASSWORD="$RANGER_PASSWORD"
+owner=$(psql -h ranger-db -U postgres -Atc "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = 'ranger'")
+owner=${owner:-postgres}
 psql -h ranger-db -U postgres -v ON_ERROR_STOP=1 -qc "DROP DATABASE IF EXISTS ranger WITH (FORCE)"
-pg_restore --create -f - /backup/ranger.dump | grep -v '^SET transaction_timeout' | psql -h ranger-db -U postgres -v ON_ERROR_STOP=1 -q -d postgres
+psql -h ranger-db -U postgres -v ON_ERROR_STOP=1 -qc "CREATE DATABASE ranger OWNER \"$owner\""
+pg_restore -f - /backup/ranger.dump | grep -v '^SET transaction_timeout' | psql -h ranger-db -U postgres -v ON_ERROR_STOP=1 -q -d ranger
 echo "databases restored"`
 
 // restore puts a backup back into the install it came from: everything
