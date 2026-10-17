@@ -37,6 +37,7 @@ spec:
       containers:
         - name: postgres
           image: {{ .Values.upstream.postgres }}
+          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
           args: ["postgres", "-c", "work_mem=10MB", "-c", "max_connections=200"]
           env:
             - {name: POSTGRES_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: POSTGRES_ADMIN_PASSWORD}}}

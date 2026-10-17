@@ -65,6 +65,7 @@ spec:
   containers:
     - name: test
       image: {{ include "storscale.image" (list . "tools") }}
+      securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
       imagePullPolicy: {{ .Values.images.pullPolicy }}
       # The suites picked (all of them when none are), less the browser's.
       command: ["sh", "-c"]
@@ -115,6 +116,7 @@ spec:
   containers:
     - name: browser
       image: mcr.microsoft.com/playwright/python:v1.63.0-noble
+      securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
       command: ["sh", "-c"]
       args:
         - |

@@ -29,6 +29,7 @@ spec:
       containers:
         - name: setup
           image: {{ include "storscale.image" (list $root "tools") }}
+          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
           imagePullPolicy: {{ $root.Values.images.pullPolicy }}
           command: ["sh", "-c", "python -u /tools/setup/run.py {{ $stage }} && python /tools/k8s.py done {{ $step }}"]
           {{- include "storscale.envFrom" $root | nindent 10 }}

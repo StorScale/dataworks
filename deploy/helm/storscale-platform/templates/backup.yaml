@@ -39,6 +39,7 @@ spec:
             # Every database, as pg_dump's custom format (pg_restore puts it back).
             - name: dump
               image: {{ .Values.upstream.postgres }}
+              securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
               command: ["bash", "-c"]
               args:
                 - |
@@ -60,6 +61,7 @@ spec:
           containers:
             - name: backup
               image: {{ include "storscale.image" (list . "tools") }}
+              securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
               imagePullPolicy: {{ .Values.images.pullPolicy }}
               command: ["python", "-u", "/tools/backup.py", "run"]
               env:

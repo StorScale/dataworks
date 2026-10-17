@@ -23,6 +23,7 @@ spec:
       containers:
         - name: platformd
           image: {{ include "storscale.image" (list . "platformd") }}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           env:
             - {name: PLATFORM_URL, value: {{ include "storscale.url" . | quote }}}
@@ -124,6 +125,7 @@ spec:
       containers:
         - name: operator
           image: {{ include "storscale.image" (list . "platformd") }}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           command: ["/usr/bin/platform-operator"]
           env:
@@ -205,6 +207,7 @@ spec:
       containers:
         - name: semanticd
           image: {{ include "storscale.image" (list . "semanticd") }}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           env:
             - {name: KEYCLOAK_URL, value: "{{ include "storscale.url" . }}/sso"}
