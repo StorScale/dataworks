@@ -4,6 +4,16 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-17
+
+Tables kept in shape (compaction, and Nessie's GC for their history), and the audit log.
+
+**Upgrading from 0.7.0:**
+- `storscale upgrade --context <cluster> --version 0.8.0`, after a `--dry-run` (it applies the Project definition, which adds `tables.maintenance`).
+- Nessie's GC runs nightly from now on and deletes the tables' history older than `maintenance.history.keep` (`P7D`), and the files only that history used: the data as it was beyond a week is gone after its first run. Set a longer `maintenance.history.keep` before upgrading to keep more; tag (in Nessie) anything to keep for good.
+- Ranger's Solr becomes a StatefulSet with a volume (`audit.storage`): the audit records from before the upgrade, which lived only in its pod, are lost once more; from now on they're kept.
+- Trino has a new account, `maintenance` (its password generated into `storscale-env`), which Ranger lets read and alter every table; its password is platformd's alone.
+
 ### Added
 - **The audit log** ([docs/use-cases.md](docs/use-cases.md), 6.3): platformd records what people do in the platform (signing in, or being turned away; a project created, changed, saying which parts, or deleted; a pipeline run started; an alert muted or tested; maintenance asked for) beside Ranger's record of every access Trino allowed or refused, in Ranger's Solr, which now keeps them on a volume of its own (`audit.storage`, 5Gi). The platform's records are kept `audit.keep` (365d). A project's new Audit tab, for its editors, shows its records and every access to its tables; Administration › Audit shows the whole platform's, filtered by person, text, outcome, source and dates, with a CSV export for auditors. The `audit` suite checks it.
 - **Table maintenance** ([docs/use-cases.md](docs/use-cases.md), 6.5): each night (`maintenance.at`, UTC) platformd compacts every project's small files into larger ones (Trino's `optimize`), one project at a time, as Trino's new `maintenance` account, which Ranger lets alter and read every table (`optimize` scans the table it rewrites), as the catalog's account may read them; its password is platformd's alone. A project may pause it (`tables.maintenance.paused`). Each table's new Storage tab shows its files, size and rows, and what its maintenance last did; the project's editors ask for a run now. A failed run alerts the project, and runs are Prometheus metrics (`platform_table_maintenance_*`). The `maintenance` suite checks it. Then Nessie's GC (`nessie-gc`, a CronJob at `maintenance.history.schedule`; a daily loop in Compose) deletes the tables' history older than `maintenance.history.keep` (`P7D`) and files no branch or tag needs, across the install, as Nessie's own Buckets account; a tag, as a month-end close, keeps what it points to, and a failed run alerts the administrators. Iceberg's own snapshot expiry and orphan-file removal don't apply to Nessie's tables, whose history is Nessie's commits: how far back the data as it was goes is the install's setting, not a project's. The Storage tab says how far back it goes. A checkout's own install keeps two minutes' history and collects every three, so the `maintenance` suite sees the files before a compaction, and a file nothing used, deleted.
