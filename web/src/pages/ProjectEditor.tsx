@@ -193,6 +193,8 @@ export default function ProjectEditor() {
                 {(["postgresql", "mysql", "sqlserver", "oracle"] as const).map((k) => <option key={k} value={k}>{k}</option>)}
               </select>
               <input value={s.connection} placeholder="connection" aria-label="Connection" onChange={(e) => setSource(i, { connection: e.target.value })} />
+              <input value={(s.schemas ?? []).join(", ")} placeholder="schemas: all" aria-label="Schemas" title="Only these schemas (default all)"
+                onChange={(e) => setSource(i, { schemas: list(e.target.value).length ? list(e.target.value) : undefined })} />
               <label className="row small" style={{ flexDirection: "row", gap: 6 }}>
                 <input type="checkbox" checked={!!s.readers} onChange={(e) => setSource(i, { readers: e.target.checked || undefined })} /> Readers
               </label>

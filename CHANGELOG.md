@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **A project's sources, the rest of 8.3:** a source may name the only schemas the project reads of it (`schemas`), and narrow what its readers see with masks and row filters (`masks`, `rowFilters`, tables as `schema.table`), as a project's tables do. Its tables are in the catalog (OpenMetadata), beside the lakehouse's: catalog-sync describes each project's sources' catalogs too, its Trino account seeing their schemas, tables and columns and reading none of their data. The SQL page's schema browser lists the sources' tables as Trino shows them to each person. The project editor takes a source's schemas. The `sources` suite checks each.
+
 ## [0.10.0] - 2026-10-17
 
 The data as it was (tags, each table's history, As of), querying a company database where it is (a project's sources), high availability, disaster recovery (the data copied off the cluster, a restore into a new install), and the rest of Pod Security.

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { asOf, atCommit, getFlow, Moment, runSQL, SQLAnswer } from "../api";
+import { asOf, atCommit, getFlow, Moment, runSQL, sourceCatalog, SQLAnswer } from "../api";
 import { ErrorBanner, limits, maskLabel, usePoll, useProject } from "../lib";
 import { Results } from "./Data";
 
@@ -23,6 +23,21 @@ export default function SQL() {
   const tables = flow.data?.tables.filter((t) => !t.external) ?? [];
   const reader = view?.role === "reader";
   useEffect(() => { if (!sql && tables[0]) setSql(starter(tables[0].name)); }, [tables[0]?.name]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The project's sources' tables, as Trino shows them to this person (what
+  // Ranger lets them see): a source they may not read isn't listed.
+  const catalogs = (spec?.sources ?? []).map((s) => sourceCatalog(name, s));
+  const [sourceTables, setSourceTables] = useState<Record<string, SourceTable[]>>({});
+  useEffect(() => {
+    let live = true;
+    catalogs.forEach((cat) => {
+      runSQL(name, `SELECT table_schema, table_name, column_name, data_type FROM "${cat}".information_schema.columns
+        WHERE table_schema <> 'information_schema' ORDER BY table_schema, table_name, ordinal_position`, 5000)
+        .then((a) => { if (live) setSourceTables((st) => ({ ...st, [cat]: sourceTablesOf(a) })); })
+        .catch(() => undefined);
+    });
+    return () => { live = false; };
+  }, [name, catalogs.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const run = async () => {
     setRunning(true);
@@ -88,6 +103,30 @@ export default function SQL() {
             );
           })}
           {flow.data && tables.length === 0 && <p className="small muted" style={{ padding: 10 }}>No tables yet.</p>}
+          {catalogs.filter((cat) => sourceTables[cat]?.length).map((cat) => (
+            <div key={cat} data-testid="source-schema">
+              <p className="eyebrow" style={{ marginTop: 12 }} title="A source: the database, queried where it is (read-only)">{cat}</p>
+              {sourceTables[cat].map((t) => {
+                const fqn = `${cat}.${t.schema}.${t.name}`;
+                return (
+                  <div key={fqn}>
+                    <button onClick={() => setOpen(open === fqn ? undefined : fqn)} onDoubleClick={() => insert(fqn)} aria-expanded={open === fqn} title="Double-click to insert">
+                      <span className="mono">{t.schema}.{t.name}</span><span className="muted small">{open === fqn ? "▾" : "▸"}</span>
+                    </button>
+                    {open === fqn && (
+                      <div style={{ padding: "0 0 6px 12px" }}>
+                        {t.columns.map((c) => (
+                          <button key={c.name} onClick={() => insert(c.name)} style={{ minHeight: 30, padding: "4px 10px" }} title="Insert">
+                            <span className="mono small">{c.name}</span><span className="small muted">{c.type}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <section className="main stack">
@@ -130,4 +169,17 @@ export default function SQL() {
       </div>
     </div>
   );
+}
+
+type SourceTable = { schema: string; name: string; columns: { name: string; type: string }[] };
+
+// sourceTablesOf groups information_schema.columns' rows (schema, table, column, type) by table.
+function sourceTablesOf(a: SQLAnswer): SourceTable[] {
+  const out: SourceTable[] = [];
+  for (const [schema, table, column, type] of a.rows as string[][]) {
+    let t = out[out.length - 1];
+    if (!t || t.schema !== schema || t.name !== table) out.push((t = { schema, name: table, columns: [] }));
+    t.columns.push({ name: column, type });
+  }
+  return out;
 }
