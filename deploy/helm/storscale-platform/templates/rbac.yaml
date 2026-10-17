@@ -32,8 +32,8 @@ rules:
     resources: [events]
     verbs: [list]
   - apiGroups: [batch]
-    resources: [jobs]
-    verbs: [list]
+    resources: [jobs, cronjobs]   # the setup steps, and the backups' last success
+    verbs: [get, list]
   # The operator runs each project's own Airflow (a Deployment and a Service).
   - apiGroups: [""]
     resources: [services]

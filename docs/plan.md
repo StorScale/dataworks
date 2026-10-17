@@ -245,7 +245,7 @@ How:
 | The tables' history and files nothing uses, collected by Nessie's GC, kept as long as the install says | Built (unreleased): Iceberg's own expiry doesn't apply to Nessie's tables |
 | The audit log: the platform's records beside Ranger's, per project and for administrators, with export | Built (unreleased); use case 6.3; Keycloak's and Buckets' events, and agents apart from people, to come |
 | The example users switchable off | Next, before Entra ID |
-| Backups, and the upgrade notes that use them | To do |
+| Backups: every database (Nessie's catalog now among them, in Postgres) and the Projects and Secrets, nightly, encrypted for a key kept off the cluster; `storscale backup` and `restore`, tested in CI | Built (unreleased), for restoring into the same install; the data in Buckets copied elsewhere, for a lost cluster, to come |
 | High availability and hardening: replicas, network policies, Pod Security, encryption at rest, image scanning and SBOMs | To do |
 | Retention per table and erasure of a person's data | Waiting on decisions: which laws, what deadlines, how kept closes are treated |
 | A table's history and its data as of a date or a close (6.10) | To do; a close is a Nessie tag |

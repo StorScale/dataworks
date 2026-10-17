@@ -86,6 +86,20 @@ storscale upgrade --context <cluster> --version 0.8.0             # then do it
 it prints the `helm rollback` to the revision before. CI's `kubernetes` job upgrades the last
 release to each commit this way, with a project made under the old one, and runs every suite.
 
+**Backups** are off until the chart has a certificate to encrypt them for. Make the
+pair, give the chart the certificate, and keep the key somewhere else than the cluster
+(without it no backup can be restored; with it anyone can read them):
+
+```bash
+storscale backup keygen --out ~/storscale-backup-keys
+helm upgrade ... --set-file backup.certificate=~/storscale-backup-keys/storscale-backup-cert.pem
+storscale backup --context <cluster>                     # one now; then nightly at 04:00 UTC
+storscale restore --context <cluster> --key ~/storscale-backup-keys/storscale-backup-key.pem   # the latest
+```
+
+They go to the platform's own Buckets unless `backup.s3` names another S3 endpoint, which
+a real install should: a lost cluster takes its own Buckets with it.
+
 People's password (the example users alice, bob, carol):
 `kubectl -n storscale get secret storscale-env -o jsonpath='{.data.LAKEHOUSE_USER_PASSWORD}' | base64 -d`.
 Every other secret is in the same Secret. They're generated on install and kept on upgrade.

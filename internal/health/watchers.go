@@ -172,6 +172,71 @@ func (k *Kube) FailedJobs(ctx context.Context) ([]Finding, error) {
 	return out, nil
 }
 
+// Backups are the platform's backups, as their CronJob (storscale-backup)
+// has them: none when the chart has no backup certificate.
+type Backups struct {
+	Configured  bool      `json:"configured"`
+	Schedule    string    `json:"schedule,omitempty"`
+	LastSuccess time.Time `json:"lastSuccess"`
+	Since       time.Time `json:"since"` // when they were set up
+}
+
+// Backups reads the backups' CronJob.
+func (k *Kube) Backups(ctx context.Context) (Backups, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", k.URL+"/apis/batch/v1/namespaces/"+k.Namespace+"/cronjobs/storscale-backup", nil)
+	if err != nil {
+		return Backups{}, err
+	}
+	tok, err := k.Token()
+	if err != nil {
+		return Backups{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	res, err := k.HTTP.Do(req)
+	if err != nil {
+		return Backups{}, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode == http.StatusNotFound {
+		return Backups{}, nil
+	}
+	if res.StatusCode != 200 {
+		return Backups{}, fmt.Errorf("kubernetes: the backups' CronJob: HTTP %d", res.StatusCode)
+	}
+	var cj struct {
+		Metadata struct {
+			Created time.Time `json:"creationTimestamp"`
+		} `json:"metadata"`
+		Spec struct {
+			Schedule string `json:"schedule"`
+		} `json:"spec"`
+		Status struct {
+			LastSuccess time.Time `json:"lastSuccessfulTime"`
+		} `json:"status"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&cj); err != nil {
+		return Backups{}, err
+	}
+	return Backups{Configured: true, Schedule: cj.Spec.Schedule, LastSuccess: cj.Status.LastSuccess, Since: cj.Metadata.Created}, nil
+}
+
+// Overdue is the finding when backups are set up and none has succeeded
+// within `within` (a nightly one's day, and some).
+func (b Backups) Overdue(now time.Time, within time.Duration) []Finding {
+	if !b.Configured {
+		return nil
+	}
+	switch {
+	case !b.LastSuccess.IsZero() && now.Sub(b.LastSuccess) > within:
+		return []Finding{{Key: "backups", Title: "Backups are overdue", Severity: "critical", Since: b.LastSuccess.Add(within),
+			Detail: "the last one that succeeded was " + b.LastSuccess.UTC().Format("2006-01-02 15:04 MST")}}
+	case b.LastSuccess.IsZero() && now.Sub(b.Since) > within:
+		return []Finding{{Key: "backups", Title: "Backups are overdue", Severity: "critical", Since: b.Since.Add(within),
+			Detail: "none has succeeded since they were set up, " + b.Since.UTC().Format("2006-01-02 15:04 MST")}}
+	}
+	return nil
+}
+
 // FromFinding is the alert for a finding that started, or ended.
 func FromFinding(f Finding, ended bool, link string) Alert {
 	a := Alert{Title: f.Title, Severity: "warning", Link: link, At: time.Now().UTC()}

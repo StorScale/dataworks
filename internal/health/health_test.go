@@ -221,3 +221,36 @@ func TestASetupStepThatGaveUpIsAFinding(t *testing.T) {
 		t.Errorf("a scheduled job's run: %q", got[1].Title)
 	}
 }
+
+func TestBackupsAreReadFromTheirCronJobAndOverdueAfterADay(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/apis/batch/v1/namespaces/storscale/cronjobs/storscale-backup":
+			io.WriteString(w, `{"metadata": {"creationTimestamp": "2026-10-01T00:00:00Z"}, "spec": {"schedule": "0 4 * * *"},
+				"status": {"lastSuccessfulTime": "2026-10-16T04:05:00Z"}}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer api.Close()
+	k := &Kube{URL: api.URL, Namespace: "storscale", HTTP: api.Client(), Token: func() (string, error) { return "t", nil }}
+	b, err := k.Backups(context.Background())
+	if err != nil || !b.Configured || b.Schedule != "0 4 * * *" || !b.LastSuccess.Equal(time.Date(2026, 10, 16, 4, 5, 0, 0, time.UTC)) {
+		t.Fatalf("%+v %v", b, err)
+	}
+	if f := b.Overdue(time.Date(2026, 10, 17, 4, 30, 0, 0, time.UTC), 26*time.Hour); len(f) != 0 {
+		t.Errorf("a day after: %+v", f)
+	}
+	if f := b.Overdue(time.Date(2026, 10, 17, 7, 0, 0, 0, time.UTC), 26*time.Hour); len(f) != 1 || f[0].Severity != "critical" ||
+		!strings.Contains(f[0].Detail, "2026-10-16 04:05") {
+		t.Errorf("27 hours after: %+v", f)
+	}
+	never := Backups{Configured: true, Since: time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)}
+	if f := never.Overdue(time.Date(2026, 10, 17, 0, 0, 0, 0, time.UTC), 26*time.Hour); len(f) != 1 || !strings.Contains(f[0].Detail, "none has succeeded") {
+		t.Errorf("none ever: %+v", f)
+	}
+	k.Namespace = "elsewhere"
+	if b, err := k.Backups(context.Background()); err != nil || b.Configured || b.Overdue(time.Now(), time.Hour) != nil {
+		t.Errorf("not set up: %+v %v", b, err)
+	}
+}

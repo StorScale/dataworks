@@ -108,6 +108,23 @@ export function AdminHealth() {
               <p className="small" style={{ margin: "6px 0 0" }}>Ends {ends.toLocaleDateString()}{daysLeft !== undefined && ` (${daysLeft} days)`}; alerts start 14 days before.</p>
             </div>
           )}
+          {data.backups && (
+            <div data-testid="health-backups">
+              <h2>Backups</h2>
+              {data.backups.configured ? (
+                <p className="small" style={{ margin: "6px 0 0" }}>
+                  {when(data.backups.lastSuccess)
+                    ? <>The last succeeded {ago(when(data.backups.lastSuccess))} ({when(data.backups.lastSuccess)!.toLocaleString()}).</>
+                    : <>None has succeeded yet.</>}{" "}
+                  Nightly (<code>{data.backups.schedule}</code>, UTC); an alert if none succeeds for a day.
+                </p>
+              ) : (
+                <p className="small" style={{ margin: "6px 0 0", color: "var(--warn-ink)" }}>
+                  Not set up: nothing is backed up. Give the chart <code>backup.certificate</code> (<code>storscale backup keygen</code> makes one).
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

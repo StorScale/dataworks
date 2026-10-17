@@ -151,8 +151,22 @@ jobs:
       - run: go build -o bin/storscale ./cmd/storscale
       - run: kind create cluster --name storscale --config deploy/kind/cluster.yaml --wait 180s
       - run: deploy/kind/https.sh "$STORSCALE_DOMAIN" storscale
+      # Backups on: a key pair, its certificate given to the chart.
+      - name: A backup key
+        run: |
+          bin/storscale backup keygen --out "$RUNNER_TEMP/backup"
+          python3 -c 'import json,sys; print(json.dumps({"backup": {"certificate": open(sys.argv[1]).read()}}))' \
+            "$RUNNER_TEMP/backup/storscale-backup-cert.pem" > "$RUNNER_TEMP/backup/values.json"
+          echo "STORSCALE_K8S_VALUES=$STORSCALE_K8S_VALUES $RUNNER_TEMP/backup/values.json" >> "$GITHUB_ENV"
       - run: bin/storscale up --dir stack --k8s
       - run: bin/storscale test --dir stack --k8s realm health lakehouse superset airflow jupyterhub catalog semantic projects project_alerts audit maintenance pipelines_git limits monitoring
+      # A backup, and a restore from it: something in each place it keeps,
+      # backed up, removed, restored, checked.
+      - run: bin/storscale test --dir stack --k8s restore_mark
+      - run: bin/storscale backup --k8s
+      - run: bin/storscale test --dir stack --k8s restore_damage
+      - run: bin/storscale restore --k8s --key "$RUNNER_TEMP/backup/storscale-backup-key.pem" --yes
+      - run: bin/storscale test --dir stack --k8s restore_check
       - name: What went wrong
         if: failure()
         run: deploy/kind/diagnose.sh

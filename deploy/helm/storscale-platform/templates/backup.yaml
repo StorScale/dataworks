@@ -1,0 +1,79 @@
+{{- /* Backups (backup.*): each night every database is dumped (the platform's
+     Postgres, Nessie's catalog among them, and Ranger's), the Projects and
+     Secrets exported, all packed and encrypted for backup.certificate, and
+     kept in backup.bucket (stack/tools/backup.py). Off until there's a
+     certificate: storscale backup keygen makes one, with the key a restore
+     needs, which belongs somewhere else than this cluster. */}}
+{{- if .Values.backup.certificate }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: storscale-backup-cert
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  cert.pem: {{ .Values.backup.certificate | quote }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: storscale-backup
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels: {{- include "storscale.selector" (list .Release.Name "storscale-backup") | nindent 12 }}
+        spec:
+          enableServiceLinks: false
+          serviceAccountName: storscale   # to read the Projects and Secrets
+          restartPolicy: Never
+          initContainers:
+            {{- include "storscale.ca.init" . | nindent 12 }}
+            # Every database, as pg_dump's custom format (pg_restore puts it back).
+            - name: dump
+              image: {{ .Values.upstream.postgres }}
+              command: ["bash", "-c"]
+              args:
+                - |
+                  set -euo pipefail
+                  mkdir -p /backup/postgres
+                  for db in $(psql -h postgres -U postgres -Atc "SELECT datname FROM pg_database WHERE NOT datistemplate AND datname <> 'postgres'"); do
+                    echo "dumping $db"
+                    pg_dump -h postgres -U postgres -Fc -f "/backup/postgres/$db.dump" "$db"
+                  done
+                  echo "dumping ranger"
+                  PGPASSWORD="$RANGER_PASSWORD" pg_dump -h ranger-db -U postgres -Fc -f /backup/ranger.dump ranger
+              env:
+                - {name: PGPASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: POSTGRES_ADMIN_PASSWORD}}}
+                - {name: RANGER_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: RANGER_PASSWORD}}}
+              volumeMounts:
+                - {name: backup, mountPath: /backup}
+              resources:
+                requests: {cpu: 50m, memory: 64Mi}
+          containers:
+            - name: backup
+              image: {{ include "storscale.image" (list . "tools") }}
+              imagePullPolicy: {{ .Values.images.pullPolicy }}
+              command: ["python", "-u", "/tools/backup.py", "run"]
+              env:
+                {{- include "storscale.backup.env" . | nindent 16 }}
+                {{- include "storscale.ca.env" . | nindent 16 }}
+              volumeMounts:
+                - {name: backup, mountPath: /backup}
+                - {name: files-tools, mountPath: /tools}
+                - {name: cert, mountPath: /backup-cert, readOnly: true}
+                {{- include "storscale.ca.mount" . | nindent 16 }}
+              {{- include "storscale.resources" (list "50m" "128Mi" "512Mi") | nindent 14 }}
+          volumes:
+            - {name: backup, emptyDir: {}}
+            - {name: cert, secret: {secretName: storscale-backup-cert}}
+            {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 12 }}
+            {{- include "storscale.ca.volumes" . | nindent 12 }}
+{{- end }}

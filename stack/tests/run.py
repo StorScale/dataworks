@@ -14,19 +14,22 @@ from lakekit import load_sales_tables
 
 SUITES = ["realm", "health", "lakehouse", "superset", "airflow", "jupyterhub", "catalog", "semantic", "projects", "project_alerts", "audit", "maintenance", "pipelines_git", "limits", "monitoring"]
 FRESH_TABLES = {"superset", "airflow"}
+# Run only when named, in this order, around storscale backup and restore (restore.py).
+ON_REQUEST = ["restore_mark", "restore_damage", "restore_check"]
 
 wanted = sys.argv[1:] or SUITES
-unknown = set(wanted) - set(SUITES)
+unknown = set(wanted) - set(SUITES) - set(ON_REQUEST)
 if unknown:
-    sys.exit(f"unknown suites: {', '.join(sorted(unknown))}; the suites are {', '.join(SUITES)}")
+    sys.exit(f"unknown suites: {', '.join(sorted(unknown))}; the suites are {', '.join(SUITES + ON_REQUEST)}")
 
 results = {}
-for suite in [s for s in SUITES if s in wanted]:
+for suite in [s for s in SUITES + ON_REQUEST if s in wanted]:
     print(f"\n=== {suite}", flush=True)
     if suite in FRESH_TABLES:
         load_sales_tables()
     started = time.time()
-    code = subprocess.run([sys.executable, "-u", f"/tests/{suite}.py"]).returncode
+    script = ["/tests/restore.py", suite] if suite in ON_REQUEST else [f"/tests/{suite}.py"]
+    code = subprocess.run([sys.executable, "-u", *script]).returncode
     results[suite] = (code == 0, time.time() - started)
 
 print("\n=== summary")

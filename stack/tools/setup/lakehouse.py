@@ -53,12 +53,14 @@ POLICIES = [{**p, "policyItems": p["policyItems"] + ([allow(["execute"], users=[
 
 if __name__ == "__main__":
     setup_buckets(
-        buckets=["warehouse", "scratch", "storscale-platform"],
+        buckets=["warehouse", "scratch", "storscale-platform", "storscale-backups"],
         policies={"lakehouse-engine": bucket_rw("warehouse"), "platform-store": bucket_rw("storscale-platform"),
+                  "backup-store": bucket_rw("storscale-backups"),  # the backups' own account: that bucket alone
                   "analysts": bucket_rw("scratch"), "engineers": bucket_rw("scratch")},
         accounts=[(env["TRINO_S3_ACCESS_KEY"], env["TRINO_S3_SECRET_KEY"], "lakehouse-engine"),
                   (env["NESSIE_S3_ACCESS_KEY"], env["NESSIE_S3_SECRET_KEY"], "lakehouse-engine"),
-                  (env["PLATFORM_STORE_ACCESS_KEY"], env["PLATFORM_STORE_SECRET_KEY"], "platform-store")])
+                  (env["PLATFORM_STORE_ACCESS_KEY"], env["PLATFORM_STORE_SECRET_KEY"], "platform-store"),
+                  (env["BACKUP_S3_ACCESS_KEY"], env["BACKUP_S3_SECRET_KEY"], "backup-store")])
     ensure_buckets_identity()
     wait_for("Ranger", f"{RANGER}/login.jsp")  # unauthenticated: five failed sign-ins lock Ranger's admin
     sync_people({**keycloak_people(), "service-account-airflow-pipelines": ["pipelines"]})
