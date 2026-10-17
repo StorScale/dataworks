@@ -9,7 +9,7 @@ FROM python:3.12-slim
 RUN apt-get update \
  && apt-get install -y --no-install-recommends openssl curl apache2-utils git \
  && rm -rf /var/lib/apt/lists/*
-RUN pip install --no-cache-dir trino==0.340.0 boto3==1.43.108 requests==2.34.2 pyspark-client==4.1.3 websocket-client==1.9.2 mcp==2.3.0
+RUN pip install --no-cache-dir trino==0.340.0 boto3==1.43.108 requests==2.34.2 pyspark-client==4.1.3 websocket-client==1.9.2 mcp==2.3.0 psycopg2-binary==2.9.10
 COPY --from=mc /go/bin/mc /usr/local/bin/mc
 # Kubernetes runs it as an unprivileged user (65532): a home, and a working
 # directory, any user may write to.

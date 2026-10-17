@@ -100,6 +100,8 @@ def main():
     check("... and Ranger's column mask (card numbers' last four digits)",
           rows is not None and all(r["card_number"].startswith("XXXX") for r in rows), err or rows[0]["card_number"])
     rows, err = sql_lab(alice, "SELECT * FROM payroll")
+    if "'prepared' state" in (err or ""):  # Superset's own session, now and then, after a refused query: once more
+        rows, err = sql_lab(alice, "SELECT * FROM payroll")
     check("... and Ranger's denials (no payroll)", rows is None and "Access Denied" in (err or ""),
           (err or "").split("message=")[-1].split(", query_id")[0])
     rows, err = sql_lab(bob, "SELECT id, region, card_number FROM orders ORDER BY id")
