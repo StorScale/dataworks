@@ -241,13 +241,14 @@ How:
 | Limits per project | Built (0.6.0) |
 | Health page; alerts to administrators (services, Prometheus rules, failed setup steps, the certificate) and to each project (failed runs and checks, stale tables) | Built (0.7.0); use cases 6.4, 6.7 |
 | One-command upgrades (`storscale upgrade`), CI upgrading the last release to each commit | Built (0.7.0); a wider version matrix to come |
-| Iceberg table maintenance: compaction, snapshot expiry, orphan files | Built (unreleased); use case 6.5 |
+| Iceberg table maintenance: compaction | Built (unreleased); use case 6.5 |
+| The tables' history and files nothing uses, collected by Nessie's GC, kept as long as the install says | Next: Iceberg's own expiry doesn't apply to Nessie's tables |
 | The audit log: the platform's records beside Ranger's, per project and for administrators, with export | Built (unreleased); use case 6.3; Keycloak's and Buckets' events, and agents apart from people, to come |
 | The example users switchable off | Next, before Entra ID |
 | Backups, and the upgrade notes that use them | To do |
 | High availability and hardening: replicas, network policies, Pod Security, encryption at rest, image scanning and SBOMs | To do |
 | Retention per table and erasure of a person's data | Waiting on decisions: which laws, what deadlines, how kept closes are treated |
-| A table's history and its data as of a date or a close (6.10) | To do; snapshot retention is now each project's `keepSnapshots` |
+| A table's history and its data as of a date or a close (6.10) | To do; a close is a Nessie tag |
 | Docs on storscale.io/platform | To do |
 
 ### One-command upgrades (built 2026-10-16)

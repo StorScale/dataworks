@@ -126,11 +126,10 @@ spec:
         - name: trino
           image: {{ .Values.upstream.trino }}
           {{- include "storscale.envFrom" . | nindent 10 }}
-          env:
-            # The least a table's snapshots are kept (catalog/iceberg.properties).
-            - {name: MAINTENANCE_MIN_RETENTION, value: {{ .Values.maintenance.minRetention | quote }}}
-            {{- /* It fetches Keycloak's keys at the public address. */}}
-            {{- include "storscale.ca.env" . | nindent 12 }}
+          {{- /* It fetches Keycloak's keys at the public address. */}}
+          {{- with include "storscale.ca.env" . }}
+          env: {{- . | nindent 12 }}
+          {{- end }}
           ports:
             - {name: http, containerPort: 8080}
             - {name: https, containerPort: 8443}
