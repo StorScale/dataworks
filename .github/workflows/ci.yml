@@ -108,8 +108,15 @@ jobs:
           for i in $(seq 60); do [ "$(p '{.status.phase}')" = Ready ] && break; sleep 5; done
           p '{.status.phase}' | grep -qx Ready
           kubectl --context kind-storscale -n storscale delete project upgrade-check --wait
+      # Only the last release's own images: --prune would also take the ones
+      # no container runs yet, such as the notebooks'.
       - name: Room again (the last release's images)
-        run: docker exec storscale-control-plane crictl rmi --prune >/dev/null && df -h /
+        env:
+          LAST: ${{ steps.last.outputs.version }}
+        run: |
+          old=$(docker exec storscale-control-plane crictl images | awk -v t="$LAST" '$1 ~ /^ghcr\.io\/storscale\// && $2 == t {print $1":"$2}')
+          [ -z "$old" ] || docker exec storscale-control-plane crictl rmi $old
+          df -h /
       - run: bin/storscale test --dir stack --k8s
       - name: What went wrong
         if: failure()
