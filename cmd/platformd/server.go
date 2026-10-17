@@ -19,6 +19,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
+	"github.com/StorScale/storscale-platform/internal/audit"
 	"github.com/StorScale/storscale-platform/internal/catalog"
 	"github.com/StorScale/storscale-platform/internal/pipelines"
 	"github.com/StorScale/storscale-platform/internal/store"
@@ -70,6 +71,7 @@ type server struct {
 	health          *watch         // nil: no health checks (HEALTH isn't on)
 	projectAlerts   *projectAlerts // nil: no project alerts (HEALTH isn't on)
 	maintainer      *maintainer    // nil: no table maintenance (no MAINTENANCE_TRINO_PASSWORD)
+	audit           *audit.Log     // nil: no audit log (no AUDIT_URL)
 
 	mu       sync.Mutex
 	sessions map[string]*session
@@ -126,6 +128,9 @@ func newServer(ctx context.Context, cfg config, log *slog.Logger) (*server, erro
 	if err := s.startMaintenance(ctx); err != nil {
 		return nil, err
 	}
+	if err := s.startAudit(); err != nil {
+		return nil, err
+	}
 	if cfg.Health {
 		s.startHealth(ctx)
 		s.startProjectAlerts(ctx)
@@ -157,6 +162,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/projects/{name}/sql", s.handleSemantic)
 	mux.HandleFunc("GET /api/projects/{name}/pipelines", s.handlePipelines)
 	mux.HandleFunc("POST /api/projects/{name}/pipelines/{pipeline}/runs", s.handleStartRun)
+	mux.HandleFunc("GET /api/projects/{name}/audit", s.handleProjectAudit)
+	mux.HandleFunc("GET /api/audit", s.handleAudit)
 	mux.HandleFunc("GET /api/projects/{name}/maintenance", s.handleMaintenance)
 	mux.HandleFunc("POST /api/projects/{name}/maintenance", s.handleMaintenance)
 	mux.HandleFunc("GET /api/projects/{name}/alerts", s.handleProjectAlerts)
@@ -227,6 +234,11 @@ func (s *server) handleCallback(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: sid, Path: "/", HttpOnly: true, Secure: s.secure,
 		SameSite: http.SameSiteLaxMode, MaxAge: int(sessionTTL.Seconds())})
 	s.log.Info("signed in", "user", claims.Username, "groups", claims.Groups, "allowed", s.allowed(claims.Groups))
+	if s.allowed(claims.Groups) {
+		s.record(r, claims.Username, "signed.in", "platform", "")
+	} else {
+		s.recordRefusal(r, claims.Username, "signed.in", "platform", "in none of the platform's groups")
+	}
 	http.Redirect(w, r, l.Next, http.StatusFound)
 }
 
@@ -260,6 +272,7 @@ func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		if sess := s.sessions[c.Value]; sess != nil {
 			end.Set("id_token_hint", sess.IDToken)
 			s.log.Info("signed out", "user", sess.User.Username)
+			s.record(r, sess.User.Username, "signed.out", "platform", "")
 		}
 		delete(s.sessions, c.Value)
 		s.mu.Unlock()

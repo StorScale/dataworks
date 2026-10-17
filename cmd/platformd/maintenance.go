@@ -324,6 +324,7 @@ func (s *server) handleMaintenance(w http.ResponseWriter, r *http.Request) {
 		}
 		if m.enqueue(v.Name) {
 			s.log.Info("maintenance asked for", "project", v.Name, "by", sess.User.Username)
+			s.record(r, sess.User.Username, "maintenance.asked", "project:"+v.Name, "")
 		}
 		writeJSON(w, http.StatusAccepted, map[string]string{"state": m.state(v.Name)})
 		return

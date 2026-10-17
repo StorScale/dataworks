@@ -210,3 +210,18 @@ export type Maintenance = {
 };
 export const getMaintenance = (name: string) => api<Maintenance>("GET", `/api/projects/${encodeURIComponent(name)}/maintenance`);
 export const runMaintenance = (name: string) => api<{ state: string }>("POST", `/api/projects/${encodeURIComponent(name)}/maintenance`);
+
+// --- The audit log: what people did in the platform, and every access Trino allowed or refused
+
+export type AuditEvent = {
+  time: string; user: string; action: string; resource: string; allowed: boolean;
+  detail?: string; source: string; policy?: number; ip?: string; reason?: string;
+};
+export type AuditFilter = { user?: string; result?: "" | "allowed" | "denied"; source?: string; q?: string; before?: string; since?: string };
+const auditParams = (f: AuditFilter) =>
+  new URLSearchParams(Object.entries(f).filter(([, v]) => v) as [string, string][]).toString();
+export const getProjectAudit = (name: string, f: AuditFilter) =>
+  api<{ enabled: boolean; events: AuditEvent[]; more?: boolean }>("GET", `/api/projects/${encodeURIComponent(name)}/audit?${auditParams(f)}`);
+export const getAudit = (f: AuditFilter & { project?: string }) =>
+  api<{ enabled: boolean; events: AuditEvent[]; more?: boolean }>("GET", `/api/audit?${auditParams(f)}`);
+export const auditCSV = (f: AuditFilter & { project?: string }) => `/api/audit?${auditParams({ ...f, format: "csv" } as AuditFilter)}`;

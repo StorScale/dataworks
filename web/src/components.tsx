@@ -225,6 +225,7 @@ export function ProjectFrame() {
     ["pipelines", "Pipelines", !!spec?.pipelines && pipelines],
     ["dashboards", "Dashboards", has("dashboards")],
     ["access", "Access", true],
+    ["audit", "Audit", view?.role === "editor" || admin],
   ];
   return (
     <ProjectContext.Provider value={{ name: project, view, error, reload }}>

@@ -308,6 +308,7 @@ func (s *server) handleProjectAlerts(w http.ResponseWriter, r *http.Request) {
 		}
 		pa.mu.Unlock()
 		s.log.Info("project alert muted", "project", v.Name, "key", req.Key, "hours", req.Hours, "by", sess.User.Username)
+		s.record(r, sess.User.Username, "alert.muted", "project:"+v.Name+"/alert:"+req.Key, fmt.Sprintf("for %g hours", req.Hours))
 	}
 	pa.mu.Lock()
 	unknown := append([]string{}, pa.unknown[v.Name]...)
