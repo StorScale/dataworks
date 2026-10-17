@@ -21,7 +21,6 @@ Metadata is ingested every METADATA_EVERY seconds; checks run every round.
 import json
 import logging
 import os
-import re
 import sys
 import time
 
@@ -77,10 +76,13 @@ def server_config(token):
             "loggerLevel": "WARN"}
 
 
-def trino_connection():
+def trino_connection(catalog):
     return {"config": {
         "type": "Trino", "hostPort": "trino:8443", "username": "openmetadata",
         "authType": {"password": env["OPENMETADATA_TRINO_PASSWORD"]},
+        # One catalog a run: without one, the connection's test reads an
+        # information_schema of no catalog, which Ranger refuses.
+        "catalog": catalog,
         "connectionArguments": {"http_scheme": "https", "verify": "/tls/cert.pem"},
     }}
 
@@ -95,11 +97,24 @@ def catalogs():
 
 
 def ingest_metadata(token):
-    include = [f"^{re.escape(c)}$" for c in catalogs()]
+    """Each catalog in turn, into the one service: a source's failing (its
+    database down) doesn't keep the others from the catalog."""
+    failed = []
+    for catalog in catalogs():
+        try:
+            ingest_catalog(token, catalog)
+        except Exception as e:  # noqa: BLE001
+            if catalog == "iceberg":
+                raise
+            failed.append(f"{catalog}: {e}")
+    if failed:
+        log.warning("metadata: sources not described: %s", "; ".join(failed))
+
+
+def ingest_catalog(token, catalog):
     workflow = MetadataWorkflow.create({
-        "source": {"type": "trino", "serviceName": SERVICE, "serviceConnection": trino_connection(),
+        "source": {"type": "trino", "serviceName": SERVICE, "serviceConnection": trino_connection(catalog),
                    "sourceConfig": {"config": {"type": "DatabaseMetadata", "markDeletedTables": True,
-                                               "databaseFilterPattern": {"includes": include},
                                                "includeViews": True,
                                                "schemaFilterPattern": {"excludes": ["information_schema", "system"]}}}},
         "sink": {"type": "metadata-rest", "config": {}},
