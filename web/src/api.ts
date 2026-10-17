@@ -205,6 +205,7 @@ export type TableStats = { dataFiles: number; bytes: number; rows: number; snaps
 export type TableRun = { table: string; started: string; ended: string; done: string[]; error?: string; before: TableStats; after: TableStats };
 export type Maintenance = {
   enabled: boolean; at?: string; state?: "idle" | "queued" | "running"; paused?: boolean;
+  keepHistory?: string; // ISO 8601, as P7D: how far back the data as it was goes
   tables: { name: string; now?: TableStats; lastRun?: TableRun }[];
 };
 export const getMaintenance = (name: string) => api<Maintenance>("GET", `/api/projects/${encodeURIComponent(name)}/maintenance`);

@@ -242,7 +242,7 @@ How:
 | Health page; alerts to administrators (services, Prometheus rules, failed setup steps, the certificate) and to each project (failed runs and checks, stale tables) | Built (0.7.0); use cases 6.4, 6.7 |
 | One-command upgrades (`storscale upgrade`), CI upgrading the last release to each commit | Built (0.7.0); a wider version matrix to come |
 | Iceberg table maintenance: compaction | Built (unreleased); use case 6.5 |
-| The tables' history and files nothing uses, collected by Nessie's GC, kept as long as the install says | Next: Iceberg's own expiry doesn't apply to Nessie's tables |
+| The tables' history and files nothing uses, collected by Nessie's GC, kept as long as the install says | Built (unreleased): Iceberg's own expiry doesn't apply to Nessie's tables |
 | The audit log: the platform's records beside Ranger's, per project and for administrators, with export | Built (unreleased); use case 6.3; Keycloak's and Buckets' events, and agents apart from people, to come |
 | The example users switchable off | Next, before Entra ID |
 | Backups, and the upgrade notes that use them | To do |

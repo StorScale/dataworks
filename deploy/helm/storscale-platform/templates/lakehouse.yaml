@@ -182,3 +182,38 @@ spec:
       {{- if and (eq .Values.trino.service.type "NodePort") .Values.trino.service.nodePort }}
       nodePort: {{ .Values.trino.service.nodePort }}
       {{- end }}
+---
+# Nessie's GC: the tables' history older than maintenance.history.keep, and
+# files no branch or tag needs, deleted from the warehouse, as Nessie's own
+# Buckets account. A run that fails is a failed Job: the Health page's.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nessie-gc
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.maintenance.history.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        metadata:
+          labels: {{- include "storscale.selector" (list .Release.Name "nessie-gc") | nindent 12 }}
+        spec:
+          enableServiceLinks: false
+          restartPolicy: Never
+          containers:
+            - name: gc
+              image: {{ .Values.upstream.nessieGc }}
+              args: ["gc", "--uri", "http://nessie:19120/api/v2", "--inmemory",
+                     "--default-cutoff", {{ .Values.maintenance.history.keep | quote }},
+                     "--iceberg", "s3.endpoint=http://buckets:9000/,s3.path-style-access=true"]
+              env:
+                - {name: AWS_ACCESS_KEY_ID, valueFrom: {secretKeyRef: {name: storscale-env, key: NESSIE_S3_ACCESS_KEY}}}
+                - {name: AWS_SECRET_ACCESS_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: NESSIE_S3_SECRET_KEY}}}
+                - {name: AWS_REGION, value: us-east-1}
+                - {name: JAVA_TOOL_OPTIONS, value: "-Xmx384m"}
+              {{- include "storscale.resources" (list "100m" "512Mi" "640Mi") | nindent 14 }}
