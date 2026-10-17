@@ -75,6 +75,22 @@ def main():
     check("Ranger's column mask: analysts see only card numbers' last four digits", masked, rows[0][2])
     msg = denied("alice", "SELECT * FROM payroll")
     check("analysts can't read other tables", msg, msg)
+
+    # 3b. The table as it was: read at a Nessie reference (a branch or tag,
+    # after @; a commit, after #), and never wider than the table itself.
+    def at(user, name, cols="id, region, card_number"):
+        try:
+            return sql(user, f'SELECT {cols} FROM "{name}" ORDER BY 1')
+        except Exception as e:  # noqa: BLE001 (refused, or not resolved)
+            return str(e).splitlines()[0][:200]
+    head = requests.get("http://nessie:19120/api/v2/trees/main", timeout=10).json()["reference"]["hash"]
+    for ref in ("orders@main", f"orders#{head}"):
+        everyone = at("bob", ref, "count(*)")
+        check(f"a table reads at a Nessie reference ({ref.split('#')[0]}{'#<commit>' if '#' in ref else ''})", everyone == [[7]], everyone)
+        then = at("alice", ref)
+        check("... and alice sees it as she sees the table: EU rows, card numbers masked", then == rows, then)
+    msg = denied("alice", 'SELECT * FROM "payroll@main"')
+    check("... and still can't read a table she may not, at any reference", msg, msg)
     msg = denied("alice", "CREATE TABLE notes (t varchar)")
     check("analysts can't create tables", msg, msg)
     msg = denied("alice", "INSERT INTO orders VALUES (8, 'Hal', '4000', 'EU', 1, DATE '2026-09-08')")

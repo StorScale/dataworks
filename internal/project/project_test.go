@@ -127,6 +127,14 @@ func TestRangerPolicies(t *testing.T) {
 	if m := byName["catalog=iceberg schema=sales table=orders column=card_number 1"]; m.DataMaskPolicyItems[0].DataMaskInfo.DataMaskType != "MASK_SHOW_LAST_4" {
 		t.Errorf("mask: %+v", m)
 	}
+	// The table as it was (orders@a-tag, orders#a-commit) is the table: its
+	// readers' access, mask and row filter reach it too.
+	for _, key := range []string{"catalog=iceberg schema=sales table=orders column=* 0", "catalog=iceberg schema=sales table=orders 2",
+		"catalog=iceberg schema=sales table=orders column=card_number 1"} {
+		if got := strings.Join(byName[key].Resources["table"].Values, " "); got != "orders orders@* orders#*" {
+			t.Errorf("%s: tables %q, want orders at every reference too", key, got)
+		}
+	}
 }
 
 func TestHashFollowsTheSpec(t *testing.T) {
