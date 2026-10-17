@@ -113,7 +113,8 @@ func PrometheusAlerts(ctx context.Context, c *http.Client, base string) ([]Findi
 	return out, nil
 }
 
-// FailedJobs are the setup steps (Kubernetes Jobs) that gave up.
+// FailedJobs are the setup steps (Kubernetes Jobs) that gave up, and the
+// scheduled jobs' runs (Nessie's GC) that failed.
 func (k *Kube) FailedJobs(ctx context.Context) ([]Finding, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", k.URL+"/apis/batch/v1/namespaces/"+k.Namespace+"/jobs?"+url.Values{}.Encode(), nil)
 	if err != nil {
@@ -135,7 +136,11 @@ func (k *Kube) FailedJobs(ctx context.Context) ([]Finding, error) {
 	var list struct {
 		Items []struct {
 			Metadata struct {
-				Name string `json:"name"`
+				Name            string `json:"name"`
+				OwnerReferences []struct {
+					Kind string `json:"kind"`
+					Name string `json:"name"`
+				} `json:"ownerReferences"`
 			} `json:"metadata"`
 			Status struct {
 				Conditions []struct {
@@ -155,7 +160,11 @@ func (k *Kube) FailedJobs(ctx context.Context) ([]Finding, error) {
 	for _, j := range list.Items {
 		for _, c := range j.Status.Conditions {
 			if c.Type == "Failed" && c.Status == "True" {
-				out = append(out, Finding{Key: j.Metadata.Name, Title: "Setup step " + j.Metadata.Name + " failed",
+				title := "Setup step " + j.Metadata.Name + " failed"
+				if o := j.Metadata.OwnerReferences; len(o) > 0 && o[0].Kind == "CronJob" {
+					title = "Scheduled job " + o[0].Name + " failed (run " + j.Metadata.Name + ")"
+				}
+				out = append(out, Finding{Key: j.Metadata.Name, Title: title,
 					Detail: strings.TrimSpace(c.Reason + ": " + firstLine(c.Message)), Severity: "critical", Since: c.LastTransitionTime})
 			}
 		}
