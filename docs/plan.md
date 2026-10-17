@@ -233,6 +233,23 @@ How:
 - **Still open:** who approves access requests.
 - **Effort:** about 4 to 6 days.
 
+### Phase 6: where it stands (2026-10-17)
+
+| Part | State |
+|---|---|
+| Keycloak on its own database, production mode; the realm's ownership split | Built (0.6.0) |
+| Limits per project | Built (0.6.0) |
+| Health page; alerts to administrators (services, Prometheus rules, failed setup steps, the certificate) and to each project (failed runs and checks, stale tables) | Built (0.7.0); use cases 6.4, 6.7 |
+| One-command upgrades (`storscale upgrade`), CI upgrading the last release to each commit | Built (0.7.0); a wider version matrix to come |
+| Iceberg table maintenance: compaction, snapshot expiry, orphan files | Built (unreleased); use case 6.5 |
+| The audit log: the platform's records beside Ranger's, per project and for administrators, with export | Built (unreleased); use case 6.3; Keycloak's and Buckets' events, and agents apart from people, to come |
+| The example users switchable off | Next, before Entra ID |
+| Backups, and the upgrade notes that use them | To do |
+| High availability and hardening: replicas, network policies, Pod Security, encryption at rest, image scanning and SBOMs | To do |
+| Retention per table and erasure of a person's data | Waiting on decisions: which laws, what deadlines, how kept closes are treated |
+| A table's history and its data as of a date or a close (6.10) | To do; snapshot retention is now each project's `keepSnapshots` |
+| Docs on storscale.io/platform | To do |
+
 ### One-command upgrades (built 2026-10-16)
 
 Helm installs a chart's CRDs once and never upgrades them, so each release's notes said to apply the Project definition by hand first; the 0.5.0 upgrade of `storscale-da1` without it silently dropped `pipelines.repo` and the rest from every project. And a checkout's chart once pointed `storscale-da1` at images not yet published.
