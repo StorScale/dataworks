@@ -574,6 +574,16 @@ func resources(kv ...string) map[string]RangerResource {
 	return out
 }
 
+// atAnyRef is a table's resource at every Nessie reference too: a table is
+// read as it was through its name (orders@close-2026-09, orders#<commit>),
+// and a reader's access, masks and row filters must reach those names, or
+// the past would show what the present hides.
+func atAnyRef(r map[string]RangerResource) map[string]RangerResource {
+	tb := r["table"].Values[0]
+	r["table"] = RangerResource{Values: []string{tb, tb + "@*", tb + "#*"}}
+	return r
+}
+
 func allow(group string, accesses ...string) RangerItem {
 	it := RangerItem{Groups: []string{group}, Users: []string{}}
 	for _, a := range accesses {
@@ -616,7 +626,7 @@ func (p *Project) RangerPolicies() []RangerPolicy {
 		out = append(out, tables)
 		for _, tb := range sorted(view.Tables) {
 			out = append(out, RangerPolicy{Name: named("read:" + tb), Description: desc,
-				Resources:   resources("catalog", t.Catalog, "schema", t.Namespace, "table", tb, "column", "*"),
+				Resources:   atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", tb, "column", "*")),
 				PolicyItems: []RangerItem{allow(readers, "select", "show")}})
 		}
 	}
@@ -624,14 +634,14 @@ func (p *Project) RangerPolicies() []RangerPolicy {
 		it := allow(readers, "select")
 		it.DataMaskInfo = &RangerMask{DataMaskType: m.Type}
 		out = append(out, RangerPolicy{Name: named("mask:" + m.Table + "." + m.Column), PolicyType: 1, Description: desc,
-			Resources:           resources("catalog", t.Catalog, "schema", t.Namespace, "table", m.Table, "column", m.Column),
+			Resources:           atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", m.Table, "column", m.Column)),
 			DataMaskPolicyItems: []RangerItem{it}})
 	}
 	for _, f := range view.RowFilters {
 		it := allow(readers, "select")
 		it.RowFilterInfo = &RangerRowFilter{FilterExpr: f.Filter}
 		out = append(out, RangerPolicy{Name: named("filter:" + f.Table), PolicyType: 2, Description: desc,
-			Resources:            resources("catalog", t.Catalog, "schema", t.Namespace, "table", f.Table),
+			Resources:            atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", f.Table)),
 			RowFilterPolicyItems: []RangerItem{it}})
 	}
 	return out
