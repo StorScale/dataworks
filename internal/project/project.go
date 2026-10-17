@@ -48,6 +48,27 @@ type Spec struct {
 	Pipelines   *Pipelines `json:"pipelines,omitempty"`
 	Limits      *Limits    `json:"limits,omitempty"`
 	Notify      *Notify    `json:"notify,omitempty"`
+	Sources     []Source   `json:"sources,omitempty"`
+}
+
+// A Source is one of the company's databases, queried where it is: a Trino
+// catalog of the project's own (SourceCatalog), which its editors, and its
+// readers if Readers says so, may read and no one may write. Connection
+// names one of the project's connections (host, port, database, username,
+// password: a read-only account of the database's own).
+type Source struct {
+	Name       string `json:"name"`
+	Kind       string `json:"kind"`
+	Connection string `json:"connection"`
+	Readers    bool   `json:"readers,omitempty"`
+}
+
+// SourceKinds are the databases a source may be (Trino's connectors).
+var SourceKinds = []string{"postgresql", "mysql", "sqlserver", "oracle"}
+
+// SourceCatalog is a source's Trino catalog: the project's name, then its own.
+func (p *Project) SourceCatalog(s Source) string {
+	return strings.ReplaceAll(p.Metadata.Name, "-", "_") + "_" + s.Name
 }
 
 // Limits cap a project's share of the platform, so one project can't slow
@@ -201,6 +222,7 @@ var (
 	queryMemRE   = regexp.MustCompile(`^([1-9][0-9]{0,5}(MB|GB)|([1-9][0-9]?|100)%)$`)
 	storageRE    = regexp.MustCompile(`^([1-9][0-9]{0,5})(Gi|Ti)$`)
 	tagNameRE    = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
+	sourceNameRE = regexp.MustCompile(`^[a-z][a-z0-9_]{0,19}$`)
 	commitRE     = regexp.MustCompile(`^[0-9a-f]{16,64}$`)
 	withinRE     = regexp.MustCompile(`^([1-9][0-9]{0,4})(m|h|d)$`)
 	emailRE      = regexp.MustCompile(`^[^@\s,]+@[^@\s,]+\.[^@\s,]+$`)
@@ -348,6 +370,22 @@ func (p *Project) Validate() error {
 			if !emailRE.MatchString(e) {
 				bad("notify: %q isn't an email address", e)
 			}
+		}
+	}
+	seenSource := map[string]bool{}
+	for _, src := range p.Spec.Sources {
+		switch {
+		case !sourceNameRE.MatchString(src.Name):
+			bad("sources: name %q: 1 to 20 lowercase letters, digits and underscores, starting with a letter", src.Name)
+		case seenSource[src.Name]:
+			bad("sources: %q twice", src.Name)
+		}
+		seenSource[src.Name] = true
+		if !slices.Contains(SourceKinds, src.Kind) {
+			bad("sources: %s: kind %q: one of %s", src.Name, src.Kind, strings.Join(SourceKinds, ", "))
+		}
+		if !secretRE.MatchString(src.Connection) {
+			bad("sources: %s: connection %q isn't a connection's name", src.Name, src.Connection)
 		}
 	}
 	if l := p.Spec.Limits; l != nil {
@@ -631,6 +669,41 @@ func allow(group string, accesses ...string) RangerItem {
 // RangerPolicies are the Ranger policies for the project's tables: one per
 // resource (Ranger allows no more), named with RangerPrefix.
 func (p *Project) RangerPolicies() []RangerPolicy {
+	return append(p.tablePolicies(), p.sourcePolicies()...)
+}
+
+// sourcePolicies let the project read its sources (editors and pipelines,
+// and readers where a source says so), and no one write them: Ranger allows
+// only what a policy allows.
+func (p *Project) sourcePolicies() []RangerPolicy {
+	var out []RangerPolicy
+	desc := "From the project " + p.Metadata.Name + ": the platform operator keeps it as the project says."
+	for _, src := range p.Spec.Sources {
+		cat, named := p.SourceCatalog(src), p.RangerPrefix()+"source:"+src.Name
+		who := []string{p.Group(Editor)}
+		if p.Spec.Pipelines != nil {
+			who = append(who, p.Group("pipelines"))
+		}
+		if src.Readers {
+			who = append(who, p.Group(Reader))
+		}
+		items := func(accesses ...string) []RangerItem {
+			var its []RangerItem
+			for _, g := range who {
+				its = append(its, allow(g, accesses...))
+			}
+			return its
+		}
+		out = append(out,
+			RangerPolicy{Name: named, Description: desc, Resources: resources("catalog", cat), PolicyItems: items("use", "show")},
+			RangerPolicy{Name: named + ":schemas", Description: desc, Resources: resources("catalog", cat, "schema", "*"), PolicyItems: items("use", "show")},
+			RangerPolicy{Name: named + ":tables", Description: desc,
+				Resources: resources("catalog", cat, "schema", "*", "table", "*", "column", "*"), PolicyItems: items("select", "show")})
+	}
+	return out
+}
+
+func (p *Project) tablePolicies() []RangerPolicy {
 	t := p.Spec.Tables
 	if t == nil {
 		return nil

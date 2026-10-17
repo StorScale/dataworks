@@ -1,6 +1,7 @@
 package project
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -295,5 +296,60 @@ func TestTags(t *testing.T) {
 	p, _ := Parse([]byte(`{"apiVersion":"platform.storscale.io/v1alpha1","kind":"Project","metadata":{"name":"sales"},"spec":{"members":[{"group":"engineers","role":"editor"}]}}`))
 	if got := p.NessieTag(Tag{Name: "close-2026-09"}); got != "sales.close-2026-09" {
 		t.Errorf("Nessie's name: %s", got)
+	}
+}
+
+func TestSources(t *testing.T) {
+	spec := func(name, sources string) (*Project, error) {
+		return Parse([]byte(`{"apiVersion":"platform.storscale.io/v1alpha1","kind":"Project","metadata":{"name":"` + name + `"},
+			"spec":{"members":[{"group":"engineers","role":"editor"}],"sources":` + sources + `}}`))
+	}
+	p, err := spec("sales-eu", `[{"name":"finance","kind":"postgresql","connection":"finance-db"},{"name":"crm","kind":"mysql","connection":"crm","readers":true}]`)
+	if err != nil {
+		t.Fatalf("sources: %v", err)
+	}
+	if got := p.SourceCatalog(p.Spec.Sources[0]); got != "sales_eu_finance" {
+		t.Errorf("catalog: %s", got)
+	}
+	for _, bad := range []string{
+		`[{"name":"Finance","kind":"postgresql","connection":"finance-db"}]`,
+		`[{"name":"finance","kind":"db2","connection":"finance-db"}]`,
+		`[{"name":"finance","kind":"postgresql","connection":"Finance DB"}]`,
+		`[{"name":"finance","kind":"postgresql","connection":"a"},{"name":"finance","kind":"mysql","connection":"b"}]`,
+	} {
+		if _, err := spec("sales", bad); err == nil {
+			t.Errorf("%s: want refused", bad)
+		}
+	}
+	// Read-only, the project's: editors and readers where it says so; no
+	// tables of its own, and still the sources' policies.
+	byName := map[string]RangerPolicy{}
+	for _, rp := range p.RangerPolicies() {
+		byName[rp.Name] = rp
+		for _, it := range rp.PolicyItems {
+			for _, a := range it.Accesses {
+				if !slices.Contains([]string{"use", "show", "select"}, a.Type) {
+					t.Errorf("%s: %s may %s", rp.Name, it.Groups, a.Type)
+				}
+			}
+		}
+	}
+	if len(byName) != 6 {
+		t.Fatalf("want a catalog, schemas and tables policy per source: %v", byName)
+	}
+	groups := func(name string) (g []string) {
+		for _, it := range byName[name].PolicyItems {
+			g = append(g, it.Groups...)
+		}
+		return g
+	}
+	if g := groups("project:sales-eu:source:finance:tables"); slices.Contains(g, "sales-eu-readers") || !slices.Contains(g, "sales-eu-editors") {
+		t.Errorf("finance's readers: %v", g)
+	}
+	if g := groups("project:sales-eu:source:crm:tables"); !slices.Contains(g, "sales-eu-readers") {
+		t.Errorf("crm's readers: %v", g)
+	}
+	if r := byName["project:sales-eu:source:crm"].Resources; r["catalog"].Values[0] != "sales_eu_crm" || len(r) != 1 {
+		t.Errorf("crm's catalog policy: %v", r)
 	}
 }

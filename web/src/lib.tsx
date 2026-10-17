@@ -101,6 +101,9 @@ export function grants(name: string, spec: Spec) {
   const bucket = spec.files ? spec.files.bucket || name : null;
   const r = spec.tables?.readers;
   const readerTables = r?.tables?.length ? r.tables.join(", ") : "every table";
+  const cat = (x: { name: string }) => `${name.replace(/-/g, "_")}_${x.name}`;
+  const sources = (spec.sources ?? []).filter((x) => x.name);
+  const read = (xs: typeof sources) => (xs.length ? [`Read the source${xs.length > 1 ? "s" : ""} ${xs.map(cat).join(", ")} (not write)`] : []);
   const narrowing = [
     ...(r?.rowFilters ?? []).map((f) => `${f.table}: only rows where ${f.filter}`),
     ...(r?.masks ?? []).map((m) => `${m.table}.${m.column} masked (${maskLabel(m.type)})`),
@@ -110,13 +113,13 @@ export function grants(name: string, spec: Spec) {
       role: "Editors",
       key: "editor",
       group: `${name}-editors`,
-      items: [ns && `Create, change and drop tables in ${ns}`, bucket && `Read and write the ${bucket} bucket`, spec.pipelines && "Run the project's pipelines", "Change the project's metrics"].filter(Boolean) as string[],
+      items: [ns && `Create, change and drop tables in ${ns}`, bucket && `Read and write the ${bucket} bucket`, spec.pipelines && "Run the project's pipelines", ...read(sources), "Change the project's metrics"].filter(Boolean) as string[],
     },
     {
       role: "Readers",
       key: "reader",
       group: `${name}-readers`,
-      items: [ns && `Read ${readerTables} in ${ns}`, ...narrowing, bucket && `Read the ${bucket} bucket`, "Ask for the project's metrics"].filter(Boolean) as string[],
+      items: [ns && `Read ${readerTables} in ${ns}`, ...narrowing, bucket && `Read the ${bucket} bucket`, ...read(sources.filter((x) => x.readers)), "Ask for the project's metrics"].filter(Boolean) as string[],
     },
     ...(spec.pipelines
       ? [{
@@ -127,6 +130,7 @@ export function grants(name: string, spec: Spec) {
             `Keycloak client ${spec.pipelines.serviceAccount}'s service account`,
             ns && `Read, insert and delete in ${ns}'s tables`,
             bucket && `Read and write ${bucket}/landing/`,
+            ...read(sources),
           ].filter(Boolean) as string[],
         }]
       : []),

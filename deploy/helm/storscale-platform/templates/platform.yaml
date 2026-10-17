@@ -164,8 +164,15 @@ spec:
             - {name: LIMITS_TOTAL_QUERIES, value: {{ .total.queries | quote }}}
             - {name: LIMITS_TOTAL_QUEUED, value: {{ .total.queued | quote }}}
             {{- end }}
+            # Projects' sources: Trino's catalogs of them, made as the operator's Trino account;
+            # their connections in a Secret mounted into Trino (trino-sources).
+            - {name: TRINO_URL, value: "https://trino:8443"}
+            - {name: TRINO_CA, value: /trino-cert/cert.pem}
+            - {name: OPERATOR_TRINO_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: OPERATOR_TRINO_PASSWORD}}}
+            - {name: SOURCES_SECRET, value: trino-sources}
           volumeMounts:
             - {name: airflow-project, mountPath: /etc/storscale/airflow-project, readOnly: true}
+            - {name: trino-cert, mountPath: /trino-cert, readOnly: true}
           ports:
             - {name: health, containerPort: 8081}
           readinessProbe:
@@ -175,6 +182,7 @@ spec:
       volumes:
         {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 8 }}
         - {name: airflow-project, configMap: {name: storscale-airflow-project}}
+        - {name: trino-cert, secret: {secretName: trino-tls, items: [{key: cert.pem, path: cert.pem}]}}
 ---
 apiVersion: v1
 kind: Service

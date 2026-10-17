@@ -70,7 +70,11 @@ export type Spec = {
   pipelines?: { serviceAccount: string; repo?: string; path?: string; ref?: string; credentials?: { secretRef: string }; memory?: string };
   limits?: { queries?: number; queued?: number; queryMemory?: string; storage?: string };
   notify?: { teams?: string; email?: string[] };
+  sources?: Source[];
 };
+// A company database the project queries where it is: a read-only Trino catalog <project>_<name>.
+export type Source = { name: string; kind: "postgresql" | "mysql" | "sqlserver" | "oracle"; connection: string; readers?: boolean };
+export const sourceCatalog = (project: string, s: { name: string }) => `${project.replace(/-/g, "_")}_${s.name}`;
 export type Project = { apiVersion: string; kind: string; metadata: { name: string }; spec: Spec };
 export type Part = { system: string; ok: boolean; message: string };
 export type Person = { username: string; role: string; via: string };

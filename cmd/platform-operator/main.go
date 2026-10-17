@@ -54,6 +54,7 @@ import (
 	"github.com/StorScale/storscale-platform/internal/project"
 	"github.com/StorScale/storscale-platform/internal/reconcile"
 	"github.com/StorScale/storscale-platform/internal/store"
+	"github.com/StorScale/storscale-platform/internal/trino"
 )
 
 func main() {
@@ -140,6 +141,28 @@ func main() {
 				QueryMemory: env("LIMITS_PROJECT_QUERY_MEMORY", "50%")},
 			Person: project.Limits{Queries: num("LIMITS_PERSON_QUERIES", 4), Queued: num("LIMITS_PERSON_QUEUED", 100)},
 			Total:  project.Limits{Queries: num("LIMITS_TOTAL_QUERIES", 20), Queued: num("LIMITS_TOTAL_QUEUED", 1000)}}
+	}
+	// The projects' sources: Trino's catalogs, made as the operator's Trino
+	// account; their connections in a Secret mounted into Trino (Kubernetes,
+	// SOURCES_SECRET) or a directory it shares (Compose, SOURCES_PATH).
+	if pw := os.Getenv("OPERATOR_TRINO_PASSWORD"); pw != "" {
+		tc, err := trino.New(env("TRINO_URL", "https://trino:8443"), env("OPERATOR_TRINO_USER", "platform-operator"), pw, os.Getenv("TRINO_CA"))
+		if err != nil {
+			log.Error("trino", "error", err)
+			os.Exit(2)
+		}
+		var files reconcile.SourceFiles
+		if name := os.Getenv("SOURCES_SECRET"); name != "" {
+			kube, err := reconcile.NewKube()
+			if err != nil {
+				log.Error("kubernetes", "error", err)
+				os.Exit(2)
+			}
+			files = &reconcile.SecretFiles{Kube: kube, Name: name}
+		} else {
+			files = &reconcile.DirFiles{Dir: env("SOURCES_PATH", "/sources")}
+		}
+		r.Sources = &reconcile.TrinoSources{Trino: tc, Files: files, Dir: env("TRINO_SOURCES_DIR", "/etc/trino/sources")}
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

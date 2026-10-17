@@ -160,6 +160,21 @@ spec:
                   properties:
                     teams: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
                     email: {type: array, items: {type: string}}
+                sources:
+                  type: array
+                  description: >-
+                    The company's databases the project queries where they are: each a Trino catalog
+                    <project>_<name>, read-only, which its editors and pipelines (and its readers, if
+                    readers is true) may read. connection names one of its connections: url (JDBC), or
+                    host, port and database; username and password (the database's read-only account).
+                  items:
+                    type: object
+                    required: [name, kind, connection]
+                    properties:
+                      name: {type: string, pattern: '^[a-z][a-z0-9_]{0,19}$'}
+                      kind: {type: string, enum: [postgresql, mysql, sqlserver, oracle]}
+                      connection: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
+                      readers: {type: boolean, description: "Its readers may read it too; default false (editors and pipelines only)."}
                 limits:
                   type: object
                   description: >-

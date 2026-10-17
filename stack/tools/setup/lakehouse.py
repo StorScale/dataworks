@@ -30,13 +30,19 @@ CATALOG_USER = "openmetadata"  # the catalog's service user: it reads every tabl
 # the table it rewrites, which needs select too. So it may read every table,
 # as the catalog's user may; its password is platformd's alone.
 MAINTENANCE_USER = "maintenance"
-POLICIES = [{**p, "policyItems": p["policyItems"] + ([allow(["execute"], users=[CATALOG_USER, MAINTENANCE_USER])] if p["name"] == "run queries" else [])}
+# The platform operator makes and drops the projects' sources' catalogs
+# (CREATE CATALOG): that, on any catalog, and nothing in them. Who may read a
+# source is its project's policies.
+OPERATOR_USER = "platform-operator"
+POLICIES = [{**p, "policyItems": p["policyItems"] + ([allow(["execute"], users=[CATALOG_USER, MAINTENANCE_USER, OPERATOR_USER])] if p["name"] == "run queries" else [])}
             for p in BASE_POLICIES] + [
     # Everyone may see that the catalog is there; engineers may add namespaces
     # to it. What's in a namespace is up to its project. (Ranger allows one
     # access policy per resource, so the catalog's policy has an item per group.)
     {"name": "iceberg catalog", "resources": res(catalog=ICEBERG),
      "policyItems": [allow(["all"], groups=["engineers"]), allow(["use", "show"], groups=["analysts", "pipelines"], users=[CATALOG_USER, MAINTENANCE_USER])]},
+    {"name": "operator: catalogs", "resources": res(catalog="*"),
+     "policyItems": [allow(["create", "drop"], users=[OPERATOR_USER])]},
     {"name": "catalog: every namespace", "resources": res(catalog=ICEBERG, schema="*"),
      "policyItems": [allow(["use", "show"], users=[CATALOG_USER, MAINTENANCE_USER])]},
     {"name": "catalog: every table", "resources": res(catalog=ICEBERG, schema="*", table="*", column="*"),
@@ -65,7 +71,8 @@ if __name__ == "__main__":
     wait_for("Ranger", f"{RANGER}/login.jsp")  # unauthenticated: five failed sign-ins lock Ranger's admin
     sync_people({**keycloak_people(), "service-account-airflow-pipelines": ["pipelines"]})
     known = {u["name"] for u in ranger("GET", "/service/xusers/users?pageSize=1000")["vXUsers"]}
-    for name, first, suffix in [(CATALOG_USER, "OpenMetadata", "om"), (MAINTENANCE_USER, "Table maintenance", "mt")]:
+    for name, first, suffix in [(CATALOG_USER, "OpenMetadata", "om"), (MAINTENANCE_USER, "Table maintenance", "mt"),
+                                (OPERATOR_USER, "Platform operator", "op")]:
         if name not in known:  # Ranger's own sign-in for them is never used: they sign in to Trino
             ranger("POST", "/service/xusers/secure/users", json={
                 "name": name, "firstName": first, "password": env["RANGER_PASSWORD"] + suffix,
