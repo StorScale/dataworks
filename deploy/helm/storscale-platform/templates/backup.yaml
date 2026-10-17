@@ -39,7 +39,7 @@ spec:
             # Every database, as pg_dump's custom format (pg_restore puts it back).
             - name: dump
               image: {{ .Values.upstream.postgres }}
-              securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
+              securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 999, runAsGroup: 999, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}   # the Postgres client alone: its image's postgres user
               command: ["bash", "-c"]
               args:
                 - |

@@ -246,10 +246,25 @@ How:
 | The audit log: the platform's records beside Ranger's, per project and for administrators, with export | Built (unreleased); use case 6.3; Keycloak's and Buckets' events, and agents apart from people, to come |
 | The example users switchable off | Next, before Entra ID |
 | Backups: every database (Nessie's catalog now among them, in Postgres) and the Projects and Secrets, nightly, encrypted for a key kept off the cluster; `storscale backup` and `restore`, tested in CI | Built (unreleased), for restoring into the same install; the data in Buckets copied elsewhere, for a lost cluster, to come |
-| High availability and hardening: replicas, network policies, Pod Security, encryption at rest, image scanning and SBOMs | To do |
+| High availability and hardening: replicas, network policies, Pod Security, encryption at rest, image scanning and SBOMs | Network policies, Pod Security (baseline enforced; restricted for most, the rest listed below), image scanning (SBOMs and signing were already) built, unreleased; replicas and encryption at rest to do |
 | Retention per table and erasure of a person's data | Waiting on decisions: which laws, what deadlines, how kept closes are treated |
 | A table's history and its data as of a date or a close (6.10) | Designed (below); first, a check that a table read at a reference keeps its masks and filters |
 | Docs on storscale.io/platform | To do |
+
+### Pod security: what's left (2026-10-17)
+
+Every container runs without privilege escalation, with the default seccomp profile; the namespace enforces Pod Security's baseline standard and warns of the restricted one. These still fall short of restricted (they keep their capabilities, or run as root), each with what it would take:
+
+| Container | Why | What it would take |
+|---|---|---|
+| `postgres` (the platform's), `ranger-db` | The images start as root, take the data directory, then run as `postgres` (999) | Run as 999 from the start, with `fsGroup: 999` (the volumes' files are 999's already); check an upgrade on a volume made before |
+| `gateway` (Caddy) | Caddy's image runs as root | Run as a user of its own, with its data and config directories on emptyDirs (8800 needs no privilege) |
+| `openmetadata`, `openmetadata-migrate` | The image runs as root | Run as a user of its own, if the image allows (its logs and temp files); else a derived image |
+| `jupyterhub` (the hub) | The image runs as root | Run as a user of its own, with `fsGroup` on its volume (the hub's database and cookie secret) |
+| `ranger-admin` | The image's start scripts run as root, then switch user | A derived image that starts as the ranger user; the most work |
+| `storscale-test-browser` | Playwright's image runs as root | Only for the checks: as root it stays |
+
+Done since: the Postgres client steps (each database's making, the backup's dump, the restore) run as the image's `postgres` user, capabilities dropped. **Then:** enforce restricted, once the rest are done.
 
 ### The data as it was (use case 6.10), how (design, 2026-10-17)
 
