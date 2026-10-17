@@ -334,8 +334,8 @@ func TestSources(t *testing.T) {
 			}
 		}
 	}
-	if len(byName) != 6 {
-		t.Fatalf("want a catalog, schemas and tables policy per source: %v", byName)
+	if len(byName) != 8 {
+		t.Fatalf("want a catalog, schemas, tables and metadata policy per source: %v", byName)
 	}
 	groups := func(name string) (g []string) {
 		for _, it := range byName[name].PolicyItems {
@@ -385,6 +385,10 @@ func TestASourcesSchemasMasksAndFilters(t *testing.T) {
 			t.Errorf("the catalog's access: %+v", it.Accesses)
 		}
 	}
+	md := byName["project:sales:source:finance:metadata"]
+	if md.Resources["schema"].Values[0] != "information_schema" || len(md.PolicyItems) != 1 || md.PolicyItems[0].Users[0] != CatalogUser {
+		t.Errorf("the catalog's metadata: %+v", md)
+	}
 	for _, bad := range []string{
 		`{"name":"finance","kind":"postgresql","connection":"fin","masks":[{"table":"ledger.accounts","column":"iban","type":"MASK"}]}`,
 		`{"name":"finance","kind":"postgresql","connection":"fin","readers":true,"masks":[{"table":"accounts","column":"iban","type":"MASK"}]}`,
@@ -393,5 +397,30 @@ func TestASourcesSchemasMasksAndFilters(t *testing.T) {
 		if _, err := parse(bad); err == nil {
 			t.Errorf("%s: want refused", bad)
 		}
+	}
+}
+
+func TestASourcesCopy(t *testing.T) {
+	parse := func(tables, src string) error {
+		_, err := Parse([]byte(`{"apiVersion":"platform.storscale.io/v1alpha1","kind":"Project","metadata":{"name":"sales"},
+			"spec":{"members":[{"group":"engineers","role":"editor"}]` + tables + `,"sources":[` + src + `]}}`))
+		return err
+	}
+	if err := parse(`,"tables":{}`, `{"name":"finance","kind":"postgresql","connection":"fin","copy":{"tables":["public.invoices"]}}`); err != nil {
+		t.Errorf("a copy: %v", err)
+	}
+	for _, c := range [][2]string{
+		{``, `{"name":"finance","kind":"postgresql","connection":"fin","copy":{"tables":["public.invoices"]}}`},
+		{`,"tables":{}`, `{"name":"finance","kind":"oracle","connection":"fin","copy":{"tables":["public.invoices"]}}`},
+		{`,"tables":{}`, `{"name":"finance","kind":"postgresql","connection":"fin","copy":{"tables":[]}}`},
+		{`,"tables":{}`, `{"name":"finance","kind":"postgresql","connection":"fin","copy":{"tables":["invoices"]}}`},
+		{`,"tables":{}`, `{"name":"finance","kind":"postgresql","connection":"fin","copy":{"tables":["a.invoices","b.invoices"]}}`},
+	} {
+		if parse(c[0], c[1]) == nil {
+			t.Errorf("%s %s: want refused", c[0], c[1])
+		}
+	}
+	if got := CopyTable(Source{Name: "finance"}, "public.invoices"); got != "finance_invoices" {
+		t.Errorf("CopyTable: %s", got)
 	}
 }

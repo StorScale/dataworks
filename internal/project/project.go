@@ -67,6 +67,31 @@ type Source struct {
 	Schemas    []string    `json:"schemas,omitempty"`
 	Masks      []Mask      `json:"masks,omitempty"`
 	RowFilters []RowFilter `json:"rowFilters,omitempty"`
+	Copy       *Copy       `json:"copy,omitempty"`
+}
+
+// Copy is a source's tables copied into the project's own (use case 8.1),
+// by change capture: a first copy, then every insert, update and delete,
+// within minutes. Each lands in the project's namespace as <source>_<table>
+// (CopyTable), under the project's rules like any of its tables. The
+// source's account needs what the database's change log asks for (its
+// administrator's to grant). Kubernetes only.
+type Copy struct {
+	Tables []string `json:"tables"` // schema.table (MySQL: database.table)
+}
+
+// CopyKinds are the sources that can be copied (Debezium's connectors).
+var CopyKinds = []string{"postgresql", "mysql", "sqlserver"}
+
+// CopyName names a source's copying: its Deployment and Secret.
+func (p *Project) CopyName(s Source) string {
+	return "copy-" + p.Metadata.Name + "-" + strings.ReplaceAll(s.Name, "_", "-")
+}
+
+// CopyTable is the project's table a source's table is copied into.
+func CopyTable(s Source, table string) string {
+	_, tb, _ := strings.Cut(table, ".")
+	return s.Name + "_" + tb
 }
 
 // CatalogUser is the catalog's (OpenMetadata's) Trino account: it may see
@@ -406,6 +431,27 @@ func (p *Project) Validate() error {
 		}
 		if (len(src.Masks) > 0 || len(src.RowFilters) > 0) && !src.Readers {
 			bad("sources: %s: masks and row filters are what readers see, and its readers can't read it (readers: true)", src.Name)
+		}
+		if c := src.Copy; c != nil {
+			switch {
+			case !slices.Contains(CopyKinds, src.Kind):
+				bad("sources: %s: a %s database can't be copied yet (%s can)", src.Name, src.Kind, strings.Join(CopyKinds, ", "))
+			case p.Spec.Tables == nil:
+				bad("sources: %s: its tables are copied into the project's, and it has none (tables)", src.Name)
+			case len(c.Tables) == 0:
+				bad("sources: %s: copy names no tables", src.Name)
+			}
+			into := map[string]string{}
+			for _, t := range c.Tables {
+				if !schemaTableRE.MatchString(t) {
+					bad("sources: %s: copy: %q: a table as schema.table", src.Name, t)
+					continue
+				}
+				if other, ok := into[CopyTable(src, t)]; ok {
+					bad("sources: %s: copy: %s and %s would both be %s", src.Name, other, t, CopyTable(src, t))
+				}
+				into[CopyTable(src, t)] = t
+			}
 		}
 		for _, f := range src.RowFilters {
 			if !schemaTableRE.MatchString(f.Table) || strings.TrimSpace(f.Filter) == "" {
@@ -750,7 +796,11 @@ func (p *Project) sourcePolicies() []RangerPolicy {
 			RangerPolicy{Name: named, Description: desc, Resources: resources("catalog", cat), PolicyItems: see(items("use", "show"), "use", "show")},
 			RangerPolicy{Name: named + ":schemas", Description: desc, Resources: inSchemas(), PolicyItems: see(items("use", "show"), "use", "show")},
 			RangerPolicy{Name: named + ":tables", Description: desc,
-				Resources: inSchemas("table", "*", "column", "*"), PolicyItems: see(items("select", "show"), "show")})
+				Resources: inSchemas("table", "*", "column", "*"), PolicyItems: see(items("select", "show"), "show")},
+			// The catalog reads what's there from information_schema (its
+			// schemata, tables, columns): metadata, never a table's rows.
+			RangerPolicy{Name: named + ":metadata", Description: desc,
+				Resources: resources("catalog", cat, "schema", "information_schema", "table", "*", "column", "*"), PolicyItems: see(nil, "select")})
 		for _, m := range src.Masks {
 			sc, tb, _ := strings.Cut(m.Table, ".")
 			it := allow(p.Group(Reader), "select")
