@@ -135,6 +135,17 @@ pipelines:
 # of its members names it (client tag project:<name>, as the platform's SQL
 # page and metrics do), and all its own pipelines'; the rest count against
 # the person. Notebooks are a person's (notebooks.memoryLimit, cpuLimit).
+
+# Table maintenance: each night at `at` (UTC), platformd compacts every
+# project's small files, expires snapshots older than keepSnapshots (a
+# project's tables.maintenance may say otherwise; tagged snapshots are kept),
+# and removes files no snapshot uses. minRetention is the least any snapshot
+# is kept, whatever a project says: Trino refuses to expire younger ones.
+maintenance:
+  at: "02:00"
+  keepSnapshots: 7d
+  minRetention: 1d
+
 limits:
   project:
     queries: 4          # Trino queries running at once

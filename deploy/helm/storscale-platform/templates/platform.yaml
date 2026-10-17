@@ -46,6 +46,13 @@ spec:
             - {name: NESSIE_URL, value: "http://nessie:19120"}
             # A project with a repo has an Airflow of its own (project-<name>-airflow).
             - {name: PROJECT_AIRFLOWS, value: "true"}
+            # Table maintenance, each night (maintenance.*), as Trino's maintenance account.
+            - {name: TRINO_URL, value: "https://trino:8443"}
+            - {name: TRINO_CA, value: /trino-cert/cert.pem}
+            - {name: MAINTENANCE_TRINO_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: MAINTENANCE_TRINO_PASSWORD}}}
+            - {name: MAINTENANCE_AT, value: {{ .Values.maintenance.at | quote }}}
+            - {name: MAINTENANCE_KEEP, value: {{ .Values.maintenance.keepSnapshots | quote }}}
+            - {name: MAINTENANCE_MIN_RETENTION, value: {{ .Values.maintenance.minRetention | quote }}}
             - {name: BRAND_NAME, value: {{ .Values.brand.name | quote }}}
             {{- with .Values.brand.title }}
             - {name: BRAND_TITLE, value: {{ . | quote }}}
@@ -65,6 +72,7 @@ spec:
             periodSeconds: 5
           volumeMounts:
             - {name: catalog, mountPath: /catalog, readOnly: true}
+            - {name: trino-cert, mountPath: /trino-cert, readOnly: true}   # Trino's certificate, not its key
             {{- if or .Values.brand.logo .Values.brand.icon }}
             - {name: brand, mountPath: /etc/storscale/brand, readOnly: true}
             {{- end }}
@@ -75,6 +83,7 @@ spec:
         {{- include "storscale.ca.volumes" . | nindent 8 }}
         # The catalog's bot token, which catalog-sync keeps up to date.
         - {name: catalog, secret: {secretName: catalog-token, optional: true}}
+        - {name: trino-cert, secret: {secretName: trino-tls, items: [{key: cert.pem, path: cert.pem}]}}
         {{- if or .Values.brand.logo .Values.brand.icon }}
         - {name: brand, configMap: {name: storscale-brand}}
         {{- end }}

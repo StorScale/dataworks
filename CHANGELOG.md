@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **Table maintenance** ([docs/use-cases.md](docs/use-cases.md), 6.5): each night (`maintenance.at`, UTC) platformd compacts every project's small files, expires snapshots older than the project's `tables.maintenance.keepSnapshots` (default `maintenance.keepSnapshots`, 7d; tagged and branched snapshots are kept), and removes files no snapshot uses, as Trino's new `maintenance` account, which Ranger lets alter every table and read none. A project may turn compaction off (`compact: false`) or pause it (`paused: true`). `maintenance.minRetention` (1d; 1m for a checkout's own install) is the least any snapshot is kept: Trino's catalog refuses less. Each table's new Storage tab shows its files, size, rows and snapshots, and what its maintenance last did; the project's editors ask for a run now. A failed run alerts the project, and runs are Prometheus metrics (`platform_table_maintenance_*`). The `maintenance` suite checks it.
+
 ## [0.7.0] - 2026-10-17
 
 The platform's health, with alerts to its administrators and to each project's own people; and one-command upgrades.

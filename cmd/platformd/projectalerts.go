@@ -22,7 +22,7 @@ import (
 // a pipeline's latest run failed, a check is failing, a table is stale.
 type issue struct {
 	Key        string     `json:"key"`  // pipeline/<id>/<run>, check/<table>/<check>, stale/<table>
-	Kind       string     `json:"kind"` // pipeline, check, stale
+	Kind       string     `json:"kind"` // pipeline, check, stale, maintenance
 	Title      string     `json:"title"`
 	Detail     string     `json:"detail,omitempty"`
 	Link       string     `json:"link"`
@@ -119,6 +119,13 @@ func (s *server) issuesOf(ctx context.Context, p *project.Project) (out []issue,
 					Title: fmt.Sprintf("%s is stale: not changed within %s", f.Table, f.Within), Detail: detail,
 					Link: link + "/data?table=" + f.Table})
 			}
+		}
+	}
+	if s.maintainer != nil {
+		for _, run := range s.maintainer.failures(p.Metadata.Name) {
+			out = append(out, issue{Key: "maintenance/" + run.Table, Kind: "maintenance",
+				Title: fmt.Sprintf("%s: its maintenance failed", run.Table), Detail: run.Error,
+				Link: link + "/data?table=" + run.Table})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
@@ -222,7 +229,7 @@ func (pa *projectAlerts) isMuted(project, key string) bool {
 func alertOf(project string, is issue, resolved bool) health.Alert {
 	a := health.Alert{Title: project + ": " + is.Title, Severity: "down", Link: is.Link, LinkText: "Open it in the platform", At: time.Now().UTC(),
 		Facts: [][2]string{{"Project", project}}}
-	if is.Kind == "stale" {
+	if is.Kind == "stale" || is.Kind == "maintenance" {
 		a.Severity = "warning"
 	}
 	if resolved {

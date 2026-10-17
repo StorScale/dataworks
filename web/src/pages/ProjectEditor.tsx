@@ -35,6 +35,11 @@ export default function ProjectEditor() {
     const next = { ...spec.notify, ...n };
     set({ notify: next.teams || next.email?.length ? next : undefined });
   };
+  const setMaintenance = (m: Partial<NonNullable<NonNullable<Spec["tables"]>["maintenance"]>>) => {
+    const next = { ...spec.tables?.maintenance, ...m };
+    const kept = Object.values(next).some((v) => v !== undefined);
+    set({ tables: { ...spec.tables, maintenance: kept ? next : undefined } });
+  };
   const setFreshness = (i: number, f: Partial<{ table: string; within: string }>) =>
     set({ tables: { ...spec.tables, freshness: spec.tables!.freshness!.map((x, j) => (j === i ? { ...x, ...f } : x)) } });
 
@@ -172,6 +177,26 @@ export default function ProjectEditor() {
                 </div>
               ))}
               <button className="btn" onClick={() => set({ tables: { ...spec.tables, freshness: [...(spec.tables!.freshness ?? []), { table: "", within: "24h" }] } })}>Add a table</button>
+            </>
+          )}
+
+          {spec.tables && (
+            <>
+              <h2 style={{ marginTop: 20 }}>Table maintenance</h2>
+              <p className="muted small" style={{ margin: "4px 0 8px" }}>
+                Each night: small files compacted, snapshots older than this expired (tagged ones are kept), files no snapshot uses removed.
+                How long snapshots are kept is how far back the data as it was goes. Left empty, the install's default.
+              </p>
+              <label>Keep snapshots for
+                <input value={spec.tables.maintenance?.keepSnapshots ?? ""} placeholder="7d" style={{ width: 120 }}
+                  onChange={(e) => setMaintenance({ keepSnapshots: e.target.value || undefined })} />
+              </label>
+              <label className="row" style={{ flexDirection: "row", gap: 8 }}>
+                <input type="checkbox" checked={spec.tables.maintenance?.compact ?? true} onChange={(e) => setMaintenance({ compact: e.target.checked ? undefined : false })} /> Compact small files
+              </label>
+              <label className="row" style={{ flexDirection: "row", gap: 8 }}>
+                <input type="checkbox" checked={!!spec.tables.maintenance?.paused} onChange={(e) => setMaintenance({ paused: e.target.checked || undefined })} /> Paused
+              </label>
             </>
           )}
         </div>

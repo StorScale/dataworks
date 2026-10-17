@@ -281,10 +281,19 @@ services:
       AIRFLOW_URL: http://airflow:8090/pipelines
       AIRFLOW_USER: storscale-platform
       AIRFLOW_PASSWORD: ${AIRFLOW_PLATFORM_PASSWORD}
+      # Table maintenance, each night at MAINTENANCE_AT (UTC), as Trino's
+      # maintenance account; snapshots kept MAINTENANCE_KEEP unless a project
+      # says otherwise, and never less than Trino allows.
+      TRINO_URL: https://trino:8443
+      TRINO_CA: /trino-cert/cert.pem
+      MAINTENANCE_TRINO_PASSWORD: ${MAINTENANCE_TRINO_PASSWORD}
+      MAINTENANCE_MIN_RETENTION: ${MAINTENANCE_MIN_RETENTION}
     volumes:
       - catalog:/catalog:ro
+      - trino-cert:/trino-cert:ro   # Trino's certificate, not its key
     depends_on:
       keycloak: {condition: service_healthy}
+      tls: {condition: service_completed_successfully}
     healthcheck:
       test: ["CMD", "/usr/bin/platformd", "healthcheck"]
       interval: 5s
@@ -472,7 +481,7 @@ services:
   # Trino's password file (bcrypt): Superset signs in to Trino as "superset".
   trino-passwords:
     <<: *tools
-    command: ["sh", "-c", "htpasswd -B -C 10 -b -c /auth/password.db superset \"$$SUPERSET_TRINO_PASSWORD\" && htpasswd -B -C 10 -b /auth/password.db openmetadata \"$$OPENMETADATA_TRINO_PASSWORD\" && chmod 644 /auth/password.db"]
+    command: ["sh", "-c", "htpasswd -B -C 10 -b -c /auth/password.db superset \"$$SUPERSET_TRINO_PASSWORD\" && htpasswd -B -C 10 -b /auth/password.db openmetadata \"$$OPENMETADATA_TRINO_PASSWORD\" && htpasswd -B -C 10 -b /auth/password.db maintenance \"$$MAINTENANCE_TRINO_PASSWORD\" && chmod 644 /auth/password.db"]
     volumes:
       - trino-auth:/auth
 
@@ -486,6 +495,7 @@ services:
       TRINO_SHARED_SECRET: ${TRINO_SHARED_SECRET}
       RANGER_PLUGIN_PASSWORD: ${RANGER_PLUGIN_PASSWORD}
       TRINO_DB_PASSWORD: ${TRINO_DB_PASSWORD}   # its limits' database
+      MAINTENANCE_MIN_RETENTION: ${MAINTENANCE_MIN_RETENTION}   # the least a snapshot is kept (iceberg.properties)
     volumes:
       - ./trino/config.properties:/etc/trino/config.properties:ro
       - ./trino/password-authenticator.properties:/etc/trino/password-authenticator.properties:ro

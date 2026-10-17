@@ -79,6 +79,16 @@ spec:
                               table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                               column: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                               type: {type: string, enum: [MASK, MASK_SHOW_LAST_4, MASK_SHOW_FIRST_4, MASK_HASH, MASK_NULL, MASK_NONE, MASK_DATE_SHOW_YEAR]}
+                    maintenance:
+                      description: "How the platform keeps the tables in shape each night: small files compacted, snapshots older than keepSnapshots expired (tagged ones kept), files no snapshot uses removed. What's left out is the install's default."
+                      type: object
+                      properties:
+                        keepSnapshots:
+                          description: "How far back the data as it was goes: 7d, 12h."
+                          type: string
+                          pattern: '^[1-9][0-9]{0,4}(m|h|d)$'
+                        compact: {type: boolean, description: "Compact small files into larger ones (default true)."}
+                        paused: {type: boolean, description: "No maintenance for now."}
                     freshness:
                       type: array
                       description: How recently each table must have changed; an older one is stale, and the project is told.

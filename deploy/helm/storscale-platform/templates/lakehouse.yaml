@@ -110,14 +110,15 @@ spec:
             - {name: TRINO_DB_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: TRINO_DB_PASSWORD}}}
           resources:
             requests: {cpu: 10m, memory: 32Mi}
-        # Trino's password file (bcrypt): Superset and the catalog sign in to Trino with passwords.
+        # Trino's password file (bcrypt): Superset, the catalog and platformd's table maintenance sign in to Trino with passwords.
         - name: passwords
           image: {{ include "storscale.image" (list . "tools") }}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           command: ["sh", "-c"]
           args:
             - htpasswd -B -C 10 -b -c /auth/password.db superset "$SUPERSET_TRINO_PASSWORD" &&
-              htpasswd -B -C 10 -b /auth/password.db openmetadata "$OPENMETADATA_TRINO_PASSWORD" && chmod 644 /auth/password.db
+              htpasswd -B -C 10 -b /auth/password.db openmetadata "$OPENMETADATA_TRINO_PASSWORD" &&
+              htpasswd -B -C 10 -b /auth/password.db maintenance "$MAINTENANCE_TRINO_PASSWORD" && chmod 644 /auth/password.db
           {{- include "storscale.envFrom" . | nindent 10 }}
           volumeMounts:
             - {name: auth, mountPath: /auth}
@@ -125,10 +126,11 @@ spec:
         - name: trino
           image: {{ .Values.upstream.trino }}
           {{- include "storscale.envFrom" . | nindent 10 }}
-          {{- /* It fetches Keycloak's keys at the public address. */}}
-          {{- with include "storscale.ca.env" . }}
-          env: {{- . | nindent 12 }}
-          {{- end }}
+          env:
+            # The least a table's snapshots are kept (catalog/iceberg.properties).
+            - {name: MAINTENANCE_MIN_RETENTION, value: {{ .Values.maintenance.minRetention | quote }}}
+            {{- /* It fetches Keycloak's keys at the public address. */}}
+            {{- include "storscale.ca.env" . | nindent 12 }}
           ports:
             - {name: http, containerPort: 8080}
             - {name: https, containerPort: 8443}

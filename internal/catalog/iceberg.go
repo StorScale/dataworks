@@ -6,42 +6,50 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
 
-// LastChange is when a table last changed: its current snapshot's time, as
-// the Iceberg catalog (Nessie's REST API, http://nessie:19120/iceberg) has
-// it. Zero, with no error, for a table with no snapshot yet.
-func LastChange(ctx context.Context, c *http.Client, base, warehouse, namespace, table string) (time.Time, error) {
-	base = strings.TrimRight(base, "/")
-	get := func(path string, out any) error {
-		req, err := http.NewRequestWithContext(ctx, "GET", base+path, nil)
-		if err != nil {
-			return err
-		}
-		res, err := c.Do(req)
-		if err != nil {
-			return fmt.Errorf("iceberg: %v", err)
-		}
-		defer res.Body.Close()
-		if res.StatusCode == http.StatusNotFound {
-			return errNotFound
-		}
-		if res.StatusCode != 200 {
-			return fmt.Errorf("iceberg: GET %s: HTTP %d", path, res.StatusCode)
-		}
-		if err := json.NewDecoder(res.Body).Decode(out); err != nil {
-			return fmt.Errorf("iceberg: GET %s: %v", path, err)
-		}
-		return nil
+// Iceberg is the Iceberg catalog's REST API (Nessie's,
+// http://nessie:19120/iceberg), for one warehouse.
+type Iceberg struct {
+	HTTP      *http.Client
+	Base      string
+	Warehouse string
+}
+
+func (ic *Iceberg) get(ctx context.Context, path string, out any) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", strings.TrimRight(ic.Base, "/")+path, nil)
+	if err != nil {
+		return err
 	}
+	res, err := ic.HTTP.Do(req)
+	if err != nil {
+		return fmt.Errorf("iceberg: %v", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode == http.StatusNotFound {
+		return errNotFound
+	}
+	if res.StatusCode != 200 {
+		return fmt.Errorf("iceberg: GET %s: HTTP %d", path, res.StatusCode)
+	}
+	if err := json.NewDecoder(res.Body).Decode(out); err != nil {
+		return fmt.Errorf("iceberg: GET %s: %v", path, err)
+	}
+	return nil
+}
+
+// root is the warehouse's path: /v1/ and its prefix, as the catalog gives it.
+func (ic *Iceberg) root(ctx context.Context) (string, error) {
 	var cfg struct {
 		Defaults  map[string]any `json:"defaults"` // strings, by the spec; not every catalog keeps to it
 		Overrides map[string]any `json:"overrides"`
 	}
-	if err := get("/v1/config?warehouse="+url.QueryEscape(warehouse), &cfg); err != nil {
-		return time.Time{}, err
+	if err := ic.get(ctx, "/v1/config?warehouse="+url.QueryEscape(ic.Warehouse), &cfg); err != nil {
+		return "", err
 	}
 	prefix, _ := cfg.Overrides["prefix"].(string)
 	if prefix == "" {
@@ -50,31 +58,116 @@ func LastChange(ctx context.Context, c *http.Client, base, warehouse, namespace,
 	// The prefix goes in the path as the catalog gives it: Nessie's comes
 	// escaped already (main%7Cwarehouse); escaped again it's refused.
 	if strings.ContainsAny(prefix, "/?#") {
-		return time.Time{}, fmt.Errorf("iceberg: the catalog's prefix %q isn't one path segment", prefix)
+		return "", fmt.Errorf("iceberg: the catalog's prefix %q isn't one path segment", prefix)
 	}
-	path := "/v1/"
-	if prefix != "" {
-		path += prefix + "/"
+	if prefix == "" {
+		return "/v1/", nil
 	}
-	var t struct {
-		Metadata struct {
-			Current   *int64 `json:"current-snapshot-id"`
-			Snapshots []struct {
-				ID int64 `json:"snapshot-id"`
-				At int64 `json:"timestamp-ms"`
-			} `json:"snapshots"`
-		} `json:"metadata"`
+	return "/v1/" + prefix + "/", nil
+}
+
+// Tables are a namespace's tables, by name.
+func (ic *Iceberg) Tables(ctx context.Context, namespace string) ([]string, error) {
+	root, err := ic.root(ctx)
+	if err != nil {
+		return nil, err
 	}
-	if err := get(path+"namespaces/"+url.PathEscape(namespace)+"/tables/"+url.PathEscape(table), &t); err != nil {
+	var out []string
+	token := ""
+	for {
+		var page struct {
+			Identifiers []struct {
+				Name string `json:"name"`
+			} `json:"identifiers"`
+			Next string `json:"next-page-token"`
+		}
+		path := root + "namespaces/" + url.PathEscape(namespace) + "/tables"
+		if token != "" {
+			path += "?pageToken=" + url.QueryEscape(token)
+		}
+		if err := ic.get(ctx, path, &page); err != nil {
+			if err == errNotFound {
+				return nil, nil // no namespace yet: no tables
+			}
+			return nil, err
+		}
+		for _, id := range page.Identifiers {
+			out = append(out, id.Name)
+		}
+		if page.Next == "" || page.Next == token {
+			sort.Strings(out)
+			return out, nil
+		}
+		token = page.Next
+	}
+}
+
+// Stats are what a table holds now (its current snapshot's summary) and
+// how far back it goes (its snapshots).
+type Stats struct {
+	DataFiles   int64     `json:"dataFiles"`
+	Bytes       int64     `json:"bytes"`
+	Rows        int64     `json:"rows"`
+	Snapshots   int       `json:"snapshots"`
+	Oldest      time.Time `json:"oldest"`      // the oldest snapshot's time
+	LastChange  time.Time `json:"lastChange"`  // the current snapshot's
+	Refs        int       `json:"refs"`        // branches and tags, main among them
+	DeleteFiles int64     `json:"deleteFiles"` // position and equality deletes
+}
+
+type tableMetadata struct {
+	Metadata struct {
+		Current   *int64 `json:"current-snapshot-id"`
+		Snapshots []struct {
+			ID      int64             `json:"snapshot-id"`
+			At      int64             `json:"timestamp-ms"`
+			Summary map[string]string `json:"summary"`
+		} `json:"snapshots"`
+		Refs map[string]any `json:"refs"`
+	} `json:"metadata"`
+}
+
+func (ic *Iceberg) load(ctx context.Context, namespace, table string) (*tableMetadata, error) {
+	root, err := ic.root(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var t tableMetadata
+	if err := ic.get(ctx, root+"namespaces/"+url.PathEscape(namespace)+"/tables/"+url.PathEscape(table), &t); err != nil {
 		if err == errNotFound {
-			return time.Time{}, fmt.Errorf("no table %s.%s", namespace, table)
+			return nil, fmt.Errorf("no table %s.%s", namespace, table)
 		}
-		return time.Time{}, err
+		return nil, err
 	}
-	for _, s := range t.Metadata.Snapshots {
-		if t.Metadata.Current != nil && s.ID == *t.Metadata.Current {
-			return time.UnixMilli(s.At).UTC(), nil
+	return &t, nil
+}
+
+// Stats are a table's, now.
+func (ic *Iceberg) Stats(ctx context.Context, namespace, table string) (Stats, error) {
+	t, err := ic.load(ctx, namespace, table)
+	if err != nil {
+		return Stats{}, err
+	}
+	m := t.Metadata
+	st := Stats{Snapshots: len(m.Snapshots), Refs: len(m.Refs)}
+	num := func(s map[string]string, k string) int64 { n, _ := strconv.ParseInt(s[k], 10, 64); return n }
+	for _, s := range m.Snapshots {
+		at := time.UnixMilli(s.At).UTC()
+		if st.Oldest.IsZero() || at.Before(st.Oldest) {
+			st.Oldest = at
+		}
+		if m.Current != nil && s.ID == *m.Current {
+			st.LastChange = at
+			st.DataFiles, st.Bytes, st.Rows = num(s.Summary, "total-data-files"), num(s.Summary, "total-files-size"), num(s.Summary, "total-records")
+			st.DeleteFiles = num(s.Summary, "total-delete-files")
 		}
 	}
-	return time.Time{}, nil
+	return st, nil
+}
+
+// LastChange is when a table last changed: its current snapshot's time.
+// Zero, with no error, for a table with no snapshot yet.
+func LastChange(ctx context.Context, c *http.Client, base, warehouse, namespace, table string) (time.Time, error) {
+	st, err := (&Iceberg{HTTP: c, Base: base, Warehouse: warehouse}).Stats(ctx, namespace, table)
+	return st.LastChange, err
 }
