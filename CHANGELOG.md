@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+- **Nessie keeps the catalog in Postgres** (its `JDBC2` store): on Kubernetes a `nessie` database on the platform's Postgres (`nessie-db`, made if missing), in Compose a `nessie-db` server of its own. The catalog (every table, its history, branches and tags) is then in the database dumps the backups take, and Nessie no longer holds a volume's lock. An install from before keeps its catalog: before Nessie starts, a step moves it from RocksDB into Postgres once, with Nessie's admin tool, and renames the RocksDB files to `catalog-rocksdb-moved` on the `nessie-data` volume (to roll back, rename them back to `catalog`). In Compose, upgrade with `storscale down` then `up`, so Nessie isn't running while its catalog moves.
+
 ## [0.8.0] - 2026-10-17
 
 Tables kept in shape (compaction, and Nessie's GC for their history), and the audit log.
