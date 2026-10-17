@@ -57,8 +57,9 @@ spec:
   ingress:
     - ports: [{port: 8443}]
 ---
-# The platform's Postgres: each tool's database, to that tool; the backups;
-# platformd's health check (a TCP connect).
+# The platform's Postgres: each tool's database, to that tool (Trino's
+# workers with Trino: a project's source may be one of its databases); the
+# backups; platformd's health check (a TCP connect); the checks.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -73,7 +74,8 @@ spec:
       from:
         {{- include "storscale.np.from" (list "keycloak" "nessie" "trino" "platform-operator" "platformd"
               "airflow" "airflow-scheduler" "airflow-dag-processor" "airflow-init" "project-airflow"
-              "superset" "superset-init" "openmetadata" "openmetadata-migrate" "storscale-backup" "storscale-restore") | nindent 8 }}
+              "superset" "superset-init" "openmetadata" "openmetadata-migrate" "storscale-backup" "storscale-restore"
+              "trino-worker" "storscale-test") | nindent 8 }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

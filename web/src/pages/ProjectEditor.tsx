@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getProject, MASK_TYPES, Member, Project, putProject, Spec } from "../api";
+import { getProject, MASK_TYPES, Member, Project, putProject, Source, sourceCatalog, Spec } from "../api";
 import { grants } from "../lib";
 
 const blank = (): Project => ({
@@ -31,6 +31,7 @@ export default function ProjectEditor() {
   const setMember = (i: number, m: Partial<Member>) => set({ members: spec.members.map((x, j) => (j === i ? { ...x, ...m } : x)) });
   const readers = spec.tables?.readers ?? {};
   const setReaders = (r: typeof readers) => set({ tables: { ...spec.tables, readers: r } });
+  const setSource = (i: number, s: Partial<Source>) => set({ sources: spec.sources!.map((x, j) => (j === i ? { ...x, ...s } : x)) });
   const setNotify = (n: Partial<NonNullable<Spec["notify"]>>) => {
     const next = { ...spec.notify, ...n };
     set({ notify: next.teams || next.email?.length ? next : undefined });
@@ -179,6 +180,27 @@ export default function ProjectEditor() {
               <button className="btn" onClick={() => set({ tables: { ...spec.tables, freshness: [...(spec.tables!.freshness ?? []), { table: "", within: "24h" }] } })}>Add a table</button>
             </>
           )}
+
+          <h2 style={{ marginTop: 20 }}>Sources</h2>
+          <p className="muted small" style={{ margin: "4px 0 8px" }}>
+            The company's databases, queried where they are: each a read-only catalog the project's editors and pipelines may read
+            (its readers too, where ticked). The connection is one of the project's, with the database's read-only account.
+          </p>
+          {(spec.sources ?? []).map((s, i) => (
+            <div key={i} className="row" data-testid="source">
+              <input value={s.name} placeholder="finance" style={{ width: 140 }} aria-label="Source name" onChange={(e) => setSource(i, { name: e.target.value })} />
+              <select value={s.kind} aria-label="Kind" onChange={(e) => setSource(i, { kind: e.target.value as Source["kind"] })}>
+                {(["postgresql", "mysql", "sqlserver", "oracle"] as const).map((k) => <option key={k} value={k}>{k}</option>)}
+              </select>
+              <input value={s.connection} placeholder="connection" aria-label="Connection" onChange={(e) => setSource(i, { connection: e.target.value })} />
+              <label className="row small" style={{ flexDirection: "row", gap: 6 }}>
+                <input type="checkbox" checked={!!s.readers} onChange={(e) => setSource(i, { readers: e.target.checked || undefined })} /> Readers
+              </label>
+              {s.name && <span className="small muted mono">{sourceCatalog(p.metadata.name || "project", s)}</span>}
+              <button className="btn" onClick={() => set({ sources: (spec.sources ?? []).filter((_, j) => j !== i).length ? spec.sources!.filter((_, j) => j !== i) : undefined })}>Remove</button>
+            </div>
+          ))}
+          <button className="btn" onClick={() => set({ sources: [...(spec.sources ?? []), { name: "", kind: "postgresql", connection: "" }] })}>Add a source</button>
 
           {spec.tables && (
             <>

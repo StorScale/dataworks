@@ -342,8 +342,7 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R8.8 The project's access rules on them, in Ranger, and their tables in the catalog.
 - R8.9 Limits on what a query may pull from a source (6.8), so the source's own users aren't slowed.
 
-**Open questions**
-- Trino's dynamic catalogs (added while it runs), or a restart of its coordinator for each new source?
+**Decided:** Trino's dynamic catalogs (made while it runs, by the platform operator), the connection in files Trino reads, never in the statement (docs/plan.md).
 
 ---
 

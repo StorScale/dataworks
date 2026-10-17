@@ -28,6 +28,9 @@ type Reconciler struct {
 	// TrinoLimits keeps Trino's resource groups from the projects' limits;
 	// nil: Trino has no limits but its own.
 	TrinoLimits *TrinoLimits
+	// Sources keeps Trino's catalogs of the projects' sources; nil: Trino
+	// makes none (catalog management isn't dynamic, or no operator account).
+	Sources *TrinoSources
 	// ProjectAirflows, on Kubernetes, gives each project with a repo an
 	// Airflow of its own; nil (Compose): projects' repos are bundles in the
 	// shared Airflow.
@@ -65,6 +68,15 @@ func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Sta
 			err = r.Nessie.syncTags(ctx, p)
 		}
 		part("nessie", err)
+	}
+	if r.Sources != nil {
+		conns := func(name string) (map[string]string, error) { return r.Store.Connection(ctx, p.Metadata.Name, name) }
+		if err := r.Sources.Apply(ctx, p, conns); len(p.Spec.Sources) > 0 {
+			part("trino", err)
+		} else if err != nil && r.Log != nil {
+			// Sources that went: their catalogs go, when Trino's there.
+			r.Log.Warn("removing the sources' catalogs", "project", p.Metadata.Name, "error", err)
+		}
 	}
 	switch {
 	case r.ownAirflow(p):
@@ -105,6 +117,9 @@ func (r *Reconciler) Delete(ctx context.Context, p *project.Project) error {
 		}
 	}
 	keep(r.Ranger.syncPolicies(ctx, p.RangerPrefix(), nil))
+	if r.Sources != nil {
+		keep(r.Sources.Remove(ctx, p.Metadata.Name))
+	}
 	keep(r.Ranger.syncGroupMembers(ctx, p.Groups(), nil, r.RangerUserPassword))
 	keep(r.Ranger.deleteGroups(ctx, p.Groups()))
 	if r.ProjectAirflows != nil {

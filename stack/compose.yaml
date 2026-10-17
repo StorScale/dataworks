@@ -345,9 +345,20 @@ services:
       AIRFLOW_PASSWORD: ${AIRFLOW_PLATFORM_PASSWORD}
       # Projects' limits: Trino's resource groups, and the projects' buckets' sizes.
       TRINO_DB_PASSWORD: ${TRINO_DB_PASSWORD}
+      # Projects' sources: Trino's catalogs of them, made as the operator's
+      # Trino account; their connections in files Trino reads (trino-sources).
+      TRINO_URL: https://trino:8443
+      TRINO_CA: /trino-cert/cert.pem
+      OPERATOR_TRINO_PASSWORD: ${OPERATOR_TRINO_PASSWORD}
+      SOURCES_PATH: /sources
+    volumes:
+      - trino-sources:/sources
+      - trino-cert:/trino-cert:ro
     depends_on:
       setup: {condition: service_completed_successfully}
       nessie: {condition: service_started}
+      tls: {condition: service_completed_successfully}
+      trino-passwords: {condition: service_completed_successfully}
     healthcheck:
       test: ["CMD", "/usr/bin/platform-operator", "healthcheck"]
       interval: 5s
@@ -559,16 +570,22 @@ services:
       - tls:/tls
       - trino-cert:/cert
 
-  # Trino's password file (bcrypt): Superset signs in to Trino as "superset".
+  # Trino's password file (bcrypt): Superset, the catalog, table maintenance
+  # and the platform operator sign in to Trino with passwords. And the
+  # sources' directory, the operator's to write (it runs as 65532).
   trino-passwords:
     <<: *tools
-    command: ["sh", "-c", "htpasswd -B -C 10 -b -c /auth/password.db superset \"$$SUPERSET_TRINO_PASSWORD\" && htpasswd -B -C 10 -b /auth/password.db openmetadata \"$$OPENMETADATA_TRINO_PASSWORD\" && htpasswd -B -C 10 -b /auth/password.db maintenance \"$$MAINTENANCE_TRINO_PASSWORD\" && chmod 644 /auth/password.db"]
+    command: ["sh", "-c", "htpasswd -B -C 10 -b -c /auth/password.db superset \"$$SUPERSET_TRINO_PASSWORD\" && htpasswd -B -C 10 -b /auth/password.db openmetadata \"$$OPENMETADATA_TRINO_PASSWORD\" && htpasswd -B -C 10 -b /auth/password.db maintenance \"$$MAINTENANCE_TRINO_PASSWORD\" && htpasswd -B -C 10 -b /auth/password.db platform-operator \"$$OPERATOR_TRINO_PASSWORD\" && chmod 644 /auth/password.db && chown 65532:65532 /sources && chmod 755 /sources"]
     volumes:
       - trino-auth:/auth
+      - trino-sources:/sources
 
   trino:
     restart: unless-stopped
     image: trinodb/trino:483
+    # Its catalogs are made and dropped while it runs (the projects'
+    # sources), in a directory of its own: the install's copied in first.
+    command: ["sh", "-c", "mkdir -p /data/trino/catalog && cp /etc/trino/catalog-install/*.properties /data/trino/catalog/ && exec /usr/lib/trino/bin/run-trino"]
     environment:
       KEYCLOAK_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}/sso
       TRINO_S3_ACCESS_KEY: ${TRINO_S3_ACCESS_KEY}
@@ -583,9 +600,10 @@ services:
       - ./trino/ranger-trino-security.xml:/etc/trino/ranger-trino-security.xml:ro
       - ./trino/ranger-trino-audit.xml:/etc/trino/ranger-trino-audit.xml:ro
       - ./trino/resource-groups.properties:/etc/trino/resource-groups.properties:ro
-      - ./trino/catalog:/etc/trino/catalog:ro
+      - ./trino/catalog:/etc/trino/catalog-install:ro
       - tls:/etc/trino/tls:ro
       - trino-auth:/etc/trino/auth:ro
+      - trino-sources:/etc/trino/sources:ro   # the sources' connections (the operator's)
     ports: ["${STORSCALE_BIND:-127.0.0.1}:8443:8443"]
     mem_limit: 1536m   # its heap is 80% of this (Trino's image); a query gets at most 512 MB here
     depends_on:
@@ -950,6 +968,7 @@ volumes:
   trino-cert:
   ranger-audits:
   trino-auth:
+  trino-sources:
   prometheus-token:
   jupyterhub-data:
   superset-db:
