@@ -25,9 +25,10 @@ from lakekit import (BASE_POLICIES, RANGER, allow, bucket_rw, ensure_buckets_ide
 
 ICEBERG = "iceberg"
 CATALOG_USER = "openmetadata"  # the catalog's service user: it reads every table, to describe and check them
-# platformd's table maintenance: it may alter every table (Trino's optimize,
-# expire_snapshots and remove_orphan_files are table procedures, which need
-# alter), and read none.
+# platformd's table maintenance: Trino's optimize, expire_snapshots and
+# remove_orphan_files are table procedures, which need alter; optimize scans
+# the table it rewrites, which needs select too. So it may read every table,
+# as the catalog's user may; its password is platformd's alone.
 MAINTENANCE_USER = "maintenance"
 POLICIES = [{**p, "policyItems": p["policyItems"] + ([allow(["execute"], users=[CATALOG_USER, MAINTENANCE_USER])] if p["name"] == "run queries" else [])}
             for p in BASE_POLICIES] + [
@@ -39,7 +40,7 @@ POLICIES = [{**p, "policyItems": p["policyItems"] + ([allow(["execute"], users=[
     {"name": "catalog: every namespace", "resources": res(catalog=ICEBERG, schema="*"),
      "policyItems": [allow(["use", "show"], users=[CATALOG_USER, MAINTENANCE_USER])]},
     {"name": "catalog: every table", "resources": res(catalog=ICEBERG, schema="*", table="*", column="*"),
-     "policyItems": [allow(["select", "show"], users=[CATALOG_USER]), allow(["alter"], users=[MAINTENANCE_USER])]},
+     "policyItems": [allow(["select", "show"], users=[CATALOG_USER]), allow(["select", "alter"], users=[MAINTENANCE_USER])]},
     # The catalog's information_schema, which tools read to list tables and
     # columns (Superset does, to check a dataset). Trino filters it down to
     # what each person may see anyway.
