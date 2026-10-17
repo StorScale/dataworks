@@ -71,6 +71,7 @@ spec:
       containers:
         - name: hub
           image: {{ include "storscale.image" (list . "jupyterhub") }}
+          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           command: ["jupyterhub", "-f", "/etc/jupyterhub/jupyterhub_config.py"]
           {{- include "storscale.envFrom" . | nindent 10 }}

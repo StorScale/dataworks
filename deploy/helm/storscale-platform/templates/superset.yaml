@@ -8,6 +8,7 @@ initContainers: {{- . | nindent 2 }}
 containers:
   - name: superset
     image: {{ include "storscale.image" (list . "superset") }}
+    securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
     imagePullPolicy: {{ .Values.images.pullPolicy }}
     {{- include "storscale.envFrom" . | nindent 4 }}
     env:

@@ -12,6 +12,7 @@
 {{- $root := index . 0 }}{{ $part := index . 1 -}}
 image: {{ include "storscale.image" (list $root "airflow") }}
 imagePullPolicy: {{ $root.Values.images.pullPolicy }}
+securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
 envFrom:
   - configMapRef: {name: storscale-config}
 env:

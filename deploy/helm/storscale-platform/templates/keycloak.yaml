@@ -25,6 +25,7 @@ spec:
         # who is in this step alone.
         - name: database
           image: {{ .Values.upstream.postgres }}
+          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
           command: ["bash", "-c"]
           args:
             - |
@@ -43,6 +44,7 @@ spec:
       containers:
         - name: keycloak
           image: {{ .Values.upstream.keycloak }}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           command: ["bash", "-c"]
           args:
             - |

@@ -18,6 +18,7 @@ spec:
       containers:
         - name: caddy
           image: {{ .Values.upstream.caddy }}
+          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
           args: ["caddy", "run", "--config", "/etc/storscale/Caddyfile", "--adapter", "caddyfile"]
           env:
             - {name: STORSCALE_DOMAIN, value: {{ .Values.global.domain | quote }}}

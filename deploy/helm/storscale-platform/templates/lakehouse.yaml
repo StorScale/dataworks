@@ -36,6 +36,7 @@ spec:
         # (an install from before 0.9.0 has none), as Postgres' admin.
         - name: database
           image: {{ .Values.upstream.postgres }}
+          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
           command: ["bash", "-c"]
           args:
             - |
@@ -56,6 +57,7 @@ spec:
         # RocksDB files are renamed, never read again (kept for a rollback).
         - name: move
           image: {{ .Values.upstream.nessieAdmin }}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           command: ["bash", "-c"]
           args:
             - |
@@ -79,6 +81,7 @@ spec:
       containers:
         - name: nessie
           image: {{ .Values.upstream.nessie }}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           env:
             - {name: JAVA_OPTS_APPEND, value: "-Xms64m -Xmx256m"}
             {{- include "storscale.nessieDb" . | nindent 12 }}
@@ -138,6 +141,7 @@ spec:
         # missing: as Postgres' admin, who is in this step alone.
         - name: database
           image: {{ .Values.upstream.postgres }}
+          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
           command: ["bash", "-c"]
           args:
             - |
@@ -156,6 +160,7 @@ spec:
         # Trino's password file (bcrypt): Superset, the catalog and platformd's table maintenance sign in to Trino with passwords.
         - name: passwords
           image: {{ include "storscale.image" (list . "tools") }}
+          securityContext: {allowPrivilegeEscalation: false, seccompProfile: {type: RuntimeDefault}}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           command: ["sh", "-c"]
           args:
@@ -168,6 +173,7 @@ spec:
       containers:
         - name: trino
           image: {{ .Values.upstream.trino }}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           {{- include "storscale.envFrom" . | nindent 10 }}
           {{- /* It fetches Keycloak's keys at the public address. */}}
           {{- with include "storscale.ca.env" . }}
@@ -253,6 +259,7 @@ spec:
           containers:
             - name: gc
               image: {{ .Values.upstream.nessieGc }}
+              securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
               args: ["gc", "--uri", "http://nessie:19120/api/v2", "--inmemory",
                      "--default-cutoff", {{ .Values.maintenance.history.keep | quote }},
                      "--iceberg", "s3.endpoint=http://buckets:9000/,s3.path-style-access=true"]
