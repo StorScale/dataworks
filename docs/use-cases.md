@@ -160,7 +160,7 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 5. Separately, each night, rows older than a table's retention (say 25 months for campaign responses) are deleted the same way.
 
 **Requirements**
-- R6.25 Each project declares where its consumer data is: the tables, the column that identifies a person, and the files' prefixes; the catalog shows it. Classification (10.5) later finds what's undeclared.
+- R6.25 Each project declares where its consumer data is: the tables, the column that identifies a person, and the files' prefixes; the catalog shows it. Classification (10.5) later finds what's undeclared. (Built 2026-10-18: the tables and their person's column, `tables.people`; not yet the files' prefixes, or the catalog showing it.)
 - R6.26 Erasure by a person's ID across the declared tables and what lineage says came from them, carried through snapshots, data branches and files, within the law's deadline, and recorded without the data; an API for the privacy tool.
 - R6.27 Retention per table (rows older than a set age deleted), applied by the maintenance of 6.5.
 - R6.28 The erasure's record lists the deliveries that carried the person's data (R9.6).
@@ -375,7 +375,7 @@ The company delivers files to clients and partners, and some carry consumer data
 - R9.6 Deliveries of personal data record whose data they carried (the people's IDs, or enough to find them again from the tables' history), for the legal period, searchable by person.
 
 **Open questions**
-- A list of IDs per file is itself personal data: is it kept, or found again by running the delivery's query on the data as it was (Iceberg's time travel), which needs the snapshots kept as long? **Found again from the tables, not kept** (decided 2026-10-18): the delivery log holds no personal data; it keeps each run's snapshots, and a search runs the delivery's query on the tables as they were then. So a delivery of personal data keeps the snapshots it read (tagged) for the legal period.
+- A list of IDs per file is itself personal data: is it kept, or found again by running the delivery's query on the data as it was (Iceberg's time travel), which needs the snapshots kept as long? **Found again from the tables, not kept** (decided 2026-10-18): the delivery log holds no personal data; it keeps each run's snapshots, and a search runs the delivery's query on the tables as they were then. So a delivery of personal data keeps the snapshots it read (tagged) for the legal period. Who searches: the data-protection approvers (`deliveries.approverGroups`); how long: a setting, `deliveries.keepFor`, default 7 years (both decided 2026-10-18).
 
 ### 9.3 A partner reads in place
 

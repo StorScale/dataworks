@@ -101,3 +101,29 @@ func TestConnections(t *testing.T) {
 		t.Errorf("uses: %q", got)
 	}
 }
+
+func TestPeoplesTablesArePersonal(t *testing.T) {
+	p, err := Compose("sales", []byte(repoProject), []byte("spec: {tables: {people: [{table: customers, column: customer_id}]}}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		d     Delivery
+		table string
+	}{
+		{Delivery{Table: "customers"}, "customers"},
+		{Delivery{Query: "select customer_id, sum(amount) from customers group by 1"}, "customers"},
+		{Delivery{Query: "select region, count(*) from customers group by 1"}, ""}, // no one's ID in it
+		{Delivery{Table: "orders"}, ""},
+	} {
+		if tb, _ := p.PersonKeyOf(c.d); tb != c.table {
+			t.Errorf("%+v: %q, want %q", c.d, tb, c.table)
+		}
+		if got := p.PersonalColumns(c.d); (len(got) > 0) != (c.table != "") {
+			t.Errorf("%+v: personal %v", c.d, got)
+		}
+	}
+	if _, err := Compose("sales", []byte(repoProject), []byte("spec: {tables: {people: [{table: Customers, column: id}]}}")); err == nil {
+		t.Error("a bad table name: no error")
+	}
+}

@@ -13,7 +13,11 @@ two deliveries of it (use case 9.1):
   3. each run is in the delivery log;
   4. a change to what it sends (its format) needs approving again: until
      then it has no DAG;
-  5. a failing check sends nothing (more rows than it allows).
+  5. a failing check sends nothing (more rows than it allows);
+  6. a delivery of a people's table (tables.people) needs a data-protection
+     approver too; once it has run, searching the log by a person's ID
+     finds it, from the table as it was then (their row deleted since),
+     and the log itself holds no one's ID (use case 9.2).
 
 The project, its connections, its table and what was sent are removed after.
 """
@@ -249,11 +253,44 @@ def main():
         state = run(bob, "delivery_deliver_counts")
         after = [o["Key"] for o in s3.list_objects_v2(Bucket=BUCKET, Prefix="acme/").get("Contents", [])]
         check("a failing check (more rows than allowed) sends nothing, and the run fails", state == "failed" and after == [], f"{state}: {after}")
+
+        # 6. What was sent about a person (9.2): a table of people's data, declared.
+        sql("bob", "CREATE TABLE customers AS SELECT * FROM (VALUES ('C-1042', 'Ana', 'EU'), ('C-2000', 'Ben', 'US')) AS t (customer_id, name, region)",
+            "iceberg", NAME)
+        people = {"name": "people", "table": "customers", "format": "csv", "files": "people_{date}.csv", "schedule": "0 6 * * 1",
+                  "target": "storscale-test-s3"}
+        personal = {**strict, "spec": {**strict["spec"], "tables": {"people": [{"table": "customers", "column": "customer_id"}]},
+                                       "deliveries": strict["spec"]["deliveries"] + [people]}}
+        r = bob.put(url, data=json.dumps(personal), timeout=30)
+        needs = deliveries(bob).get("people", {}).get("needs", [])
+        check("a delivery of a people's table is personal: it needs a data-protection approver too",
+              r.ok and any("data-protection" in n for n in needs), (r.text[:200], needs))
+        approve(alice, "people")
+        if not deliveries(bob).get("people", {}).get("approved"):
+            print("skip what was sent about a person: no data-protection approver here besides bob, who changed it (deliveries.approverGroups)")
+        else:
+            wait(lambda: pipeline(bob, "delivery_deliver_people"), 420, every=10)
+            state = run(bob, "delivery_deliver_people")
+            sql("bob", "DELETE FROM customers WHERE customer_id = 'C-1042'", "iceberg", NAME)   # gone since: found as it was
+
+            def search(s, person):
+                r = s.get(f"{PLATFORM}/api/projects/{NAME}/deliveries/search", params={"person": person}, timeout=120)
+                return r.status_code, (r.json() if r.ok else {})
+            code, found = search(alice, "C-1042")
+            hits = found.get("runs", [])
+            check("alice (a data-protection approver) finds the run that sent C-1042, from the table as it was then, though their row is gone now",
+                  state == "success" and code == 200 and len(hits) == 1 and hits[0].get("delivery") == "people" and hits[0].get("rows") == 1
+                  and hits[0].get("target", "").startswith("s3://"), (state, code, found))
+            code, none = search(alice, "C-9999")
+            check("... and none for someone it didn't send", code == 200 and none.get("runs") == [] and none.get("checked", 0) >= 1, none)
+            log_runs = deliveries(bob).get("people", {}).get("runs", [])
+            check("... the delivery log holds no one's ID", log_runs and "C-1042" not in json.dumps(log_runs), log_runs[:1])
     finally:
         try:
             sql("bob", "DROP TABLE IF EXISTS regions", "iceberg", NAME)
+            sql("bob", "DROP TABLE IF EXISTS customers", "iceberg", NAME)
         except Exception as e:  # noqa: BLE001
-            print(f"  (dropping regions: {e})")
+            print(f"  (dropping regions and customers: {e})")
         bob.delete(url, headers={"X-Platform-Request": "1"}, timeout=30)
         wait(lambda: NAME not in (projects(bob) or {}), 300)
         for c in ("storscale-test-sftp", "storscale-test-s3", "storscale-test-pgp"):

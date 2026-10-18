@@ -33,8 +33,10 @@ var (
 
 // devSets are a checkout's install's settings beside its images: Nessie's
 // GC every three minutes, keeping two minutes' history, so the maintenance
-// suite sees history go.
-var devSets = []string{"--set", "maintenance.history.keep=PT2M", "--set", "maintenance.history.schedule=*/3 * * * *"}
+// suite sees history go; and the analysts (alice) data-protection approvers
+// beside the administrators, so the deliveries suite has one besides bob.
+var devSets = []string{"--set", "maintenance.history.keep=PT2M", "--set", "maintenance.history.schedule=*/3 * * * *",
+	"--set", `deliveries.approverGroups=engineers\,analysts`}
 
 // podSecurity makes the platform's namespace, if it's missing, and labels it
 // for Pod Security admission: baseline enforced, restricted warned of.

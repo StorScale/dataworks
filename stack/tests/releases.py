@@ -29,7 +29,7 @@ import pipelines_git as pg
 from projects import platform, projects, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
-NAME, PORT = "released", 8425
+NAME, PORT = "released", 8427
 H = {"X-Platform-Request": "1"}
 
 SEMANTIC = """semantic_model:

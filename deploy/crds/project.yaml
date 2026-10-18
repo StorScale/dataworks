@@ -91,6 +91,15 @@ spec:
                           keepUntil: {type: string, pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$', description: "A date: the tag is removed after it."}
                           note: {type: string, maxLength: 500}
                           by: {type: string, maxLength: 100, description: "Who made it."}
+                    people:
+                      description: "The tables holding people's data, each with the column identifying a person: a delivery of them sends personal data, and the delivery log is searched by a person's ID there."
+                      type: array
+                      items:
+                        type: object
+                        required: [table, column]
+                        properties:
+                          table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                          column: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                     maintenance:
                       description: "How the platform keeps the tables in shape each night: small files compacted."
                       type: object

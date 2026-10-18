@@ -139,10 +139,15 @@ pipelines:
   gitKnownHosts: ""
 
 # Projects' deliveries (use case 9.1): who approves one that sends personal
-# data, beside another editor of its project (Keycloak groups, comma-separated;
-# empty: the platform's administrators).
+# data, beside another editor of its project, and searches the delivery log
+# by a person's ID (Keycloak groups, comma-separated; empty: the platform's
+# administrators).
 deliveries:
   approverGroups: ""
+  # How long the tables as a delivery of personal data read them are kept
+  # (a Nessie tag per run), so the delivery log can be searched by a
+  # person's ID (use case 9.2): years (7y) or days (400d).
+  keepFor: 7y
 
 # Projects as code (use case 7.4): which of a project's targets this install
 # is. A plan of the project's repo lays storscale/targets/<target>.yaml over
