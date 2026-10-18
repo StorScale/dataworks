@@ -105,3 +105,16 @@ func (r *Reconciler) applyDeliveries(ctx context.Context, p *project.Project, be
 	}
 	return errors.Join(errs...)
 }
+
+// removeDeliveries takes a deleted project's deliveries' connections from the
+// shared Airflow (a project's own Airflow goes with it, connections and all).
+func (r *Reconciler) removeDeliveries(ctx context.Context, p *project.Project) error {
+	if r.Airflow == nil || r.ownAirflow(p) {
+		return nil
+	}
+	var errs []error
+	for _, d := range p.Spec.Deliveries {
+		errs = append(errs, r.Airflow.API.DeleteConnection(ctx, DeliveryConnID(p, d)))
+	}
+	return errors.Join(errs...)
+}

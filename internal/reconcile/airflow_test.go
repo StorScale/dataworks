@@ -189,3 +189,24 @@ func TestAnErrorNeverCarriesTheToken(t *testing.T) {
 		t.Errorf("error %v: want the status, never the token", err)
 	}
 }
+
+func TestADeletedProjectsDeliveriesLeaveTheSharedAirflow(t *testing.T) {
+	f := &fakeAirflow{conns: map[string]pipelines.Connection{}}
+	ts := httptest.NewServer(f)
+	defer ts.Close()
+	p, err := project.Parse([]byte(`{"metadata": {"name": "deliver"}, "spec": {"members": [{"group": "engineers", "role": "editor"}], "tables": {},
+		"pipelines": {"serviceAccount": "airflow-pipelines"}, "deliveries": [{"name": "acme", "table": "regions", "format": "csv",
+		"files": "a_{date}.csv", "schedule": "0 6 * * 1", "target": "deliver-s3"}]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := DeliveryConnID(p, p.Spec.Deliveries[0])
+	f.conns[id] = pipelines.Connection{ID: id, Type: "generic", Extra: `{"target": {"secretKey": "s"}}`}
+	r := &Reconciler{Airflow: &Airflow{API: pipelines.New(ts.URL+"/pipelines", "storscale-platform", "pw")}}
+	if err := r.removeDeliveries(context.Background(), p); err != nil || len(f.conns) != 0 {
+		t.Errorf("deleted: %v, left %+v", err, f.conns)
+	}
+	if err := r.removeDeliveries(context.Background(), p); err != nil {
+		t.Errorf("again, with nothing left: %v", err)
+	}
+}

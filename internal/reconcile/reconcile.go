@@ -185,7 +185,8 @@ func (r *Reconciler) Delete(ctx context.Context, p *project.Project) error {
 		keep(r.Copies.Remove(ctx, p))
 	}
 	keep(r.removeImports(ctx, p))
-	if r.Reviewer != nil { // its merge requests' branches and catalogs
+	keep(r.removeDeliveries(ctx, p)) // their targets' credentials with them
+	if r.Reviewer != nil {           // its merge requests' branches and catalogs
 		if prev, _ := r.Store.Status(ctx, p.Metadata.Name); prev != nil {
 			keep(r.applyReviews(ctx, p, nil, nil, prev.Reviews))
 		}
