@@ -12,7 +12,7 @@ import time
 
 from lakekit import load_sales_tables
 
-SUITES = ["realm", "health", "lakehouse", "superset", "airflow", "jupyterhub", "catalog", "semantic", "projects", "project_alerts", "audit", "maintenance", "history", "sources", "copies", "imports", "pipelines_git", "reviews", "deliveries", "limits", "monitoring"]
+SUITES = ["realm", "health", "lakehouse", "superset", "airflow", "jupyterhub", "catalog", "semantic", "projects", "project_alerts", "audit", "maintenance", "history", "sources", "copies", "imports", "pipelines_git", "reviews", "releases", "deliveries", "limits", "monitoring"]
 FRESH_TABLES = {"superset", "airflow"}
 # Run only when named, in this order, around storscale backup and restore (restore.py).
 ON_REQUEST = ["restore_mark", "restore_damage", "restore_check"]

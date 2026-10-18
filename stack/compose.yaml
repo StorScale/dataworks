@@ -280,6 +280,7 @@ services:
       CATALOG_URL: http://openmetadata:8585
       # The semantic layer, which platformd calls with the signed-in person's token.
       SEMANTIC_URL: http://semanticd:8000
+      INSTALL_TARGET: development   # a project's repo's storscale/targets/development.yaml (use case 7.4)
       # Airflow, for the projects' pipelines and their runs, as the platform's own Airflow account.
       AIRFLOW_URL: http://airflow:8090/pipelines
       AIRFLOW_USER: storscale-platform

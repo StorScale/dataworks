@@ -26,6 +26,8 @@
 //	HEALTH                on: check the platform's services every few seconds (the Health page),
 //	                      and alert the administrators (where the Secret storscale-alerts says)
 //	METRICS_LISTEN        the checks' metrics, for Prometheus (:9102): never through the gateway
+//	INSTALL_TARGET        which of a project's targets this install is (production): its repo's
+//	                      storscale/targets/<target>.yaml, laid over storscale/project.yaml
 //
 // `platformd healthcheck` checks a running platformd, for container health checks.
 package main
@@ -99,7 +101,10 @@ type config struct {
 	DeliveryApproverGroups []string
 	// OperatorURL is the platform operator's (a GitLab webhook asks it to
 	// look at a project's merge requests at once).
-	OperatorURL                                           string
+	OperatorURL string
+	// InstallTarget is which of a project's targets (its repo's
+	// storscale/targets/<target>.yaml) this install is: development, production.
+	InstallTarget                                         string
 	Listen, WebDir                                        string
 	StoreURL, StoreBucket, StoreAccessKey, StoreSecretKey string
 	ProjectStore                                          string // bucket (the default) or kubernetes
@@ -142,6 +147,7 @@ func configFromEnv(get func(string) string) (config, error) {
 		AdminGroups:            list("PLATFORM_ADMIN_GROUPS", "engineers"),
 		DeliveryApproverGroups: list("DELIVERY_APPROVER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers")),
 		OperatorURL:            or("OPERATOR_URL", "http://platform-operator:8081"),
+		InstallTarget:          or("INSTALL_TARGET", "production"),
 		Listen:                 or("PLATFORM_LISTEN", ":8080"),
 		WebDir:                 or("PLATFORM_WEB_DIR", "/usr/share/storscale/web"),
 		StoreURL:               get("STORE_URL"), StoreBucket: or("STORE_BUCKET", "storscale-platform"),

@@ -281,6 +281,22 @@ Every container runs without privilege escalation, with the default seccomp prof
 
 **Order and effort:** (1) the access check and the operator's fix, a day; (2) reading as of a tag, time or commit on the SQL page, with the checks above, a day; (3) tags: API, Tags tab, keep and removal, audit, two days; (4) the History tab, two days. **Built (2026-10-17):** all four. Tags are the project's (`tables.tags`: a name, a commit, keepUntil, a note, who), the operator keeps Nessie's as they say; the platform turns a tag or a time into its commit. Not yet: notebooks and dashboards read as of a moment by the name alone (no picker), and deliveries (9.1) recording their commit.
 
+### The project as code, from development to production (use case 7.4), how (design, 2026-10-18)
+
+**In the repo.** Beside the pipelines, a folder `storscale/`: `project.yaml` (the project's spec: members, tables and their readers' rules, checks, sources, imports, deliveries), `semantic.yaml` (its metrics), and `targets/<target>.yaml`, what differs per install (members, buckets, schedules), laid over `project.yaml` (maps merged, lists replaced). An install says which target it is (`install.target`: development, production). A release is a git tag (`v1.3`).
+
+**Plan.** An editor asks for a plan of a ref (a tag, a branch, a commit) on the project's Releases tab. platformd starts the platform's DAG `storscale_plan` in the project's Airflow (it has the repo's credentials, and git), which checks the repo out at the ref and sends `storscale/` back to platformd as the project's pipelines. platformd composes the spec for this install's target, checks it (as any spec), and keeps the plan: the ref and its commit, who asked, and what changes: the spec's (members, readers' rules, pipelines, deliveries; the audit log's diff) and the metrics' (added, removed, changed).
+
+**Apply (R7.13).** An administrator other than who asked for the plan applies it (a plan can change the project's members and readers' rules, which only administrators change today): the spec saved as any change is (deliveries' approvals kept as they were, a change to what one sends needing approval again), the semantic model saved, the release recorded (its ref, commit, who planned and who applied, when), in the audit log. A plan older than the project's current spec (changed since by another plan or by hand) is refused: planned again.
+
+A repo's `project.yaml` may pin `pipelines.ref` to the release's tag: the pipelines' code then moves with the spec.
+
+**Rollback (R7.14).** A plan of an earlier release, applied the same way. Data written in between stays (the tables are the lakehouse's, with their history: 6.10's as-of reads them as they were), and the Releases tab says so.
+
+**Checks:** the `releases` suite serves a repo (pipelines_git's git host) with `storscale/` at two tags, the project made as v1 has it: v2 planned by alice (its changes listed: a member added, a metric added, the target's description), refused when applied by her or by bob on his own plan, applied by bob; v1 planned and applied (the rollback), the project's spec and metrics as v1's; a ref the repo hasn't, a failed plan.
+
+**Order and effort:** the DAG and the files' composing, a day; plans and applying, a day; the Releases tab, a day; the checks, a day.
+
 ### A file delivery (use case 9.1), how (design, 2026-10-18; in 0.15.0)
 
 **Built:** the spec (`deliveries`), the approvals (platformd: who changed what it sends, kept by it; approving, by another editor or an administrator, and a data-protection approver for personal columns; a change needing approval again), the operator's connection per delivery in the Airflow its DAG runs in, the approved ones listed for the DAG file (`storscale_deliveries.py`), the run (`storscale_delivery_run.py`: checks, files, gzip, PGP, manifest, SFTP or S3, three tries), the delivery log and the Deliveries tab, the `deliveries` suite. Who approves is a default until the user decides (`deliveries.approverGroups`). **Left:** fixed-width files, Azure Blob and Google Cloud Storage, whose data a delivery carried (9.2), shares in place (9.3).

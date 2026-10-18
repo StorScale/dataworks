@@ -14,7 +14,6 @@ It's in the Airflow image (/opt/storscale/dags, the bundle "storscale"):
 the platform's code, in the project's own Airflow on Kubernetes (its
 identity, its git connection), in the shared one in Compose.
 """
-import base64
 import json
 import os
 import re
@@ -25,7 +24,7 @@ import pendulum
 import requests
 
 from airflow.sdk import BaseHook, dag, get_current_context, task
-from storscale import dbt
+from storscale import dbt, git
 
 PLATFORM = os.environ.get("STORSCALE_PLATFORMD_URL", "http://platformd:8080")
 SEMANTIC = os.environ.get("STORSCALE_SEMANTIC_URL", "http://semanticd:8000")
@@ -55,18 +54,6 @@ class GitLab:
                          timeout=30).raise_for_status()
         else:
             requests.post(f"{self.url}/merge_requests/{iid}/notes", json={"body": body}, headers=self.h, timeout=30).raise_for_status()
-
-
-def checkout(conn, sha, work):
-    """The repo at sha, in work: the token as a header, never in a URL or on disk."""
-    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-    auth = []
-    if conn.password:
-        basic = base64.b64encode(f"{conn.login or 'oauth2'}:{conn.password}".encode()).decode()
-        auth = ["-c", f"http.extraHeader=Authorization: Basic {basic}"]
-    subprocess.run(["git", "init", "-q", work], check=True, env=env)
-    subprocess.run(["git", *auth, "-C", work, "fetch", "-q", "--depth", "50", conn.host, sha], check=True, env=env)
-    subprocess.run(["git", "-C", work, "checkout", "-q", "FETCH_HEAD"], check=True, env=env)
 
 
 def query(token, sql):
@@ -128,12 +115,12 @@ def storscale_review():
     def review():
         c = get_current_context()["dag_run"].conf
         project, iid, sha = c["project"], int(c["iid"]), c["sha"]
-        git = BaseHook.get_connection(f"git_{project.replace('-', '_')}")
-        gitlab = GitLab(c["gitlab"], c["gitlabProject"], git.password)
+        repo = BaseHook.get_connection(f"git_{project.replace('-', '_')}")
+        gitlab = GitLab(c["gitlab"], c["gitlabProject"], repo.password)
         gitlab.status(sha, "running", "dbt build on the merge request's data branch", c.get("url", ""))
         try:
             work = tempfile.mkdtemp(prefix="review-")
-            checkout(git, sha, os.path.join(work, "repo"))
+            git.checkout(repo, sha, os.path.join(work, "repo"))
             project_dir = os.path.join(work, "repo", c["dbt"])
             tok = dbt.token()
             # Production's manifest, to build only what changed (and what's downstream).
