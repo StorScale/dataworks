@@ -77,7 +77,7 @@ DBT_PROJECT = {
     "dags/dbt/dbt_project.yml": "name: pipes\nversion: '1.0'\nconfig-version: 2\nprofile: storscale\nmodel-paths: [models]\n"
                                 "models:\n  pipes:\n    +materialized: table\n",
     "dags/dbt/models/regions.sql": "select * from (values (1, 'EU'), (2, 'US')) as t (id, region)\n",
-    "dags/dbt/models/schema.yml": "version: 2\nmodels:\n  - name: regions\n    columns:\n      - name: id\n"
+    "dags/dbt/models/schema.yml": "version: 2\nmodels:\n  - name: regions\n    description: The regions, for the dbt check.\n    columns:\n      - name: id\n"
                                   "        tests: [unique, not_null]\n      - name: region\n        tests: [not_null]\n",
 }
 
@@ -389,6 +389,14 @@ def main():
             regions = str(e)[:200]
         check("dbt builds the repo's model (dbt build, its tests passing) into the project's namespace, as its pipelines",
               state == "success" and regions == [[1, "EU"], [2, "US"]], f"run {state}: {regions}")
+        def described():
+            r = requests.post(f"{env['KEYCLOAK_URL']}/realms/lakehouse/protocol/openid-connect/token", timeout=10, data={
+                "grant_type": "client_credentials", "client_id": "platform-operator", "client_secret": env["OPERATOR_CLIENT_SECRET"]})
+            t = requests.get("http://openmetadata:8585/api/v1/tables/name/trino.iceberg.pipes.regions",
+                             headers={"Authorization": f"Bearer {r.json()['access_token']}"}, timeout=30)
+            return (t.json().get("description") or None) if t.ok else None
+        desc = wait(described, 300, every=10) if state == "success" else None
+        check("... and the catalog has the model as dbt describes it", desc == "The regions, for the dbt check.", desc)
         if state != "success" and dbt_run:   # dbt's own words, from the task's log
             log = af.get(f"{AIRFLOW}/api/v2/dags/pipes_dbt/dagRuns/{dbt_run}/taskInstances/dbt_build/logs/1",
                          params={"full_content": "true"}, headers={"Accept": "application/json"}, timeout=60)
