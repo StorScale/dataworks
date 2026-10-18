@@ -160,7 +160,7 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 5. Separately, each night, rows older than a table's retention (say 25 months for campaign responses) are deleted the same way.
 
 **Requirements**
-- R6.25 Each project declares where its consumer data is: the tables, the column that identifies a person, and the files' prefixes; the catalog shows it. Classification (10.5) later finds what's undeclared. (Built 2026-10-18: the tables and their person's column, `tables.people`; not yet the files' prefixes, or the catalog showing it.)
+- R6.25 Each project declares where its consumer data is: the tables, the column that identifies a person, and the files' prefixes; the catalog shows it. Classification (12.5) later finds what's undeclared. (Built 2026-10-18: the tables and their person's column, `tables.people`; not yet the files' prefixes, or the catalog showing it.)
 - R6.26 Erasure by a person's ID across the declared tables and what lineage says came from them, carried through snapshots, data branches and files, within the law's deadline, and recorded without the data; an API for the privacy tool.
 - R6.27 Retention per table (rows older than a set age deleted), applied by the maintenance of 6.5.
 - R6.28 The erasure's record lists the deliveries that carried the person's data (R9.6).
@@ -340,6 +340,25 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 
 **Decided:** Trino's dynamic catalogs (made while it runs, by the platform operator), the connection in files Trino reads, never in the statement (docs/plan.md).
 
+### 8.4 One-click connectors
+
+1. Marketing wants Salesforce in their project. On the project's Sources tab, bob picks **Salesforce** from the platform's connectors (Salesforce, Gong, HighSpot, SAP S/4HANA, SAP HANA and BW, any REST API, any database), signs in to Salesforce once (OAuth, or a token on the Connections tab), and ticks the objects he wants: accounts, opportunities, campaigns.
+2. He picks when (hourly, nightly) and how much history. The platform writes the import (8.2: dlt, in the project's Airflow) and its first run starts.
+3. The tables appear in the project with their columns described, lineage to Salesforce, and checks that each run copied something; Salesforce's deleted records are marked deleted.
+4. Gong and HighSpot work the same way, from connectors the platform keeps (on dlt's REST support). SAP comes two ways: S/4HANA's OData services, through the company's SAP gateway; or the HANA or BW database itself, by change capture or by query (8.1, 8.3).
+5. A connector's own update (a new Salesforce API version) is the platform's to make, not the project's.
+
+**Requirements**
+- R8.10 A gallery of named connectors, each with a form: sign-in (OAuth or the Connections tab), the objects to copy, the schedule, the history to start from. No code, and no spec written by hand.
+- R8.11 Connectors kept by the platform (versioned, tested against each application's sandbox), on dlt: Salesforce (dlt's own source), Gong and HighSpot (on its REST support), SAP S/4HANA (OData), SAP HANA and BW (databases: 8.1 and 8.3).
+- R8.12 Each connector's tables described in the catalog, with lineage to the application, and checks on each run (rows copied, deletes carried).
+
+**Decided (2026-10-18):** Salesforce first (dlt has a source); Gong and HighSpot next; SAP both ways, S/4HANA by OData and HANA or BW as a database.
+
+**Open questions**
+- The company's SAP: which systems, and is its OData gateway reachable from the platform's network?
+- Gong's and HighSpot's API access: the company's plan with each must include it.
+
 ---
 
 ## Phase 9: getting data out
@@ -391,9 +410,95 @@ The company delivers files to clients and partners, and some carry consumer data
 
 ---
 
-## Phase 10: governed AI
+## Phase 10: the business layer
 
-### 10.1 sam asks a question
+What people work with is the business's own words (Customer, Revenue, Campaign, Booking), defined once, governed, and the same in every tool: SQL, dashboards (Superset, Power BI), the catalog, and agents.
+
+### 10.1 Customer, defined once
+
+1. The data governance group (priya with the domain owners) defines the company's entities and metrics once, in a shared semantic model kept in its own repo: `Customer` (its key, its attributes, which tables it comes from), `Revenue`, `Campaign`, `Booking`, each with an owner, a definition in plain words, and the tests that pin its numbers (12.3).
+2. A project uses them rather than defining its own: `sales` builds on `Customer` and `Revenue` and adds `Pipeline coverage`, its own metric, beside them.
+3. alice searches the platform for "customer" and finds the entity, what it means, who owns it, the metrics on it and the projects using it, not a list of tables. She asks for Revenue by Customer segment and gets it, under her own rules (EU only).
+4. A change to `Revenue`'s definition is a pull request to the shared model, reviewed by its owner, tested, and released (7.4) to every project at once.
+
+**Requirements**
+- R10.1 A company-wide semantic model (entities, dimensions, metrics) with owners and plain-language definitions, kept in git and released like a project (7.4); projects build on it and add their own.
+- R10.2 The platform shows entities and metrics first, tables second: search, a page per entity and metric, and where each is used.
+- R10.3 The catalog's glossary terms are the semantic model's entities and metrics, kept in step, linked to the tables and columns they come from.
+
+### 10.2 Dashboards on the same definitions
+
+1. alice opens Superset in the platform. Its datasets are the semantic model's (Customer, Revenue by month): the metrics come defined, so her chart's Revenue is the governed Revenue, to the cent.
+2. sam opens Power BI. He connects to the platform with his company sign-in, picks Revenue and Customer from the same model, and builds his report; he sees the EU only, as everywhere.
+3. When `Revenue`'s definition changes (10.1), both tools show the new numbers without anyone rebuilding a dataset.
+
+**Requirements**
+- R10.4 Superset's datasets made from the semantic model and kept in step with it, per project and the shared model.
+- R10.5 Power BI over the platform: through Trino (DirectQuery) with the company's sign-in (Keycloak, Entra ID), on views or a semantic endpoint generated from the model, under Ranger's rules for the person.
+- R10.6 One definition: a dashboard's metric and the semantic layer's answer agree, checked by a test.
+
+### 10.3 A certified data product, found
+
+1. sales publishes `orders_by_region` as a data product: an owner, a description, a contract (columns, freshness within a day, its checks), a version, and the entities it holds (Customer, Revenue).
+2. The governance group reviews it and certifies it: the catalog shows it as certified, and search ranks certified products first.
+3. marketing finds it, asks for it, and sales' owner approves: marketing reads it in place from their own project, under sales' rules, without a copy.
+4. sales changes a column in a way the contract doesn't allow: their pull request (7.3) fails, saying marketing depends on it. A compatible change becomes a new version, and marketing is told.
+5. If the company keeps Collibra as its catalog of record, certified products, the glossary and lineage are sent there too.
+
+**Requirements**
+- R10.7 Data products: a published table with an owner, a contract, versions and the entities it holds, found in the catalog.
+- R10.8 Certification by the governance group, shown wherever the product appears, and lost when its contract breaks.
+- R10.9 Access granted between projects, on request, read in place.
+- R10.10 Contracts checked in pull requests, and those who depend on a product told of its changes.
+- R10.11 A sync to Collibra (products, glossary, lineage), if Collibra is the company's catalog of record.
+
+**Open questions**
+- OpenMetadata or Collibra as the catalog of record? (Not decided, 2026-10-18: OpenMetadata now, the Collibra sync designed as optional.)
+
+### 10.4 DevAssist asks the same data
+
+1. A developer asks DevAssist (the company's assistant), signed in as them: "Which customers' bookings fell most this quarter?"
+2. DevAssist is one of the platform's MCP clients. It finds the Customer and Booking entities and the certified `bookings` product, asks the semantic layer for Bookings by Customer, and gets what the developer may see, under the same rules as on a dashboard.
+3. Its answer names the definitions and the product it used, linked. Asked something no governed definition covers, it says so, rather than guessing from raw tables.
+
+**Requirements**
+- R10.12 The MCP server's tools reach the company's semantic model and certified data products: find, describe, query (as the person), and cite.
+- R10.13 DevAssist, and any assistant the company approves, registered as an MCP client of the platform, signing in as the person (OAuth), its calls audited (12.1).
+
+---
+
+## Phase 11: visual transformation
+
+Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes, that are code underneath: dbt models in the project's repo, reviewed and released like any other change.
+
+### 11.1 alice builds a pipeline on a canvas
+
+1. alice opens the canvas in `sales`. She drags in `orders` and a supplier's CSV she uploaded (with a preview), and adds steps: rename and retype columns, filter test rows, remove duplicates, join to `orders`, group by region and week, pivot, compute a column.
+2. Each step shows its result on a sample, and the SQL it makes beside it. A step that would fail (a join on columns of different types) says why before she runs it.
+3. She saves it as a table in `sales`: it's a set of dbt models in the project's repo, on a branch, as a merge request (as a scheduled notebook is, 7.7); its lineage, column by column, appears in the catalog.
+4. Merged, it runs on a schedule as a pipeline, and its checks run with it.
+
+**Requirements**
+- R11.1 A canvas of steps (input, filter, select and rename, type, join, union, group, pivot and unpivot, window, formula, deduplicate, output), each previewed on a sample, in Trino.
+- R11.2 Each canvas saved as dbt models in the project's repo, as a merge request, reviewed on a data branch (7.3), released by plan (7.4).
+- R11.3 Uploads to the project's landing area (CSV, Excel), with a preview, as inputs.
+- R11.4 The result in the catalog with its lineage, schedulable as a pipeline, its checks run with it.
+
+### 11.2 bob changes it in code
+
+1. bob opens alice's pipeline as code: the dbt models the canvas wrote, readable, with a comment per step.
+2. He changes one model by hand. The canvas shows that step as code from then on, and the rest as steps.
+3. A canvas step on the semantic model's terms (Customer, Revenue) uses their governed definitions (10.1).
+
+**Requirements**
+- R11.5 The canvas and the code are the same thing: a canvas opens from the repo's models, and a step changed by hand stays code.
+- R11.6 Large data later: the same canvas on Spark, for what Trino can't do in one query.
+
+---
+
+## Phase 12: governed AI
+
+### 12.1 sam asks a question
 
 1. sam asks an assistant (Claude, signed in to the platform as sam): "What was revenue by region last quarter, and why did EU fall?"
 2. The assistant asks the platform's MCP server for the `revenue` metric by region and month. It runs as sam: sam sees the EU only, as on the dashboards, and the numbers match them to the cent.
@@ -402,11 +507,11 @@ The company delivers files to clients and partners, and some carry consumer data
 5. The question's cost (LLM tokens, Trino time) counts against the `sales` project's budget.
 
 **Requirements**
-- R10.1 Every answer from the semantic layer, run as the person, with its definitions cited.
-- R10.2 An LLM gateway (LiteLLM) in front of the models: per project and per person budgets, cost recorded, and guardrails (no secrets or masked values sent out).
-- R10.3 Agents' calls audited with the person behind them (R6.11).
+- R12.1 Every answer from the semantic layer, run as the person, with its definitions cited.
+- R12.2 An LLM gateway (LiteLLM) in front of the models: per project and per person budgets, cost recorded, and guardrails (no secrets or masked values sent out).
+- R12.3 Agents' calls audited with the person behind them (R6.11).
 
-### 10.2 An agent of the project's own
+### 12.2 An agent of the project's own
 
 1. bob sets up a nightly agent for `sales`: it reads the failed checks and posts a summary to the team's chat.
 2. It gets an identity of its own, a service account in the project, and may only read the project's checks and tables.
@@ -414,29 +519,29 @@ The company delivers files to clients and partners, and some carry consumer data
 4. One night it loops. At its budget, the gateway stops it, and bob gets an alert.
 
 **Requirements**
-- R10.4 Agents registered in a project: identity, owner, tools and data allowed, budget.
-- R10.5 Approval before an agent runs; revoking it takes effect at once.
-- R10.6 Spend caps that stop an agent, with an alert.
+- R12.4 Agents registered in a project: identity, owner, tools and data allowed, budget.
+- R12.5 Approval before an agent runs; revoking it takes effect at once.
+- R12.6 Spend caps that stop an agent, with an alert.
 
-### 10.3 A metric change, tested
+### 12.3 A metric change, tested
 
 1. bob changes `revenue` to exclude refunds, in a pull request.
 2. The semantic layer's tests run (as in 7.3): known answers for known questions (EU revenue for September), and a set of plain-language questions whose expected metric calls are checked.
 3. The pull request shows which answers changed. After merge, sam's next question gets the new definition.
 
 **Requirements**
-- R10.7 Tests for the semantic layer: expected values, and expected metric calls for plain-language questions.
+- R12.7 Tests for the semantic layer: expected values, and expected metric calls for plain-language questions.
 
-### 10.4 alice writes SQL with help
+### 12.4 alice writes SQL with help
 
 1. On the SQL page, alice asks the assistant for "orders by region per week with a 4-week moving average".
 2. It writes the SQL from the project's tables and their columns (the catalog), and she runs it as herself.
 3. It never sees data she can't, and its suggestions use only tables she can read.
 
 **Requirements**
-- R10.8 An assistant in the SQL page (and for pipeline code), given the project's schema and run under the person's access.
+- R12.8 An assistant in the SQL page (and for pipeline code), given the project's schema and run under the person's access.
 
-### 10.5 A new column of personal data
+### 12.5 A new column of personal data
 
 1. A source (8.1) gains a column, `customer_email`. Nobody wrote a policy for it.
 2. The catalog's classification finds it holds email addresses and tags it `personal`. The tag goes to Ranger.
@@ -444,58 +549,46 @@ The company delivers files to clients and partners, and some carry consumer data
 4. The project's owner sees the new tag, and can confirm it or correct it.
 
 **Requirements**
-- R10.9 Classification of columns in the catalog (personal, financial, health), automatic and confirmed by people.
-- R10.10 Ranger's policies by tag, with the catalog's tags kept in step, so a newly tagged column is protected without a policy of its own.
+- R12.9 Classification of columns in the catalog (personal, financial, health), automatic and confirmed by people.
+- R12.10 Ranger's policies by tag, with the catalog's tags kept in step, so a newly tagged column is protected without a policy of its own.
 
 ---
 
-## Phase 11: usage and cost per project
+## Phase 13: usage and cost per project
 
-### 11.1 frank's monthly view
+### 13.1 frank's monthly view
 
 1. frank opens the Usage page for `sales`: this month's Trino CPU time, Spark time, storage (by bucket and table), LLM spend, and the trend against last month.
 2. It shows what drives it: the top pipelines, people and queries.
 3. At 80% of the month's budget, frank and the project's owner get an alert.
 
 **Requirements**
-- R11.1 Usage attributed to projects: Trino (query to project, through the person or service account), Spark, Buckets storage, the LLM gateway.
-- R11.2 A rate card (what a CPU-hour, a GB-month and a token cost), set by the install.
-- R11.3 Budgets per project, with alerts. (The limits that cap a project's use are 6.8's.)
+- R13.1 Usage attributed to projects: Trino (query to project, through the person or service account), Spark, Buckets storage, the LLM gateway.
+- R13.2 A rate card (what a CPU-hour, a GB-month and a token cost), set by the install.
+- R13.3 Budgets per project, with alerts. (The limits that cap a project's use are 6.8's.)
 
 ---
 
-## Phase 12: self-service and ML
+## Phase 14: data apps and ML
 
-### 12.1 alice cleans a spreadsheet without code
-
-1. alice uploads a supplier's CSV to the project's landing area. The platform previews it.
-2. She builds a recipe: rename columns, parse dates, drop test rows, remove duplicates, join to `orders` by order ID. Each step previews its result. The SQL it generates is shown beside it.
-3. She saves it as a table in `sales`. Its lineage appears in the catalog, and it can run on a schedule.
-4. Saved, it's code in the project's repo (as a dbt model), so bob can review and change it like any other.
-
-**Requirements**
-- R12.1 Uploads to the project's landing area, with a preview.
-- R12.2 A recipe builder: steps, each previewed, generating SQL (or a dbt model) kept in the project's repo.
-- R12.3 The result in the catalog with its lineage, and schedulable as a pipeline.
-
-### 12.2 An app for sam
+### 14.1 An app for sam
 
 1. alice makes a small app from the `revenue` metric: a region filter, a table and a chart.
 2. She shares it with sam, who opens it from Home; it shows what sam may see.
 
 **Requirements**
-- R12.4 Simple data apps per project, built from metrics and tables, run as the person viewing them.
+- R14.1 Simple data apps per project, built from metrics and tables, run as the person viewing them.
 
-### 12.3 dana puts a model into use
+### 14.2 dana puts a model into use
 
 1. dana trains a churn model in a notebook. Each run is tracked (MLflow): parameters, metrics, the data's Nessie commit.
 2. She registers the best one and asks for approval. The project's owner sees its evaluation and approves.
 3. It's used by a pipeline that scores customers nightly, and its drift is monitored.
 
 **Requirements**
-- R12.5 MLflow per project, its runs tied to the data's commit.
-- R12.6 A model registry with approval before use.
-- R12.7 Batch scoring as a pipeline; drift monitored in Grafana.
+- R14.2 MLflow per project, its runs tied to the data's commit.
+- R14.3 A model registry with approval before use.
+- R14.4 Batch scoring as a pipeline; drift monitored in Grafana.
 
 ---
 
@@ -509,17 +602,6 @@ The company delivers files to clients and partners, and some carry consumer data
 **Requirements**
 - R-U.3 Project templates: a spec and a repo to copy, kept by the platform's administrators.
 - R-U.4 Shared libraries (code, recipes, checks) that projects use without copying.
-
-### U.3 sales publishes orders; marketing uses them
-
-1. sales publishes `orders_by_region` as a data product: an owner, a description, a contract (columns, freshness within a day, its checks), and a version.
-2. marketing finds it in the catalog and asks for it. sales' owner approves; marketing's people read it from their own project, under sales' rules, without a copy.
-3. sales changes a column in a way the contract doesn't allow: their pull request (7.3) fails, saying marketing depends on it. A compatible change becomes a new version, and marketing is told.
-
-**Requirements**
-- R-U.5 Data products: a published table with an owner, a contract and versions, found in the catalog.
-- R-U.6 Access granted between projects, on request, read in place.
-- R-U.7 Contracts checked in pull requests, and those who depend on a product told of its changes.
 
 ## To decide, with the first teams
 
@@ -537,10 +619,12 @@ The company delivers files to clients and partners, and some carry consumer data
 |---|---|---|
 | 6 | 6.1–6.10 | 6.2 on the real cluster: an upgrade with no lost projects, people or settings; 6.8: a project at its limits leaves another's queries at their usual speed; 6.9: an erasure carried through snapshots and files, and recorded; 6.10: a delivery's files made again exactly from the data as it was sent |
 | 7 | 7.1–7.7 | 7.3: a pull request runs on its own data branch, a good one merges, a bad one is refused; 7.6: a private repo connected without access to the cluster |
-| 8 | 8.1–8.3 | 8.1: a database table's changes reach its Iceberg table in minutes, under the project's rules; 8.3: a database queried in place, under the project's rules |
+| 8 | 8.1–8.4 | 8.1: a database table's changes reach its Iceberg table in minutes, under the project's rules; 8.3: a database queried in place, under the project's rules; 8.4: Salesforce's objects in a project's tables from a form, with no code |
 | 9 | 9.1–9.3 | 9.1: a delivery reaches an SFTP server, encrypted, with its manifest, and a failing check sends nothing; 9.2: the log finds what was sent about a person |
-| 10 | 10.1–10.5 | 10.1 and 10.2: within the person's or agent's rules and budget, every call audited; 10.5: a new personal column masked everywhere |
-| 11 | 11.1 | 11.1: usage and cost show per project, and a budget alerts |
-| 12 | 12.1–12.3 | 12.1: a clean table from a spreadsheet without code, in the catalog with its lineage |
+| 10 | 10.1–10.4 | 10.1: Customer and Revenue defined once, used by two projects; 10.2: a Superset chart, a Power BI report and the semantic layer agree on Revenue, each under the person's rules; 10.3: a certified product read in place by another project, and a breaking change refused; 10.4: an assistant over MCP answers from the governed definitions, as the person |
+| 11 | 11.1–11.2 | 11.1: a pipeline built on the canvas becomes dbt models in a merge request, runs, and shows its lineage; 11.2: one step changed by hand stays code |
+| 12 | 12.1–12.5 | 12.1 and 12.2: within the person's or agent's rules and budget, every call audited; 12.5: a new personal column masked everywhere |
+| 13 | 13.1 | 13.1: usage and cost show per project, and a budget alerts |
+| 14 | 14.1–14.2 | 14.2: a model approved before a pipeline uses it, its drift watched |
 
 Each storyboard becomes an end-to-end suite, as the phases before did: the people and agents above, against a real install, in CI.
