@@ -15,3 +15,11 @@ RUN /opt/dlt/bin/pip install --no-cache-dir "dlt[filesystem,pyiceberg,sql-databa
       psycopg2-binary==2.9.10 pymysql==1.2.3
 # An import's run (the DAG file storscale_imports.py starts it here).
 COPY storscale_import_run.py /opt/dlt/storscale_import_run.py
+# dbt (use case 7.5), for projects' DAGs: in a virtualenv of its own too, run by
+# the platform's helper (storscale.dbt), which every DAG can import.
+USER root
+RUN python -m venv /opt/dbt && chown -R airflow:0 /opt/dbt
+COPY storscale /opt/storscale/storscale
+RUN echo /opt/storscale > "$(python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')/storscale.pth"
+USER airflow
+RUN /opt/dbt/bin/pip install --no-cache-dir dbt-core==1.12.5 dbt-trino==1.10.5

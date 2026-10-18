@@ -962,7 +962,9 @@ func (p *Project) tablePolicies() []RangerPolicy {
 		PolicyItems: []RangerItem{allow(editors, "all")}}
 	if hasPipelines {
 		schema.PolicyItems = append(schema.PolicyItems, allow(pipelines, "use", "show"))
-		tables.PolicyItems = append(tables.PolicyItems, allow(pipelines, "select", "insert", "delete", "show"))
+		// The pipelines make their tables too (dbt's models: made, swapped
+		// in by a rename, dropped), in the project's namespace alone.
+		tables.PolicyItems = append(tables.PolicyItems, allow(pipelines, "select", "insert", "delete", "create", "drop", "alter", "show"))
 	}
 	var view ReaderView
 	if t.Readers != nil {
