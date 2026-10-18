@@ -389,6 +389,12 @@ def main():
             regions = str(e)[:200]
         check("dbt builds the repo's model (dbt build, its tests passing) into the project's namespace, as its pipelines",
               state == "success" and regions == [[1, "EU"], [2, "US"]], f"run {state}: {regions}")
+        if state != "success" and dbt_run:   # dbt's own words, from the task's log
+            log = af.get(f"{AIRFLOW}/api/v2/dags/pipes_dbt/dagRuns/{dbt_run}/taskInstances/dbt_build/logs/1",
+                         params={"full_content": "true"}, headers={"Accept": "application/json"}, timeout=60)
+            entries = log.json().get("content", []) if log.ok else []
+            lines = [e.get("event", "") if isinstance(e, dict) else str(e) for e in entries]
+            print("\n".join("    " + x for x in "\n".join(lines).splitlines()[-60:]) or f"    (no log: HTTP {log.status_code})")
 
         # 3. A new commit, with a broken file.
         v2 = push(work, {f"dags/{DAG}.py": DAG_V1.format(description="Hello, v2"),
