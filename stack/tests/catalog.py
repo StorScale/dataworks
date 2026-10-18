@@ -157,7 +157,7 @@ def main():
     logos = theme.get("customLogoConfig", {})
     icon = requests.get(f"{catalog_url}{logos.get('customMonogramUrlPath', '/none')}", timeout=30)
     check("the catalog wears the platform's colours and icon, served on its own name",
-          theme.get("customTheme", {}).get("primaryColor") == "#1a56c4" and icon.ok and icon.headers.get("Content-Type", "").startswith("image/"),
+          theme.get("customTheme", {}).get("primaryColor") == "#10151c" and icon.ok and icon.headers.get("Content-Type", "").startswith("image/"),
           (theme, icon.status_code, icon.headers.get("Content-Type")))
     finish()
 

@@ -292,11 +292,15 @@ def lineage_settings():
 
 # The platform's look, as OpenMetadata's: its logo and icon (platformd's,
 # through the gateway on the catalog's name), and the web app's colours.
+# The logo comes fitted to OpenMetadata's sidebar (platformd's catalog-logo: a
+# wide logo would overflow it); the colours are the platform's top bar's
+# near-black, as OpenMetadata's slots use them (primary for buttons and links,
+# hover a light tint, selected darker than primary, info a light tone).
 THEME = {
-    "customLogoConfig": {"customLogoUrlPath": "/_storscale/brand/logo", "customMonogramUrlPath": "/_storscale/brand/icon",
+    "customLogoConfig": {"customLogoUrlPath": "/_storscale/brand/catalog-logo", "customMonogramUrlPath": "/_storscale/brand/icon",
                          "customFaviconUrlPath": "/_storscale/brand/icon"},
-    "customTheme": {"primaryColor": "#1a56c4", "hoverColor": "#123f92", "selectedColor": "#e7effc", "errorColor": "#b4232a",
-                    "successColor": "#1e7d4f", "warningColor": "#b86e00", "infoColor": "#1a56c4"},
+    "customTheme": {"primaryColor": "#10151c", "hoverColor": "#e8ecf1", "selectedColor": "#0b0f14", "errorColor": "#b4232a",
+                    "successColor": "#1e7d4f", "warningColor": "#b86e00", "infoColor": "#8b97a8"},
 }
 
 

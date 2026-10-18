@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"html"
 	"net/http"
@@ -92,10 +93,10 @@ func (b brand) page(index []byte) []byte {
 }
 
 // handleBrandLogo and handleBrandIcon serve the images to anyone: they're
-// on every page, the sign-in's too.
-// The logo and the icon, always: without a logo of the deployment's own,
-// its icon; without an icon, StorScale's (the web app's favicon.svg). Other
-// tools show them as theirs (OpenMetadata, through the gateway).
+// on every page, the sign-in's too. Always one: without a logo of the
+// deployment's own, its icon; without an icon, StorScale's (the web app's
+// favicon.svg). Other tools show them as theirs (OpenMetadata, through the
+// gateway).
 func (s *server) handleBrandLogo(w http.ResponseWriter, r *http.Request) {
 	if s.brand.logo == nil {
 		s.handleBrandIcon(w, r)
@@ -110,6 +111,37 @@ func (s *server) handleBrandIcon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	serveImage(w, r, s.brand.icon, s.brand.iconType)
+}
+
+// A catalogLogo is the logo fitted to a box of these proportions, as
+// OpenMetadata's sidebar shows it: an image 40 pixels high, its width
+// following the image's own proportions, in 172 pixels of room. A wide logo
+// with no size of its own (an SVG with only a viewBox) would come out wider
+// than the sidebar; fitted, it's at most 150 by 40, at its left, centred
+// up and down.
+const catalogLogoW, catalogLogoH = 150, 40
+
+// handleBrandCatalogLogo is the logo (or the icon), fitted for OpenMetadata.
+func (s *server) handleBrandCatalogLogo(w http.ResponseWriter, r *http.Request) {
+	data, typ := s.brand.logo, s.brand.logoType
+	if data == nil {
+		data, typ = s.brand.icon, s.brand.iconType
+	}
+	if data == nil {
+		data, typ = s.brand.defaultIcon, "image/svg+xml"
+	}
+	if data == nil {
+		http.NotFound(w, r)
+		return
+	}
+	fitted := fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">`+
+		`<image href="data:%s;base64,%s" x="0" y="0" width="%d" height="%d" preserveAspectRatio="xMinYMid meet"/></svg>`,
+		catalogLogoW, catalogLogoH, catalogLogoW, catalogLogoH, typ, base64.StdEncoding.EncodeToString(data), catalogLogoW, catalogLogoH)
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	// The logo inside it is a data: image; nothing else loads, and nothing runs.
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src data:; style-src 'unsafe-inline'; frame-ancestors 'none'")
+	w.Write([]byte(fitted))
 }
 
 func serveImage(w http.ResponseWriter, r *http.Request, data []byte, typ string) {

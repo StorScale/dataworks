@@ -164,6 +164,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/session", s.handleSession)
 	mux.HandleFunc("GET /brand/logo", s.handleBrandLogo)
 	mux.HandleFunc("GET /brand/icon", s.handleBrandIcon)
+	mux.HandleFunc("GET /brand/catalog-logo", s.handleBrandCatalogLogo)
 	mux.HandleFunc("GET /api/projects", s.handleProjects)
 	mux.HandleFunc("GET /api/projects/{name}", s.handleProject)
 	mux.HandleFunc("PUT /api/projects/{name}", s.handlePutProject)
