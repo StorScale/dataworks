@@ -38,8 +38,15 @@ def make(pd):
     d, project = pd["delivery"], pd["project"]
     dag_id = f"delivery_{project.replace('-', '_')}_{d['name']}"
 
-    @dag(dag_id=dag_id, schedule=d["schedule"], start_date=pendulum.datetime(2026, 1, 1, tz="UTC"), catchup=False,
+    # From its approval on: a delivery approved on a Thursday sends next
+    # Monday's, not last Monday's at once (Airflow runs a new DAG's latest slot).
+    approved = (d.get("approval") or {}).get("at")
+    start = pendulum.parse(approved) if approved else pendulum.now("UTC")
+    checks = json.dumps(d.get("checks") or {}, sort_keys=True)
+
+    @dag(dag_id=dag_id, schedule=d["schedule"], start_date=start, catchup=False,
          max_active_runs=1, tags=[f"project:{project}", "delivery"],
+         description=f"{d.get('table') or 'a query'} as {d['format']} to {d['target']}; checks {checks}",
          doc_md=f"The delivery **{d['name']}** of the project {project}: {d.get('table') or 'a query'} as {d['format']} "
                 f"to {d['target']}, approved by {', '.join((d.get('approval') or {}).get('by') or [])}.")
     def the_delivery():
