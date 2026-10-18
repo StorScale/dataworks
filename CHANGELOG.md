@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **An application's data, imported** ([docs/use-cases.md](docs/use-cases.md), 8.2): a project names imports (`imports`): any REST API (dlt's `rest_api`: its resources' paths, where the objects are in the answer, a primary key, a cursor and its query parameter) or a database by a cursor column (`sql_database`, PostgreSQL or MySQL), one of its connections (the API's token, or the database's account), and a schedule. Each is a DAG of the platform's Airflow, tagged as the project's pipeline (its Pipelines page, its alerts when a run fails): dlt (1.30, in a virtualenv of its own in the Airflow image) copies each resource into `<import>_<resource>` in the project's namespace, an Iceberg table written through Nessie's REST catalog (pyiceberg), merged on its primary key or appended to, each run asking only for what's past its cursor (dlt keeps it beside the data). The import's credentials are an Airflow connection the operator keeps, handed to the run in its environment. The `imports` suite serves a small API with a token and a cursor, and checks a first run, a second run asking only for what's new and merging it, the project's rules on the table, and a failed run's alert.
+
 ## [0.11.0] - 2026-10-18
 
 A database's changes copied into the lakehouse (change capture, on Kubernetes), and the rest of querying a database where it is: a source's schemas, its readers' masks and row filters, its tables in the catalog and on the SQL page.

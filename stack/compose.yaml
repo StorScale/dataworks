@@ -87,6 +87,9 @@ x-airflow-env: &airflow-env
   AIRFLOW__CORE__LOAD_EXAMPLES: "False"
   AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "False"
   AIRFLOW__DAG_PROCESSOR__REFRESH_INTERVAL: "10"
+  # Projects' imports (dlt) write the lakehouse as its writers' Buckets account.
+  COPY_S3_ACCESS_KEY: ${COPY_S3_ACCESS_KEY}
+  COPY_S3_SECRET_KEY: ${COPY_S3_SECRET_KEY}
 
 x-airflow: &airflow
   build: ./airflow/image

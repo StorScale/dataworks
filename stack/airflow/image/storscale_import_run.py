@@ -1,0 +1,85 @@
+"""One run of a project's import (use case 8.2), in dlt's virtualenv
+(/opt/dlt/bin/python), as the DAG file storscale_imports.py starts it.
+
+STORSCALE_IMPORT is the import, as the platform operator lists it (its
+project, namespace and spec); STORSCALE_IMPORT_SECRET its credentials, from
+its Airflow connection. Each resource lands in iceberg.<namespace> as
+<import>_<resource>: merged on its primary key, or appended to; past its
+cursor alone, where it has one (dlt keeps the cursor in the namespace's
+_dlt_pipeline_state, so a run in a fresh pod goes on from the last).
+
+The tables are Iceberg's, through Nessie's REST catalog (pyiceberg), their
+files in the warehouse bucket, as the lakehouse's writers' Buckets account
+(COPY_S3_ACCESS_KEY, COPY_S3_SECRET_KEY).
+"""
+import json
+import os
+import urllib.parse
+
+import dlt
+from dlt.destinations import filesystem
+
+pi = json.loads(os.environ["STORSCALE_IMPORT"])
+secret = json.loads(os.environ.get("STORSCALE_IMPORT_SECRET") or "{}")
+im, project, namespace = pi["import"], pi["project"], pi["namespace"]
+name = im["name"]
+
+# pyiceberg's catalog, as dlt asks pyiceberg for it (the catalog "default").
+access, key = os.environ["COPY_S3_ACCESS_KEY"], os.environ["COPY_S3_SECRET_KEY"]
+for k, v in {"TYPE": "rest", "URI": os.environ.get("NESSIE_ICEBERG_URL", "http://nessie:19120/iceberg/"),
+             "WAREHOUSE": "warehouse", "S3__ENDPOINT": "http://buckets:9000", "S3__ACCESS_KEY_ID": access,
+             "S3__SECRET_ACCESS_KEY": key, "S3__REGION": "us-east-1", "S3__PATH_STYLE_ACCESS": "true"}.items():
+    os.environ[f"PYICEBERG_CATALOG__DEFAULT__{k}"] = v
+
+
+def disposition(primary_key):
+    return {"disposition": "merge", "strategy": "upsert"} if primary_key else "append"
+
+
+def rest_api():
+    from dlt.sources.rest_api import rest_api_source
+    api = im["api"]
+    client = {"base_url": api["baseUrl"]}
+    if secret.get("password"):
+        client["auth"] = {"type": "bearer", "token": secret["password"]}
+    resources = []
+    for r in api["resources"]:
+        endpoint = {"path": r["path"]}
+        if r.get("dataSelector"):
+            endpoint["data_selector"] = r["dataSelector"]
+        if r.get("cursor"):
+            endpoint["params"] = {r["cursorParam"]: {"type": "incremental", "cursor_path": r["cursor"],
+                                                     "initial_value": r["cursorStart"]}}
+        res = {"name": r["name"], "endpoint": endpoint, "table_name": f"{name}_{r['name']}",
+               "write_disposition": disposition(r.get("primaryKey"))}
+        if r.get("primaryKey"):
+            res["primary_key"] = r["primaryKey"]
+        resources.append(res)
+    return [rest_api_source({"client": client, "resources": resources}, name=name)]
+
+
+def sql_database():
+    from dlt.sources.sql_database import sql_table
+    db = im["database"]
+    scheme = {"postgresql": "postgresql+psycopg2", "mysql": "mysql+pymysql"}[db["kind"]]
+    port = secret.get("port") or {"postgresql": 5432, "mysql": 3306}[db["kind"]]
+    url = (f"{scheme}://{urllib.parse.quote(secret['username'], safe='')}:{urllib.parse.quote(secret['password'], safe='')}"
+           f"@{secret['host']}:{port}/{urllib.parse.quote(secret.get('database') or '', safe='')}")
+    out = []
+    for t in db["tables"]:
+        schema, table = t["table"].split(".", 1)
+        res = sql_table(credentials=url, table=table, schema=schema,
+                        incremental=dlt.sources.incremental(t["cursor"]) if t.get("cursor") else None)
+        res.apply_hints(table_name=f"{name}_{table}", write_disposition=disposition(t.get("primaryKey")),
+                        primary_key=t.get("primaryKey") or None)
+        out.append(res)
+    return out
+
+
+sources = {"rest_api": rest_api, "sql_database": sql_database}[im["source"]]()
+destination = filesystem(bucket_url="s3://warehouse", credentials={
+    "aws_access_key_id": access, "aws_secret_access_key": key, "endpoint_url": "http://buckets:9000", "region_name": "us-east-1"})
+pipeline = dlt.pipeline(pipeline_name=f"import_{project.replace('-', '_')}_{name}", destination=destination,
+                        dataset_name=namespace, pipelines_dir="/tmp/storscale-imports")
+info = pipeline.run(sources, table_format="iceberg")
+print(info)

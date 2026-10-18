@@ -160,6 +160,52 @@ spec:
                   properties:
                     teams: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
                     email: {type: array, items: {type: string}}
+                imports:
+                  type: array
+                  description: >-
+                    An application's data, or a database's by a cursor column, copied into the project's
+                    tables on a schedule (dlt, in the platform's Airflow): each resource into <import>_<name>,
+                    merged on its primary key or appended, each run copying only what's new past its cursor.
+                  items:
+                    type: object
+                    required: [name, source]
+                    properties:
+                      name: {type: string, pattern: '^[a-z][a-z0-9_]{0,19}$'}
+                      source: {type: string, enum: [rest_api, sql_database]}
+                      connection: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
+                      schedule: {type: string, description: "Cron (UTC), five fields; default hourly."}
+                      api:
+                        type: object
+                        required: [baseUrl, resources]
+                        properties:
+                          baseUrl: {type: string}
+                          resources:
+                            type: array
+                            items:
+                              type: object
+                              required: [name, path]
+                              properties:
+                                name: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                                path: {type: string}
+                                dataSelector: {type: string}
+                                primaryKey: {type: string}
+                                cursor: {type: string}
+                                cursorParam: {type: string}
+                                cursorStart: {type: string}
+                      database:
+                        type: object
+                        required: [kind, tables]
+                        properties:
+                          kind: {type: string, enum: [postgresql, mysql]}
+                          tables:
+                            type: array
+                            items:
+                              type: object
+                              required: [table]
+                              properties:
+                                table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}\.[a-z_][a-z0-9_]{0,62}$'}
+                                cursor: {type: string}
+                                primaryKey: {type: string}
                 sources:
                   type: array
                   description: >-

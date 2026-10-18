@@ -424,3 +424,41 @@ func TestASourcesCopy(t *testing.T) {
 		t.Errorf("CopyTable: %s", got)
 	}
 }
+
+func TestImports(t *testing.T) {
+	parse := func(tables, imp string) error {
+		_, err := Parse([]byte(`{"apiVersion":"platform.storscale.io/v1alpha1","kind":"Project","metadata":{"name":"sales"},
+			"spec":{"members":[{"group":"engineers","role":"editor"}]` + tables + `,"imports":[` + imp + `]}}`))
+		return err
+	}
+	ok := []string{
+		`{"name":"crm","source":"rest_api","connection":"crm-token","schedule":"*/15 * * * *","api":{"baseUrl":"https://api.example.com/v1",
+		  "resources":[{"name":"leads","path":"leads","primaryKey":"id","cursor":"updated_at","cursorParam":"since","cursorStart":"2026-01-01T00:00:00Z"}]}}`,
+		`{"name":"erp","source":"sql_database","connection":"erp-db","database":{"kind":"postgresql","tables":[{"table":"public.orders","cursor":"updated_at","primaryKey":"id"}]}}`,
+	}
+	for _, imp := range ok {
+		if err := parse(`,"tables":{}`, imp); err != nil {
+			t.Errorf("%s: %v", imp, err)
+		}
+	}
+	for _, c := range [][2]string{
+		{``, ok[0]}, // no tables of its own
+		{`,"tables":{}`, `{"name":"crm","source":"airbyte"}`},
+		{`,"tables":{}`, `{"name":"crm","source":"rest_api","api":{"baseUrl":"ftp://x","resources":[{"name":"leads","path":"leads"}]}}`},
+		{`,"tables":{}`, `{"name":"crm","source":"rest_api","api":{"baseUrl":"https://x","resources":[{"name":"leads","path":"leads","cursor":"updated_at"}]}}`},
+		{`,"tables":{}`, `{"name":"crm","source":"rest_api","schedule":"hourly","api":{"baseUrl":"https://x","resources":[{"name":"leads","path":"leads"}]}}`},
+		{`,"tables":{}`, `{"name":"erp","source":"sql_database","database":{"kind":"postgresql","tables":[{"table":"public.orders"}]}}`},
+		{`,"tables":{}`, `{"name":"erp","source":"sql_database","connection":"erp","database":{"kind":"postgresql","tables":[{"table":"a.orders"},{"table":"b.orders"}]}}`},
+	} {
+		if parse(c[0], c[1]) == nil {
+			t.Errorf("%s %s: want refused", c[0], c[1])
+		}
+	}
+	p, _ := Parse([]byte(`{"apiVersion":"platform.storscale.io/v1alpha1","kind":"Project","metadata":{"name":"sales-eu"},"spec":{"members":[{"group":"engineers","role":"editor"}]}}`))
+	if got := p.ImportConnID(Import{Name: "crm"}); got != "import_sales_eu_crm" {
+		t.Errorf("ImportConnID: %s", got)
+	}
+	if got := ImportTable(Import{Name: "erp"}, "public.orders"); got != "erp_orders" {
+		t.Errorf("ImportTable: %s", got)
+	}
+}

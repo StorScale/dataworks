@@ -83,6 +83,13 @@ func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Sta
 			r.Log.Warn("removing the sources' catalogs", "project", p.Metadata.Name, "error", err)
 		}
 	}
+	if len(p.Spec.Imports) > 0 {
+		part("imports", r.applyImports(ctx, p))
+	} else if r.Airflow != nil {
+		if err := r.applyImports(ctx, p); err != nil && r.Log != nil { // those it had go
+			r.Log.Warn("removing the imports' connections", "project", p.Metadata.Name, "error", err)
+		}
+	}
 	copying := slices.ContainsFunc(p.Spec.Sources, func(s project.Source) bool { return s.Copy != nil })
 	switch {
 	case r.Copies != nil:
@@ -140,6 +147,7 @@ func (r *Reconciler) Delete(ctx context.Context, p *project.Project) error {
 	if r.Copies != nil { // its tables stay, as its data does
 		keep(r.Copies.Remove(ctx, p))
 	}
+	keep(r.removeImports(ctx, p))
 	keep(r.Ranger.syncGroupMembers(ctx, p.Groups(), nil, r.RangerUserPassword))
 	keep(r.Ranger.deleteGroups(ctx, p.Groups()))
 	if r.ProjectAirflows != nil {

@@ -49,6 +49,72 @@ type Spec struct {
 	Limits      *Limits    `json:"limits,omitempty"`
 	Notify      *Notify    `json:"notify,omitempty"`
 	Sources     []Source   `json:"sources,omitempty"`
+	Imports     []Import   `json:"imports,omitempty"`
+}
+
+// An Import copies an application's data, or a database's by a cursor
+// column, into the project's tables on a schedule (use case 8.2): dlt, run
+// in the platform's Airflow, each of its resources into <import>_<name> in
+// the project's namespace (ImportTable). A resource with a primary key is
+// merged on it; one without, appended to. Each run copies only what's new
+// when a resource names a cursor (dlt keeps where it got to).
+type Import struct {
+	Name       string          `json:"name"`
+	Source     string          `json:"source"`               // one of ImportSources
+	Connection string          `json:"connection,omitempty"` // rest_api: its token (key token); sql_database: host, port, database, username, password
+	Schedule   string          `json:"schedule,omitempty"`   // cron (UTC); default hourly
+	API        *ImportAPI      `json:"api,omitempty"`
+	Database   *ImportDatabase `json:"database,omitempty"`
+}
+
+// ImportSources are dlt's sources an import may be.
+var ImportSources = []string{"rest_api", "sql_database"}
+
+// ImportAPI is a REST API, as dlt's rest_api source takes it: its resources'
+// paths under BaseURL, each a list of objects (at DataSelector, a JSONPath,
+// when they're within the answer); dlt finds the pages itself.
+type ImportAPI struct {
+	BaseURL   string        `json:"baseUrl"`
+	Resources []APIResource `json:"resources"`
+}
+
+type APIResource struct {
+	Name         string `json:"name"`
+	Path         string `json:"path"`
+	DataSelector string `json:"dataSelector,omitempty"`
+	PrimaryKey   string `json:"primaryKey,omitempty"`
+	// Cursor is the objects' field that grows (updated_at, an id); the API
+	// is asked for those past it, by the query parameter CursorParam,
+	// starting at CursorStart.
+	Cursor      string `json:"cursor,omitempty"`
+	CursorParam string `json:"cursorParam,omitempty"`
+	CursorStart string `json:"cursorStart,omitempty"`
+}
+
+// ImportDatabase is a database read by a cursor column (no change capture:
+// its deletes aren't seen; 8.1 for that).
+type ImportDatabase struct {
+	Kind   string    `json:"kind"` // postgresql, mysql
+	Tables []DBTable `json:"tables"`
+}
+
+type DBTable struct {
+	Table      string `json:"table"` // schema.table
+	Cursor     string `json:"cursor,omitempty"`
+	PrimaryKey string `json:"primaryKey,omitempty"`
+}
+
+// ImportTable is the project's table an import's resource lands in.
+func ImportTable(i Import, resource string) string {
+	if _, tb, ok := strings.Cut(resource, "."); ok {
+		resource = tb
+	}
+	return i.Name + "_" + resource
+}
+
+// ImportConnID is the platform Airflow's connection holding an import's credentials.
+func (p *Project) ImportConnID(i Import) string {
+	return "import_" + strings.ReplaceAll(p.Metadata.Name, "-", "_") + "_" + i.Name
 }
 
 // A Source is one of the company's databases, queried where it is: a Trino
@@ -259,6 +325,7 @@ var (
 	storageRE     = regexp.MustCompile(`^([1-9][0-9]{0,5})(Gi|Ti)$`)
 	tagNameRE     = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 	schemaTableRE = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}\.[a-z_][a-z0-9_]{0,62}$`)
+	cronRE        = regexp.MustCompile(`^[0-9*/,-]+( [0-9*/,-]+){4}$`)
 	sourceNameRE  = regexp.MustCompile(`^[a-z][a-z0-9_]{0,19}$`)
 	commitRE      = regexp.MustCompile(`^[0-9a-f]{16,64}$`)
 	withinRE      = regexp.MustCompile(`^([1-9][0-9]{0,4})(m|h|d)$`)
@@ -465,6 +532,62 @@ func (p *Project) Validate() error {
 			if !slices.Contains(MaskTypes, m.Type) {
 				bad("sources: %s: mask type %q must be one of %s", src.Name, m.Type, strings.Join(MaskTypes, ", "))
 			}
+		}
+	}
+	seenImport := map[string]bool{}
+	for _, im := range p.Spec.Imports {
+		switch {
+		case !sourceNameRE.MatchString(im.Name):
+			bad("imports: name %q: 1 to 20 lowercase letters, digits and underscores, starting with a letter", im.Name)
+		case seenImport[im.Name]:
+			bad("imports: %q twice", im.Name)
+		case p.Spec.Tables == nil:
+			bad("imports: %s: its tables are the project's, and it has none (tables)", im.Name)
+		}
+		seenImport[im.Name] = true
+		if im.Connection != "" && !secretRE.MatchString(im.Connection) {
+			bad("imports: %s: connection %q isn't a connection's name", im.Name, im.Connection)
+		}
+		if im.Schedule != "" && !cronRE.MatchString(im.Schedule) {
+			bad("imports: %s: schedule %q: five cron fields, as 0 * * * *", im.Name, im.Schedule)
+		}
+		into := map[string]bool{}
+		landing := func(name string) {
+			if into[ImportTable(im, name)] {
+				bad("imports: %s: two resources would both be %s", im.Name, ImportTable(im, name))
+			}
+			into[ImportTable(im, name)] = true
+		}
+		switch im.Source {
+		case "rest_api":
+			a := im.API
+			if a == nil || !strings.HasPrefix(a.BaseURL, "https://") && !strings.HasPrefix(a.BaseURL, "http://") || len(a.Resources) == 0 {
+				bad("imports: %s: a rest_api import has an api: its baseUrl (http or https) and its resources", im.Name)
+				break
+			}
+			for _, r := range a.Resources {
+				if !identifierRE.MatchString(r.Name) || r.Path == "" || strings.Contains(r.Path, "://") {
+					bad("imports: %s: a resource has a name (an identifier) and a path under the baseUrl: %q", im.Name, r.Name)
+				}
+				if (r.Cursor != "") != (r.CursorParam != "") || r.Cursor != "" && r.CursorStart == "" {
+					bad("imports: %s: %s: a cursor names its field, its query parameter and where it starts", im.Name, r.Name)
+				}
+				landing(r.Name)
+			}
+		case "sql_database":
+			d := im.Database
+			if d == nil || !slices.Contains([]string{"postgresql", "mysql"}, d.Kind) || len(d.Tables) == 0 || im.Connection == "" {
+				bad("imports: %s: a sql_database import has a database (its kind, postgresql or mysql, and its tables) and a connection", im.Name)
+				break
+			}
+			for _, t := range d.Tables {
+				if !schemaTableRE.MatchString(t.Table) || t.Cursor != "" && !identifierRE.MatchString(t.Cursor) || t.PrimaryKey != "" && !identifierRE.MatchString(t.PrimaryKey) {
+					bad("imports: %s: a table as schema.table, its cursor and primary key columns: %q", im.Name, t.Table)
+				}
+				landing(t.Table)
+			}
+		default:
+			bad("imports: %s: source %q: one of %s", im.Name, im.Source, strings.Join(ImportSources, ", "))
 		}
 	}
 	if l := p.Spec.Limits; l != nil {
