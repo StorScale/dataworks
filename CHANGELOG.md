@@ -34,6 +34,9 @@ dbt in a project's repo: its models built by Airflow in Trino as the project's p
 ### Added
 - **dbt in a project's repo** ([docs/use-cases.md](docs/use-cases.md), 7.5): a DAG of the repo's calls the platform's helper, `storscale.dbt.build(project=..., path="dbt")`, and its run is `dbt build` on the dbt project beside it (dbt-core 1.12 with dbt-trino, in a virtualenv of their own in the Airflow image), in Trino, on the project's Iceberg tables, signed in as the project's pipelines service account (a Keycloak token): Ranger's rules are the pipelines', and its audit names them. The helper writes dbt's profile, so the repo holds no settings and no secrets. After each run, passed or failed, the helper sends dbt's artifacts (manifest, catalog, run results) to platformd, which takes them from the project's own pipelines account alone (its Keycloak token) and keeps them in the platform's bucket (`dbt/<project>/`); catalog-sync describes the models from them (OpenMetadata's dbt source): their descriptions, columns, lineage and tests' results. The pipelines_git suite's repo has a dbt project, whose model's table the suite reads and whose description the catalog shows. Not yet: dbt packages, and runs of only what changed.
 
+### Changed
+- **Trino has 2Gi** (`trino.memory`, and Compose's), up from 1536Mi: its memory outside the heap grows with each catalog made while it runs (sources, merge requests' branches), and CI saw its container killed for memory (OOMKilled) with 1536Mi.
+
 ### Fixed
 - **Trino's memory:** its heap is 60% of its pod's (its own jvm.config; the image's 80%, with 256 MB of code cache besides, left too little for the rest, and Trino's container was killed under load in CI).
 - **The data's backup copies a bucket again when an object fails** (read short mid-copy), up to three times: the copy is incremental, so again fetches only what's missing.

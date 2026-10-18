@@ -90,7 +90,7 @@ trino:
   service:
     type: NodePort
     nodePort: 30443   # kind maps the host's port 8443 here
-  memory: 1536Mi      # its heap is 60% of this (stack/trino/jvm.config): the rest is its code cache, metadata and the catalogs' clients
+  memory: 2Gi         # its heap is 60% of this (stack/trino/jvm.config): the rest is its code cache, metadata and the catalogs' clients (each catalog made while it runs adds to it)
   # Workers beside the coordinator, which then plans and hands out queries'
   # tasks: more of them, more queries at once (and no one pod's loss stops
   # them). 0: the coordinator does the work itself.
