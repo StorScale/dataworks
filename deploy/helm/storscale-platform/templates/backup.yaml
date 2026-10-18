@@ -122,7 +122,13 @@ spec:
                   for b in $(mc ls src | awk '{print $NF}' | tr -d /); do
                     [ "$b" = "$BACKUP_BUCKET" ] && continue
                     echo "data: $b"
-                    mc mirror --overwrite --quiet "src/$b" "dst/$BACKUP_BUCKET/data/$b"
+                    # An object read short now and then fails a copy: the mirror is
+                    # incremental, so again copies only what's missing.
+                    n=1
+                    until mc mirror --overwrite --quiet "src/$b" "dst/$BACKUP_BUCKET/data/$b"; do
+                      [ "$n" -ge 3 ] && exit 1
+                      n=$((n + 1)); echo "data: $b again ($n of 3)"; sleep 10
+                    done
                   done
                   echo "data: copied"
               env:
