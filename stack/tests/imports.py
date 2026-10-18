@@ -75,6 +75,18 @@ def delete_connection():
         s3_root().delete_object(Bucket="storscale-platform", Key=f"connections/{PROJECT}/{CONNECTION}.json")
 
 
+def clear_dlt():
+    """dlt's own state (where its cursors got to) is files beside the dataset
+    (warehouse/sales/_dlt_*), not tables Trino drops: removed, so a run of
+    this suite starts afresh, whatever one before left."""
+    s3 = s3_root()
+    for prefix in ("sales/_dlt_", f"sales/{TABLE}"):
+        for page in s3.get_paginator("list_objects_v2").paginate(Bucket="warehouse", Prefix=prefix):
+            keys = [{"Key": o["Key"]} for o in page.get("Contents", [])]
+            if keys:
+                s3.delete_objects(Bucket="warehouse", Delete={"Objects": keys})
+
+
 def pipeline(s):
     r = s.get(f"{PLATFORM}/api/projects/{PROJECT}/pipelines", timeout=60)
     return next((p for p in (r.json().get("pipelines", []) if r.ok else []) if p["id"] == DAG), None)
@@ -118,6 +130,12 @@ def main():
     server = ThreadingHTTPServer(("0.0.0.0", PORT), CRM)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     here = socket.gethostbyname(socket.gethostname())
+    for t in (TABLE, "_dlt_loads", "_dlt_pipeline_state", "_dlt_version"):
+        try:
+            sql("bob", f"DROP TABLE IF EXISTS {t}", "iceberg", "sales")
+        except Exception:  # noqa: BLE001
+            pass
+    clear_dlt()
     put_connection({"token": TOKEN})
     spec = {**before, "spec": {**before["spec"], "imports": [{
         "name": "crm", "source": "rest_api", "connection": CONNECTION, "schedule": "0 0 1 1 *",   # by hand here
@@ -170,6 +188,7 @@ def main():
                 sql("bob", f"DROP TABLE IF EXISTS {t}", "iceberg", "sales")
             except Exception as e:  # noqa: BLE001
                 print(f"  (dropping {t}: {e})")
+        clear_dlt()
         server.shutdown()
     finish()
 
