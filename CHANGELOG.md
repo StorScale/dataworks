@@ -7,6 +7,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 ### Added
 - **dbt in a project's repo** ([docs/use-cases.md](docs/use-cases.md), 7.5): a DAG of the repo's calls the platform's helper, `storscale.dbt.build(project=..., path="dbt")`, and its run is `dbt build` on the dbt project beside it (dbt-core 1.12 with dbt-trino, in a virtualenv of their own in the Airflow image), in Trino, on the project's Iceberg tables, signed in as the project's pipelines service account (a Keycloak token): Ranger's rules are the pipelines', and its audit names them. The helper writes dbt's profile, so the repo holds no settings and no secrets. The pipelines_git suite's repo has a dbt project, whose model's table the suite reads. Not yet: the models and their tests in the catalog, dbt packages, and runs of only what changed.
 
+### Fixed
+- **The data's backup copies a bucket again when an object fails** (read short mid-copy), up to three times: the copy is incremental, so again fetches only what's missing.
+
 ### Changed
 - **A project's pipelines make their tables** (create, drop, alter, in the project's namespace alone: dbt's models), beside reading and writing them.
 - **Anyone signed in may run queries and see the iceberg catalog is there** (Ranger's group public), each project's own pipelines account among them (on Kubernetes a group of its own, which the shared policies can't name): what one may read in a namespace or table is still its project's.
