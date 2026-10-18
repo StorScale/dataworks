@@ -82,6 +82,12 @@ http://{$STORSCALE_DOMAIN}:{$GATEWAY_PORT} {
 
 # The tools that open in a tab of their own keep names of their own.
 http://catalog.{$STORSCALE_DOMAIN}:{$GATEWAY_PORT} {
+	# The platform's logo and icon, which OpenMetadata shows as its own
+	# (catalog-sync sets its theme): from platformd, on this name.
+	handle /_storscale/brand/* {
+		uri strip_prefix /_storscale
+		reverse_proxy platformd:8080
+	}
 	# The platform's way in: starts OpenMetadata's service worker, then signs in.
 	handle /_storscale/* {
 		root * /srv

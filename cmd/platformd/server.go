@@ -113,6 +113,7 @@ func newServer(ctx context.Context, cfg config, log *slog.Logger) (*server, erro
 	if s.brand, err = loadBrand(cfg.BrandName, cfg.BrandTitle, cfg.BrandLogo, cfg.BrandIcon); err != nil {
 		return nil, err
 	}
+	s.brand.defaultIcon, _ = os.ReadFile(filepath.Join(cfg.WebDir, "favicon.svg"))
 	if index, err := os.ReadFile(filepath.Join(cfg.WebDir, "index.html")); err == nil {
 		s.index = s.brand.page(index)
 	} else {

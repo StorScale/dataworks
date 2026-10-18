@@ -19,6 +19,7 @@ import (
 type brand struct {
 	name, title        string
 	logo, icon         []byte // nil: StorScale's
+	defaultIcon        []byte // StorScale's (the web app's favicon.svg)
 	logoType, iconType string
 }
 
@@ -92,11 +93,22 @@ func (b brand) page(index []byte) []byte {
 
 // handleBrandLogo and handleBrandIcon serve the images to anyone: they're
 // on every page, the sign-in's too.
+// The logo and the icon, always: without a logo of the deployment's own,
+// its icon; without an icon, StorScale's (the web app's favicon.svg). Other
+// tools show them as theirs (OpenMetadata, through the gateway).
 func (s *server) handleBrandLogo(w http.ResponseWriter, r *http.Request) {
+	if s.brand.logo == nil {
+		s.handleBrandIcon(w, r)
+		return
+	}
 	serveImage(w, r, s.brand.logo, s.brand.logoType)
 }
 
 func (s *server) handleBrandIcon(w http.ResponseWriter, r *http.Request) {
+	if s.brand.icon == nil {
+		serveImage(w, r, s.brand.defaultIcon, "image/svg+xml")
+		return
+	}
 	serveImage(w, r, s.brand.icon, s.brand.iconType)
 }
 
