@@ -15,7 +15,9 @@ pipeline in Airflow:
      the failing check; carol (in neither group) gets nothing;
   5. someone signed in to the platform signs in to the catalog without
      another password: its Keycloak sign-in returns at once, with a token
-     the catalog accepts as theirs.
+     the catalog accepts as theirs;
+  6. it wears the platform's colours, and its logo and icon (platformd's,
+     through the gateway on the catalog's name).
 """
 import html
 import os
@@ -149,6 +151,14 @@ def main():
                       timeout=30).json().get("name") if token else None
     check("signed in to the platform, alice signs in to the catalog without another password",
           not form and me == "alice", "a Keycloak form" if form else f"the catalog says: {me}")
+
+    # 6. The platform's look.
+    theme = om.get(f"{OM}/system/settings/customUiThemePreference", timeout=30).json().get("config_value", {})
+    logos = theme.get("customLogoConfig", {})
+    icon = requests.get(f"{catalog_url}{logos.get('customMonogramUrlPath', '/none')}", timeout=30)
+    check("the catalog wears the platform's colours and icon, served on its own name",
+          theme.get("customTheme", {}).get("primaryColor") == "#1a56c4" and icon.ok and icon.headers.get("Content-Type", "").startswith("image/"),
+          (theme, icon.status_code, icon.headers.get("Content-Type")))
     finish()
 
 

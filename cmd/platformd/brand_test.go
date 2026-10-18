@@ -11,14 +11,23 @@ import (
 
 func TestTheDefaultBrandIsStorScales(t *testing.T) {
 	k := newFakeKeycloak(t)
-	ts := newTestServerWith(t, k, func(c *config) { c.BrandName = "StorScale" })
+	const storscale = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"/>`
+	ts := newTestServerWith(t, k, func(c *config) {
+		c.BrandName = "StorScale"
+		os.WriteFile(filepath.Join(c.WebDir, "favicon.svg"), []byte(storscale), 0o644)
+	})
 	c, _ := signIn(t, ts, k, map[string]any{"preferred_username": "alice", "groups": []string{"analysts"}}, "/")
 	_, body := getSession(t, ts, c)
 	if b := body["brand"].(map[string]any); b["name"] != "StorScale" || b["logo"] != "" {
 		t.Errorf("brand %v, want StorScale's name and icon", b)
 	}
-	if res, _ := http.Get(ts.URL + "/brand/logo"); res.StatusCode != http.StatusNotFound {
-		t.Errorf("/brand/logo with none: %d, want 404", res.StatusCode)
+	// Other tools (OpenMetadata) show the logo and icon: StorScale's icon for both.
+	for _, path := range []string{"/brand/logo", "/brand/icon"} {
+		res, _ := http.Get(ts.URL + path)
+		got, _ := io.ReadAll(res.Body)
+		if res.StatusCode != http.StatusOK || string(got) != storscale || res.Header.Get("Content-Type") != "image/svg+xml" {
+			t.Errorf("%s with none: %d %q %s, want StorScale's icon", path, res.StatusCode, got, res.Header.Get("Content-Type"))
+		}
 	}
 }
 
@@ -117,10 +126,8 @@ func TestTheTabShowsTheBrand(t *testing.T) {
 				}
 			}
 			res, _ := http.Get(ts.URL + "/brand/icon")
-			if want := map[bool]int{true: http.StatusOK, false: http.StatusNotFound}[strings.Contains(tc.wantIcon, "/brand/icon")]; res.StatusCode != want {
-				t.Errorf("/brand/icon: %d, want %d", res.StatusCode, want)
-			} else if want == http.StatusOK && res.Header.Get("Content-Type") != "image/png" {
-				t.Errorf("/brand/icon: %q, want image/png", res.Header.Get("Content-Type"))
+			if strings.Contains(tc.wantIcon, "/brand/icon") && (res.StatusCode != http.StatusOK || res.Header.Get("Content-Type") != "image/png") {
+				t.Errorf("/brand/icon: %d %q, want the deployment's, as image/png", res.StatusCode, res.Header.Get("Content-Type"))
 			}
 		})
 	}

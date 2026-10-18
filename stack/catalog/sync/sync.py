@@ -290,6 +290,22 @@ def lineage_settings():
     r.raise_for_status()
 
 
+# The platform's look, as OpenMetadata's: its logo and icon (platformd's,
+# through the gateway on the catalog's name), and the web app's colours.
+THEME = {
+    "customLogoConfig": {"customLogoUrlPath": "/_storscale/brand/logo", "customMonogramUrlPath": "/_storscale/brand/icon",
+                         "customFaviconUrlPath": "/_storscale/brand/icon"},
+    "customTheme": {"primaryColor": "#1a56c4", "hoverColor": "#123f92", "selectedColor": "#e7effc", "errorColor": "#b4232a",
+                    "successColor": "#1e7d4f", "warningColor": "#b86e00", "infoColor": "#1a56c4"},
+}
+
+
+def theme_settings():
+    r = requests.put(f"{OM}/v1/system/settings", headers=admin_headers(), timeout=10,
+                     json={"config_type": "customUiThemePreference", "config_value": THEME})
+    r.raise_for_status()
+
+
 def main():
     os.makedirs("/catalog", exist_ok=True)
     last_metadata = 0.0
@@ -297,6 +313,7 @@ def main():
     while True:
         try:
             lineage_settings()
+            theme_settings()
             break
         except Exception as e:  # noqa: BLE001 (OpenMetadata may still be starting)
             log.warning("lineage settings: %s", e)
