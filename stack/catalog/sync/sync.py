@@ -13,7 +13,8 @@ Every round, it:
   3. runs each project's checks (spec.tables.checks) as OpenMetadata tests on
      its tables, which shows their results on the tables;
   4. links each source's table a project copies (sources[].copy, use case
-     8.1) to its copy, <source>_<table>, column by column: their lineage.
+     8.1) to its copy, <source>_<table>, column by column; and each import's
+     pipeline (use case 8.2) to its tables, <import>_<resource>: their lineage.
 
 Once, it also makes the pipeline service "airflow", and has OpenMetadata file
 the pipelines it learns of from OpenLineage events under it.
@@ -169,6 +170,41 @@ def copy_lineage():
                     log.warning("lineage of %s to %s: HTTP %d %s", src["fullyQualifiedName"], dst["fullyQualifiedName"], r.status_code, r.text[:200])
 
 
+def import_lineage():
+    """Each import's pipeline (its DAG, in the pipeline service "airflow"),
+    upstream of the tables it writes (once they're described)."""
+    h = admin_headers()
+    pipelines_url = env.get("PIPELINES_URL", "")
+    for p in projects():
+        tables = p["spec"].get("tables")
+        if tables is None:
+            continue
+        prefix = p["metadata"]["name"].replace("-", "_")
+        namespace = tables.get("namespace") or prefix
+        for im in p["spec"].get("imports") or []:
+            dag = f"import_{prefix}_{im['name']}"
+            r = requests.put(f"{OM}/v1/pipelines", headers=h, timeout=30, json={
+                "name": f"airflow-{dag}", "displayName": dag, "service": "airflow",
+                "description": f"The import {im['name']} of the project {p['metadata']['name']} ({im['source']}): the platform keeps it.",
+                **({"sourceUrl": f"{pipelines_url}/dags/{dag}"} if pipelines_url else {})})
+            if not r.ok:
+                log.warning("pipeline %s: HTTP %d %s", dag, r.status_code, r.text[:200])
+                continue
+            pipeline = r.json()
+            names = [x["name"] for x in (im.get("api") or {}).get("resources", [])] + \
+                    [x["table"].split(".", 1)[1] for x in (im.get("database") or {}).get("tables", [])]
+            for name in names:
+                t = requests.get(f"{OM}/v1/tables/name/{SERVICE}.{tables.get('catalog') or 'iceberg'}.{namespace}.{im['name']}_{name}",
+                                 headers=h, timeout=30)
+                if not t.ok:
+                    continue
+                r = requests.put(f"{OM}/v1/lineage", headers=h, timeout=30, json={"edge": {
+                    "fromEntity": {"id": pipeline["id"], "type": "pipeline"}, "toEntity": {"id": t.json()["id"], "type": "table"},
+                    "lineageDetails": {"description": f"Imported by {dag} ({im['source']})"}}})
+                if not r.ok:
+                    log.warning("lineage of %s to %s: HTTP %d %s", dag, name, r.status_code, r.text[:200])
+
+
 def test_case(project, check):
     name = "_".join(filter(None, [project, check["table"], check.get("column"), check["check"]]))
     tc = {"name": name, "testDefinitionName": CHECKS[check["check"]], "parameterValues": []}
@@ -244,6 +280,7 @@ def main():
             if time.time() - last_metadata > METADATA_EVERY:
                 ingest_metadata(token)
                 copy_lineage()
+                import_lineage()
                 last_metadata = time.time()
                 log.info("metadata: ingested trino")
             run_checks(token)

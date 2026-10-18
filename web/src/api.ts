@@ -71,6 +71,14 @@ export type Spec = {
   limits?: { queries?: number; queued?: number; queryMemory?: string; storage?: string };
   notify?: { teams?: string; email?: string[] };
   sources?: Source[];
+  imports?: Import[];
+};
+// An application's data (or a database's, by a cursor), copied into the project's tables on a schedule (dlt).
+export type APIResource = { name: string; path: string; dataSelector?: string; primaryKey?: string; cursor?: string; cursorParam?: string; cursorStart?: string };
+export type Import = {
+  name: string; source: "rest_api" | "sql_database"; connection?: string; schedule?: string;
+  api?: { baseUrl: string; resources: APIResource[] };
+  database?: { kind: "postgresql" | "mysql"; tables: { table: string; cursor?: string; primaryKey?: string }[] };
 };
 // A company database the project queries where it is: a read-only Trino catalog <project>_<name>.
 export type Source = {
