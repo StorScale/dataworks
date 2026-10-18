@@ -281,7 +281,7 @@ Every container runs without privilege escalation, with the default seccomp prof
 
 **Order and effort:** (1) the access check and the operator's fix, a day; (2) reading as of a tag, time or commit on the SQL page, with the checks above, a day; (3) tags: API, Tags tab, keep and removal, audit, two days; (4) the History tab, two days. **Built (2026-10-17):** all four. Tags are the project's (`tables.tags`: a name, a commit, keepUntil, a note, who), the operator keeps Nessie's as they say; the platform turns a tag or a time into its commit. Not yet: notebooks and dashboards read as of a moment by the name alone (no picker), and deliveries (9.1) recording their commit.
 
-### A pull request on a data branch (use case 7.3), how (design, 2026-10-18; the first part built)
+### A pull request on a data branch (use case 7.3), how (design, 2026-10-18; the first part in 0.14.0)
 
 **Built:** `pipelines.reviews` (GitLab's address, the repo's path there, the dbt project's folder); the operator's poll of GitLab (`internal/gitlab`), the branches (`<project>-mr-<iid>`) and catalogs (`<project>_mr_<iid>`, Nessie's REST catalog at the branch: `http://nessie:19120/iceberg/<branch>/`), their Ranger policies, the run started a pass after the branch is made (Trino's policies first), once per commit (its run id); the DAG `storscale_review` (`/opt/storscale/dags`, the bundle `storscale` in every Airflow); platformd serving the last manifest to the project's pipelines; the `reviews` suite. **Left:** a sample of the rows that differ, the semantic layer's metrics that moved, webhooks in place of polling, the merge request's comment updated rather than added at each commit.
 
