@@ -123,6 +123,14 @@ func TestPeoplesTablesArePersonal(t *testing.T) {
 			t.Errorf("%+v: personal %v", c.d, got)
 		}
 	}
+	// Without readers' rules (no masks) too.
+	bare, err := Parse([]byte(`{"metadata":{"name":"sales"},"spec":{"members":[{"user":"bob","role":"editor"}],"tables":{"people":[{"table":"customers","column":"customer_id"}]}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := bare.PersonalColumns(Delivery{Table: "customers"}); !slices.Equal(got, []string{"customers.customer_id"}) {
+		t.Errorf("no readers' rules: %v", got)
+	}
 	if _, err := Compose("sales", []byte(repoProject), []byte("spec: {tables: {people: [{table: Customers, column: id}]}}")); err == nil {
 		t.Error("a bad table name: no error")
 	}

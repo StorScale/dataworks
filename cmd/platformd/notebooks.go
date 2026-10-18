@@ -42,6 +42,7 @@ Each run (storscale.notebook: papermill, as the project's pipelines) keeps
 its executed notebook, linked from the run on the project's Pipelines tab.
 The notebook is notebooks/%s.ipynb, beside this file.
 """
+# An Airflow DAG (Airflow reads only files that say so: "airflow" and "dag").
 from storscale import notebook
 
 notebook.schedule(project=%q, name=%q, schedule=%q, owner=%q)
