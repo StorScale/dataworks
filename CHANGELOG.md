@@ -4,6 +4,16 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-18
+
+File deliveries to clients and partners (SFTP and S3), approved before they run; an import's reset, GitLab's webhooks, how far a copy is behind, and the metrics a merge request moves.
+
+**Upgrading from 0.14.0:**
+- `storscale upgrade --context <cluster> --version 0.15.0`, after a `--dry-run`. Trino's pods ask for 2Gi each now (was 1536Mi). The Airflow image is larger (the deliveries' virtualenv, gpg).
+- Who approves deliveries that send personal data: `deliveries.approverGroups` (Keycloak groups), default the platform's administrators.
+- GitLab's webhooks, if wanted: in the repo's connection, `webhookToken`; in GitLab, a webhook to `https://<platform>/api/webhooks/gitlab/<project>` with that token, for merge request events. Without them, the platform polls each minute as before.
+- A delivery's target is reached from the Airflow its DAG runs in (egress is open): a partner's SFTP server or bucket behind a firewall needs the cluster's nodes let through.
+
 ### Added
 - **File deliveries to clients and partners** ([docs/use-cases.md](docs/use-cases.md), 9.1; SFTP and S3 first): a project names its deliveries (`deliveries`: a table or a query of its own, CSV, Parquet or JSON lines, gzipped if asked, the files' names with `{date}` and `{part}`, a file per value of a column if asked, a schedule, a target connection, an SFTP server with its host key checked or an S3 bucket, and the recipient's PGP key). A delivery runs only once approved by someone other than who last changed what it sends (another editor of the project, or an administrator); one sending personal columns (those the project masks for its readers, until columns are tagged) needs a data-protection approver too (`deliveries.approverGroups`, default the administrators). A change to what it sends (its table or query, split, format, target or key) needs approving again, and until then it has no DAG. Its run, as the project's pipelines in its Airflow (the platform's DAG file `storscale_deliveries.py`, the run in a virtualenv of its own with pyarrow, paramiko, boto3 and gpg): its checks first (rows within a range, its table changed in time, every part there; a failing one sends nothing), the files written, compressed and encrypted, a manifest beside them (each file's rows, bytes and SHA-256, the tables' snapshots read), all sent, tried three times. Each run is in the delivery log (platformd keeps it, with an audit record), on the project's new Deliveries tab with its approval. The `deliveries` suite plays the partner (an SFTP server, a bucket, a key pair) and checks it end to end.
 - **An import reset**: the project's editors have an import copy everything again (dlt drops its tables and where its cursors got to), from the editor; the imports suite checks it.
