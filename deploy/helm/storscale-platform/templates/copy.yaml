@@ -41,8 +41,9 @@ deployment:
               - {name: JAVA_OPTS, value: "-XX:MaxRAMPercentage=70"}
             ports:
               - {name: http, containerPort: 8080}
+            # Ready once its server listens (it serves no health check over HTTP).
             readinessProbe:
-              httpGet: {path: /q/health/ready, port: http}
+              tcpSocket: {port: http}
               periodSeconds: 10
               failureThreshold: 60
             volumeMounts:
