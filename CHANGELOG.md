@@ -9,7 +9,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ### Changed
 - **A project's pipelines make their tables** (create, drop, alter, in the project's namespace alone: dbt's models), beside reading and writing them.
-- **Everyone may read the catalog's information_schema** (Ranger's group public): Trino shows in it only what each one may see, and each project's own pipelines (dbt) read it.
+- **Everyone may read the catalog's information_schema and Trino's system metadata** (`system.jdbc`, `system.metadata`; Ranger's group public): Trino shows in them only what each one may see, and each project's own pipelines (dbt) read them. Not `system.runtime`.
 
 ## [0.12.0] - 2026-10-18
 
