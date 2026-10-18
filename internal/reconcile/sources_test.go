@@ -25,7 +25,7 @@ type fakeTrino struct {
 }
 
 var (
-	createRE = regexp.MustCompile(`^CREATE CATALOG "([a-z0-9_]+)" USING`)
+	createRE = regexp.MustCompile(`^CREATE CATALOG (?:IF NOT EXISTS )?"([a-z0-9_]+)" USING`)
 	dropRE   = regexp.MustCompile(`^DROP CATALOG IF EXISTS "([a-z0-9_]+)"$`)
 )
 

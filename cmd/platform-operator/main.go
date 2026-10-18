@@ -163,6 +163,8 @@ func main() {
 			files = &reconcile.DirFiles{Dir: env("SOURCES_PATH", "/sources")}
 		}
 		r.Sources = &reconcile.TrinoSources{Trino: tc, Files: files, Dir: env("TRINO_SOURCES_DIR", "/etc/trino/sources")}
+		// Projects' merge requests' data branches, their catalogs made as the same account.
+		r.Reviewer = &reconcile.Reviewer{Trino: tc, Nessie: r.Nessie}
 	}
 	// On Kubernetes, the projects' sources copied into their tables, a pod
 	// each, from the chart's template (COPY_TEMPLATE).

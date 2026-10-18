@@ -8,8 +8,11 @@ type Status struct {
 	Phase    string `json:"phase"`    // Ready, Applying, Error, Deleting
 	Observed string `json:"observed"` // the Hash of the spec it applied
 	// Parts: one per system the project lives in (keycloak, buckets, ranger, nessie).
-	Parts   []Part    `json:"parts"`
-	Members []Person  `json:"members"` // who's in, through which role
+	Parts   []Part   `json:"parts"`
+	Members []Person `json:"members"` // who's in, through which role
+	// Reviews are the open merge requests (their iids) whose data branches
+	// the operator keeps (use case 7.3).
+	Reviews []int     `json:"reviews,omitempty"`
 	Updated time.Time `json:"updated"`
 	// Spec is the spec the operator applied, so it can undo it once the
 	// project is gone.

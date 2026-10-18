@@ -236,7 +236,7 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R7.10 Merge publishes data and code together; a failed check blocks it.
 
 **Open questions**
-- Which git hosts first? (The company's.)
+- Which git hosts first? **GitLab** (the company's; decided 2026-10-18).
 - How much does the branch run: the whole project's pipelines, or only what the change touches (as dbt's Slim CI)?
 - Large tables: run the branch on a sample?
 

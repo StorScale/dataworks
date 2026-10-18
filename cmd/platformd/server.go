@@ -176,6 +176,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/projects/{name}/pipelines", s.handlePipelines)
 	mux.HandleFunc("POST /api/projects/{name}/pipelines/{pipeline}/runs", s.handleStartRun)
 	mux.HandleFunc("POST /api/projects/{name}/dbt/artifacts", s.handleDbtArtifacts)
+	mux.HandleFunc("GET /api/projects/{name}/dbt/artifacts/{artifact}", s.handleDbtArtifact)
 	mux.HandleFunc("GET /api/projects/{name}/asof", s.handleAsOf)
 	mux.HandleFunc("GET /api/projects/{name}/tags", s.handleTags)
 	mux.HandleFunc("POST /api/projects/{name}/tags", s.handleTags)

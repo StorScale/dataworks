@@ -33,6 +33,8 @@ type Reconciler struct {
 	// Sources keeps Trino's catalogs of the projects' sources; nil: Trino
 	// makes none (catalog management isn't dynamic, or no operator account).
 	Sources *TrinoSources
+	// Reviewer keeps projects' merge requests' data branches; nil: none.
+	Reviewer *Reviewer
 	// Copies copies projects' sources into their tables (Kubernetes); nil:
 	// a source that asks to be copied is told it can't be, here.
 	Copies *Copies
@@ -61,8 +63,19 @@ func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Sta
 	people, err := r.members(ctx, p)
 	st.Members = people.list
 	part("keycloak", err)
+	// The open merge requests (their data branches' policies go with the
+	// project's); on GitLab's error, those of before, kept.
+	var before []int
+	if prev, _ := r.Store.Status(ctx, p.Metadata.Name); prev != nil {
+		before = prev.Reviews
+	}
+	mrs, gl, reviewsErr := r.openReviews(ctx, p)
+	st.Reviews = iids(mrs)
+	if reviewsErr != nil {
+		st.Reviews = before
+	}
 	if err == nil {
-		part("ranger", r.applyRanger(ctx, p, people))
+		part("ranger", r.applyRanger(ctx, p, people, st.Reviews))
 	} else {
 		part("ranger", fmt.Errorf("waiting for Keycloak"))
 	}
@@ -121,6 +134,17 @@ func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Sta
 			r.Log.Warn("removing the git connection", "project", p.Metadata.Name, "error", err)
 		}
 	}
+	if pl := p.Spec.Pipelines; r.Reviewer != nil && (pl != nil && pl.Reviews != nil || len(before) > 0) {
+		err := reviewsErr
+		if err == nil {
+			err = r.applyReviews(ctx, p, mrs, gl, before)
+		}
+		if pl != nil && pl.Reviews != nil {
+			part("reviews", err)
+		} else if err != nil && r.Log != nil {
+			r.Log.Warn("removing the merge requests' branches", "project", p.Metadata.Name, "error", err)
+		}
+	}
 	st.Phase = project.Ready
 	for _, pt := range st.Parts {
 		if !pt.OK {
@@ -148,6 +172,11 @@ func (r *Reconciler) Delete(ctx context.Context, p *project.Project) error {
 		keep(r.Copies.Remove(ctx, p))
 	}
 	keep(r.removeImports(ctx, p))
+	if r.Reviewer != nil { // its merge requests' branches and catalogs
+		if prev, _ := r.Store.Status(ctx, p.Metadata.Name); prev != nil {
+			keep(r.applyReviews(ctx, p, nil, nil, prev.Reviews))
+		}
+	}
 	keep(r.Ranger.syncGroupMembers(ctx, p.Groups(), nil, r.RangerUserPassword))
 	keep(r.Ranger.deleteGroups(ctx, p.Groups()))
 	if r.ProjectAirflows != nil {
@@ -258,7 +287,7 @@ func (r *Reconciler) members(ctx context.Context, p *project.Project) (people, e
 	return out, nil
 }
 
-func (r *Reconciler) applyRanger(ctx context.Context, p *project.Project, ppl people) error {
+func (r *Reconciler) applyRanger(ctx context.Context, p *project.Project, ppl people, reviews []int) error {
 	want := map[string][]string{} // username -> project groups
 	for g, us := range ppl.byGroup {
 		for _, u := range us {
@@ -282,7 +311,7 @@ func (r *Reconciler) applyRanger(ctx context.Context, p *project.Project, ppl pe
 			return err
 		}
 	}
-	return r.Ranger.syncPolicies(ctx, p.RangerPrefix(), p.RangerPolicies())
+	return r.Ranger.syncPolicies(ctx, p.RangerPrefix(), append(p.RangerPolicies(), p.ReviewPolicies(reviews)...))
 }
 
 func (r *Reconciler) applyBuckets(ctx context.Context, p *project.Project) error {

@@ -166,7 +166,7 @@ func connectionsHash(key string, conns ...pipelines.Connection) string {
 // objects are the project's Airflow's Deployment, its pod marked with the
 // connections it starts with, and its Service.
 func (pa *ProjectAirflows) objects(a *Airflow, p *project.Project, connections string) (deployment, service map[string]any) {
-	bundles, _ := json.Marshal([]Bundle{a.bundle(p)})
+	bundles, _ := json.Marshal([]Bundle{a.bundle(p), StorscaleBundle})
 	roles, _ := json.Marshal(map[string][]string{p.Group(project.Editor): {"Op"}, p.Group(project.Reader): {"Viewer"}})
 	pairs := []string{"@PROJECT@", p.Metadata.Name, "@AIRFLOW@", p.AirflowName(), "@DATABASE@", p.AirflowDatabase(),
 		"@BUNDLES@", string(bundles), "@ROLE_GROUPS@", string(roles)}

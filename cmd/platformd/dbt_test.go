@@ -19,6 +19,13 @@ func (k kept) PutFile(_ context.Context, key string, data []byte, _ string) erro
 	return nil
 }
 
+func (k kept) GetFile(_ context.Context, key string) ([]byte, error) {
+	if v, ok := k[key]; ok {
+		return []byte(v), nil
+	}
+	return nil, nil
+}
+
 func TestOnlyAProjectsPipelinesKeepItsDbtArtifacts(t *testing.T) {
 	files := kept{}
 	st := &statuses{list: []*project.Status{{Name: "sales", Members: []project.Person{
@@ -56,5 +63,23 @@ func TestOnlyAProjectsPipelinesKeepItsDbtArtifacts(t *testing.T) {
 	}
 	if files["dbt/sales/manifest.json"] != `{"nodes": {}}` || files["dbt/sales/run_results.json"] == "" || len(files) != 2 {
 		t.Errorf("kept: %v", files)
+	}
+	get := func(token, artifact string) (int, string) {
+		r := httptest.NewRequest("GET", "/api/projects/sales/dbt/artifacts/"+artifact, nil)
+		r.SetPathValue("name", "sales")
+		r.SetPathValue("artifact", artifact)
+		r.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		s.handleDbtArtifact(w, r)
+		return w.Code, w.Body.String()
+	}
+	if code, body := get("service-account-project-sales-pipelines", "manifest"); code != 200 || body != `{"nodes": {}}` {
+		t.Errorf("the manifest, to its pipelines: %d %s", code, body)
+	}
+	if code, _ := get("bob", "manifest"); code != http.StatusForbidden {
+		t.Errorf("to bob: %d", code)
+	}
+	if code, _ := get("service-account-project-sales-pipelines", "catalog"); code != http.StatusNotFound {
+		t.Errorf("none yet: %d", code)
 	}
 }

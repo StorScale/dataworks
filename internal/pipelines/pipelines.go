@@ -359,6 +359,17 @@ func (c *Client) PutConnection(ctx context.Context, conn Connection) error {
 	return err
 }
 
+// Trigger starts a run of a DAG with this run id and conf; a run of that id
+// already there is no error (started is false): a run per id, once.
+func (c *Client) Trigger(ctx context.Context, dag, runID string, conf map[string]any) (started bool, err error) {
+	err = c.call(ctx, "POST", "/dags/"+url.PathEscape(dag)+"/dagRuns", map[string]any{
+		"dag_run_id": runID, "logical_date": nil, "conf": conf}, nil)
+	if code(err) == http.StatusConflict {
+		return false, nil
+	}
+	return err == nil, err
+}
+
 // DeleteConnection removes a connection; one that isn't there is no error.
 func (c *Client) DeleteConnection(ctx context.Context, id string) error {
 	err := c.call(ctx, "DELETE", "/connections/"+url.PathEscape(id), nil, nil)

@@ -462,3 +462,25 @@ func TestImports(t *testing.T) {
 		t.Errorf("ImportTable: %s", got)
 	}
 }
+
+func TestReviews(t *testing.T) {
+	ok := `{"serviceAccount": "airflow-pipelines", "repo": "https://gitlab.example.com/sales/dags.git", "credentials": {"secretRef": "sales-git"},
+		"reviews": {"gitlab": "https://gitlab.example.com", "dbt": "dbt"}}`
+	if err := withPipelines(t, ok); err != nil {
+		t.Errorf("reviews: %v", err)
+	}
+	for _, bad := range []string{
+		`{"serviceAccount": "airflow-pipelines", "reviews": {"gitlab": "https://gitlab.example.com", "dbt": "dbt"}}`,
+		`{"serviceAccount": "airflow-pipelines", "repo": "https://gitlab.example.com/sales/dags.git", "reviews": {"gitlab": "https://gitlab.example.com", "dbt": "dbt"}}`,
+		`{"serviceAccount": "airflow-pipelines", "repo": "https://gitlab.example.com/sales/dags.git", "credentials": {"secretRef": "sales-git"}, "reviews": {"gitlab": "gitlab.example.com", "dbt": "dbt"}}`,
+		`{"serviceAccount": "airflow-pipelines", "repo": "https://gitlab.example.com/sales/dags.git", "credentials": {"secretRef": "sales-git"}, "reviews": {"gitlab": "https://gitlab.example.com", "dbt": "../dbt"}}`,
+	} {
+		if withPipelines(t, bad) == nil {
+			t.Errorf("%s: want refused", bad)
+		}
+	}
+	p := &Project{Metadata: Metadata{Name: "sales-eu"}}
+	if p.ReviewBranch(42) != "sales-eu-mr-42" || p.ReviewCatalog(42) != "sales_eu_mr_42" {
+		t.Errorf("branch %s, catalog %s", p.ReviewBranch(42), p.ReviewCatalog(42))
+	}
+}
