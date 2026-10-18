@@ -4,6 +4,14 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-18
+
+An application's data imported into a project's tables on a schedule (dlt, in the platform's Airflow): any REST API, or a database by a cursor column.
+
+**Upgrading from 0.11.0:**
+- `storscale upgrade --context <cluster> --version 0.12.0`, after a `--dry-run`. The Airflow image is larger (dlt and pyiceberg, in a virtualenv of their own), and its scheduler now holds the lakehouse's writers' Buckets account (the copies'), for the imports' runs.
+- An import's API or database is reached from the Airflow scheduler's pod (egress is open).
+
 ### Added
 - **An application's data, imported** ([docs/use-cases.md](docs/use-cases.md), 8.2): a project names imports (`imports`): any REST API (dlt's `rest_api`: its resources' paths, where the objects are in the answer, a primary key, a cursor and its query parameter) or a database by a cursor column (`sql_database`, PostgreSQL or MySQL), one of its connections (the API's token, or the database's account), and a schedule. Each is a DAG of the platform's Airflow, tagged as the project's pipeline (its Pipelines page, its alerts when a run fails): dlt (1.30, in a virtualenv of its own in the Airflow image) copies each resource into `<import>_<resource>` in the project's namespace, an Iceberg table written through Nessie's REST catalog (pyiceberg), merged on its primary key or appended to, each run asking only for what's past its cursor (dlt keeps it beside the data). The import's credentials are an Airflow connection the operator keeps, handed to the run in its environment. An import runs once as it's added (Airflow's latest slot of its schedule), then on its schedule. The catalog has each import's pipeline upstream of its tables. The project editor has an Imports section. The `imports` suite serves a small API with a token and a cursor, and checks a first run, a second run asking only for what's new and merging it, the project's rules on the table, its lineage, and a failed run's alert.
 
