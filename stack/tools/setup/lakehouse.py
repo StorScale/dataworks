@@ -48,13 +48,14 @@ POLICIES = [{**p, "policyItems": p["policyItems"] + ([allow(["execute"], users=[
     {"name": "catalog: every table", "resources": res(catalog=ICEBERG, schema="*", table="*", column="*"),
      "policyItems": [allow(["select", "show"], users=[CATALOG_USER]), allow(["select", "alter"], users=[MAINTENANCE_USER])]},
     # The catalog's information_schema, which tools read to list tables and
-    # columns (Superset does, to check a dataset). Trino filters it down to
-    # what each person may see anyway.
+    # columns (Superset does, to check a dataset; dbt does, as a project's
+    # pipelines). Trino filters it down to what each one may see, so everyone
+    # may read it (Ranger's group public): each project's pipelines too.
     {"name": "iceberg information_schema", "resources": res(catalog=ICEBERG, schema="information_schema"),
-     "policyItems": [allow(["use", "show"], groups=["analysts", "engineers", "pipelines"], users=[CATALOG_USER])]},
+     "policyItems": [allow(["use", "show"], groups=["public"], users=[CATALOG_USER])]},
     {"name": "iceberg information_schema tables",
      "resources": res(catalog=ICEBERG, schema="information_schema", table="*", column="*"),
-     "policyItems": [allow(["select"], groups=["analysts", "engineers", "pipelines"], users=[CATALOG_USER])]},
+     "policyItems": [allow(["select"], groups=["public"], users=[CATALOG_USER])]},
 ]
 
 if __name__ == "__main__":

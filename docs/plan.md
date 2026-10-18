@@ -281,6 +281,24 @@ Every container runs without privilege escalation, with the default seccomp prof
 
 **Order and effort:** (1) the access check and the operator's fix, a day; (2) reading as of a tag, time or commit on the SQL page, with the checks above, a day; (3) tags: API, Tags tab, keep and removal, audit, two days; (4) the History tab, two days. **Built (2026-10-17):** all four. Tags are the project's (`tables.tags`: a name, a commit, keepUntil, a note, who), the operator keeps Nessie's as they say; the platform turns a tag or a time into its commit. Not yet: notebooks and dashboards read as of a moment by the name alone (no picker), and deliveries (9.1) recording their commit.
 
+### dbt in a project's repo (use case 7.5), how (design, 2026-10-18; the first part built)
+
+**Built:** the helper (`storscale.dbt`, in the Airflow image's `/opt/storscale`) and dbt's virtualenv (`/opt/dbt`: dbt-core 1.12.5, dbt-trino 1.10.5), the project's pipelines allowed to make their tables, information_schema readable by all, and the pipelines_git suite's dbt project. **Left:** the artifacts into the catalog, dbt packages (`dbt deps` would write into the read-only checkout), runs of only what changed (with 7.3), and a long run outliving its Keycloak token (minutes).
+
+**Where dbt runs.** In the project's own Airflow (on Kubernetes; the shared one in Compose), as a task of a DAG in the project's repo: the platform's image gives the DAG a helper, `storscale.dbt.build(path="dbt")`, which the repo's DAG calls (its path is the repo's, so the helper finds the dbt project beside the DAG). The task runs `dbt build` in a virtualenv of its own (`/opt/dbt`: dbt-core with dbt-trino, beside Airflow's packages, as dlt is), in Trino, on the project's Iceberg tables, signed in as the project's pipelines service account (a Keycloak token, Trino's JWT sign-in, as lakehouse_identity does): Ranger's rules are the project's pipelines', and its audit names the account. The helper writes dbt's profile itself (Trino's address, its certificate, the catalog, the project's namespace as the schema), so the repo holds no connection settings and no secrets.
+
+**What a project says.** Nothing new: a repo with a DAG that calls the helper. Its models and tests are dbt's own files (`dbt_project.yml`, `models/`), reviewed and versioned with the DAGs.
+
+**In the catalog (R7.16).** The helper puts dbt's artifacts of each run (`manifest.json`, `catalog.json`, `run_results.json`) in the platform's bucket (`dbt/<project>/`), and catalog-sync ingests them (OpenMetadata's dbt source, from S3): the models' descriptions and columns, their lineage column by column (from dbt's own graph), and their tests' results beside the project's checks.
+
+**Pull requests (R7.17)** come with 7.3's branches: a branch's run builds only what changed and what depends on it (`dbt build --select state:modified+`, against production's manifest).
+
+**Checks:** the pipelines_git suite's repo gains a dbt project (a model on `orders`, two tests, one failing on purpose): its DAG runs `dbt build`, the model's table is made as the pipelines' account (Ranger's audit), and the catalog has the model, its lineage from `orders`, and the failing test.
+
+**To check first:** dbt-trino's JWT sign-in against Trino 483, and its Iceberg models (table, incremental by merge) through Nessie's REST catalog.
+
+**Order and effort:** the helper and the image, a day; the artifacts into the catalog, a day; the checks, a day.
+
 ### An application's data (use case 8.2), how (design, 2026-10-18; in 0.12.0)
 
 **Built:** the spec (`imports`: `rest_api` and `sql_database`), the operator's Airflow connections per import and its list (`/airflow/imports`), the DAG file `storscale_imports.py` (a DAG per import, tagged as the project's pipeline), the run (`storscale_import_run.py`, in dlt's virtualenv in the Airflow image: dlt 1.30.0, pyiceberg 0.12.0), the scheduler with the lakehouse's writers' Buckets account (the copies'), and the `imports` suite. **Then:** the editor's Imports section, and catalog-sync's lineage (each import's pipeline upstream of its tables). **Left:** files from the project's bucket (`filesystem`: its account would need the project's bucket, which the lakehouse's writers' doesn't have), and applications' own sources (HubSpot, Salesforce) by demand. An import runs once as it's added (Airflow's latest slot of its schedule, `catchup` off). In Compose the platform's Airflow also runs projects' repos, whose code could read the writers' account there (on Kubernetes they run in Airflows of their own).

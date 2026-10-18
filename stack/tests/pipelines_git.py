@@ -16,6 +16,10 @@ token), as a team's git host would, and makes a project, pipes, that names it:
   4. deleting the project takes its repo out of Airflow: its DAGs, its
      connection and its bundle go.
 
+The repo has a dbt project too (use case 7.5): its DAG calls the platform's
+helper (storscale.dbt.build), whose run makes the model's table in the
+project's namespace, as its pipelines' service account, its tests passing.
+
 On Kubernetes the project gets an Airflow of its own, and these check too
 that it's the project's alone: its repo isn't in the shared Airflow; its
 pipelines run as a service account of its own, in the memory it gives
@@ -43,7 +47,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import requests
 
-from lakekit import check, env, finish, s3_root
+from lakekit import check, env, finish, s3_root, sql
 
 import k8s
 from projects import platform, projects, wait
@@ -54,6 +58,28 @@ NAME, DAG, SECRET, PORT = "pipes", "pipes_hello", "storscale-test-git", 8418
 OWN = k8s.in_cluster()   # the project has an Airflow of its own
 AIRFLOW = f"http://project-{NAME}-airflow:8090/airflow/{NAME}" if OWN else "http://airflow:8090/pipelines"
 USER, TOKEN = "pipes-bot", "gittest_" + secrets.token_hex(16)
+
+DBT_DAG = '''"""The project's dbt models, built by the platform's helper."""
+import pendulum
+
+from airflow.sdk import dag
+from storscale import dbt
+
+
+@dag(schedule=None, start_date=pendulum.datetime(2026, 1, 1, tz="UTC"), catchup=False)
+def pipes_dbt():
+    dbt.build(project="pipes", path="dbt")
+
+
+pipes_dbt()
+'''
+DBT_PROJECT = {
+    "dags/dbt/dbt_project.yml": "name: pipes\nversion: '1.0'\nconfig-version: 2\nprofile: storscale\nmodel-paths: [models]\n"
+                                "models:\n  pipes:\n    +materialized: table\n",
+    "dags/dbt/models/regions.sql": "select * from (values (1, 'EU'), (2, 'US')) as t (id, region)\n",
+    "dags/dbt/models/schema.yml": "version: 2\nmodels:\n  - name: regions\n    columns:\n      - name: id\n"
+                                  "        tests: [unique, not_null]\n      - name: region\n        tests: [not_null]\n",
+}
 
 DAG_V1 = '''"""Says hello, and what of git and the platform's secrets it can see: as
 it's parsed (in its description) and as it runs (in its log)."""
@@ -264,7 +290,7 @@ def main():
     work = tempfile.mkdtemp()
     git("init", "-q", "-b", "main", cwd=work)
     git("remote", "add", "origin", f"{root}/{NAME}.git", cwd=work)
-    v1 = push(work, {f"dags/{DAG}.py": DAG_V1.format(description="Hello, v1")}, "v1")
+    v1 = push(work, {f"dags/{DAG}.py": DAG_V1.format(description="Hello, v1"), "dags/pipes_dbt.py": DBT_DAG, **DBT_PROJECT}, "v1")
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Git)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     repo = f"http://{socket.gethostbyname(socket.gethostname())}:{PORT}/{NAME}.git"
@@ -273,7 +299,7 @@ def main():
     put_secret("someone-else")   # first, a credential that isn't the project's
     spec = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": NAME},
             "spec": {"description": "Pipelines from git: the pipelines_git suite's.",
-                     "members": [{"group": "engineers", "role": "editor"}],
+                     "members": [{"group": "engineers", "role": "editor"}], "tables": {},
                      "pipelines": {"serviceAccount": "airflow-pipelines", "repo": repo, "path": "dags",
                                    "credentials": {"secretRef": SECRET}, "memory": "2Gi"}}}
     try:
@@ -352,6 +378,18 @@ def main():
               any(x.endswith("pipes_check: exposed none") for x in seen),
               next((x for x in seen if "pipes_check: exposed" in x), "no line"))
 
+        # 2b. dbt, as the project's pipelines.
+        r = bob.post(f"{PLATFORM}/api/projects/{NAME}/pipelines/pipes_dbt/runs", headers={"X-Platform-Request": "1"}, timeout=60)
+        dbt_run = r.json().get("run") if r.ok else None
+        state = wait(lambda: next((x["state"] for x in next((p for p in pipelines(bob).get("pipelines", []) if p["id"] == "pipes_dbt"), {}).get("runs", [])
+                                   if x["id"] == dbt_run and x["state"] in ("success", "failed")), None), 600, every=10) if dbt_run else None
+        try:
+            regions = sql("bob", "SELECT id, region FROM regions ORDER BY id", "iceberg", "pipes")
+        except Exception as e:  # noqa: BLE001
+            regions = str(e)[:200]
+        check("dbt builds the repo's model (dbt build, its tests passing) into the project's namespace, as its pipelines",
+              state == "success" and regions == [[1, "EU"], [2, "US"]], f"run {state}: {regions}")
+
         # 3. A new commit, with a broken file.
         v2 = push(work, {f"dags/{DAG}.py": DAG_V1.format(description="Hello, v2"),
                          "dags/broken.py": "from airflow.sdk import dag\n\nthis is not python\n"}, "v2, and a mistake")
@@ -365,6 +403,10 @@ def main():
         check("... with the repo it came from", page.get("repo", {}).get("url") == repo and TOKEN not in json.dumps(page),
               page.get("repo"))
     finally:
+        try:
+            sql("bob", "DROP TABLE IF EXISTS regions", "iceberg", "pipes")
+        except Exception as e:  # noqa: BLE001
+            print(f"  (dropping regions: {e})")
         # 4. Deleting the project takes its repo out of Airflow.
         bob.delete(f"{PLATFORM}/api/projects/{NAME}", headers={"X-Platform-Request": "1"}, timeout=30)
         went = wait(lambda: NAME not in (projects(bob) or {}), 180)
