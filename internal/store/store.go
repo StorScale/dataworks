@@ -50,6 +50,7 @@ type Store interface {
 	// which the operator makes): nil, with no error, when there's none. On
 	// Kubernetes, a Secret in the namespace; otherwise secrets/<name>.json.
 	Secret(ctx context.Context, name string) (map[string]string, error)
+	ConnectionStore
 }
 
 // ConnectionLabel marks a Secret as a project's connection: its value is the project.

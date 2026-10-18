@@ -82,3 +82,22 @@ func TestMetricChanges(t *testing.T) {
 		t.Error("bad YAML: no error")
 	}
 }
+
+func TestConnections(t *testing.T) {
+	for name, want := range map[string]bool{"sales-dags": true, "sales-": false, "dags": false, "hr-dags": false, "sales-Dags": false, "storscale-env": false} {
+		if got := ConnectionNameProblem("sales", name) == ""; got != want {
+			t.Errorf("%s: %v", name, got)
+		}
+	}
+	db := KindOf("database")
+	if got := db.ValuesProblems(map[string]string{"username": "u", "password": "p"}); len(got) != 1 || !strings.Contains(got[0], "host, url") {
+		t.Errorf("no host: %q", got)
+	}
+	if got := db.ValuesProblems(map[string]string{"username": "u", "password": "p", "host": "h", "nonsense": "x"}); len(got) != 1 {
+		t.Errorf("an unknown key: %q", got)
+	}
+	p, _ := Compose("sales", []byte(repoProject), []byte("spec: {notify: {teams: sales-teams}}"))
+	if got := p.ConnectionUses("sales-teams"); !slices.Equal(got, []string{"alerts (notify.teams)"}) {
+		t.Errorf("uses: %q", got)
+	}
+}

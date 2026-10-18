@@ -262,6 +262,20 @@ export const approveDelivery = (name: string, d: string) =>
   api<{ approved: boolean; needs: string[] }>("POST", `/api/projects/${encodeURIComponent(name)}/deliveries/${encodeURIComponent(d)}/approve`);
 export const resetImport = (name: string, i: string) =>
   api<{ run: string }>("POST", `/api/projects/${encodeURIComponent(name)}/imports/${encodeURIComponent(i)}/reset`);
+// --- A project's connections (7.6): credentials given once, never shown again
+export type ConnectionField = { key: string; label: string; secret?: boolean; required?: boolean; multiline?: boolean };
+export type ConnectionKind = { kind: string; label: string; for: string; fields: ConnectionField[]; oneOf?: string[] };
+export type Connection = {
+  name: string; kind?: string; addedBy?: string; addedAt?: string; changedBy?: string; changedAt?: string;
+  values: Record<string, string>; set: string[]; usedBy: string[];
+};
+const conns = (name: string) => `/api/projects/${encodeURIComponent(name)}/connections`;
+export const getConnections = (name: string) => api<{ connections: Connection[]; kinds: ConnectionKind[]; canEdit: boolean }>("GET", conns(name));
+export const addConnection = (name: string, c: { name: string; kind: string; values: Record<string, string> }) => api<Connection>("POST", conns(name), c);
+export const changeConnection = (name: string, c: string, kind: string | undefined, values: Record<string, string>) =>
+  api<Connection>("PUT", `${conns(name)}/${encodeURIComponent(c)}`, { kind, values });
+export const removeConnection = (name: string, c: string) => api<void>("DELETE", `${conns(name)}/${encodeURIComponent(c)}`);
+
 // --- A project's releases (7.4): plans of its repo's storscale/ at a ref, applied by someone else
 export type Plan = {
   id: string; ref: string; commit?: string; target: string; by: string; at: string;

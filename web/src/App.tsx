@@ -7,6 +7,7 @@ import Admin, { AdminAccess, AdminMonitoring, AdminProjects } from "./pages/Admi
 import { AdminHealth } from "./pages/Health";
 import { AdminAudit, ProjectAudit } from "./pages/Audit";
 import Tags from "./pages/Tags";
+import Connections from "./pages/Connections";
 import Deliveries from "./pages/Deliveries";
 import Releases from "./pages/Releases";
 import Data from "./pages/Data";
@@ -69,6 +70,7 @@ function Shell() {
           <Route path="tags" element={<Tags />} />
           <Route path="deliveries" element={<Deliveries />} />
           <Route path="releases" element={<Releases />} />
+          <Route path="connections" element={<Connections />} />
           <Route path="edit" element={admin ? <ProjectEditor /> : <Navigate to=".." replace />} />
         </Route>
         <Route path="/admin" element={admin ? <Admin /> : <NotFound />}>
