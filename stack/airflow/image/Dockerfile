@@ -23,6 +23,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends gnupg && rm -rf
 USER airflow
 RUN /opt/deliver/bin/pip install --no-cache-dir trino==0.340.0 pyarrow==25.0.1 paramiko==5.0.0 boto3==1.43.108 requests==2.34.2
 COPY storscale_delivery_run.py /opt/deliver/storscale_delivery_run.py
+# Notebooks on a schedule (use case 7.7): papermill runs them in a virtualenv
+# with the notebook image's packages (storscale.notebook starts it), and
+# buckets_lake signed in as the project's pipelines.
+USER root
+RUN python -m venv /opt/notebook && chown -R airflow:0 /opt/notebook
+USER airflow
+RUN /opt/notebook/bin/pip install --no-cache-dir papermill==2.7.0 ipykernel==7.4.0 nbconvert==7.17.1 \
+      boto3==1.43.108 requests==2.34.2 pandas==3.0.6 pyarrow==25.0.1
+COPY notebook/buckets_lake.py /opt/notebook/lib/buckets_lake.py
+RUN echo /opt/notebook/lib > "$(/opt/notebook/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')/buckets.pth"
 # dbt (use case 7.5), for projects' DAGs: in a virtualenv of its own too, run by
 # the platform's helper (storscale.dbt), which every DAG can import.
 USER root

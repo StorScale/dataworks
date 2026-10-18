@@ -161,7 +161,11 @@ export default function Pipelines() {
               <tbody>
                 {p.runs.map((r) => (
                   <tr key={r.id}>
-                    <td><span className="row" style={{ gap: 8 }}><StateDot state={r.state} /><span className="mono small">{r.id}</span></span></td>
+                    <td><span className="row" style={{ gap: 8 }}><StateDot state={r.state} /><span className="mono small">{r.id}</span>
+                      {p.id.startsWith("notebook_") && r.state !== "running" && r.state !== "queued" && (
+                        <a className="small" target="_blank" rel="noopener" data-testid={`notebook-${r.id}`}
+                          href={`/api/projects/${encodeURIComponent(name)}/notebooks/runs/${encodeURIComponent(p.id)}/${encodeURIComponent(r.id)}`}>notebook</a>
+                      )}</span></td>
                     <td className="mono small" title={r.commit}>{short(r.commit) ?? "–"}</td>
                     <td className="small">{when(r.started)?.toLocaleString() ?? "–"}</td>
                     <td className="small muted">{took(when(r.started), when(r.ended)) || (r.state === "running" ? "running" : "–")}</td>

@@ -127,3 +127,6 @@ func (p *Project) ConnectionUses(name string) []string {
 	}
 	return out
 }
+
+// ValidCron says whether a schedule is cron's five fields.
+func ValidCron(s string) bool { return cronRE.MatchString(s) }
