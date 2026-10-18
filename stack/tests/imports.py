@@ -10,7 +10,8 @@ here (a token, a cursor, its leads changing):
   3. a second run asks only for what's new past the cursor, and merges it
      (a lead changed, one added);
   4. alice (a reader of sales' listed tables) can't read it;
-  5. a run that fails (the API down) is one of sales' alerts.
+  5. the catalog has its lineage: the import's pipeline upstream of its table;
+  6. a run that fails (the API down) is one of sales' alerts.
 
 The sales spec, the connection and the tables are put back after.
 """
@@ -21,7 +22,9 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from lakekit import check, denied, finish, s3_root, sql
+import requests
+
+from lakekit import check, denied, env, finish, s3_root, sql
 
 import k8s
 from projects import platform, wait
@@ -95,6 +98,19 @@ def rows():
         return str(e)[:200]
 
 
+def upstream():
+    """The table's upstream nodes in the catalog (OpenMetadata), as its administrator reads them."""
+    r = requests.post(f"{env['KEYCLOAK_URL']}/realms/lakehouse/protocol/openid-connect/token", timeout=10, data={
+        "grant_type": "client_credentials", "client_id": "platform-operator", "client_secret": env["OPERATOR_CLIENT_SECRET"]})
+    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    r = requests.get(f"http://openmetadata:8585/api/v1/lineage/table/name/trino.iceberg.sales.{TABLE}",
+                     params={"upstreamDepth": 1, "downstreamDepth": 0}, headers=h, timeout=30)
+    if not r.ok:
+        return []
+    nodes = {n["id"]: n.get("fullyQualifiedName") for n in r.json().get("nodes", [])}
+    return [nodes.get(e["fromEntity"]) for e in r.json().get("upstreamEdges", [])]
+
+
 def main():
     bob = platform("bob")
     url = f"{PLATFORM}/api/projects/{PROJECT}"
@@ -135,7 +151,11 @@ def main():
         msg = denied("alice", f"SELECT count(*) FROM {TABLE}", "iceberg", "sales")
         check("it's under sales' rules: alice (who reads its listed tables) can't read it", msg is not None, msg)
 
-        # 5. A failed run alerts.
+        # 5. Lineage.
+        up = wait(upstream, 300, every=10) or upstream()
+        check("the catalog has its lineage: the import's pipeline upstream of its table", "airflow.airflow-import_sales_crm" in up, up)
+
+        # 6. A failed run alerts.
         CRM.down = True
         state = run(bob)
         issue = wait(lambda: next((i for i in bob.get(f"{url}/alerts", timeout=30).json().get("issues", [])

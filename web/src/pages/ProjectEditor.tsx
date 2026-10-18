@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getProject, MASK_TYPES, Member, Project, putProject, Source, sourceCatalog, Spec } from "../api";
+import { APIResource, getProject, Import, MASK_TYPES, Member, Project, putProject, Source, sourceCatalog, Spec } from "../api";
 import { grants } from "../lib";
 
 const blank = (): Project => ({
@@ -31,6 +31,15 @@ export default function ProjectEditor() {
   const setMember = (i: number, m: Partial<Member>) => set({ members: spec.members.map((x, j) => (j === i ? { ...x, ...m } : x)) });
   const readers = spec.tables?.readers ?? {};
   const setReaders = (r: typeof readers) => set({ tables: { ...spec.tables, readers: r } });
+  const setImport = (i: number, x: Partial<Import>) => set({ imports: spec.imports!.map((y, j) => (j === i ? { ...y, ...x } : y)) });
+  const setResource = (i: number, k: number, r: Partial<APIResource>) => {
+    const im = spec.imports![i];
+    setImport(i, { api: { ...im.api!, resources: im.api!.resources.map((y, j) => (j === k ? { ...y, ...r } : y)) } });
+  };
+  const setDBTable = (i: number, k: number, t: Partial<NonNullable<Import["database"]>["tables"][number]>) => {
+    const im = spec.imports![i];
+    setImport(i, { database: { ...im.database!, tables: im.database!.tables.map((y, j) => (j === k ? { ...y, ...t } : y)) } });
+  };
   const setSource = (i: number, s: Partial<Source>) => set({ sources: spec.sources!.map((x, j) => (j === i ? { ...x, ...s } : x)) });
   const setNotify = (n: Partial<NonNullable<Spec["notify"]>>) => {
     const next = { ...spec.notify, ...n };
@@ -178,6 +187,69 @@ export default function ProjectEditor() {
                 </div>
               ))}
               <button className="btn" onClick={() => set({ tables: { ...spec.tables, freshness: [...(spec.tables!.freshness ?? []), { table: "", within: "24h" }] } })}>Add a table</button>
+            </>
+          )}
+
+          {spec.tables && (
+            <>
+              <h2 style={{ marginTop: 20 }}>Imports</h2>
+              <p className="muted small" style={{ margin: "4px 0 8px" }}>
+                An application's data (any REST API), or a database's by a column that grows, copied into the project's tables on a
+                schedule: each as &lt;import&gt;_&lt;name&gt;, merged on its primary key or appended to, each run copying only what's past its cursor.
+                They're the project's pipelines. The connection holds the API's token (key token), or the database's account.
+              </p>
+              {(spec.imports ?? []).map((im, i) => (
+                <div key={i} className="card stack" style={{ gap: 6, padding: 12 }} data-testid="import">
+                  <div className="row">
+                    <input value={im.name} placeholder="crm" style={{ width: 120 }} aria-label="Import name" onChange={(e) => setImport(i, { name: e.target.value })} />
+                    <select value={im.source} aria-label="Import source" onChange={(e) => setImport(i, e.target.value === "rest_api"
+                      ? { source: "rest_api", database: undefined, api: im.api ?? { baseUrl: "https://", resources: [{ name: "", path: "" }] } }
+                      : { source: "sql_database", api: undefined, database: im.database ?? { kind: "postgresql", tables: [{ table: "" }] } })}>
+                      <option value="rest_api">a REST API</option>
+                      <option value="sql_database">a database, by a cursor</option>
+                    </select>
+                    <input value={im.connection ?? ""} placeholder="connection" aria-label="Import connection" onChange={(e) => setImport(i, { connection: e.target.value || undefined })} />
+                    <input value={im.schedule ?? ""} placeholder="hourly (or cron: 0 * * * *)" aria-label="Import schedule" onChange={(e) => setImport(i, { schedule: e.target.value || undefined })} />
+                    <button className="btn" onClick={() => set({ imports: spec.imports!.filter((_, j) => j !== i).length ? spec.imports!.filter((_, j) => j !== i) : undefined })}>Remove</button>
+                  </div>
+                  {im.source === "rest_api" && im.api && (
+                    <>
+                      <input value={im.api.baseUrl} placeholder="https://api.example.com/v1" aria-label="Base URL" onChange={(e) => setImport(i, { api: { ...im.api!, baseUrl: e.target.value } })} />
+                      {im.api.resources.map((r, k) => (
+                        <div key={k} className="row" style={{ flexWrap: "wrap" }}>
+                          <input value={r.name} placeholder="leads" style={{ width: 110 }} aria-label="Resource name" onChange={(e) => setResource(i, k, { name: e.target.value })} />
+                          <input value={r.path} placeholder="path: leads" aria-label="Path" onChange={(e) => setResource(i, k, { path: e.target.value })} />
+                          <input value={r.dataSelector ?? ""} placeholder="where in the answer: data" aria-label="Data selector" onChange={(e) => setResource(i, k, { dataSelector: e.target.value || undefined })} />
+                          <input value={r.primaryKey ?? ""} placeholder="primary key: id" style={{ width: 130 }} aria-label="Primary key" onChange={(e) => setResource(i, k, { primaryKey: e.target.value || undefined })} />
+                          <input value={r.cursor ?? ""} placeholder="cursor: updated_at" style={{ width: 150 }} aria-label="Cursor" onChange={(e) => setResource(i, k, { cursor: e.target.value || undefined })} />
+                          <input value={r.cursorParam ?? ""} placeholder="its parameter: since" style={{ width: 150 }} aria-label="Cursor parameter" onChange={(e) => setResource(i, k, { cursorParam: e.target.value || undefined })} />
+                          <input value={r.cursorStart ?? ""} placeholder="from: 2026-01-01" style={{ width: 140 }} aria-label="Cursor start" onChange={(e) => setResource(i, k, { cursorStart: e.target.value || undefined })} />
+                          <button className="linkish" onClick={() => setImport(i, { api: { ...im.api!, resources: im.api!.resources.filter((_, j) => j !== k) } })}>Remove</button>
+                        </div>
+                      ))}
+                      <button className="btn" onClick={() => setImport(i, { api: { ...im.api!, resources: [...im.api!.resources, { name: "", path: "" }] } })}>Add a resource</button>
+                    </>
+                  )}
+                  {im.source === "sql_database" && im.database && (
+                    <>
+                      <select value={im.database.kind} aria-label="Database kind" onChange={(e) => setImport(i, { database: { ...im.database!, kind: e.target.value as "postgresql" | "mysql" } })}>
+                        <option value="postgresql">postgresql</option>
+                        <option value="mysql">mysql</option>
+                      </select>
+                      {im.database.tables.map((t, k) => (
+                        <div key={k} className="row">
+                          <input value={t.table} placeholder="schema.table" aria-label="Table" onChange={(e) => setDBTable(i, k, { table: e.target.value })} />
+                          <input value={t.cursor ?? ""} placeholder="cursor: updated_at" aria-label="Cursor column" onChange={(e) => setDBTable(i, k, { cursor: e.target.value || undefined })} />
+                          <input value={t.primaryKey ?? ""} placeholder="primary key: id" aria-label="Primary key column" onChange={(e) => setDBTable(i, k, { primaryKey: e.target.value || undefined })} />
+                          <button className="linkish" onClick={() => setImport(i, { database: { ...im.database!, tables: im.database!.tables.filter((_, j) => j !== k) } })}>Remove</button>
+                        </div>
+                      ))}
+                      <button className="btn" onClick={() => setImport(i, { database: { ...im.database!, tables: [...im.database!.tables, { table: "" }] } })}>Add a table</button>
+                    </>
+                  )}
+                </div>
+              ))}
+              <button className="btn" onClick={() => set({ imports: [...(spec.imports ?? []), { name: "", source: "rest_api", api: { baseUrl: "https://", resources: [{ name: "", path: "" }] } }] })}>Add an import</button>
             </>
           )}
 

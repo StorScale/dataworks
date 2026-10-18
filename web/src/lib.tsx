@@ -115,7 +115,8 @@ export function grants(name: string, spec: Spec) {
       key: "editor",
       group: `${name}-editors`,
       items: [ns && `Create, change and drop tables in ${ns}`, bucket && `Read and write the ${bucket} bucket`, spec.pipelines && "Run the project's pipelines", ...read(sources),
-        ...(copies.length ? [`Copies of sources' tables in ${ns ?? name}: ${copies.join(", ")}, as any table of the project`] : []), "Change the project's metrics"].filter(Boolean) as string[],
+        ...(copies.length ? [`Copies of sources' tables in ${ns ?? name}: ${copies.join(", ")}, as any table of the project`] : []),
+        ...(spec.imports?.length ? [`Run its imports: ${spec.imports.map((x) => x.name).filter(Boolean).join(", ")} (its pipelines)`] : []), "Change the project's metrics"].filter(Boolean) as string[],
     },
     {
       role: "Readers",
