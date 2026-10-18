@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"io"
 	"net/http"
 	"os"
@@ -130,5 +131,27 @@ func TestTheTabShowsTheBrand(t *testing.T) {
 				t.Errorf("/brand/icon: %d %q, want the deployment's, as image/png", res.StatusCode, res.Header.Get("Content-Type"))
 			}
 		})
+	}
+}
+
+func TestTheCatalogsLogoIsFittedToItsSidebar(t *testing.T) {
+	logo := filepath.Join(t.TempDir(), "logo.svg")
+	wide := `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 127.5 21.4"><rect width="127.5" height="21.4"/></svg>`
+	os.WriteFile(logo, []byte(wide), 0o644)
+	ts := newTestServerWith(t, newFakeKeycloak(t), func(c *config) { c.BrandName, c.BrandLogo = "Vericast", logo })
+	res, err := http.Get(ts.URL + "/brand/catalog-logo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(res.Body)
+	got := string(body)
+	if res.StatusCode != 200 || res.Header.Get("Content-Type") != "image/svg+xml" ||
+		!strings.HasPrefix(got, `<svg xmlns="http://www.w3.org/2000/svg" width="150" height="40" viewBox="0 0 150 40">`) ||
+		!strings.Contains(got, `preserveAspectRatio="xMinYMid meet"`) ||
+		!strings.Contains(got, "data:image/svg+xml;base64,"+base64.StdEncoding.EncodeToString([]byte(wide))) {
+		t.Errorf("%d %s: %s", res.StatusCode, res.Header.Get("Content-Type"), got)
+	}
+	if csp := res.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "img-src data:") || !strings.Contains(csp, "default-src 'none'") {
+		t.Errorf("its policy: %s", csp)
 	}
 }
