@@ -4,6 +4,14 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-18
+
+A merge request's dbt change built and tested on a data branch of its own (GitLab), and the merge request told how it went.
+
+**Upgrading from 0.13.0:**
+- `storscale upgrade --context <cluster> --version 0.14.0`, after a `--dry-run`. Every Airflow (the shared one, and each project's) gains the platform's bundle `storscale` (the DAG `storscale_review`).
+- A project asks for reviews with `pipelines.reviews` (its GitLab's address, the repo's path there, the dbt project's folder); the repo's token needs GitLab's API (read merge requests, write statuses and notes: the `api` scope). The operator reaches GitLab from the cluster (egress is open) each minute.
+
 ### Added
 - **A merge request on a data branch** ([docs/use-cases.md](docs/use-cases.md), 7.3; GitLab): a project's `pipelines.reviews` names its GitLab and its repo's dbt project. The operator polls the repo's open merge requests (its token, GitLab's API) and, for each, makes a Nessie branch of the project's tables (`<project>-mr-<iid>`, from main: nothing copied) and a Trino catalog on it (`<project>_mr_<iid>`, its editors reading, its pipelines building), then starts the platform's DAG `storscale_review` (in the Airflow image, in the project's own Airflow) at each new commit: it checks the repo out at that commit, builds the dbt models the change touches and those downstream (`state:modified+`, against production's manifest, which platformd keeps) in the branch's catalog, as the project's pipelines, and tells the merge request: a commit status (`storscale/dbt`: pending, running, success or failed, naming the failed tests) and a note with each model's rows on the branch and in production. Production is untouched; a merge request closed or merged, its branch and catalog go (production's next run builds what was merged). The `reviews` suite plays GitLab's API and checks it end to end.
 
