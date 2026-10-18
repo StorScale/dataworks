@@ -59,6 +59,15 @@ type statuses struct {
 
 func (s *statuses) Statuses(context.Context) ([]*project.Status, error) { return s.list, nil }
 
+func (s *statuses) Status(_ context.Context, name string) (*project.Status, error) {
+	for _, st := range s.list {
+		if st.Name == name {
+			return st, nil
+		}
+	}
+	return nil, nil
+}
+
 func TestACopyNotRunningIsAnIssueAfterAWhile(t *testing.T) {
 	p, err := project.Parse([]byte(`{"metadata": {"name": "sales"}, "spec": {"members": [{"group": "engineers", "role": "editor"}],
 		"tables": {}, "sources": [{"name": "finance", "kind": "postgresql", "connection": "fin", "copy": {"tables": ["public.invoices"]}}]}}`))

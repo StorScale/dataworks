@@ -12,7 +12,10 @@ Every round, it:
      in a source, and read none of it);
   3. runs each project's checks (spec.tables.checks) as OpenMetadata tests on
      its tables, which shows their results on the tables;
-  4. links each source's table a project copies (sources[].copy, use case
+  4. describes each project's dbt models from its last run's artifacts (use
+     case 7.5: dbt/<project>/ in the platform's bucket, which platformd keeps):
+     their descriptions, their lineage and their tests' results;
+  5. links each source's table a project copies (sources[].copy, use case
      8.1) to its copy, <source>_<table>, column by column; and each import's
      pipeline (use case 8.2) to its tables, <import>_<resource>: their lineage.
 
@@ -126,6 +129,37 @@ def ingest_catalog(token, catalog):
     workflow.execute()
     workflow.raise_from_status()
     workflow.stop()
+
+
+def ingest_dbt(token):
+    """Each project's dbt artifacts (its last run's), with OpenMetadata's dbt
+    source: the models' descriptions and columns, their lineage, their tests'
+    results, on the tables the Trino ingestion described."""
+    s3 = boto3.client("s3", endpoint_url="http://buckets:9000", region_name="us-east-1",
+                      aws_access_key_id=env["STORE_ACCESS_KEY"], aws_secret_access_key=env["STORE_SECRET_KEY"])
+    for p in projects():
+        name = p["metadata"]["name"]
+        try:
+            s3.head_object(Bucket="storscale-platform", Key=f"dbt/{name}/manifest.json")
+        except Exception:  # noqa: BLE001 (no dbt run yet)
+            continue
+        workflow = MetadataWorkflow.create({
+            "source": {"type": "dbt", "serviceName": SERVICE, "sourceConfig": {"config": {
+                "type": "DBT", "dbtUpdateDescriptions": True, "includeTags": True,
+                "dbtConfigSource": {"dbtConfigType": "s3",
+                                    "dbtSecurityConfig": {"awsAccessKeyId": env["STORE_ACCESS_KEY"], "awsSecretAccessKey": env["STORE_SECRET_KEY"],
+                                                          "awsRegion": "us-east-1", "endPointURL": "http://buckets:9000"},
+                                    "dbtPrefixConfig": {"dbtBucketName": "storscale-platform", "dbtObjectPrefix": f"dbt/{name}"}}}}},
+            "sink": {"type": "metadata-rest", "config": {}},
+            "workflowConfig": server_config(token),
+        })
+        try:
+            workflow.execute()
+            workflow.raise_from_status()
+        except Exception as e:  # noqa: BLE001 (one project's run doesn't keep the others out)
+            log.warning("dbt of %s: %s", name, e)
+        finally:
+            workflow.stop()
 
 
 def projects():
@@ -279,6 +313,7 @@ def main():
                 shared = token
             if time.time() - last_metadata > METADATA_EVERY:
                 ingest_metadata(token)
+                ingest_dbt(token)
                 copy_lineage()
                 import_lineage()
                 last_metadata = time.time()

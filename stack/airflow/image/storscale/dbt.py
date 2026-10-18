@@ -14,10 +14,16 @@ connection keycloak_pipelines, which the platform keeps): Ranger's rules are
 the pipelines', and its audit names the account. Its profile is written here
 (Trino's address and certificate, the catalog, the project's namespace), so
 the repo holds no settings and no secrets: its dbt_project.yml needs none.
+
+After each run, passed or failed, its artifacts (manifest.json, catalog.json
+from dbt docs generate, run_results.json) go to the platform (as the same
+account), which keeps them for the catalog: the models, their columns, their
+lineage and their tests' results appear there.
 Not yet: dbt packages (packages.yml; `dbt deps` would write into the repo's
 checkout, which is read-only).
 """
 import inspect
+import json
 import os
 import subprocess
 import tempfile
@@ -27,6 +33,7 @@ import requests
 from airflow.sdk import BaseHook, task
 
 DBT = "/opt/dbt/bin/dbt"
+PLATFORM = os.environ.get("STORSCALE_PLATFORMD_URL", "http://platformd:8080")
 REALM = "lakehouse"
 
 
@@ -57,6 +64,25 @@ PROFILE = """storscale:
 """
 
 
+def _report(project, target, token):
+    """The run's artifacts to the platform, for the catalog: never fails the run."""
+    body = {}
+    for name in ("manifest", "catalog", "run_results"):
+        try:
+            with open(os.path.join(target, f"{name}.json")) as f:
+                body[name] = json.load(f)
+        except (OSError, ValueError):
+            pass
+    if not body:
+        return
+    try:
+        r = requests.post(f"{PLATFORM}/api/projects/{project}/dbt/artifacts", json=body, timeout=120,
+                          headers={"Authorization": f"Bearer {token}"})
+        print(f"storscale.dbt: artifacts to the platform: HTTP {r.status_code} {r.text[:200]}")
+    except requests.RequestException as e:
+        print(f"storscale.dbt: artifacts not sent: {e}")
+
+
 def build(project, path="dbt", schema=None, catalog="iceberg", task_id="dbt_build", select=None):
     """The task: `dbt build` on the dbt project at `path`, beside the DAG file
     that calls this. schema: the project's namespace (default its name, with
@@ -77,6 +103,12 @@ def build(project, path="dbt", schema=None, catalog="iceberg", task_id="dbt_buil
                "--target-path", os.path.join(work, "target"), "--log-path", os.path.join(work, "logs")]
         if select:
             cmd += ["--select", select]
-        subprocess.run(cmd, env=env, check=True)
+        built = subprocess.run(cmd, env=env)
+        # The catalog's view of the run, whatever came of it.
+        subprocess.run([DBT, "docs", "generate", "--project-dir", project_dir, "--profiles-dir", work, "--profile", "storscale",
+                        "--target-path", os.path.join(work, "target"), "--log-path", os.path.join(work, "logs")], env=env)
+        _report(project, os.path.join(work, "target"), env["STORSCALE_TRINO_TOKEN"])
+        if built.returncode != 0:
+            raise RuntimeError(f"dbt build failed (exit {built.returncode}): its log above says which model or test")
         return os.path.join(work, "target")
     return dbt_build()

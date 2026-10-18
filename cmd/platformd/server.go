@@ -54,15 +54,18 @@ type login struct {
 }
 
 type server struct {
-	cfg      config
-	log      *slog.Logger
-	oauth    oauth2.Config
-	verifier *oidc.IDTokenVerifier
-	secure   bool // cookies only over HTTPS
-	now      func() time.Time
-	store    store.Store       // nil: no projects
-	catalog  *catalog.Client   // nil: no Flow view
-	airflow  *pipelines.Client // nil: no pipelines
+	cfg       config
+	log       *slog.Logger
+	oauth     oauth2.Config
+	verifier  *oidc.IDTokenVerifier
+	tokens    *oidc.IDTokenVerifier            // the realm's access tokens, any client's (a project's pipelines)
+	tokenUser func(raw string) (string, error) // in tests, who a token is (in place of tokens)
+	files     fileStore                        // the platform's files in its bucket (dbt's artifacts); nil without STORE_URL
+	secure    bool                             // cookies only over HTTPS
+	now       func() time.Time
+	store     store.Store       // nil: no projects
+	catalog   *catalog.Client   // nil: no Flow view
+	airflow   *pipelines.Client // nil: no pipelines
 	// projects' own Airflows (cfg.ProjectAirflows), by project, with the
 	// password they were made with
 	projectAirflows map[string]projectAirflow
@@ -100,6 +103,7 @@ func newServer(ctx context.Context, cfg config, log *slog.Logger) (*server, erro
 			},
 		},
 		verifier: oidc.NewVerifier(cfg.issuer(), keys, &oidc.Config{ClientID: cfg.ClientID}),
+		tokens:   tokenVerifier(cfg.issuer(), keys),
 		// Only over HTTPS: Chrome and Firefox count http://*.localhost as
 		// secure, but Safari doesn't, and drops Secure cookies there.
 		secure:   pu.Scheme == "https",
@@ -118,6 +122,13 @@ func newServer(ctx context.Context, cfg config, log *slog.Logger) (*server, erro
 		if s.store, err = store.Open(cfg.ProjectStore, cfg.StoreURL, cfg.StoreAccessKey, cfg.StoreSecretKey, cfg.StoreBucket); err != nil {
 			return nil, err
 		}
+	}
+	if cfg.StoreURL != "" {
+		files, err := store.New(cfg.StoreURL, cfg.StoreAccessKey, cfg.StoreSecretKey, cfg.StoreBucket)
+		if err != nil {
+			return nil, err
+		}
+		s.files = files
 	}
 	if cfg.AirflowURL != "" {
 		s.airflow = pipelines.New(cfg.AirflowURL, cfg.AirflowUser, cfg.AirflowPassword)
@@ -164,6 +175,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/projects/{name}/sql", s.handleSemantic)
 	mux.HandleFunc("GET /api/projects/{name}/pipelines", s.handlePipelines)
 	mux.HandleFunc("POST /api/projects/{name}/pipelines/{pipeline}/runs", s.handleStartRun)
+	mux.HandleFunc("POST /api/projects/{name}/dbt/artifacts", s.handleDbtArtifacts)
 	mux.HandleFunc("GET /api/projects/{name}/asof", s.handleAsOf)
 	mux.HandleFunc("GET /api/projects/{name}/tags", s.handleTags)
 	mux.HandleFunc("POST /api/projects/{name}/tags", s.handleTags)

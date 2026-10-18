@@ -166,6 +166,14 @@ func (s *Bucket) Connection(ctx context.Context, project, name string) (map[stri
 	return s.keys(ctx, "connections/"+project+"/"+name+".json")
 }
 
+// PutFile keeps a file of the platform's (dbt's artifacts of a project's
+// run, as dbt/<project>/manifest.json) in the bucket, as given.
+func (s *Bucket) PutFile(ctx context.Context, key string, data []byte, contentType string) error {
+	_, err := s.c.PutObject(ctx, s.bucket, key, bytes.NewReader(data), int64(len(data)),
+		minio.PutObjectOptions{ContentType: contentType})
+	return err
+}
+
 // keys reads a JSON object of strings; nil, with no error, when there's none.
 func (s *Bucket) keys(ctx context.Context, key string) (map[string]string, error) {
 	data, err := s.get(ctx, key)
