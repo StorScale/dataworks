@@ -610,7 +610,7 @@ services:
       - trino-auth:/etc/trino/auth:ro
       - trino-sources:/etc/trino/sources:ro   # the sources' connections (the operator's)
     ports: ["${STORSCALE_BIND:-127.0.0.1}:8443:8443"]
-    mem_limit: 1536m   # its heap is 60% of this (trino/jvm.config); a query gets at most 512 MB here
+    mem_limit: 2g   # its heap is 60% of this (trino/jvm.config); a query gets at most 512 MB here
     depends_on:
       tls: {condition: service_completed_successfully}
       trino-passwords: {condition: service_completed_successfully}
