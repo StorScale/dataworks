@@ -151,6 +151,18 @@ spec:
                       type: string
                       pattern: '^[1-9][0-9]{0,5}(Mi|Gi)$'
                       description: "The project's own Airflow's memory, from 2Gi to 64Gi; default the install's (pipelines.memory)."
+                    reviews:
+                      type: object
+                      description: >-
+                        Each open merge request's change to the repo's dbt models, built and tested on a
+                        data branch of its own (a Nessie branch), as the project's pipelines; the merge
+                        request told how it went. GitLab: the repo's token reads merge requests and
+                        writes statuses and notes.
+                      required: [gitlab, dbt]
+                      properties:
+                        gitlab: {type: string, description: "GitLab's address: https://gitlab.example.com"}
+                        project: {type: string, description: "The repo's path there (group/repo); default the repo URL's."}
+                        dbt: {type: string, description: "The dbt project's folder in the repo."}
                 notify:
                   type: object
                   description: >-

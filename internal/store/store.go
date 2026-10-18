@@ -166,6 +166,11 @@ func (s *Bucket) Connection(ctx context.Context, project, name string) (map[stri
 	return s.keys(ctx, "connections/"+project+"/"+name+".json")
 }
 
+// GetFile is a file of the platform's; nil, with no error, when there's none.
+func (s *Bucket) GetFile(ctx context.Context, key string) ([]byte, error) {
+	return s.get(ctx, key)
+}
+
 // PutFile keeps a file of the platform's (dbt's artifacts of a project's
 // run, as dbt/<project>/manifest.json) in the bucket, as given.
 func (s *Bucket) PutFile(ctx context.Context, key string, data []byte, contentType string) error {

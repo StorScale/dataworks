@@ -132,6 +132,33 @@ func (n *Nessie) Untag(ctx context.Context, name, hash string) error {
 	return n.do(ctx, "DELETE", "/trees/"+url.PathEscape(name+"@"+hash), nil, nil)
 }
 
+// Branch makes a branch from main as it is now (a merge request's data
+// branch); one that's there already is left as it is.
+func (n *Nessie) Branch(ctx context.Context, name string) (*Ref, error) {
+	if r, err := n.Ref(ctx, name); err != nil || r != nil {
+		return r, err
+	}
+	main, err := n.Ref(ctx, "main")
+	if err != nil || main == nil {
+		return nil, fmt.Errorf("main: %v", err)
+	}
+	var r struct {
+		Reference Ref `json:"reference"`
+	}
+	q := url.Values{"name": {name}, "type": {"BRANCH"}}
+	err = n.do(ctx, "POST", "/trees?"+q.Encode(), Ref{Type: "BRANCH", Name: "main", Hash: main.Hash}, &r)
+	return &r.Reference, err
+}
+
+// DropBranch removes a branch, as it is now; one that's gone is no error.
+func (n *Nessie) DropBranch(ctx context.Context, name string) error {
+	r, err := n.Ref(ctx, name)
+	if err != nil || r == nil {
+		return err
+	}
+	return n.do(ctx, "DELETE", "/trees/"+url.PathEscape(name+"@"+r.Hash), nil, nil)
+}
+
 type logPage struct {
 	LogEntries []struct {
 		CommitMeta struct {

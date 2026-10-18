@@ -19,7 +19,8 @@ import urllib.error
 import urllib.request
 
 OPERATOR = os.environ.get("OPERATOR_URL", "http://platform-operator:8081")
-LOCAL = [{"name": "dags-folder", "classpath": "airflow.dag_processing.bundles.local.LocalDagBundle", "kwargs": {}}]
+LOCAL = [{"name": "dags-folder", "classpath": "airflow.dag_processing.bundles.local.LocalDagBundle", "kwargs": {}},
+         {"name": "storscale", "classpath": "airflow.dag_processing.bundles.local.LocalDagBundle", "kwargs": {"path": "/opt/storscale/dags"}}]
 POLL = int(os.environ.get("BUNDLES_POLL_SECONDS", "15"))
 
 

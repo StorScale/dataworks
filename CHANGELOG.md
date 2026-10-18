@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **A merge request on a data branch** ([docs/use-cases.md](docs/use-cases.md), 7.3; GitLab): a project's `pipelines.reviews` names its GitLab and its repo's dbt project. The operator polls the repo's open merge requests (its token, GitLab's API) and, for each, makes a Nessie branch of the project's tables (`<project>-mr-<iid>`, from main: nothing copied) and a Trino catalog on it (`<project>_mr_<iid>`, its editors reading, its pipelines building), then starts the platform's DAG `storscale_review` (in the Airflow image, in the project's own Airflow) at each new commit: it checks the repo out at that commit, builds the dbt models the change touches and those downstream (`state:modified+`, against production's manifest, which platformd keeps) in the branch's catalog, as the project's pipelines, and tells the merge request: a commit status (`storscale/dbt`: pending, running, success or failed, naming the failed tests) and a note with each model's rows on the branch and in production. Production is untouched; a merge request closed or merged, its branch and catalog go (production's next run builds what was merged). The `reviews` suite plays GitLab's API and checks it end to end.
+
 ## [0.13.0] - 2026-10-18
 
 dbt in a project's repo: its models built by Airflow in Trino as the project's pipelines, and described in the catalog; Trino's memory set right.

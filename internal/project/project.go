@@ -296,6 +296,27 @@ type Pipelines struct {
 	Ref            string          `json:"ref,omitempty"`         // a branch, tag or commit; default the install's own
 	Credentials    *GitCredentials `json:"credentials,omitempty"` // for a repo that isn't public
 	Memory         string          `json:"memory,omitempty"`      // its Airflow's, as 3Gi or 2560Mi; default the install's
+	Reviews        *Reviews        `json:"reviews,omitempty"`     // merge requests checked on a data branch
+}
+
+// Reviews checks each open merge request's change to the repo's dbt models
+// on a data branch of its own (use case 7.3): a Nessie branch of the
+// project's tables, where the models it touches (and those downstream) are
+// built and tested, as the project's pipelines; the merge request is told
+// how it went (a commit status, a comment). The repo's credentials (a
+// token) need GitLab's API: reading merge requests, writing statuses and
+// notes.
+type Reviews struct {
+	GitLab  string `json:"gitlab"`            // GitLab's address: https://gitlab.example.com
+	Project string `json:"project,omitempty"` // the repo's path there (group/repo); default the repo URL's
+	Dbt     string `json:"dbt"`               // the dbt project's folder in the repo
+}
+
+// ReviewBranch is a merge request's Nessie branch, and ReviewCatalog the
+// Trino catalog on it.
+func (p *Project) ReviewBranch(iid int) string { return fmt.Sprintf("%s-mr-%d", p.Metadata.Name, iid) }
+func (p *Project) ReviewCatalog(iid int) string {
+	return fmt.Sprintf("%s_mr_%d", strings.ReplaceAll(p.Metadata.Name, "-", "_"), iid)
 }
 
 // GitCredentials name where the repo's credentials are kept, never the
@@ -642,10 +663,22 @@ func StorageBytes(q string) int64 {
 func (pl *Pipelines) problems() []string {
 	var out []string
 	if pl.Repo == "" {
-		if pl.Path != "" || pl.Ref != "" || pl.Credentials != nil || pl.Memory != "" {
-			out = append(out, "path, ref, credentials and memory need a repo")
+		if pl.Path != "" || pl.Ref != "" || pl.Credentials != nil || pl.Memory != "" || pl.Reviews != nil {
+			out = append(out, "path, ref, credentials, memory and reviews need a repo")
 		}
 		return out
+	}
+	if r := pl.Reviews; r != nil {
+		switch {
+		case !strings.HasPrefix(r.GitLab, "https://") && !strings.HasPrefix(r.GitLab, "http://"):
+			out = append(out, fmt.Sprintf("reviews: gitlab %q: GitLab's address, https://...", r.GitLab))
+		case pl.Credentials == nil || !strings.HasPrefix(pl.Repo, "https://") && !strings.HasPrefix(pl.Repo, "http://"):
+			out = append(out, "reviews: GitLab's API needs the repo's credentials (a token, for an https repo)")
+		case r.Dbt == "" || !gitPathRE.MatchString(r.Dbt) || slices.Contains(strings.Split(r.Dbt, "/"), ".."):
+			out = append(out, fmt.Sprintf("reviews: dbt %q: the dbt project's folder in the repo", r.Dbt))
+		case r.Project != "" && !gitPathRE.MatchString(r.Project):
+			out = append(out, fmt.Sprintf("reviews: project %q: the repo's path in GitLab, as group/repo", r.Project))
+		}
 	}
 	if pl.Memory != "" {
 		if mi, ok := MiB(pl.Memory); !ok || mi < MinMemoryMiB || mi > MaxMemoryMiB {
@@ -940,6 +973,35 @@ func (p *Project) sourcePolicies() []RangerPolicy {
 				Resources:            resources("catalog", cat, "schema", sc, "table", tb),
 				RowFilterPolicyItems: []RangerItem{it}})
 		}
+	}
+	return out
+}
+
+// ReviewPolicies let the project's editors read, and its pipelines build
+// in, the Trino catalogs of its open merge requests' data branches (use case
+// 7.3): its namespace there, and nothing else.
+func (p *Project) ReviewPolicies(iids []int) []RangerPolicy {
+	t := p.Spec.Tables
+	if t == nil || p.Spec.Pipelines == nil {
+		return nil
+	}
+	desc := "From the project " + p.Metadata.Name + ": a merge request's data branch, which the platform operator keeps."
+	editors, pipelines := p.Group(Editor), p.Group("pipelines")
+	var out []RangerPolicy
+	for _, iid := range iids {
+		cat, named := p.ReviewCatalog(iid), p.RangerPrefix()+fmt.Sprintf("review:%d", iid)
+		schemas := resources("catalog", cat, "schema", "-")
+		schemas["schema"] = RangerResource{Values: []string{t.Namespace, "information_schema"}}
+		tables := resources("catalog", cat, "schema", "-", "table", "*", "column", "*")
+		tables["schema"] = schemas["schema"]
+		out = append(out,
+			RangerPolicy{Name: named, Description: desc, Resources: resources("catalog", cat),
+				PolicyItems: []RangerItem{allow(editors, "use", "show"), allow(pipelines, "use", "show")}},
+			RangerPolicy{Name: named + ":schemas", Description: desc, Resources: schemas,
+				PolicyItems: []RangerItem{allow(editors, "use", "show"), allow(pipelines, "use", "show")}},
+			RangerPolicy{Name: named + ":tables", Description: desc, Resources: tables,
+				PolicyItems: []RangerItem{allow(editors, "select", "show"),
+					allow(pipelines, "select", "insert", "delete", "create", "drop", "alter", "show")}})
 	}
 	return out
 }

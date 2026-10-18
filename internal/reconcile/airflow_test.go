@@ -126,14 +126,14 @@ func TestBundlesAreTheAppliedProjects(t *testing.T) {
 	for _, b := range got {
 		names = append(names, b.Name)
 	}
-	if strings.Join(names, ",") != "dags-folder,project-ads,project-sales" {
-		t.Fatalf("bundles %v, want the platform's own, then each applied project's, sorted", names)
+	if strings.Join(names, ",") != "dags-folder,storscale,project-ads,project-sales" {
+		t.Fatalf("bundles %v, want the platform's own two, then each applied project's, sorted", names)
 	}
-	if kw := got[2].Kwargs; kw["tracking_ref"] != "main" || kw["subdir"] != "dags" || kw["git_conn_id"] != "git_sales" || kw["refresh_interval"] != refreshSeconds {
+	if kw := got[3].Kwargs; kw["tracking_ref"] != "main" || kw["subdir"] != "dags" || kw["git_conn_id"] != "git_sales" || kw["refresh_interval"] != refreshSeconds {
 		t.Errorf("sales' bundle: %v", kw)
 	}
-	if got[1].Kwargs["tracking_ref"] != "prod" {
-		t.Errorf("ads' bundle follows its own ref: %v", got[1].Kwargs)
+	if got[2].Kwargs["tracking_ref"] != "prod" {
+		t.Errorf("ads' bundle follows its own ref: %v", got[2].Kwargs)
 	}
 }
 

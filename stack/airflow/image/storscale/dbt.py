@@ -37,7 +37,7 @@ PLATFORM = os.environ.get("STORSCALE_PLATFORMD_URL", "http://platformd:8080")
 REALM = "lakehouse"
 
 
-def _token():
+def token():
     c = BaseHook.get_connection("keycloak_pipelines")
     scheme = c.extra_dejson.get("scheme", "http")
     host = f"{c.host}:{c.port}" if c.port else c.host
@@ -62,6 +62,13 @@ PROFILE = """storscale:
       schema: {schema}
       threads: 4
 """
+
+
+def write_profile(work, catalog, schema):
+    """dbt's profile (storscale), in work: Trino, this catalog and schema."""
+    with open(os.path.join(work, "profiles.yml"), "w") as f:
+        f.write(PROFILE.format(host=os.environ.get("TRINO_HOST", "trino"), cert=os.environ.get("TRINO_CA", "/tls/cert.pem"),
+                               catalog=catalog, schema=schema))
 
 
 def _report(project, target, token):
@@ -94,11 +101,9 @@ def build(project, path="dbt", schema=None, catalog="iceberg", task_id="dbt_buil
     @task(task_id=task_id)
     def dbt_build():
         work = tempfile.mkdtemp(prefix="dbt-")
-        with open(os.path.join(work, "profiles.yml"), "w") as f:
-            f.write(PROFILE.format(host=os.environ.get("TRINO_HOST", "trino"), cert=os.environ.get("TRINO_CA", "/tls/cert.pem"),
-                                   catalog=catalog, schema=schema))
+        write_profile(work, catalog, schema)
         env = {k: v for k, v in os.environ.items() if not k.startswith("AIRFLOW__")}
-        env.update({"STORSCALE_TRINO_TOKEN": _token(), "DBT_SEND_ANONYMOUS_USAGE_STATS": "false"})
+        env.update({"STORSCALE_TRINO_TOKEN": token(), "DBT_SEND_ANONYMOUS_USAGE_STATS": "false"})
         cmd = [DBT, "build", "--project-dir", project_dir, "--profiles-dir", work, "--profile", "storscale",
                "--target-path", os.path.join(work, "target"), "--log-path", os.path.join(work, "logs")]
         if select:

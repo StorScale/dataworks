@@ -170,7 +170,7 @@ func TestTheSharedAirflowTakesNoProjectsRepoWhenEachHasItsOwn(t *testing.T) {
 		Store: &memStore{statuses: []*project.Status{{Name: "sales", Phase: project.Ready, Spec: sales,
 			Parts: []project.Part{{System: "airflow", OK: true}}}}}}
 	got, _ := r.Bundles(context.Background())
-	if len(got) != 1 || got[0].Name != "dags-folder" {
+	if len(got) != 2 || got[0].Name != "dags-folder" || got[1].Name != "storscale" {
 		t.Errorf("bundles %v, want the platform's own only", got)
 	}
 }

@@ -39,6 +39,11 @@ type Bundle struct {
 // The platform's own DAGs, from Airflow's dags folder.
 var localBundle = Bundle{Name: "dags-folder", Classpath: "airflow.dag_processing.bundles.local.LocalDagBundle", Kwargs: map[string]any{}}
 
+// StorscaleBundle is the platform's DAGs in the Airflow image (a merge
+// request's review), in every Airflow: the shared one and each project's.
+var StorscaleBundle = Bundle{Name: "storscale", Classpath: "airflow.dag_processing.bundles.local.LocalDagBundle",
+	Kwargs: map[string]any{"path": "/opt/storscale/dags"}}
+
 const refreshSeconds = 60 // how often a project's repo is fetched
 
 func (a *Airflow) bundle(p *project.Project) Bundle {
@@ -143,7 +148,7 @@ func (r *Reconciler) Bundles(ctx context.Context) ([]Bundle, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := []Bundle{localBundle}
+	out := []Bundle{localBundle, StorscaleBundle}
 	if r.ProjectAirflows != nil { // each project's repo is in its own Airflow
 		return out, nil
 	}
@@ -157,6 +162,6 @@ func (r *Reconciler) Bundles(ctx context.Context) ([]Bundle, error) {
 			}
 		}
 	}
-	sort.Slice(out[1:], func(i, j int) bool { return out[1+i].Name < out[1+j].Name })
+	sort.Slice(out[2:], func(i, j int) bool { return out[2+i].Name < out[2+j].Name })
 	return out, nil
 }
