@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **A merge request's note, kept and fuller:** the platform's note on a merge request is updated at each new commit (one note per merge request, marked as the platform's), and holds a sample of the rows that differ between the branch and production, for each model built.
+
 ## [0.14.0] - 2026-10-18
 
 A merge request's dbt change built and tested on a data branch of its own (GitLab), and the merge request told how it went.
