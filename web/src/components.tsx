@@ -226,6 +226,7 @@ export function ProjectFrame() {
     ["dashboards", "Dashboards", has("dashboards")],
     ["tags", "Tags", !!spec?.tables],
     ["deliveries", "Deliveries", !!spec?.deliveries?.length],
+    ["releases", "Releases", !!spec?.pipelines?.repo],
     ["access", "Access", true],
     ["audit", "Audit", view?.role === "editor" || admin],
   ];

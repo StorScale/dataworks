@@ -375,6 +375,13 @@ def put_model(c, project, body, request):
     return {"project": project, "yaml": text, **summary}
 
 
+def check_model(c, project, body, request):
+    """Whether a model is one, not saved (a plan of the project's repo, use case 7.4): its members (and pipelines)."""
+    member(c, project)
+    _, summary = compile_model(project, body.get("yaml", ""))  # ValueError: what's wrong
+    return {"project": project, **summary}
+
+
 def post_query(c, project, body, request):
     member(c, project)
     return answer(c, project, body.get("metrics", []), body.get("group_by", []), body.get("where", []),
@@ -401,6 +408,7 @@ def post_sql(c, project, body, request):
 mcp.custom_route("/api/projects/{project}/sql", methods=["POST"])(api(post_sql))
 mcp.custom_route("/api/projects/{project}/semantic", methods=["GET"])(api(get_model))
 mcp.custom_route("/api/projects/{project}/semantic", methods=["PUT"])(api(put_model))
+mcp.custom_route("/api/projects/{project}/semantic/check", methods=["POST"])(api(check_model))
 mcp.custom_route("/api/projects/{project}/semantic/query", methods=["POST"])(api(post_query))
 
 

@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **A project as code, released from its repo** ([docs/use-cases.md](docs/use-cases.md), 7.4): beside its pipelines, a project's repo holds `storscale/project.yaml` (its spec), `semantic.yaml` (its metrics) and `targets/<target>.yaml` (what differs on one install, laid over `project.yaml`: maps merged, lists replaced); an install says which target it is (`install.target`, default `production`; Compose is `development`). On the project's new Releases tab an editor plans a tag, a branch or a commit: the platform's DAG `storscale_plan` (the bundle `storscale`, in the project's Airflow) checks the repo out with its connection and sends the folder to platformd, which composes the spec for this install, checks it and the semantic model (semanticd's new `/semantic/check`), and lists what would change: members added and removed, the parts of the spec changed, the deliveries that will need approving again, the metrics added, changed and removed. An administrator other than who planned it applies it: the spec and the model saved, the release recorded (its ref and commit, who planned and who applied), in the audit log. A plan made before the project changed is refused (planned again). A rollback is a plan of an earlier tag. The `releases` suite checks it end to end.
+
 ## [0.15.0] - 2026-10-18
 
 File deliveries to clients and partners (SFTP and S3), approved before they run; an import's reset, GitLab's webhooks, how far a copy is behind, and the metrics a merge request moves.

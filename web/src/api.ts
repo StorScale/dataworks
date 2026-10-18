@@ -262,6 +262,16 @@ export const approveDelivery = (name: string, d: string) =>
   api<{ approved: boolean; needs: string[] }>("POST", `/api/projects/${encodeURIComponent(name)}/deliveries/${encodeURIComponent(d)}/approve`);
 export const resetImport = (name: string, i: string) =>
   api<{ run: string }>("POST", `/api/projects/${encodeURIComponent(name)}/imports/${encodeURIComponent(i)}/reset`);
+// --- A project's releases (7.4): plans of its repo's storscale/ at a ref, applied by someone else
+export type Plan = {
+  id: string; ref: string; commit?: string; target: string; by: string; at: string;
+  state: "fetching" | "ready" | "failed" | "applied"; error?: string; changes: string[]; appliedBy?: string; appliedAt?: string;
+};
+export const getPlans = (name: string) =>
+  api<{ plans: Plan[]; release?: Plan; target: string; repo: boolean; canPlan: boolean; canApply: boolean }>("GET", `/api/projects/${encodeURIComponent(name)}/plans`);
+export const makePlan = (name: string, ref: string) => api<Plan>("POST", `/api/projects/${encodeURIComponent(name)}/plans`, { ref });
+export const applyPlan = (name: string, id: string) =>
+  api<Plan>("POST", `/api/projects/${encodeURIComponent(name)}/plans/${encodeURIComponent(id)}/apply`);
 export type CopyTable = { source: string; from: string; table: string; lastChange?: string; error?: string };
 export const getCopies = (name: string) => api<{ copies: CopyTable[] }>("GET", `/api/projects/${encodeURIComponent(name)}/copies`);
 

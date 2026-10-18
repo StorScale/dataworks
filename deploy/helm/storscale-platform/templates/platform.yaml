@@ -55,6 +55,7 @@ spec:
             {{- with .Values.deliveries.approverGroups }}
             - {name: DELIVERY_APPROVER_GROUPS, value: {{ . | quote }}}   # who approves deliveries of personal data
             {{- end }}
+            - {name: INSTALL_TARGET, value: {{ .Values.install.target | quote }}}   # a project's repo's storscale/targets/<target>.yaml
             - {name: MAINTENANCE_KEEP_HISTORY, value: {{ .Values.maintenance.history.keep | quote }}}
             # The audit log, beside Ranger's in its Solr (audit.*).
             - {name: AUDIT_URL, value: "http://ranger-solr:8983/solr/ranger_audits"}
