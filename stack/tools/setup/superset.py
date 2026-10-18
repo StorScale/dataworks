@@ -17,21 +17,21 @@ lakehouse = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(lakehouse)
 
 SERVICE_USER = "superset"
-PEOPLE = ["analysts", "engineers"]
 POLICIES = lakehouse.POLICIES + [
     {"name": "superset: queries as people", "resources": res(trinouser="*"),
      "policyItems": [allow(["impersonate"], users=[SERVICE_USER])]},
-    # BI tools read table metadata from Trino's system catalog: system.jdbc
-    # and system.metadata (Trino's SQLAlchemy and JDBC drivers do). Trino
-    # filters those tables to what each person may see anyway.
-    # (So does the catalog's service user, openmetadata, to read the tables.)
+    # Tools read table metadata from Trino's system catalog: system.jdbc and
+    # system.metadata (Trino's SQLAlchemy and JDBC drivers do; so does dbt, as
+    # each project's pipelines; so does the catalog's user, openmetadata).
+    # Trino filters those tables to what each one may see, so everyone may
+    # read them (Ranger's group public); not system.runtime (queries, nodes).
     {"name": "BI tools: system catalog", "resources": res(catalog="system"),
-     "policyItems": [allow(["use", "show"], groups=PEOPLE, users=["openmetadata"])]},
+     "policyItems": [allow(["use", "show"], groups=["public"], users=["openmetadata"])]},
     {"name": "BI tools: system metadata schemas", "resources": res(catalog="system", schema=["jdbc", "metadata"]),
-     "policyItems": [allow(["use", "show"], groups=PEOPLE, users=["openmetadata"])]},
+     "policyItems": [allow(["use", "show"], groups=["public"], users=["openmetadata"])]},
     {"name": "BI tools: system metadata tables",
      "resources": res(catalog="system", schema=["jdbc", "metadata"], table="*", column="*"),
-     "policyItems": [allow(["select"], groups=PEOPLE, users=["openmetadata"])]},
+     "policyItems": [allow(["select"], groups=["public"], users=["openmetadata"])]},
 ]
 
 if __name__ == "__main__":
