@@ -117,13 +117,15 @@ func (d Delivery) Approved() bool {
 // those its query names.
 func (p *Project) PersonalColumns(d Delivery) []string {
 	var out []string
-	if p.Spec.Tables == nil || p.Spec.Tables.Readers == nil {
+	if p.Spec.Tables == nil {
 		return out
 	}
 	q := strings.ToLower(d.Query)
-	for _, m := range p.Spec.Tables.Readers.Masks {
-		if d.Table != "" && m.Table == d.Table || d.Query != "" && strings.Contains(q, strings.ToLower(m.Column)) {
-			out = append(out, m.Table+"."+m.Column)
+	if rv := p.Spec.Tables.Readers; rv != nil {
+		for _, m := range rv.Masks {
+			if d.Table != "" && m.Table == d.Table || d.Query != "" && strings.Contains(q, strings.ToLower(m.Column)) {
+				out = append(out, m.Table+"."+m.Column)
+			}
 		}
 	}
 	if t, c := p.PersonKeyOf(d); c != "" && !slices.Contains(out, t+"."+c) {

@@ -126,7 +126,8 @@ def run(bob, dag):
     loaded = wait(lambda: any(p["id"] == dag for p in
                               (bob.get(f"{PLATFORM}/api/projects/{NAME}/pipelines", timeout=60).json() or {}).get("pipelines", [])), 600, every=10)
     if not loaded:
-        return None, "not loaded"
+        errors = (bob.get(f"{PLATFORM}/api/projects/{NAME}/pipelines", timeout=60).json() or {}).get("importErrors") or []
+        return None, f"not loaded: {json.dumps(errors)[:400]}"
     r = bob.post(f"{PLATFORM}/api/projects/{NAME}/pipelines/{dag}/runs", headers=H, timeout=60)
     run_id = r.json().get("run") if r.ok else None
     if not run_id:

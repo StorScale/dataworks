@@ -137,6 +137,10 @@ func TestANotebookIsScheduledByAMergeRequest(t *testing.T) {
 		!strings.Contains(dagFile["content"].(string), `notebook.schedule(project="sales", name="churn_features", schedule="0 5 * * *", owner="dana")`) {
 		t.Errorf("the commit: %v", c)
 	}
+	// Airflow's safe mode parses only files with both words in them.
+	if dag := strings.ToLower(dagFile["content"].(string)); !strings.Contains(dag, "airflow") || !strings.Contains(dag, "dag") {
+		t.Errorf("Airflow wouldn't read the DAG file: %s", dagFile["content"])
+	}
 	if len(gl.mrs) != 1 || gl.mrs[0]["target_branch"] != "main" {
 		t.Errorf("the merge request: %v", gl.mrs)
 	}
