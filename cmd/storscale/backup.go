@@ -535,8 +535,13 @@ func applyJSON(doc []byte) error {
 func waitStopped(limit time.Duration) error {
 	deadline := time.Now().Add(limit)
 	for {
+		// The Deployments' replicas count no pod that's terminating, and one
+		// can write for its grace period (OpenMetadata's scheduler did, into
+		// a database being restored): their pods gone, too.
 		out, err := kubeOut("get", "deployments", "-o", "jsonpath={range .items[*]}{.status.replicas}{\" \"}{end}")
-		if err == nil && strings.Trim(strings.ReplaceAll(string(out), "0", ""), " ") == "" {
+		pods, perr := kubeOut("get", "pods", "-o", "jsonpath={range .items[*]}{.metadata.ownerReferences[0].kind}{\" \"}{end}")
+		if err == nil && perr == nil && strings.Trim(strings.ReplaceAll(string(out), "0", ""), " ") == "" &&
+			!strings.Contains(string(pods), "ReplicaSet") {
 			return nil
 		}
 		if time.Now().After(deadline) {
