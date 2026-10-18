@@ -323,9 +323,7 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R8.5 Connectors for applications and files (dlt or Airbyte), configured per project, scheduled by Airflow, writing to the project's Iceberg tables.
 - R8.6 Connectors' state kept, so each run copies only what's new.
 
-**Open questions**
-- Which applications first?
-- dlt (a library, run in Airflow, small) or Airbyte (many connectors, a service of its own to run)?
+**Decided (2026-10-18):** dlt, run in the project's Airflow (Airbyte is a service of its own). First: any REST API (dlt's `rest_api`), a database by a cursor column, files in the project's bucket; applications' own sources (HubSpot, Salesforce) by demand.
 
 ### 8.3 Query a database where it is
 
