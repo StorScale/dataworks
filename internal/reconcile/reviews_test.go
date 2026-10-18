@@ -104,8 +104,8 @@ func TestAMergeRequestsDataBranch(t *testing.T) {
 	gl := &fakeGitLab{mrs: []gitlab.MergeRequest{{IID: 7, SHA: "abcdef0123456789", WebURL: "https://gitlab.example.com/sales/dags/-/merge_requests/7"}}}
 	var asked []string
 	r := &Reconciler{
-		Store:    &memStore{secrets: map[string]map[string]string{"sales/git": {"username": "bot", "password": "tok"}}},
-		Airflow:  &Airflow{API: pipelines.New(as.URL+"/pipelines", "storscale-platform", "pw")},
+		Store:   &memStore{secrets: map[string]map[string]string{"sales/git": {"username": "bot", "password": "tok"}}},
+		Airflow: &Airflow{API: pipelines.New(as.URL+"/pipelines", "storscale-platform", "pw")},
 		Reviewer: &Reviewer{Trino: ft.server(t), Nessie: &Nessie{URL: ns.URL}, GitLab: func(base, token, project string) MergeRequests {
 			asked = append(asked, base+" "+token+" "+project)
 			return gl
