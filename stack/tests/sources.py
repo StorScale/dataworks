@@ -4,7 +4,10 @@ A source is one of the company's databases, queried where it is: the
 project names it (spec.sources) and one of its connections, and the
 platform operator makes a Trino catalog of it, which Ranger lets the
 project read and no one write. These check, with sales and a source on
-the platform's own Postgres (Trino's limits' database, as its own account):
+the platform's own Postgres (Trino's limits' database, as its own account),
+its user given on sales' Connections tab (use case 7.6: alice, a reader,
+can't give one, and sees its name and user, never its password; bob can't
+remove it while the source names it, rotates it, and removes it after):
 
   1. bob (an editor) reads the source's table through its catalog, and
      nothing of the schema the source leaves out;
@@ -24,13 +27,12 @@ import os
 import psycopg2
 import requests
 
-from lakekit import check, denied, env, finish, s3_root, sql
+from lakekit import check, denied, env, finish, sql
 
-import k8s
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
-PROJECT, CONNECTION, CATALOG = "sales", "storscale-test-source", "sales_finance"
+PROJECT, CONNECTION, CATALOG = "sales", "sales-test-source", "sales_finance"
 SOLR = "http://ranger-solr:8983/solr/ranger_audits"
 OM = "http://openmetadata:8585/api/v1"
 DB = {"host": "trino-db", "port": "5432", "database": "trino", "username": "trino", "password": env["TRINO_DB_PASSWORD"]}
@@ -43,18 +45,19 @@ def source_db(statements):
             cur.execute(s)
 
 
-def put_connection(data):
-    if k8s.in_cluster():
-        k8s.put_secret(CONNECTION, data, labels={"platform.storscale.io/connection": PROJECT})
-    else:
-        s3_root().put_object(Bucket="storscale-platform", Key=f"connections/{PROJECT}/{CONNECTION}.json", Body=json.dumps(data).encode())
+def connections(user):
+    r = user.get(f"{PLATFORM}/api/projects/{PROJECT}/connections", timeout=30)
+    return {c["name"]: c for c in r.json().get("connections", [])} if r.ok else {}
 
 
-def delete_connection():
-    if k8s.in_cluster():
-        k8s._api("DELETE", f"secrets/{CONNECTION}")
-    else:
-        s3_root().delete_object(Bucket="storscale-platform", Key=f"connections/{PROJECT}/{CONNECTION}.json")
+def put_connection(bob, data):
+    """The connection, as bob gives it on sales' Connections tab (use case 7.6)."""
+    return bob.post(f"{PLATFORM}/api/projects/{PROJECT}/connections", timeout=30,
+                    json={"name": CONNECTION, "kind": "database", "values": data})
+
+
+def delete_connection(bob):
+    return bob.delete(f"{PLATFORM}/api/projects/{PROJECT}/connections/{CONNECTION}", timeout=30)
 
 
 def reads(user, table="sources_check.invoices"):
@@ -97,7 +100,15 @@ def main():
                "CREATE TABLE sources_check.invoices (id integer, amount numeric(10, 2))",
                "INSERT INTO sources_check.invoices VALUES (1, 10.50), (2, 99.00)",
                "CREATE TABLE sources_hidden.salaries (id integer)", "INSERT INTO sources_hidden.salaries VALUES (1)"])
-    put_connection(DB)
+    delete_connection(bob)   # one a run before left
+    alice = platform("alice")
+    r = put_connection(alice, DB)
+    check("alice (a reader) can't give sales a connection", r.status_code == 403, f"HTTP {r.status_code}")
+    r = put_connection(bob, DB)
+    seen = connections(alice).get(CONNECTION, {})
+    check("bob gives sales the database's user on its Connections tab; alice sees its name, kind and user, never the password",
+          r.ok and seen.get("kind") == "database" and seen.get("addedBy") == "bob" and seen.get("values", {}).get("username") == DB["username"]
+          and seen.get("set") == ["password"] and DB["password"] not in json.dumps(connections(alice)), (r.text[:200], seen))
     source = {"name": "finance", "kind": "postgresql", "connection": CONNECTION, "schemas": ["sources_check"]}
     put = lambda **more: bob.put(url, timeout=30, data=json.dumps({**before, "spec": {**before["spec"], "sources": [{**source, **more}]}}))
     try:
@@ -108,6 +119,12 @@ def main():
         n = wait(lambda: reads("bob"), 240, every=5)
         check("bob reads the source's table through its catalog (sales_finance)", n == 2, n)
         check("... and nothing of the schema the source leaves out", reads("bob", "sources_hidden.salaries") is None)
+
+        r = delete_connection(bob)
+        check("... and can't remove the connection while the source names it", r.status_code == 409 and "source finance" in r.text, r.text[:200])
+        r = bob.put(f"{PLATFORM}/api/projects/{PROJECT}/connections/{CONNECTION}", json={"values": {"password": DB["password"]}}, timeout=30)
+        check("bob rotates its password (pasting it again): changed by him, read as before",
+              r.ok and connections(bob).get(CONNECTION, {}).get("changedBy") == "bob" and wait(lambda: reads("bob"), 120, every=5) == 2, r.text[:200])
 
         # 2. Read-only.
         msg = denied("bob", "INSERT INTO sources_check.invoices VALUES (3, 1.00)", CATALOG)
@@ -146,7 +163,8 @@ def main():
         check("the source removed, its catalog goes", r.ok and gone)
     finally:
         bob.put(url, data=json.dumps(before), timeout=30)
-        delete_connection()
+        r = delete_connection(bob)
+        check("the source gone, bob removes the connection", r.ok and CONNECTION not in connections(bob), r.text[:200])
         source_db(["DROP SCHEMA IF EXISTS sources_check CASCADE", "DROP SCHEMA IF EXISTS sources_hidden CASCADE"])
     finish()
 

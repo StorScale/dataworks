@@ -281,6 +281,16 @@ Every container runs without privilege escalation, with the default seccomp prof
 
 **Order and effort:** (1) the access check and the operator's fix, a day; (2) reading as of a tag, time or commit on the SQL page, with the checks above, a day; (3) tags: API, Tags tab, keep and removal, audit, two days; (4) the History tab, two days. **Built (2026-10-17):** all four. Tags are the project's (`tables.tags`: a name, a commit, keepUntil, a note, who), the operator keeps Nessie's as they say; the platform turns a tag or a time into its commit. Not yet: notebooks and dashboards read as of a moment by the name alone (no picker), and deliveries (9.1) recording their commit.
 
+### A project's credentials, given on its Connections tab (use case 7.6), how (built 2026-10-18)
+
+**Kept where they were.** A connection is what it was before the tab: on Kubernetes a Secret labelled `platform.storscale.io/connection=<project>` (its kind, who added it and when, who last changed it, as annotations), in Compose `connections/<project>/<name>.json` in the platform's bucket (and `connection-meta/` beside). Everything that reads connections (the operator, platformd's alerts) is unchanged; one made with kubectl is listed too ("made outside the platform").
+
+**Kinds.** git (a token, and GitLab's webhook token), ssh (a key), database (sources, copies, sql_database imports), api (a rest_api import's token), sftp and s3 (deliveries' targets), pgp (a recipient's key), teams (alerts). Each says its keys, which are secret (never shown again: only that they're set) and which aren't (a host, a user's name, a bucket: shown), and which are needed.
+
+**Who.** The project's members see the list: each one's name, kind, the values that aren't secret, who added and changed it, and what in the spec uses it. Its editors (and administrators) add one, whose name starts with the project's and a dash (`sales-dags`), so it can't be the platform's own Secret or another project's (and one whose name is taken by something not the project's is refused); give one new values (a secret left empty stays as it was: rotating is pasting the new one), after which the operator applies the project at once; and remove one the spec doesn't name (one it names says by what). Each change is in the audit log, never with a value.
+
+**Left:** connections stay when their project is removed (a project made again with the same name finds them); the platform's own Secrets aren't on any tab.
+
 ### The project as code, from development to production (use case 7.4), how (design, 2026-10-18)
 
 **In the repo.** Beside the pipelines, a folder `storscale/`: `project.yaml` (the project's spec: members, tables and their readers' rules, checks, sources, imports, deliveries), `semantic.yaml` (its metrics), and `targets/<target>.yaml`, what differs per install (members, buckets, schedules), laid over `project.yaml` (maps merged, lists replaced). An install says which target it is (`install.target`: development, production). A release is a git tag (`v1.3`).
