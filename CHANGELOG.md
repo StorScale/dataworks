@@ -4,7 +4,16 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
-**Upgrading:** `deliveries.keepFor` (default `7y`) is how long a personal delivery's read is kept (Nessie tags, so its data isn't collected); storage grows by what those tags hold.
+## [0.16.0] - 2026-10-18
+
+Phase 7 completed: a project's spec and metrics released from its repo (planned, then applied by another), its credentials given on a Connections tab, and a notebook scheduled from JupyterLab as a merge request; what was sent about a person, found again from the tables as they were; and the catalog in the platform's look.
+
+**Upgrading from 0.15.0:**
+- `storscale upgrade --context <cluster> --version 0.16.0`, after a `--dry-run`. The Project CRD gains `tables.people` (the upgrade applies it first). The notebook image gains JupyterLab's Schedule (and pins JupyterLab 4.5.10); people's notebook servers take it when they next start. The Airflow image gains the scheduled notebooks' virtualenv.
+- `install.target` (default `production`) is which of a project's repo targets (`storscale/targets/<target>.yaml`) this install is.
+- `deliveries.keepFor` (default `7y`) is how long a personal delivery's read is kept (Nessie tags, so its data isn't collected); storage grows by what those tags hold. `deliveries.approverGroups` now also says who searches the delivery log by a person's ID.
+- A project's connections can now be given on its Connections tab by its editors; those made with kubectl stay, and show there.
+- Trino's pods ask for 2560Mi each now (was 2Gi): CI saw Trino killed for memory (OOMKilled) late in the suites, its memory outside the heap having grown with the catalogs made and dropped while it ran.
 
 ### Added
 - **What was sent about a person** ([docs/use-cases.md](docs/use-cases.md), 9.2): a project declares its tables of people's data and the column identifying a person (`tables.people`); a delivery of them is personal, and needs a data-protection approver. Each run of a personal delivery has the tables as it read them kept (a Nessie tag, for `deliveries.keepFor`), and the data-protection approvers search the delivery log by a person's ID on the Deliveries tab: each run is run again on the tables as they were, and the runs that carried that person's rows are listed with when, to whom, and who approved. The log holds no one's ID, and the search's audit record doesn't either. In the examples (Compose, a checkout's kind install) the analysts are data-protection approvers too, so alice can approve what bob changes.
