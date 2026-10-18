@@ -281,6 +281,16 @@ Every container runs without privilege escalation, with the default seccomp prof
 
 **Order and effort:** (1) the access check and the operator's fix, a day; (2) reading as of a tag, time or commit on the SQL page, with the checks above, a day; (3) tags: API, Tags tab, keep and removal, audit, two days; (4) the History tab, two days. **Built (2026-10-17):** all four. Tags are the project's (`tables.tags`: a name, a commit, keepUntil, a note, who), the operator keeps Nessie's as they say; the platform turns a tag or a time into its commit. Not yet: notebooks and dashboards read as of a moment by the name alone (no picker), and deliveries (9.1) recording their commit.
 
+### A notebook on a schedule (use case 7.7), how (built 2026-10-18)
+
+**In JupyterLab.** The notebook image has an extension, Schedule: a button on a notebook's toolbar, an item on a notebook's menu in the file browser, and a command. It asks which project (those the person edits, with a repo) and when (cron, UTC). Its server half (`storscale_schedule`, in the notebook server) reads the notebook, clears its outputs (what it computed may be data no repo should hold), and sends it to platformd with the person's Keycloak token, from the hub.
+
+**Into the repo, reviewed.** platformd checks the person is an editor of the project, then commits through GitLab's API (no git in platformd; the repo's token from its connection; GitLab's address from `pipelines.reviews`, or the repo's own): the notebook as `<dags>/notebooks/<name>.ipynb` and a DAG file `<dags>/notebook_<name>.py` (`storscale.notebook.schedule(...)`), on a branch of their own (`storscale/schedule-<name>`), with a merge request into the branch the project's pipelines follow. Scheduling it again updates the branch and its merge request. Always a merge request: R7.21 asks for review, and a protected branch needs one anyway.
+
+**The run.** `storscale.notebook` (in the Airflow image) runs it with papermill in a virtualenv of its own (`/opt/notebook`: the notebook image's packages, so a notebook runs as it ran by hand), as the project's pipelines: its `buckets_lake` has JupyterLab's calls, signed in as the pipelines' service account. Each run's executed notebook, and its HTML, go to platformd (`notebook-runs/<project>/<dag>/<run>`), linked from the run on the Pipelines tab (the HTML served sandboxed: its outputs, nothing run). A failed run fails its task saying which cell failed and why; the project's alerts (6.7) say the pipeline failed.
+
+**Open:** a project's own Python packages (the image's for now; see "To decide"); the alert naming the failing cell itself, not only the run.
+
 ### A project's credentials, given on its Connections tab (use case 7.6), how (built 2026-10-18)
 
 **Kept where they were.** A connection is what it was before the tab: on Kubernetes a Secret labelled `platform.storscale.io/connection=<project>` (its kind, who added it and when, who last changed it, as annotations), in Compose `connections/<project>/<name>.json` in the platform's bucket (and `connection-meta/` beside). Everything that reads connections (the operator, platformd's alerts) is unchanged; one made with kubectl is listed too ("made outside the platform").

@@ -291,7 +291,7 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R7.22 Each run's executed notebook kept, and linked from the run.
 
 **Open questions**
-- The notebook's Python packages: the image's, or an environment per project (see "To decide")?
+- The notebook's Python packages: the image's, or an environment per project (see "To decide")? The image's for now (built 2026-10-18): the scheduled run has the notebook image's packages.
 
 ---
 
@@ -375,7 +375,7 @@ The company delivers files to clients and partners, and some carry consumer data
 - R9.6 Deliveries of personal data record whose data they carried (the people's IDs, or enough to find them again from the tables' history), for the legal period, searchable by person.
 
 **Open questions**
-- A list of IDs per file is itself personal data: is it kept, or found again by running the delivery's query on the data as it was (Iceberg's time travel), which needs the snapshots kept as long?
+- A list of IDs per file is itself personal data: is it kept, or found again by running the delivery's query on the data as it was (Iceberg's time travel), which needs the snapshots kept as long? **Found again from the tables, not kept** (decided 2026-10-18): the delivery log holds no personal data; it keeps each run's snapshots, and a search runs the delivery's query on the tables as they were then. So a delivery of personal data keeps the snapshots it read (tagged) for the legal period.
 
 ### 9.3 A partner reads in place
 
