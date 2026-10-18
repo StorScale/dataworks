@@ -14,3 +14,8 @@ for p in $(k get pods -o name); do
   # the run before a restart, for a container that crashed
   k logs "$p" --all-containers --previous --tail 40 2>/dev/null | sed 's/^/  (before its restart) /' || true
 done
+# Containers that ended before (OOMKilled, an exit code): what their logs can't say.
+for p in $(k get pods -o name); do
+  k get "$p" -o jsonpath='{range .status.containerStatuses[?(@.lastState.terminated)]}{.name}{": "}{.lastState.terminated.reason}{" (exit "}{.lastState.terminated.exitCode}{") at "}{.lastState.terminated.finishedAt}{"\n"}{end}' 2>/dev/null |
+    sed "s|^|restarted: $p, container |" || true
+done

@@ -197,7 +197,7 @@ spec:
             periodSeconds: 5
             failureThreshold: 60
           volumeMounts:
-            {{- range $f := list "config.properties" "catalog-store.properties" "password-authenticator.properties" "access-control.properties" "resource-groups.properties" "ranger-trino-security.xml" "ranger-trino-audit.xml" }}
+            {{- range $f := list "config.properties" "catalog-store.properties" "jvm.config" "password-authenticator.properties" "access-control.properties" "resource-groups.properties" "ranger-trino-security.xml" "ranger-trino-audit.xml" }}
             - {name: files-trino, mountPath: /etc/trino/{{ $f }}, subPath: {{ $f }}}
             {{- end }}
             - {name: files-trino, mountPath: /etc/trino/catalog-install, subPath: catalog}
@@ -301,6 +301,7 @@ spec:
             failureThreshold: 60
           volumeMounts:
             - {name: config, mountPath: /etc/trino/config.properties, subPath: config.properties}
+            - {name: files-trino, mountPath: /etc/trino/jvm.config, subPath: jvm.config}
             - {name: files-trino, mountPath: /etc/trino/catalog, subPath: catalog}
             - {name: sources, mountPath: /etc/trino/sources, readOnly: true}   # a source's connection is read where its catalog is made
           resources:

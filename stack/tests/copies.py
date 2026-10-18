@@ -159,6 +159,8 @@ def main():
         want = [[1, 11.0], [3, 5.25]]
         got = wait(lambda: (lambda x: x if x == want else None)([[a, float(b)] for a, b in rows() or []]), 300, every=10)
         check("an insert, an update and a delete in the source reach it", got == want, rows())
+        if got != want:
+            show_copy()
 
         # 3. A column added.
         source(["ALTER TABLE public.invoices ADD COLUMN region text", "INSERT INTO public.invoices VALUES (4, 1.00, 'fourth', 1.00, 'EU')"])
