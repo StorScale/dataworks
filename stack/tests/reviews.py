@@ -35,17 +35,17 @@ from projects import platform, projects, wait
 PLATFORM = os.environ["PLATFORM_URL"]
 NAME, PORT, API_PORT = "reviewed", 8423, 8424
 WEBHOOK_TOKEN = "webhook-" + os.urandom(8).hex()
-MODEL = "select id, region, date '2026-10-01' as day from (values {rows}) as t (id, region)\n"
+MODEL = "select id, region, date '2026-10-01' as sold_on from (values {rows}) as t (id, region)\n"
 # A metric on the model, so a merge request's note says how it moved.
 SEMANTIC = """semantic_model:
   name: regions
   node_relation: {database: iceberg, schema_name: reviewed, alias: regions}
-  defaults: {agg_time_dimension: day}
+  defaults: {agg_time_dimension: sold_on}
   entities:
     - {name: region_row, type: primary, expr: id}
   dimensions:
     - {name: region, type: categorical}
-    - {name: day, type: time, type_params: {time_granularity: day}}
+    - {name: sold_on, type: time, type_params: {time_granularity: day}}
   measures:
     - {name: regions_n, expr: "1", agg: sum}
 ---

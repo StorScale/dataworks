@@ -207,7 +207,8 @@ def main():
         found = wait(lambda: pipeline(bob, "delivery_deliver_acme") and pipeline(bob, "delivery_deliver_counts"), 420, every=10)
         check("... and its DAG is one of the project's pipelines", found is not None)
         state = run(bob, "delivery_deliver_acme")
-        sent = sorted(os.listdir(os.path.join(DROP, "upload"))) if os.path.isdir(os.path.join(DROP, "upload")) else []
+        today = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).strftime("%Y-%m-%d")
+        sent = sorted(f for f in (os.listdir(os.path.join(DROP, "upload")) if os.path.isdir(os.path.join(DROP, "upload")) else []) if today in f)
         check("the SFTP delivery runs: a file per region, and a manifest", state == "success" and len(sent) == 3, f"{state}: {sent}")
         manifest = json.load(open(os.path.join(DROP, "upload", next(f for f in sent if f.startswith("manifest_"))))) if any(
             f.startswith("manifest_") for f in sent) else {}
@@ -239,13 +240,15 @@ def main():
               r.ok and not ds.get("acme", {}).get("approved", True) and ds.get("counts", {}).get("approved") and gone, ds.get("acme", {}).get("needs"))
 
         # 5. A failing check.
-        before = len(s3.list_objects_v2(Bucket=BUCKET, Prefix="acme/").get("Contents", []))
         strict = {**changed, "spec": {**changed["spec"], "deliveries": [changed["spec"]["deliveries"][0], {**s3_delivery, "checks": {"maxRows": 1}}]}}
         bob.put(url, data=json.dumps(strict), timeout=30)
-        wait(lambda: deliveries(bob).get("counts", {}).get("checks"), 60, every=5)
+        # Its DAG says its checks: the run waits for Airflow to have the new ones.
+        wait(lambda: '"maxRows": 1' in ((pipeline(bob, "delivery_deliver_counts") or {}).get("description") or ""), 300, every=10)
+        for o in s3.list_objects_v2(Bucket=BUCKET, Prefix="acme/").get("Contents", []):
+            s3.delete_object(Bucket=BUCKET, Key=o["Key"])
         state = run(bob, "delivery_deliver_counts")
-        after = len(s3.list_objects_v2(Bucket=BUCKET, Prefix="acme/").get("Contents", []))
-        check("a failing check (more rows than allowed) sends nothing, and the run fails", state == "failed" and after == before, f"{state}: {before} -> {after}")
+        after = [o["Key"] for o in s3.list_objects_v2(Bucket=BUCKET, Prefix="acme/").get("Contents", [])]
+        check("a failing check (more rows than allowed) sends nothing, and the run fails", state == "failed" and after == [], f"{state}: {after}")
     finally:
         try:
             sql("bob", "DROP TABLE IF EXISTS regions", "iceberg", NAME)
