@@ -167,6 +167,12 @@ def main():
         got = wait(lambda: (lambda x: x if x and x[-1] == [4, "EU"] else None)(rows("id, region")), 300, every=10)
         check("a column added in the source is added to it", got and got[-1] == [4, "EU"], rows("id, region"))
 
+        # How far behind: the copied table's last change, on the project's page.
+        r = bob.get(f"{url}/copies", timeout=60)
+        mine = next((x for x in (r.json().get("copies", []) if r.ok else []) if x["table"] == TABLE), {})
+        check("the project shows the copy's table with when its last change was committed",
+              mine.get("source") == SOURCE and mine.get("lastChange"), mine)
+
         # 4. The project's rules.
         msg = denied("alice", f"SELECT count(*) FROM {TABLE}", "iceberg", "sales")
         check("it's under sales' rules: alice (who reads its listed tables) can't read it", msg is not None, msg)

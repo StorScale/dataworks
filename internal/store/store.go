@@ -166,6 +166,18 @@ func (s *Bucket) Connection(ctx context.Context, project, name string) (map[stri
 	return s.keys(ctx, "connections/"+project+"/"+name+".json")
 }
 
+// ListFiles are the keys of the platform's files under a prefix.
+func (s *Bucket) ListFiles(ctx context.Context, prefix string) ([]string, error) {
+	var out []string
+	for obj := range s.c.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
+		if obj.Err != nil {
+			return nil, obj.Err
+		}
+		out = append(out, obj.Key)
+	}
+	return out, nil
+}
+
 // GetFile is a file of the platform's; nil, with no error, when there's none.
 func (s *Bucket) GetFile(ctx context.Context, key string) ([]byte, error) {
 	return s.get(ctx, key)

@@ -91,9 +91,15 @@ func healthcheck() int {
 }
 
 type config struct {
-	PlatformURL, KeycloakURL, KeycloakDirectURL, Realm    string
-	ClientID, ClientSecret                                string
-	Groups, AdminGroups                                   []string
+	PlatformURL, KeycloakURL, KeycloakDirectURL, Realm string
+	ClientID, ClientSecret                             string
+	Groups, AdminGroups                                []string
+	// DeliveryApproverGroups approve deliveries that send personal data (use
+	// case 9.1), beside the project's editors; default the administrators.
+	DeliveryApproverGroups []string
+	// OperatorURL is the platform operator's (a GitLab webhook asks it to
+	// look at a project's merge requests at once).
+	OperatorURL                                           string
 	Listen, WebDir                                        string
 	StoreURL, StoreBucket, StoreAccessKey, StoreSecretKey string
 	ProjectStore                                          string // bucket (the default) or kubernetes
@@ -127,16 +133,18 @@ func configFromEnv(get func(string) string) (config, error) {
 		return out
 	}
 	c := config{
-		PlatformURL:  strings.TrimRight(get("PLATFORM_URL"), "/"),
-		KeycloakURL:  strings.TrimRight(get("KEYCLOAK_URL"), "/"),
-		Realm:        or("KEYCLOAK_REALM", "lakehouse"),
-		ClientID:     or("OIDC_CLIENT_ID", "platform"),
-		ClientSecret: get("OIDC_CLIENT_SECRET"),
-		Groups:       list("PLATFORM_GROUPS", "analysts,engineers"),
-		AdminGroups:  list("PLATFORM_ADMIN_GROUPS", "engineers"),
-		Listen:       or("PLATFORM_LISTEN", ":8080"),
-		WebDir:       or("PLATFORM_WEB_DIR", "/usr/share/storscale/web"),
-		StoreURL:     get("STORE_URL"), StoreBucket: or("STORE_BUCKET", "storscale-platform"),
+		PlatformURL:            strings.TrimRight(get("PLATFORM_URL"), "/"),
+		KeycloakURL:            strings.TrimRight(get("KEYCLOAK_URL"), "/"),
+		Realm:                  or("KEYCLOAK_REALM", "lakehouse"),
+		ClientID:               or("OIDC_CLIENT_ID", "platform"),
+		ClientSecret:           get("OIDC_CLIENT_SECRET"),
+		Groups:                 list("PLATFORM_GROUPS", "analysts,engineers"),
+		AdminGroups:            list("PLATFORM_ADMIN_GROUPS", "engineers"),
+		DeliveryApproverGroups: list("DELIVERY_APPROVER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers")),
+		OperatorURL:            or("OPERATOR_URL", "http://platform-operator:8081"),
+		Listen:                 or("PLATFORM_LISTEN", ":8080"),
+		WebDir:                 or("PLATFORM_WEB_DIR", "/usr/share/storscale/web"),
+		StoreURL:               get("STORE_URL"), StoreBucket: or("STORE_BUCKET", "storscale-platform"),
 		ProjectStore:   get("PROJECT_STORE"),
 		StoreAccessKey: get("STORE_ACCESS_KEY"), StoreSecretKey: get("STORE_SECRET_KEY"),
 		CatalogURL: get("CATALOG_URL"), CatalogTokenFile: or("CATALOG_TOKEN_FILE", "/catalog/token"),

@@ -81,5 +81,7 @@ destination = filesystem(bucket_url="s3://warehouse", credentials={
     "aws_access_key_id": access, "aws_secret_access_key": key, "endpoint_url": "http://buckets:9000", "region_name": "us-east-1"})
 pipeline = dlt.pipeline(pipeline_name=f"import_{project.replace('-', '_')}_{name}", destination=destination,
                         dataset_name=namespace, pipelines_dir="/tmp/storscale-imports")
-info = pipeline.run(sources, table_format="iceberg")
+# A reset: the resources' tables and dlt's state of them dropped first, so all is copied again.
+refresh = "drop_sources" if os.environ.get("STORSCALE_IMPORT_RESET") == "1" else None
+info = pipeline.run(sources, table_format="iceberg", refresh=refresh)
 print(info)

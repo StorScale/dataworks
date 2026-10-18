@@ -17,6 +17,7 @@ identity, its git connection), in the shared one in Compose.
 import base64
 import json
 import os
+import re
 import subprocess
 import tempfile
 
@@ -27,6 +28,7 @@ from airflow.sdk import BaseHook, dag, get_current_context, task
 from storscale import dbt
 
 PLATFORM = os.environ.get("STORSCALE_PLATFORMD_URL", "http://platformd:8080")
+SEMANTIC = os.environ.get("STORSCALE_SEMANTIC_URL", "http://semanticd:8000")
 STATUS = "storscale/dbt"
 MARK = "<!-- storscale-review -->"   # the platform's note on a merge request: updated, not added again
 
@@ -95,6 +97,30 @@ def differ(token, branch, prod, schema, table, limit=5):
             query(token, f"SELECT * FROM (SELECT * FROM {p} EXCEPT SELECT * FROM {b}) LIMIT {limit}"))
 
 
+def moved(token, c):
+    """The project's metrics (its semantic model) whose values differ on the
+    branch from production's: each metric's SQL (the semantic layer's, not
+    run), run on both, the branch's reading its catalog in production's place."""
+    h = {"Authorization": f"Bearer {token}"}
+    try:
+        model = requests.get(f"{SEMANTIC}/api/projects/{c['project']}/semantic", headers=h, timeout=60).json()
+    except (requests.RequestException, ValueError):
+        return []
+    out = []
+    for m in [x["name"] for x in model.get("metrics", [])][:20]:
+        r = requests.post(f"{SEMANTIC}/api/projects/{c['project']}/semantic/query", json={"metrics": [m], "explain": True},
+                          headers=h, timeout=60)
+        sql = r.json().get("sql") if r.ok else None
+        if not sql:
+            continue
+        prod = query(token, sql)
+        branch = query(token, re.sub(rf"\b{re.escape(c['prodCatalog'])}\.", f"{c['catalog']}.", sql))
+        value = lambda rows: rows[0][-1] if rows else None
+        if value(prod) != value(branch):
+            out.append(f"| `{m}` | {value(branch)} | {value(prod)} |")
+    return out
+
+
 @dag(dag_id="storscale_review", schedule=None, start_date=pendulum.datetime(2026, 1, 1, tz="UTC"), catchup=False,
      max_active_runs=4, tags=["storscale"], doc_md=__doc__)
 def storscale_review():
@@ -146,6 +172,9 @@ def storscale_review():
                         lines += ["", "</details>"]
             else:
                 lines.append("No model changed.")
+            metrics = moved(tok, c)
+            if metrics:
+                lines += ["", "| metric | on the branch | in production |", "|---|---|---|", *metrics]
             for x in failed:
                 lines.append(f"- ✗ `{x['unique_id']}`: {(x.get('message') or x.get('status'))[:300]}")
             ok = built.returncode == 0 and not failed

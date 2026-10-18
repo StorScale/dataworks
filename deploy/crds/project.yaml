@@ -172,6 +172,44 @@ spec:
                   properties:
                     teams: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
                     email: {type: array, items: {type: string}}
+                deliveries:
+                  type: array
+                  description: >-
+                    Files sent to clients and partners on a schedule: a table or query of the project's,
+                    in a format, split by a column if asked, compressed and PGP-encrypted, with a manifest,
+                    to an SFTP server or an S3 bucket (connections). Each runs only once approved, and
+                    again only once a change to what it sends is (changedBy and approval are the
+                    platform's).
+                  items:
+                    type: object
+                    required: [name, format, files, schedule, target]
+                    properties:
+                      name: {type: string, pattern: '^[a-z][a-z0-9_]{0,19}$'}
+                      table: {type: string}
+                      query: {type: string}
+                      format: {type: string, enum: [csv, parquet, jsonl]}
+                      gzip: {type: boolean}
+                      files: {type: string, description: "The files' names: {date}, and {part} when split."}
+                      splitBy: {type: string}
+                      schedule: {type: string}
+                      target: {type: string}
+                      pgp: {type: string}
+                      checks:
+                        type: object
+                        properties:
+                          minRows: {type: integer, minimum: 0}
+                          maxRows: {type: integer, minimum: 0}
+                          within: {type: string}
+                          parts: {type: array, items: {type: string}}
+                      changedBy: {type: string}
+                      approval:
+                        type: object
+                        properties:
+                          hash: {type: string}
+                          by: {type: array, items: {type: string}}
+                          protection: {type: array, items: {type: string}}
+                          at: {type: string}
+                          done: {type: boolean}
                 imports:
                   type: array
                   description: >-

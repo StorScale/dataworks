@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { APIResource, getProject, Import, MASK_TYPES, Member, Project, putProject, Source, sourceCatalog, Spec } from "../api";
+import { APIResource, getProject, resetImport, Import, MASK_TYPES, Member, Project, putProject, Source, sourceCatalog, Spec } from "../api";
 import { grants } from "../lib";
 
 const blank = (): Project => ({
@@ -17,6 +17,7 @@ export default function ProjectEditor() {
   const { project: name } = useParams();
   const navigate = useNavigate();
   const [p, setP] = useState<Project>();
+  const [resetDone, setResetDone] = useState<string>();
   const [json, setJson] = useState<string>();
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
@@ -211,6 +212,12 @@ export default function ProjectEditor() {
                     <input value={im.connection ?? ""} placeholder="connection" aria-label="Import connection" onChange={(e) => setImport(i, { connection: e.target.value || undefined })} />
                     <input value={im.schedule ?? ""} placeholder="hourly (or cron: 0 * * * *)" aria-label="Import schedule" onChange={(e) => setImport(i, { schedule: e.target.value || undefined })} />
                     <button className="btn" onClick={() => set({ imports: spec.imports!.filter((_, j) => j !== i).length ? spec.imports!.filter((_, j) => j !== i) : undefined })}>Remove</button>
+                    {name && im.name && (
+                      <button className="btn" title="Its tables and where it got to dropped, then all copied again"
+                        onClick={async () => { try { await resetImport(name, im.name); setResetDone(im.name); } catch (e) { setError((e as Error).message); } }}>
+                        {resetDone === im.name ? "Copying all again…" : "Reset"}
+                      </button>
+                    )}
                   </div>
                   {im.source === "rest_api" && im.api && (
                     <>

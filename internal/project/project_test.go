@@ -484,3 +484,54 @@ func TestReviews(t *testing.T) {
 		t.Errorf("branch %s, catalog %s", p.ReviewBranch(42), p.ReviewCatalog(42))
 	}
 }
+
+func TestDeliveries(t *testing.T) {
+	parse := func(d string) (*Project, error) {
+		return Parse([]byte(`{"apiVersion":"platform.storscale.io/v1alpha1","kind":"Project","metadata":{"name":"sales"},
+			"spec":{"members":[{"group":"engineers","role":"editor"}],
+			"tables":{"readers":{"masks":[{"table":"orders","column":"card_number","type":"MASK"}]}},"deliveries":[` + d + `]}}`))
+	}
+	p, err := parse(`{"name":"acme","table":"orders","format":"csv","gzip":true,"files":"acme_{date}_{part}.csv.gz","splitBy":"region",
+		"schedule":"0 6 * * 1","target":"acme-sftp","pgp":"acme-pgp","checks":{"minRows":1,"maxRows":1000,"within":"24h","parts":["EU","US"]}}`)
+	if err != nil {
+		t.Fatalf("a delivery: %v", err)
+	}
+	d := p.Spec.Deliveries[0]
+	if d.Approved() {
+		t.Error("approved with no approval")
+	}
+	d.Approval = &Approval{Hash: d.SendsHash(), By: []string{"alice"}, Done: true}
+	if !d.Approved() {
+		t.Error("an approval of what it sends")
+	}
+	changed := d
+	changed.Target = "other-sftp"
+	if changed.Approved() {
+		t.Error("a new target needs approving again")
+	}
+	renamed := d
+	renamed.Files, renamed.Schedule = "acme2_{date}_{part}.csv.gz", "0 7 * * 1"
+	if !renamed.Approved() {
+		t.Error("its names and schedule aren't what's approved")
+	}
+	if got := p.PersonalColumns(d); len(got) != 1 || got[0] != "orders.card_number" {
+		t.Errorf("personal columns: %v", got)
+	}
+	if got := p.PersonalColumns(Delivery{Query: "select region, count(*) from orders group by region"}); len(got) != 0 {
+		t.Errorf("a query without them: %v", got)
+	}
+	for _, bad := range []string{
+		`{"name":"acme","format":"csv","files":"a_{date}.csv","schedule":"0 6 * * 1","target":"t"}`,
+		`{"name":"acme","table":"orders","query":"select 1","format":"csv","files":"a_{date}.csv","schedule":"0 6 * * 1","target":"t"}`,
+		`{"name":"acme","table":"orders","format":"xlsx","files":"a_{date}.csv","schedule":"0 6 * * 1","target":"t"}`,
+		`{"name":"acme","table":"orders","format":"csv","files":"a.csv","schedule":"0 6 * * 1","target":"t"}`,
+		`{"name":"acme","table":"orders","format":"csv","files":"x/a_{date}.csv","schedule":"0 6 * * 1","target":"t"}`,
+		`{"name":"acme","table":"orders","format":"csv","files":"a_{date}_{part}.csv","schedule":"0 6 * * 1","target":"t"}`,
+		`{"name":"acme","query":"delete from orders","format":"csv","files":"a_{date}.csv","schedule":"0 6 * * 1","target":"t"}`,
+		`{"name":"acme","table":"orders","format":"csv","files":"a_{date}.csv","schedule":"weekly","target":"t"}`,
+	} {
+		if _, err := parse(bad); err == nil {
+			t.Errorf("%s: want refused", bad)
+		}
+	}
+}

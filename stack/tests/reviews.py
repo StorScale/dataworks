@@ -25,6 +25,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote
 
+import requests
+
 from lakekit import check, finish, sql
 
 import pipelines_git as pg
@@ -32,7 +34,27 @@ from projects import platform, projects, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
 NAME, PORT, API_PORT = "reviewed", 8423, 8424
-MODEL = "select * from (values {rows}) as t (id, region)\n"
+WEBHOOK_TOKEN = "webhook-" + os.urandom(8).hex()
+MODEL = "select id, region, date '2026-10-01' as day from (values {rows}) as t (id, region)\n"
+# A metric on the model, so a merge request's note says how it moved.
+SEMANTIC = """semantic_model:
+  name: regions
+  node_relation: {database: iceberg, schema_name: reviewed, alias: regions}
+  defaults: {agg_time_dimension: day}
+  entities:
+    - {name: region_row, type: primary, expr: id}
+  dimensions:
+    - {name: region, type: categorical}
+    - {name: day, type: time, type_params: {time_granularity: day}}
+  measures:
+    - {name: regions_n, expr: "1", agg: sum}
+---
+metric:
+  name: region_count
+  description: How many regions.
+  type: simple
+  type_params: {measure: regions_n}
+"""
 DBT_DAG = '''"""Production's dbt models."""
 import pendulum
 
@@ -142,7 +164,13 @@ def main():
         threading.Thread(target=s.serve_forever, daemon=True).start()
 
     bob = platform("bob")
-    pg.put_secret(NAME)
+    # The repo's token, and the token GitLab's webhook is sent with.
+    if pg.k8s.in_cluster():
+        pg.k8s.put_secret(pg.SECRET, {"username": pg.USER, "password": pg.TOKEN, "webhookToken": WEBHOOK_TOKEN},
+                          labels={"platform.storscale.io/connection": NAME})
+    else:
+        pg.s3_root().put_object(Bucket="storscale-platform", Key=f"connections/{NAME}/{pg.SECRET}.json",
+                                Body=json.dumps({"username": pg.USER, "password": pg.TOKEN, "webhookToken": WEBHOOK_TOKEN}).encode())
     spec = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": NAME},
             "spec": {"description": "Merge requests on data branches: the reviews suite's.",
                      "members": [{"group": "engineers", "role": "editor"}], "tables": {},
@@ -159,6 +187,8 @@ def main():
                                   (bob.get(f"{PLATFORM}/api/projects/{NAME}/pipelines", timeout=60).json() or {}).get("pipelines", [])), 600, every=10)
         state = run_dag(bob, "reviewed_dbt") if loaded else "not loaded"
         check("production's model is built by its DAG", state == "success" and rows("iceberg") == [[1, "EU"], [2, "US"]], f"{state}: {rows('iceberg')}")
+        r = bob.put(f"{PLATFORM}/api/projects/{NAME}/semantic", json={"yaml": SEMANTIC}, headers={"X-Platform-Request": "1"}, timeout=60)
+        check("... and a metric on it (region_count)", r.ok, r.text[:200])
 
         # 2. A merge request, on its data branch.
         pg.git("checkout", "-q", "-b", "more-regions", cwd=work)
@@ -175,6 +205,7 @@ def main():
         note = next((b for i, b in GitLab.notes.values() if i == 1), "")
         check("... with a note of the model's rows: 3 on the branch, 2 in production, and the row that differs",
               "| `regions` | 3 | 2 |" in note and "APAC" in note, note[:400])
+        check("... and the metric that moved: region_count, 3 on the branch, 2 in production", "| `region_count` | 3 | 2 |" in note, note[-300:])
         check("... signed in to GitLab with the repo's token, each call", GitLab.signed and all(GitLab.signed), f"{sum(GitLab.signed)} of {len(GitLab.signed)}")
         check("production's table is as it was", rows("iceberg") == [[1, "EU"], [2, "US"]], rows("iceberg"))
 
@@ -193,6 +224,12 @@ def main():
         # 3. The branch, read.
         check("bob reads the branch's table through its catalog (reviewed_mr_1)",
               rows("reviewed_mr_1") == [[1, "EU"], [2, "US"], [3, "APAC"], [4, "LATAM"]], rows("reviewed_mr_1"))
+
+        # GitLab's webhook, at once (with the token the repo's connection holds).
+        hook = f"{PLATFORM}/api/webhooks/gitlab/{NAME}"
+        wrong = requests.post(hook, headers={"X-Gitlab-Token": "nope", "X-Gitlab-Event": "Merge Request Hook"}, json={}, timeout=30).status_code
+        right = requests.post(hook, headers={"X-Gitlab-Token": WEBHOOK_TOKEN, "X-Gitlab-Event": "Merge Request Hook"}, json={}, timeout=30).status_code
+        check("GitLab's webhook is taken with the project's token, and refused without it", (wrong, right) == (401, 202), (wrong, right))
 
         # 4. Closed.
         GitLab.mrs = []
