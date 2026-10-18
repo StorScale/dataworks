@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/storscale-platform/internal/store"
 )
 
 func newProjectAlerts() *projectAlerts {
@@ -43,5 +48,37 @@ func TestProjectAlertsTellWhatStartsAndWhatComesRight(t *testing.T) {
 	// A channel just named is told all that's wrong.
 	if got := pa.update("sales", "h2", []issue{check}); len(got) != 1 {
 		t.Fatalf("a new channel: %v", got)
+	}
+}
+
+// statuses is a store with these statuses alone.
+type statuses struct {
+	store.Store
+	list []*project.Status
+}
+
+func (s *statuses) Statuses(context.Context) ([]*project.Status, error) { return s.list, nil }
+
+func TestACopyNotRunningIsAnIssueAfterAWhile(t *testing.T) {
+	p, err := project.Parse([]byte(`{"metadata": {"name": "sales"}, "spec": {"members": [{"group": "engineers", "role": "editor"}],
+		"tables": {}, "sources": [{"name": "finance", "kind": "postgresql", "connection": "fin", "copy": {"tables": ["public.invoices"]}}]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := &statuses{list: []*project.Status{{Name: "sales", Parts: []project.Part{
+		{System: "copy", OK: false, Message: "copying finance: password authentication failed"}}}}}
+	s := &server{store: st, projectAlerts: &projectAlerts{down: map[string]time.Time{}}}
+	ctx := context.Background()
+	if got := s.copyIssues(ctx, p, "/p/sales"); len(got) != 0 {
+		t.Fatalf("at once: %v", got)
+	}
+	s.projectAlerts.down["sales/copy/finance"] = time.Now().Add(-CopyDownAfter - time.Minute)
+	got := s.copyIssues(ctx, p, "/p/sales")
+	if len(got) != 1 || got[0].Key != "copy/finance" || !strings.Contains(got[0].Detail, "password authentication failed") {
+		t.Fatalf("after a while: %+v", got)
+	}
+	st.list[0].Parts[0] = project.Part{System: "copy", OK: true, Message: "applied"}
+	if got := s.copyIssues(ctx, p, "/p/sales"); len(got) != 0 || len(s.projectAlerts.down) != 0 {
+		t.Fatalf("running again: %v %v", got, s.projectAlerts.down)
 	}
 }

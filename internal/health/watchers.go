@@ -172,6 +172,30 @@ func (k *Kube) FailedJobs(ctx context.Context) ([]Finding, error) {
 	return out, nil
 }
 
+// StoppedCopies are the projects' sources' copies (use case 8.1) whose pod
+// isn't running: crashing, its image not pulled, its database refusing it.
+// Their projects are told too (project alerts); the administrators are,
+// here, as it may be the platform's doing.
+func (k *Kube) StoppedCopies(ctx context.Context) ([]Finding, error) {
+	pods, err := k.Pods(ctx, "storscale-copy")
+	if err != nil {
+		return nil, err
+	}
+	var out []Finding
+	for _, p := range pods {
+		if p.Waiting == "" || strings.HasPrefix(p.Waiting, "ContainerCreating") {
+			continue
+		}
+		copy := p.Name
+		if parts := strings.Split(p.Name, "-"); len(parts) > 2 { // copy-<project>-<source>-<replicaset>-<pod>
+			copy = strings.Join(parts[:len(parts)-2], "-")
+		}
+		out = append(out, Finding{Key: "copy/" + copy, Title: "The copy " + copy + " isn't running",
+			Detail: p.Waiting, Severity: "warning", Since: time.Now()})
+	}
+	return out, nil
+}
+
 // Backups are the platform's backups, as their CronJob (storscale-backup)
 // has them: none when the chart has no backup certificate.
 type Backups struct {

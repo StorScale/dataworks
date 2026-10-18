@@ -82,12 +82,14 @@ func (c *Copies) properties(p *project.Project, s project.Source, conn map[strin
 	cat := p.SourceCatalog(s)
 	set := map[string]string{
 		// The source.
-		"debezium.source.database.hostname":                               host,
-		"debezium.source.database.user":                                   conn["username"],
-		"debezium.source.database.password":                               conn["password"],
-		"debezium.source.topic.prefix":                                    cat,
-		"debezium.source.table.include.list":                              strings.Join(s.Copy.Tables, ","),
-		"debezium.source.snapshot.mode":                                   "initial",
+		"debezium.source.database.hostname":  host,
+		"debezium.source.database.user":      conn["username"],
+		"debezium.source.database.password":  conn["password"],
+		"debezium.source.topic.prefix":       cat,
+		"debezium.source.table.include.list": strings.Join(s.Copy.Tables, ","),
+		"debezium.source.snapshot.mode":      "initial",
+		// Numbers exact (decimals as decimals, not doubles: money).
+		"debezium.source.decimal.handling.mode":                           "precise",
 		"debezium.source.offset.flush.interval.ms":                        "0",
 		"debezium.source.offset.storage":                                  "io.debezium.server.iceberg.offset.IcebergOffsetBackingStore",
 		"debezium.source.offset.storage.iceberg.table-namespace":          StateNamespace,
