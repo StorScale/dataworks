@@ -55,6 +55,7 @@ spec:
             {{- with .Values.deliveries.approverGroups }}
             - {name: DELIVERY_APPROVER_GROUPS, value: {{ . | quote }}}   # who approves deliveries of personal data
             {{- end }}
+            - {name: DELIVERY_KEEP_FOR, value: {{ .Values.deliveries.keepFor | quote }}}   # a personal delivery's read, kept (9.2)
             - {name: INSTALL_TARGET, value: {{ .Values.install.target | quote }}}   # a project's repo's storscale/targets/<target>.yaml
             - {name: MAINTENANCE_KEEP_HISTORY, value: {{ .Values.maintenance.history.keep | quote }}}
             # The audit log, beside Ranger's in its Solr (audit.*).

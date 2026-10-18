@@ -79,7 +79,8 @@ func (s *server) handleDeliveries(w http.ResponseWriter, r *http.Request) {
 		out = append(out, deliveryView{Delivery: d, Approved: d.Approved(), Personal: v.Spec.PersonalColumns(d),
 			Needs: s.needs(v.Spec, d), Runs: s.deliveryRuns(r, v.Name, d.Name, 10)})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"deliveries": out})
+	writeJSON(w, http.StatusOK, map[string]any{"deliveries": out,
+		"canSearch": s.isAdmin(sess.User) || s.inGroups(sess.User.Groups, s.cfg.DeliveryApproverGroups)})
 }
 
 // handleApproveDelivery records the signed-in person's approval of what a
@@ -170,6 +171,17 @@ func (s *server) handleDeliveryLog(w http.ResponseWriter, r *http.Request) {
 	}
 	at := s.now().UTC()
 	run["recorded"] = at
+	// A delivery of personal data: the catalog as it read it, kept (9.2).
+	if p, _ := s.store.Project(r.Context(), name); p != nil {
+		i := slices.IndexFunc(p.Spec.Deliveries, func(d project.Delivery) bool { return d.Name == delivery })
+		if i >= 0 && len(p.PersonalColumns(p.Spec.Deliveries[i])) > 0 {
+			readAt, err := time.Parse(time.RFC3339Nano, fmt.Sprint(run["readAt"]))
+			if err != nil {
+				readAt = at
+			}
+			run["kept"] = s.keepRead(r.Context(), p, delivery, readAt)
+		}
+	}
 	data, _ := json.Marshal(run)
 	if err := s.files.PutFile(r.Context(), fmt.Sprintf("deliveries/%s/%s/%s.json", name, delivery, at.Format("20060102T150405.000Z")),
 		data, "application/json"); err != nil {

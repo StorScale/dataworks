@@ -194,6 +194,9 @@ def main():
     if problems:
         log("checks failed, nothing sent: " + "; ".join(problems))
         sys.exit(1)
+    # When it read the tables: platformd keeps the catalog as it was then
+    # (a Nessie tag), so the log can be searched by a person's ID later (9.2).
+    read_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     columns, rows = query(f"SELECT * FROM {source()} AS t")
     snaps = snapshots()
     out = files(columns, rows)
@@ -212,7 +215,7 @@ def main():
             time.sleep(10 * attempt)
     log(f"sent {len(out)} files, {len(rows)} rows, to {where}")
     approval = d.get("approval") or {}
-    run = {**manifest, "target": where, "approval": {"by": approval.get("by"), "protection": approval.get("protection"), "at": approval.get("at")},
+    run = {**manifest, "target": where, "readAt": read_at, "sends": {"table": d.get("table"), "query": d.get("query")}, "approval": {"by": approval.get("by"), "protection": approval.get("protection"), "at": approval.get("at")},
            "summary": f"{len(out)} files, {len(rows)} rows, to {where}"}
     r = requests.post(f"{PLATFORM}/api/projects/{project}/deliveries/{d['name']}/runs", json=run, timeout=60,
                       headers={"Authorization": f"Bearer {token}"})

@@ -97,6 +97,7 @@ func (m *maintainer) schedule(ctx context.Context, s *server) {
 		m.mu.Unlock()
 		if due {
 			s.expireTags(ctx)
+			s.expireDeliveryTags(ctx)
 			if projects, err := s.store.Projects(ctx); err == nil {
 				for _, p := range projects {
 					m.enqueue(p.Metadata.Name)

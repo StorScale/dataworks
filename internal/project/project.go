@@ -126,7 +126,27 @@ func (p *Project) PersonalColumns(d Delivery) []string {
 			out = append(out, m.Table+"."+m.Column)
 		}
 	}
+	if t, c := p.PersonKeyOf(d); c != "" && !slices.Contains(out, t+"."+c) {
+		out = append(out, t+"."+c)
+	}
 	return sorted(out)
+}
+
+// PersonKeyOf is the table of people's data a delivery sends, and the column
+// in what it sends that identifies a person: its table's (Tables.People), or,
+// for a query, a person's column it names. Empty: none.
+func (p *Project) PersonKeyOf(d Delivery) (table, column string) {
+	if p.Spec.Tables == nil {
+		return "", ""
+	}
+	q := strings.ToLower(d.Query)
+	for _, pk := range p.Spec.Tables.People {
+		if d.Table != "" && pk.Table == d.Table ||
+			d.Query != "" && regexp.MustCompile(`\b`+pk.Table+`\b`).MatchString(q) && regexp.MustCompile(`\b`+pk.Column+`\b`).MatchString(q) {
+			return pk.Table, pk.Column
+		}
+	}
+	return "", ""
 }
 
 // An Import copies an application's data, or a database's by a cursor
@@ -286,6 +306,17 @@ type Tables struct {
 	// whatever the history kept otherwise. The operator keeps Nessie's as
 	// these say; nightly maintenance removes those past KeepUntil.
 	Tags []Tag `json:"tags,omitempty"`
+	// People: the tables that hold people's data (consumers'), and the
+	// column that identifies a person in each (R6.25): what a delivery of
+	// them sends is personal, and a search of the delivery log by a
+	// person's ID (use case 9.2) and an erasure (6.9) look there.
+	People []PersonKey `json:"people,omitempty"`
+}
+
+// A PersonKey is a table of people's data, and its column identifying a person.
+type PersonKey struct {
+	Table  string `json:"table"`
+	Column string `json:"column"` // customer_id
 }
 
 // A Tag is a moment of every table, kept: the catalog at a commit.
@@ -545,6 +576,16 @@ func (p *Project) Validate() error {
 			if _, ok := Within(f.Within); !ok {
 				bad("tables: freshness: within %q: as 30m, 24h or 7d", f.Within)
 			}
+		}
+		people := map[string]bool{}
+		for _, pk := range t.People {
+			switch {
+			case !identifierRE.MatchString(pk.Table) || !identifierRE.MatchString(pk.Column):
+				bad("tables: people: %q.%q: a table and its column identifying a person", pk.Table, pk.Column)
+			case people[pk.Table]:
+				bad("tables: people: %s twice", pk.Table)
+			}
+			people[pk.Table] = true
 		}
 		seen := map[string]bool{}
 		for _, tg := range t.Tags {

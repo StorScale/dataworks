@@ -257,7 +257,10 @@ export type DeliveryView = {
   target: string; pgp?: string; changedBy?: string; approval?: { by: string[]; protection?: string[]; at: string; done?: boolean };
   approved: boolean; personal: string[]; needs: string[]; runs: DeliveryRun[];
 };
-export const getDeliveries = (name: string) => api<{ deliveries: DeliveryView[] }>("GET", `/api/projects/${encodeURIComponent(name)}/deliveries`);
+export const getDeliveries = (name: string) => api<{ deliveries: DeliveryView[]; canSearch: boolean }>("GET", `/api/projects/${encodeURIComponent(name)}/deliveries`);
+export type SearchHit = { delivery: string; date: string; sent: string; target: string; approval?: { by?: string[]; protection?: string[] }; rows: number; error?: string };
+export const searchDeliveries = (name: string, person: string) =>
+  api<{ runs: SearchHit[]; checked: number; notKept: number }>("GET", `/api/projects/${encodeURIComponent(name)}/deliveries/search?person=${encodeURIComponent(person)}`);
 export const approveDelivery = (name: string, d: string) =>
   api<{ approved: boolean; needs: string[] }>("POST", `/api/projects/${encodeURIComponent(name)}/deliveries/${encodeURIComponent(d)}/approve`);
 export const resetImport = (name: string, i: string) =>

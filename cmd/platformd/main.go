@@ -99,6 +99,9 @@ type config struct {
 	// DeliveryApproverGroups approve deliveries that send personal data (use
 	// case 9.1), beside the project's editors; default the administrators.
 	DeliveryApproverGroups []string
+	// DeliveryKeepFor is how long a personal delivery's read is kept, so the
+	// log can be searched by a person's ID (9.2): 7y, or days as 400d.
+	DeliveryKeepFor string
 	// OperatorURL is the platform operator's (a GitLab webhook asks it to
 	// look at a project's merge requests at once).
 	OperatorURL string
@@ -146,6 +149,7 @@ func configFromEnv(get func(string) string) (config, error) {
 		Groups:                 list("PLATFORM_GROUPS", "analysts,engineers"),
 		AdminGroups:            list("PLATFORM_ADMIN_GROUPS", "engineers"),
 		DeliveryApproverGroups: list("DELIVERY_APPROVER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers")),
+		DeliveryKeepFor:        or("DELIVERY_KEEP_FOR", "7y"),
 		OperatorURL:            or("OPERATOR_URL", "http://platform-operator:8081"),
 		InstallTarget:          or("INSTALL_TARGET", "production"),
 		Listen:                 or("PLATFORM_LISTEN", ":8080"),
@@ -170,6 +174,9 @@ func configFromEnv(get func(string) string) (config, error) {
 	}
 	if len(missing) > 0 {
 		return c, errors.New("set " + strings.Join(missing, ", "))
+	}
+	if _, ok := keepUntil(c.DeliveryKeepFor, time.Now()); !ok {
+		return c, errors.New("DELIVERY_KEEP_FOR: as 7y or 400d")
 	}
 	return c, nil
 }

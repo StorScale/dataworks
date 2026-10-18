@@ -281,6 +281,18 @@ Every container runs without privilege escalation, with the default seccomp prof
 
 **Order and effort:** (1) the access check and the operator's fix, a day; (2) reading as of a tag, time or commit on the SQL page, with the checks above, a day; (3) tags: API, Tags tab, keep and removal, audit, two days; (4) the History tab, two days. **Built (2026-10-17):** all four. Tags are the project's (`tables.tags`: a name, a commit, keepUntil, a note, who), the operator keeps Nessie's as they say; the platform turns a tag or a time into its commit. Not yet: notebooks and dashboards read as of a moment by the name alone (no picker), and deliveries (9.1) recording their commit.
 
+### What was sent about a person (use case 9.2), how (built 2026-10-18)
+
+**Decided (2026-10-18):** found again from the tables, never kept in the log; searched by the data-protection approvers (`deliveries.approverGroups`); the tables as read kept for `deliveries.keepFor` (default 7 years).
+
+**Whose data.** A project declares its tables of people's data and the column identifying a person in each (`tables.people`: `customers` by `customer_id`; R6.25's first part, which 6.9's erasure needs too). A delivery of such a table, or a query naming one and its person's column, is personal: it needs a data-protection approver as masked columns do.
+
+**Kept as read.** A personal delivery's run records when it read the tables (`readAt`) and what it sent (its table or query, never a row); platformd, taking the run into the log, tags the catalog's commit at that moment in Nessie (`Delivery.<project>.<delivery>.<time>`: capitalised, so no project's own tags, which the operator keeps, are these), so Nessie's GC keeps those tables' data; the nightly round removes tags past `keepFor`.
+
+**Searched.** A data-protection approver (or an administrator) gives a person's ID on the Deliveries tab: for each kept run, platformd runs what it sent again at its commit (the table as `"<table>#<commit>"`; a query with each of the project's tables in it read so), counting that person's rows, as the platform's maintenance account in Trino (which reads unmasked). The answer: the runs that carried them, when, to whom, approved by whom; runs it couldn't tell about say why. The audit log records the search, not the ID.
+
+**Left:** a query naming a table the project has since dropped can't be run again (said so); runs from before this have nothing kept; the privacy tool's API (6.9) and erasure.
+
 ### A notebook on a schedule (use case 7.7), how (built 2026-10-18)
 
 **In JupyterLab.** The notebook image has an extension, Schedule: a button on a notebook's toolbar, an item on a notebook's menu in the file browser, and a command. It asks which project (those the person edits, with a repo) and when (cron, UTC). Its server half (`storscale_schedule`, in the notebook server) reads the notebook, clears its outputs (what it computed may be data no repo should hold), and sends it to platformd with the person's Keycloak token, from the hub.

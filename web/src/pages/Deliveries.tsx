@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { approveDelivery, getDeliveries } from "../api";
+import { approveDelivery, getDeliveries, searchDeliveries, type SearchHit } from "../api";
 import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
 
 // Deliveries send files to clients and partners on a schedule (SFTP, S3).
@@ -27,6 +27,7 @@ export default function Deliveries() {
         one that sends personal columns needs a data-protection approver too. Each run is kept here: its files, their checksums, where they went.
       </p>
       <ErrorBanner error={actionError} />
+      {data.canSearch && <PersonSearch project={name} />}
       {data.deliveries.length === 0 && <p className="muted">No deliveries. The project's spec names them (deliveries).</p>}
       {data.deliveries.map((d) => (
         <div key={d.name} className="card stack" style={{ gap: 8 }} data-testid={`delivery-${d.name}`}>
@@ -69,6 +70,58 @@ export default function Deliveries() {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+// What was sent about a person (data-protection approvers): each run that
+// carried their rows, found again from the tables as they were then.
+function PersonSearch({ project }: { project: string }) {
+  const [person, setPerson] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ person: string; runs: SearchHit[]; checked: number; notKept: number }>();
+  const [error, setError] = useState<string>();
+  const search = async () => {
+    setBusy(true);
+    setError(undefined);
+    try { setResult({ person, ...(await searchDeliveries(project, person.trim())) }); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  };
+  return (
+    <div className="card stack" style={{ gap: 8 }} data-testid="person-search">
+      <form className="row" onSubmit={(e) => { e.preventDefault(); if (person.trim()) search(); }}>
+        <strong>What was sent about a person</strong>
+        <input className="mono" placeholder="Their ID, as C-1042" value={person} onChange={(e) => setPerson(e.target.value)} aria-label="A person's ID" />
+        <button className="btn" disabled={busy || !person.trim()}>{busy ? "Searching…" : "Search"}</button>
+      </form>
+      <div className="small muted">
+        Each run of a delivery of personal data is run again on the tables as they were when it read them, for this person's rows.
+        The log keeps no one's ID; the search isn't recorded with it either.
+      </div>
+      <ErrorBanner error={error} />
+      {result && (
+        <>
+          <div className="small">
+            {result.runs.filter((r) => !r.error).length} runs sent {result.person}'s data; {result.checked} runs checked
+            {result.notKept > 0 ? `; ${result.notKept} not checkable (not personal, or from before reads were kept)` : ""}.
+          </div>
+          {result.runs.length > 0 && (
+            <table className="t">
+              <thead><tr><th>Delivery</th><th>Sent</th><th>To</th><th>Their rows</th><th>Approved by</th></tr></thead>
+              <tbody>
+                {result.runs.map((r) => (
+                  <tr key={r.delivery + r.sent}>
+                    <td className="mono small">{r.delivery}</td>
+                    <td className="small">{r.date}</td>
+                    <td className="mono small">{r.target}</td>
+                    <td className="small">{r.error ? <span title={r.error}>unclear</span> : r.rows}</td>
+                    <td className="small">{[...(r.approval?.by ?? []), ...(r.approval?.protection ?? [])].join(", ")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
+      )}
     </div>
   );
 }
