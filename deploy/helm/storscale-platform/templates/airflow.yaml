@@ -19,6 +19,8 @@ env:
   {{- $keys := list "AIRFLOW_DB_PASSWORD" "AIRFLOW_FERNET_KEY" "AIRFLOW_SECRET_KEY" "AIRFLOW_JWT_SECRET" }}
   {{- if eq $part "init" }}{{ $keys = concat $keys (list "AIRFLOW_PLATFORM_PASSWORD" "AIRFLOW_PIPELINES_SECRET") }}{{ end }}
   {{- if eq $part "api-server" }}{{ $keys = append $keys "AIRFLOW_OAUTH_SECRET" }}{{ end }}
+  {{- /* Projects' imports run in the scheduler (LocalExecutor), writing the lakehouse as its writers' account. */}}
+  {{- if eq $part "scheduler" }}{{ $keys = concat $keys (list "COPY_S3_ACCESS_KEY" "COPY_S3_SECRET_KEY") }}{{ end }}
   {{- range $keys }}
   - {name: {{ . }}, valueFrom: {secretKeyRef: {name: storscale-env, key: {{ . }}}}}
   {{- end }}
