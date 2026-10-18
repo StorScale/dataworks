@@ -9,7 +9,8 @@ These check (use case 7.3):
   2. a merge request changing the model gets a data branch: the platform
      builds the change there (the model with a third row), and tells GitLab
      (a status, success; a note with the model's rows on the branch and in
-     production), while production's table is as it was;
+     production, and a sample of those that differ), while production's
+     table is as it was; a new commit updates that note, not another;
   3. bob (an editor) reads the branch's table through its catalog;
   4. the merge request closed, its branch's catalog goes.
 
@@ -53,7 +54,7 @@ class GitLab(BaseHTTPRequestHandler):
     opens and closes them), the statuses and notes the platform sends."""
     mrs = []        # open ones
     statuses = []   # (sha, state, description)
-    notes = []      # (iid, body)
+    notes = {}      # id -> (iid, body)
     signed = []     # signed in with the repo's token, each call
 
     def log_message(self, *args):
@@ -69,7 +70,11 @@ class GitLab(BaseHTTPRequestHandler):
 
     def do_GET(self):
         GitLab.signed.append(self.headers.get("PRIVATE-TOKEN") == pg.TOKEN)
-        if unquote(self.path).startswith(f"/api/v4/projects/{NAME}/dags/merge_requests"):
+        path = unquote(self.path).split("?")[0]
+        if path.endswith("/notes"):
+            iid = int(path.split("/")[-2])
+            return self.answer(200, [{"id": k, "body": b} for k, (i, b) in sorted(GitLab.notes.items()) if i == iid])
+        if path == f"/api/v4/projects/{NAME}/dags/merge_requests":
             return self.answer(200, GitLab.mrs)
         self.answer(404, {"message": "404 Not Found"})
 
@@ -81,9 +86,19 @@ class GitLab(BaseHTTPRequestHandler):
             GitLab.statuses.append((path.rsplit("/", 1)[1], body.get("state"), body.get("description", "")))
             return self.answer(201, {})
         if path.endswith("/notes"):
-            GitLab.notes.append((int(path.split("/")[-2]), body.get("body", "")))
-            return self.answer(201, {})
+            k = len(GitLab.notes) + 1
+            GitLab.notes[k] = (int(path.split("/")[-2]), body.get("body", ""))
+            return self.answer(201, {"id": k})
         self.answer(404, {"message": "404 Not Found"})
+
+    def do_PUT(self):
+        GitLab.signed.append(self.headers.get("PRIVATE-TOKEN") == pg.TOKEN)
+        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+        k = int(unquote(self.path).split("?")[0].rsplit("/", 1)[1])
+        if k not in GitLab.notes:
+            return self.answer(404, {"message": "404 Not found"})
+        GitLab.notes[k] = (GitLab.notes[k][0], body.get("body", ""))
+        self.answer(200, {"id": k})
 
 
 def run_dag(bob, dag):
@@ -157,14 +172,27 @@ def main():
         done = wait(lambda: next((s for s in GitLab.statuses if s[0] == sha and s[1] in ("success", "failed")), None), 900, every=10)
         check("the merge request's change is built on its data branch, and GitLab told: success", done and done[1] == "success",
               done or GitLab.statuses[-3:])
-        note = next((b for i, b in GitLab.notes if i == 1), "")
-        check("... with a note of the model's rows: 3 on the branch, 2 in production", "| `regions` | 3 | 2 |" in note, note[:300])
+        note = next((b for i, b in GitLab.notes.values() if i == 1), "")
+        check("... with a note of the model's rows: 3 on the branch, 2 in production, and the row that differs",
+              "| `regions` | 3 | 2 |" in note and "APAC" in note, note[:400])
         check("... signed in to GitLab with the repo's token, each call", GitLab.signed and all(GitLab.signed), f"{sum(GitLab.signed)} of {len(GitLab.signed)}")
         check("production's table is as it was", rows("iceberg") == [[1, "EU"], [2, "US"]], rows("iceberg"))
 
+        # A new commit: the same note, updated.
+        with open(os.path.join(work, "dags/dbt/models/regions.sql"), "w") as f:
+            f.write(MODEL.format(rows="(1, 'EU'), (2, 'US'), (3, 'APAC'), (4, 'LATAM')"))
+        pg.git("commit", "-q", "-am", "LATAM too", cwd=work)
+        pg.git("push", "-q", "origin", "more-regions", cwd=work)
+        sha2 = pg.git("rev-parse", "HEAD", cwd=work)
+        GitLab.mrs = [{**GitLab.mrs[0], "sha": sha2}]
+        again = wait(lambda: next((s for s in GitLab.statuses if s[0] == sha2 and s[1] in ("success", "failed")), None), 900, every=10)
+        mine = [b for i, b in GitLab.notes.values() if i == 1]
+        check("a new commit is built too, and its note updated, not another added",
+              again and again[1] == "success" and len(mine) == 1 and "| `regions` | 4 | 2 |" in mine[0], (again, len(mine), (mine or [""])[0][:200]))
+
         # 3. The branch, read.
         check("bob reads the branch's table through its catalog (reviewed_mr_1)",
-              rows("reviewed_mr_1") == [[1, "EU"], [2, "US"], [3, "APAC"]], rows("reviewed_mr_1"))
+              rows("reviewed_mr_1") == [[1, "EU"], [2, "US"], [3, "APAC"], [4, "LATAM"]], rows("reviewed_mr_1"))
 
         # 4. Closed.
         GitLab.mrs = []

@@ -28,6 +28,7 @@ from storscale import dbt
 
 PLATFORM = os.environ.get("STORSCALE_PLATFORMD_URL", "http://platformd:8080")
 STATUS = "storscale/dbt"
+MARK = "<!-- storscale-review -->"   # the platform's note on a merge request: updated, not added again
 
 
 class GitLab:
@@ -42,7 +43,16 @@ class GitLab:
         requests.post(f"{self.url}/statuses/{sha}", json=body, headers=self.h, timeout=30).raise_for_status()
 
     def note(self, iid, body):
-        requests.post(f"{self.url}/merge_requests/{iid}/notes", json={"body": body}, headers=self.h, timeout=30).raise_for_status()
+        """The platform's note on the merge request: the one it left before,
+        updated (a note per merge request, at its latest commit), or a new one."""
+        body = MARK + "\n" + body
+        r = requests.get(f"{self.url}/merge_requests/{iid}/notes", params={"per_page": 100, "sort": "asc"}, headers=self.h, timeout=30)
+        mine = next((n for n in (r.json() if r.ok else []) if isinstance(n, dict) and MARK in (n.get("body") or "")), None)
+        if mine:
+            requests.put(f"{self.url}/merge_requests/{iid}/notes/{mine['id']}", json={"body": body}, headers=self.h,
+                         timeout=30).raise_for_status()
+        else:
+            requests.post(f"{self.url}/merge_requests/{iid}/notes", json={"body": body}, headers=self.h, timeout=30).raise_for_status()
 
 
 def checkout(conn, sha, work):
@@ -57,19 +67,32 @@ def checkout(conn, sha, work):
     subprocess.run(["git", "-C", work, "checkout", "-q", "FETCH_HEAD"], check=True, env=env)
 
 
-def rows(token, catalog, schema, table):
+def query(token, sql):
+    """Rows of a statement, as the project's pipelines; None when it can't run
+    (a table not there: a new model, or none in production)."""
     import trino
     conn = trino.dbapi.connect(host=os.environ.get("TRINO_HOST", "trino"), port=8443, http_scheme="https",
-                               verify=os.environ.get("TRINO_CA", "/tls/cert.pem"), auth=trino.auth.JWTAuthentication(token),
-                               catalog=catalog, schema=schema)
+                               verify=os.environ.get("TRINO_CA", "/tls/cert.pem"), auth=trino.auth.JWTAuthentication(token))
     try:
         cur = conn.cursor()
-        cur.execute(f'SELECT count(*) FROM "{table}"')
-        return cur.fetchone()[0]
-    except Exception:  # noqa: BLE001 (not there: a new model, or none in production)
+        cur.execute(sql)
+        return cur.fetchall()
+    except Exception:  # noqa: BLE001
         return None
     finally:
         conn.close()
+
+
+def rows(token, catalog, schema, table):
+    got = query(token, f'SELECT count(*) FROM "{catalog}"."{schema}"."{table}"')
+    return got[0][0] if got else None
+
+
+def differ(token, branch, prod, schema, table, limit=5):
+    """A sample of the rows the branch has and production hasn't, and the other way."""
+    b, p = f'"{branch}"."{schema}"."{table}"', f'"{prod}"."{schema}"."{table}"'
+    return (query(token, f"SELECT * FROM (SELECT * FROM {b} EXCEPT SELECT * FROM {p}) LIMIT {limit}"),
+            query(token, f"SELECT * FROM (SELECT * FROM {p} EXCEPT SELECT * FROM {b}) LIMIT {limit}"))
 
 
 @dag(dag_id="storscale_review", schedule=None, start_date=pendulum.datetime(2026, 1, 1, tz="UTC"), catchup=False,
@@ -115,6 +138,12 @@ def storscale_review():
                 lines += ["| model | rows on the branch | rows in production |", "|---|---|---|"]
                 for m in models:
                     lines.append(f"| `{m}` | {rows(tok, c['catalog'], c['namespace'], m)} | {rows(tok, c['prodCatalog'], c['namespace'], m)} |")
+                for m in models:
+                    added, gone = differ(tok, c["catalog"], c["prodCatalog"], c["namespace"], m)
+                    if added or gone:
+                        lines += ["", f"<details><summary><code>{m}</code>: rows that differ (a sample)</summary>", ""]
+                        lines += [f"- \\+ `{list(r)}`" for r in added or []] + [f"- \\- `{list(r)}`" for r in gone or []]
+                        lines += ["", "</details>"]
             else:
                 lines.append("No model changed.")
             for x in failed:
