@@ -9,6 +9,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ### Changed
 - **A project's pipelines make their tables** (create, drop, alter, in the project's namespace alone: dbt's models), beside reading and writing them.
+- **Anyone signed in may run queries and see the iceberg catalog is there** (Ranger's group public), each project's own pipelines account among them (on Kubernetes a group of its own, which the shared policies can't name): what one may read in a namespace or table is still its project's.
 - **Everyone may read the catalog's information_schema and Trino's system metadata** (`system.jdbc`, `system.metadata`; Ranger's group public): Trino shows in them only what each one may see, and each project's own pipelines (dbt) read them. Not `system.runtime`.
 
 ## [0.12.0] - 2026-10-18

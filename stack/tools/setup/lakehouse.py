@@ -34,13 +34,18 @@ MAINTENANCE_USER = "maintenance"
 # (CREATE CATALOG): that, on any catalog, and nothing in them. Who may read a
 # source is its project's policies.
 OPERATOR_USER = "platform-operator"
-POLICIES = [{**p, "policyItems": p["policyItems"] + ([allow(["execute"], users=[CATALOG_USER, MAINTENANCE_USER, OPERATOR_USER])] if p["name"] == "run queries" else [])}
+# Anyone signed in may run queries and see that the iceberg catalog is there
+# (Ranger's group public), each project's own pipelines account among them
+# (a group of its own, <project>-pipelines, which these shared policies can't
+# name): what one may read in a namespace or table is still its project's.
+POLICIES = [{**p, "policyItems": p["policyItems"] + ([allow(["execute"], groups=["public"], users=[CATALOG_USER, MAINTENANCE_USER, OPERATOR_USER])]
+                                                     if p["name"] == "run queries" else [])}
             for p in BASE_POLICIES] + [
     # Everyone may see that the catalog is there; engineers may add namespaces
     # to it. What's in a namespace is up to its project. (Ranger allows one
     # access policy per resource, so the catalog's policy has an item per group.)
     {"name": "iceberg catalog", "resources": res(catalog=ICEBERG),
-     "policyItems": [allow(["all"], groups=["engineers"]), allow(["use", "show"], groups=["analysts", "pipelines"], users=[CATALOG_USER, MAINTENANCE_USER])]},
+     "policyItems": [allow(["all"], groups=["engineers"]), allow(["use", "show"], groups=["public"], users=[CATALOG_USER, MAINTENANCE_USER])]},
     {"name": "operator: catalogs", "resources": res(catalog="*"),
      "policyItems": [allow(["create", "drop"], users=[OPERATOR_USER])]},
     {"name": "catalog: every namespace", "resources": res(catalog=ICEBERG, schema="*"),

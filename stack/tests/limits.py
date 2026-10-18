@@ -70,8 +70,14 @@ def finished(q):
 def group_of(user, statement, tags=None):
     """The resource group a statement ran in, as Trino says (its path)."""
     q = finished(submit(user, statement, tags))
-    info = requests.get(f"{TRINO}/v1/query/{q['id']}", headers={"Authorization": f"Bearer {token(user)}"},
-                        verify="/tls/cert.pem", timeout=30)
+    for attempt in range(3):   # a connection cut mid-answer (it happens, with Trino's workers about) is asked again
+        try:
+            info = requests.get(f"{TRINO}/v1/query/{q['id']}", headers={"Authorization": f"Bearer {token(user)}"},
+                                verify="/tls/cert.pem", timeout=30)
+            break
+        except (requests.exceptions.ChunkedEncodingError, requests.exceptions.ConnectionError):
+            if attempt == 2:
+                raise
     return ".".join(info.json().get("resourceGroupId") or []) if info.ok else f"HTTP {info.status_code}"
 
 
