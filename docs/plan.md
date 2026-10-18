@@ -281,7 +281,7 @@ Every container runs without privilege escalation, with the default seccomp prof
 
 **Order and effort:** (1) the access check and the operator's fix, a day; (2) reading as of a tag, time or commit on the SQL page, with the checks above, a day; (3) tags: API, Tags tab, keep and removal, audit, two days; (4) the History tab, two days. **Built (2026-10-17):** all four. Tags are the project's (`tables.tags`: a name, a commit, keepUntil, a note, who), the operator keeps Nessie's as they say; the platform turns a tag or a time into its commit. Not yet: notebooks and dashboards read as of a moment by the name alone (no picker), and deliveries (9.1) recording their commit.
 
-### dbt in a project's repo (use case 7.5), how (design, 2026-10-18; the first part built)
+### dbt in a project's repo (use case 7.5), how (design, 2026-10-18; in 0.13.0)
 
 **Built:** the helper (`storscale.dbt`, in the Airflow image's `/opt/storscale`) and dbt's virtualenv (`/opt/dbt`: dbt-core 1.12.5, dbt-trino 1.10.5), the project's pipelines allowed to make their tables, information_schema readable by all, and the pipelines_git suite's dbt project. **Then:** the artifacts into the catalog (the helper posts them to platformd's `/api/projects/<name>/dbt/artifacts`, as the project's pipelines account's token; platformd keeps them in `dbt/<project>/`; catalog-sync runs OpenMetadata's dbt source on them). **Left:** dbt packages (`dbt deps` would write into the read-only checkout), runs of only what changed (with 7.3), and a long run outliving its Keycloak token (minutes).
 

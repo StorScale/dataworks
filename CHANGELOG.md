@@ -4,6 +4,14 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-18
+
+dbt in a project's repo: its models built by Airflow in Trino as the project's pipelines, and described in the catalog; Trino's memory set right.
+
+**Upgrading from 0.12.0:**
+- `storscale upgrade --context <cluster> --version 0.13.0`, after a `--dry-run`. Trino restarts with its own JVM settings (its heap 60% of its pod's), and the setup steps run again: a project's pipelines may then make, drop and alter tables in its namespace, and anyone signed in may run queries and read Trino's metadata (filtered to what each may see), as the notes under Changed say.
+- A repo's DAG uses dbt with `from storscale import dbt` and `dbt.build(project=..., path="dbt")`; its `dbt_project.yml` says `profile: storscale`.
+
 ### Added
 - **dbt in a project's repo** ([docs/use-cases.md](docs/use-cases.md), 7.5): a DAG of the repo's calls the platform's helper, `storscale.dbt.build(project=..., path="dbt")`, and its run is `dbt build` on the dbt project beside it (dbt-core 1.12 with dbt-trino, in a virtualenv of their own in the Airflow image), in Trino, on the project's Iceberg tables, signed in as the project's pipelines service account (a Keycloak token): Ranger's rules are the pipelines', and its audit names them. The helper writes dbt's profile, so the repo holds no settings and no secrets. After each run, passed or failed, the helper sends dbt's artifacts (manifest, catalog, run results) to platformd, which takes them from the project's own pipelines account alone (its Keycloak token) and keeps them in the platform's bucket (`dbt/<project>/`); catalog-sync describes the models from them (OpenMetadata's dbt source): their descriptions, columns, lineage and tests' results. The pipelines_git suite's repo has a dbt project, whose model's table the suite reads and whose description the catalog shows. Not yet: dbt packages, and runs of only what changed.
 
