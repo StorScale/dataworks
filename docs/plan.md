@@ -281,7 +281,7 @@ Every container runs without privilege escalation, with the default seccomp prof
 
 **Order and effort:** (1) the access check and the operator's fix, a day; (2) reading as of a tag, time or commit on the SQL page, with the checks above, a day; (3) tags: API, Tags tab, keep and removal, audit, two days; (4) the History tab, two days. **Built (2026-10-17):** all four. Tags are the project's (`tables.tags`: a name, a commit, keepUntil, a note, who), the operator keeps Nessie's as they say; the platform turns a tag or a time into its commit. Not yet: notebooks and dashboards read as of a moment by the name alone (no picker), and deliveries (9.1) recording their commit.
 
-### A file delivery (use case 9.1), how (design, 2026-10-18; the first part built)
+### A file delivery (use case 9.1), how (design, 2026-10-18; in 0.15.0)
 
 **Built:** the spec (`deliveries`), the approvals (platformd: who changed what it sends, kept by it; approving, by another editor or an administrator, and a data-protection approver for personal columns; a change needing approval again), the operator's connection per delivery in the Airflow its DAG runs in, the approved ones listed for the DAG file (`storscale_deliveries.py`), the run (`storscale_delivery_run.py`: checks, files, gzip, PGP, manifest, SFTP or S3, three tries), the delivery log and the Deliveries tab, the `deliveries` suite. Who approves is a default until the user decides (`deliveries.approverGroups`). **Left:** fixed-width files, Azure Blob and Google Cloud Storage, whose data a delivery carried (9.2), shares in place (9.3).
 
