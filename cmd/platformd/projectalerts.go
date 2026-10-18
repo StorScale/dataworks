@@ -22,7 +22,7 @@ import (
 // a pipeline's latest run failed, a check is failing, a table is stale.
 type issue struct {
 	Key        string     `json:"key"`  // pipeline/<id>/<run>, check/<table>/<check>, stale/<table>
-	Kind       string     `json:"kind"` // pipeline, check, stale, maintenance
+	Kind       string     `json:"kind"` // pipeline, check, stale, maintenance, copy
 	Title      string     `json:"title"`
 	Detail     string     `json:"detail,omitempty"`
 	Link       string     `json:"link"`
@@ -38,6 +38,7 @@ type projectAlerts struct {
 	muted    map[string]time.Time        // project/key -> until
 	unknown  map[string][]string         // project -> what couldn't be looked at, and why
 	checked  bool                        // a first pass done: what was wrong already isn't news
+	down     map[string]time.Time        // project/copy/<source> -> since when its copy isn't running
 	http     *http.Client
 	nessie   string // Nessie's Iceberg API (http://nessie:19120/iceberg)
 	warehous string
@@ -45,6 +46,7 @@ type projectAlerts struct {
 
 func (s *server) startProjectAlerts(ctx context.Context) {
 	pa := &projectAlerts{issues: map[string]map[string]issue{}, told: map[string]string{}, muted: map[string]time.Time{}, unknown: map[string][]string{},
+		down: map[string]time.Time{},
 		http: &http.Client{Timeout: 20 * time.Second}, warehous: "warehouse"}
 	pa.nessie = strings.TrimRight(os.Getenv("NESSIE_URL"), "/")
 	if pa.nessie == "" {
@@ -121,6 +123,7 @@ func (s *server) issuesOf(ctx context.Context, p *project.Project) (out []issue,
 			}
 		}
 	}
+	out = append(out, s.copyIssues(ctx, p, link)...)
 	if s.maintainer != nil {
 		for _, run := range s.maintainer.failures(p.Metadata.Name) {
 			out = append(out, issue{Key: "maintenance/" + run.Table, Kind: "maintenance",
@@ -327,4 +330,53 @@ func (s *server) handleProjectAlerts(w http.ResponseWriter, r *http.Request) {
 		dest["email"] = n.Email
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"checked": pa.checked, "issues": out, "notify": dest, "unknown": unknown})
+}
+
+// CopyDownAfter is how long a source's copy may be not running (starting,
+// restarting, refused by its database) before its project is told.
+const CopyDownAfter = 10 * time.Minute
+
+// copyIssues are the project's copies (use case 8.1) that haven't been
+// running for CopyDownAfter, as the operator last found them (its status's
+// copy part, which names each copy that isn't).
+func (s *server) copyIssues(ctx context.Context, p *project.Project, link string) []issue {
+	pa := s.projectAlerts
+	if pa == nil || s.store == nil {
+		return nil
+	}
+	var part *project.Part
+	if statuses, err := s.store.Statuses(ctx); err == nil {
+		for _, st := range statuses {
+			if st.Name != p.Metadata.Name {
+				continue
+			}
+			for i := range st.Parts {
+				if st.Parts[i].System == "copy" {
+					part = &st.Parts[i]
+				}
+			}
+		}
+	}
+	var out []issue
+	pa.mu.Lock()
+	defer pa.mu.Unlock()
+	for _, src := range p.Spec.Sources {
+		key := p.Metadata.Name + "/copy/" + src.Name
+		if src.Copy == nil || part == nil || part.OK || !strings.Contains(part.Message, "copying "+src.Name+":") {
+			delete(pa.down, key)
+			continue
+		}
+		since, ok := pa.down[key]
+		if !ok {
+			pa.down[key] = time.Now()
+			continue
+		}
+		if time.Since(since) < CopyDownAfter {
+			continue
+		}
+		out = append(out, issue{Key: "copy/" + src.Name, Kind: "copy",
+			Title:  fmt.Sprintf("the copy of %s isn't running (since %s)", src.Name, since.UTC().Format("15:04 MST")),
+			Detail: part.Message, Link: link})
+	}
+	return out
 }

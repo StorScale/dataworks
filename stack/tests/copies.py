@@ -13,7 +13,8 @@ own, an account with REPLICATION; CI runs Postgres with wal_level=logical):
   2. an insert, an update and a delete in the source reach it;
   3. a column added in the source is added to it;
   4. it's under the project's rules: alice (a reader of sales' listed
-     tables only) can't read it.
+     tables only) can't read it;
+  5. the catalog has its lineage: the source's table upstream of it.
 
 The sales spec, the connection, the copied table and the source database
 are removed after.
@@ -23,6 +24,7 @@ import os
 import time
 
 import psycopg2
+import requests
 
 from lakekit import check, denied, env, finish, sql
 
@@ -69,6 +71,11 @@ def show_copy():
         name = pod["metadata"]["name"]
         for cs in pod.get("status", {}).get("containerStatuses", []):
             print(f"  {name}: ready={cs.get('ready')} restarts={cs.get('restartCount')} state={json.dumps(cs.get('state'))[:300]}")
+        for c in pod.get("status", {}).get("conditions", []):
+            print(f"  {name}: {c.get('type')}={c.get('status')} {c.get('reason') or ''} {c.get('message') or ''}")
+        r = k8s._api("GET", "events", params={"fieldSelector": f"involvedObject.name={name}"})
+        for e in (r.json().get("items", []) if r.ok else [])[-8:]:
+            print(f"  {name}: event {e.get('reason')}: {(e.get('message') or '')[:200]}")
         for previous in ("true", "false"):
             r = k8s._api("GET", f"pods/{name}/log", params={"tailLines": "80", "previous": previous})
             if r.ok and r.text.strip():
@@ -76,6 +83,19 @@ def show_copy():
                 print("\n".join("    " + line for line in r.text.splitlines()))
     if not pods:
         print("  (no copy pod)")
+
+
+def upstream():
+    """The copy's upstream tables in the catalog (OpenMetadata), as its administrator reads them."""
+    r = requests.post(f"{env['KEYCLOAK_URL']}/realms/lakehouse/protocol/openid-connect/token", timeout=10, data={
+        "grant_type": "client_credentials", "client_id": "platform-operator", "client_secret": env["OPERATOR_CLIENT_SECRET"]})
+    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    r = requests.get(f"http://openmetadata:8585/api/v1/lineage/table/name/trino.iceberg.sales.{TABLE}",
+                     params={"upstreamDepth": 1, "downstreamDepth": 0}, headers=h, timeout=30)
+    if not r.ok:
+        return []
+    nodes = {n["id"]: n.get("fullyQualifiedName") for n in r.json().get("nodes", [])}
+    return [nodes.get(e["fromEntity"]) for e in r.json().get("upstreamEdges", [])]
 
 
 def drop_source():
@@ -104,8 +124,8 @@ def main():
     before = bob.get(url, timeout=30).json()["spec"]
     drop_source()
     admin([f"CREATE ROLE {ROLE} LOGIN REPLICATION PASSWORD '{PASSWORD}'", f"CREATE DATABASE {DB} OWNER {ROLE}"])
-    source(["CREATE TABLE public.invoices (id integer PRIMARY KEY, amount numeric(10, 2), note text)",
-            "INSERT INTO public.invoices VALUES (1, 10.50, 'first'), (2, 99.00, 'second')"])
+    source(["CREATE TABLE public.invoices (id integer PRIMARY KEY, amount numeric(10, 2), note text, total numeric)",
+            "INSERT INTO public.invoices VALUES (1, 10.50, 'first', 10.50), (2, 99.00, 'second', 99.00)"])
     k8s.put_secret(CONNECTION, {"host": "postgres", "port": "5432", "database": DB, "username": ROLE, "password": PASSWORD},
                    labels={"platform.storscale.io/connection": PROJECT})
     spec = {**before, "spec": {**before["spec"], "sources": [
@@ -122,22 +142,37 @@ def main():
         part = lambda: next((p for p in (bob.get(url, timeout=30).json().get("status") or {}).get("parts", []) if p["system"] == "copy"), {})
         ok = wait(lambda: part().get("ok"), 120, every=5)
         check("... and its copy is part of the project's status", ok, part())
+        if not ok:
+            show_copy()
+        # Exact numbers: a numeric(10, 2) is a decimal(10, 2), 10.50 not 10.4999...; a numeric of no
+        # declared precision a decimal too (Debezium sends it with its scale, value by value).
+        try:
+            exact = sql("bob", f"SELECT typeof(amount), CAST(amount AS varchar), typeof(total), CAST(total AS varchar) FROM {TABLE} WHERE id = 1",
+                        "iceberg", "sales")[0]
+        except Exception as e:  # noqa: BLE001
+            exact = [str(e)[:200]]
+        check("... its numbers exact: numeric(10, 2) as decimal(10, 2), 10.50", exact[:2] == ["decimal(10,2)", "10.50"], exact)
+        check("... and a numeric of no declared precision as a decimal", str(exact[2:3]).startswith("['decimal"), exact)
 
         # 2. Changes, within a minute or two.
-        source(["INSERT INTO public.invoices VALUES (3, 5.25, 'third')", "UPDATE public.invoices SET amount = 11.00 WHERE id = 1",
+        source(["INSERT INTO public.invoices VALUES (3, 5.25, 'third', 5.25)", "UPDATE public.invoices SET amount = 11.00 WHERE id = 1",
                 "DELETE FROM public.invoices WHERE id = 2"])
         want = [[1, 11.0], [3, 5.25]]
         got = wait(lambda: (lambda x: x if x == want else None)([[a, float(b)] for a, b in rows() or []]), 300, every=10)
         check("an insert, an update and a delete in the source reach it", got == want, rows())
 
         # 3. A column added.
-        source(["ALTER TABLE public.invoices ADD COLUMN region text", "INSERT INTO public.invoices VALUES (4, 1.00, 'fourth', 'EU')"])
+        source(["ALTER TABLE public.invoices ADD COLUMN region text", "INSERT INTO public.invoices VALUES (4, 1.00, 'fourth', 1.00, 'EU')"])
         got = wait(lambda: (lambda x: x if x and x[-1] == [4, "EU"] else None)(rows("id, region")), 300, every=10)
         check("a column added in the source is added to it", got and got[-1] == [4, "EU"], rows("id, region"))
 
         # 4. The project's rules.
         msg = denied("alice", f"SELECT count(*) FROM {TABLE}", "iceberg", "sales")
         check("it's under sales' rules: alice (who reads its listed tables) can't read it", msg is not None, msg)
+
+        # 5. Lineage.
+        up = wait(upstream, 300, every=10) or upstream()
+        check("the catalog has its lineage: the source's table upstream of it", "trino.sales_finance.public.invoices" in up, up)
 
         # Its copy stops with the source.
         r = bob.put(url, data=json.dumps(before), timeout=30)

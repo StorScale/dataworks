@@ -11,7 +11,9 @@ Every round, it:
      column and schema is in the catalog (its Trino account may see what's
      in a source, and read none of it);
   3. runs each project's checks (spec.tables.checks) as OpenMetadata tests on
-     its tables, which shows their results on the tables.
+     its tables, which shows their results on the tables;
+  4. links each source's table a project copies (sources[].copy, use case
+     8.1) to its copy, <source>_<table>, column by column: their lineage.
 
 Once, it also makes the pipeline service "airflow", and has OpenMetadata file
 the pipelines it learns of from OpenLineage events under it.
@@ -135,6 +137,38 @@ def projects():
     return out
 
 
+def copy_lineage():
+    """Each copied source table, upstream of its copy (both described by now,
+    the copy once its first commit is in): an edge, its columns matched by
+    name. Put again each round: OpenMetadata keeps one edge per pair."""
+    h = admin_headers()
+
+    def table(fqn):
+        r = requests.get(f"{OM}/v1/tables/name/{fqn}", params={"fields": "columns"}, headers=h, timeout=30)
+        return r.json() if r.ok else None
+    for p in projects():
+        tables = p["spec"].get("tables")
+        if tables is None:
+            continue
+        prefix = p["metadata"]["name"].replace("-", "_")
+        namespace = tables.get("namespace") or prefix
+        for s in p["spec"].get("sources") or []:
+            for t in (s.get("copy") or {}).get("tables") or []:
+                schema, name = t.split(".", 1)
+                src = table(f"{SERVICE}.{prefix}_{s['name']}.{schema}.{name}")
+                dst = table(f"{SERVICE}.{tables.get('catalog') or 'iceberg'}.{namespace}.{s['name']}_{name}")
+                if not src or not dst:
+                    continue
+                theirs = {c["name"] for c in src.get("columns", [])}
+                columns = [{"fromColumns": [f"{src['fullyQualifiedName']}.{c['name']}"], "toColumn": f"{dst['fullyQualifiedName']}.{c['name']}"}
+                           for c in dst.get("columns", []) if c["name"] in theirs]
+                r = requests.put(f"{OM}/v1/lineage", headers=h, timeout=30, json={"edge": {
+                    "fromEntity": {"id": src["id"], "type": "table"}, "toEntity": {"id": dst["id"], "type": "table"},
+                    "lineageDetails": {"columnsLineage": columns, "description": f"Copied by change capture (source {s['name']})"}}})
+                if not r.ok:
+                    log.warning("lineage of %s to %s: HTTP %d %s", src["fullyQualifiedName"], dst["fullyQualifiedName"], r.status_code, r.text[:200])
+
+
 def test_case(project, check):
     name = "_".join(filter(None, [project, check["table"], check.get("column"), check["check"]]))
     tc = {"name": name, "testDefinitionName": CHECKS[check["check"]], "parameterValues": []}
@@ -209,6 +243,7 @@ def main():
                 shared = token
             if time.time() - last_metadata > METADATA_EVERY:
                 ingest_metadata(token)
+                copy_lineage()
                 last_metadata = time.time()
                 log.info("metadata: ingested trino")
             run_checks(token)

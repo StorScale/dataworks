@@ -122,6 +122,15 @@ func (w *watch) watchFindings(ctx context.Context, s *server) {
 					w.send(ctx, s, health.FromFinding(f, true, w.link))
 				}
 			}
+			if stopped, err := w.kube.StoppedCopies(ctx); err == nil {
+				on, off := w.findings.Set("copies", stopped)
+				for _, f := range on {
+					w.send(ctx, s, health.FromFinding(f, false, w.link))
+				}
+				for _, f := range off {
+					w.send(ctx, s, health.FromFinding(f, true, w.link))
+				}
+			}
 			if failed, err := w.kube.FailedJobs(ctx); err == nil {
 				on, _ := w.findings.Set("jobs", failed)
 				for _, f := range on {
