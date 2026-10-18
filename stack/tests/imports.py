@@ -124,7 +124,7 @@ def upstream():
 
 
 def main():
-    bob = platform("bob")
+    bob, alice = platform("bob"), platform("alice")
     url = f"{PLATFORM}/api/projects/{PROJECT}"
     before = bob.get(url, timeout=30).json()["spec"]
     server = ThreadingHTTPServer(("0.0.0.0", PORT), CRM)
@@ -164,6 +164,18 @@ def main():
         check("a second run asks only for what's new past the cursor", CRM.asked and CRM.asked[0][0] == "2026-10-03T10:00:00Z", CRM.asked[:3])
         check("... and merges it: a lead changed, one added, none twice",
               state == "success" and rows() == [[1, "Ada"], [2, "Grace Hopper"], [3, "Edsger"], [4, "Barbara"]], f"{state}: {rows()}")
+
+        # A reset: all copied again, from the cursor's start.
+        CRM.asked.clear()
+        r = bob.post(f"{url}/imports/crm/reset", headers={"X-Platform-Request": "1"}, timeout=60)
+        reset_id = r.json().get("run") if r.ok else None
+        state = wait(lambda: next((x["state"] for x in (pipeline(bob) or {}).get("runs", [])
+                                   if x["id"] == reset_id and x["state"] in ("success", "failed")), None), 600, every=10) if reset_id else r.text[:200]
+        check("a reset copies it all again, from the cursor's start, none twice",
+              state == "success" and CRM.asked and CRM.asked[0][0] == "2026-01-01T00:00:00Z"
+              and rows() == [[1, "Ada"], [2, "Grace Hopper"], [3, "Edsger"], [4, "Barbara"]], f"{state}: {CRM.asked[:2]} {rows()}")
+        code = alice.post(f"{url}/imports/crm/reset", headers={"X-Platform-Request": "1"}, timeout=60).status_code
+        check("... and only an editor resets it: alice (a reader) can't", code == 403, f"HTTP {code}")
 
         # 4. The project's rules.
         msg = denied("alice", f"SELECT count(*) FROM {TABLE}", "iceberg", "sales")

@@ -19,6 +19,16 @@ func (k kept) PutFile(_ context.Context, key string, data []byte, _ string) erro
 	return nil
 }
 
+func (k kept) ListFiles(_ context.Context, prefix string) ([]string, error) {
+	var out []string
+	for key := range k {
+		if strings.HasPrefix(key, prefix) {
+			out = append(out, key)
+		}
+	}
+	return out, nil
+}
+
 func (k kept) GetFile(_ context.Context, key string) ([]byte, error) {
 	if v, ok := k[key]; ok {
 		return []byte(v), nil

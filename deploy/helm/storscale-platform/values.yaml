@@ -138,6 +138,12 @@ pipelines:
   # Without them, a host's key is taken the first time it's seen.
   gitKnownHosts: ""
 
+# Projects' deliveries (use case 9.1): who approves one that sends personal
+# data, beside another editor of its project (Keycloak groups, comma-separated;
+# empty: the platform's administrators).
+deliveries:
+  approverGroups: ""
+
 # Projects' sources copied into their tables by change capture (use case 8.1):
 # a pod per copying source, which the operator makes.
 copy:

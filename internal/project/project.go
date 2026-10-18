@@ -50,6 +50,83 @@ type Spec struct {
 	Notify      *Notify    `json:"notify,omitempty"`
 	Sources     []Source   `json:"sources,omitempty"`
 	Imports     []Import   `json:"imports,omitempty"`
+	Deliveries  []Delivery `json:"deliveries,omitempty"`
+}
+
+// A Delivery sends files to a client or partner on a schedule (use case
+// 9.1): a table of the project's (or a query on its tables), in a format,
+// split by a column if asked, compressed, encrypted for the recipient, with
+// a manifest, to an SFTP server or an S3 bucket (Target, one of the
+// project's connections). It runs as the project's pipelines, only once
+// approved, and again only once what it sends, as changed, is approved.
+type Delivery struct {
+	Name     string          `json:"name"`
+	Table    string          `json:"table,omitempty"` // one of the project's, or Query
+	Query    string          `json:"query,omitempty"` // a SELECT on the project's tables
+	Format   string          `json:"format"`          // csv, parquet, jsonl
+	Gzip     bool            `json:"gzip,omitempty"`
+	Files    string          `json:"files"`             // names: {date}, {part} (SplitBy's value)
+	SplitBy  string          `json:"splitBy,omitempty"` // a column: a file per value
+	Schedule string          `json:"schedule"`          // cron (UTC)
+	Target   string          `json:"target"`            // a connection: SFTP (host, port, username, password or sshPrivateKey, hostKey) or S3 (endpoint, bucket, prefix, accessKey, secretKey)
+	PGP      string          `json:"pgp,omitempty"`     // a connection holding the recipient's pgpPublicKey
+	Checks   *DeliveryChecks `json:"checks,omitempty"`
+	// ChangedBy and Approval are the platform's, never set by hand: who last
+	// changed what it sends, and who approved it (an approval by another).
+	ChangedBy string    `json:"changedBy,omitempty"`
+	Approval  *Approval `json:"approval,omitempty"`
+}
+
+// DeliveryChecks run before anything is sent: a failing one sends nothing.
+type DeliveryChecks struct {
+	MinRows int64    `json:"minRows,omitempty"`
+	MaxRows int64    `json:"maxRows,omitempty"`
+	Within  string   `json:"within,omitempty"` // its table changed within: 30m, 24h, 7d
+	Parts   []string `json:"parts,omitempty"`  // SplitBy's values all there
+}
+
+// An Approval is who approved what a delivery sends (the Hash of it), and
+// when; Done once everyone it needs has (another editor, and for personal
+// data the install's data-protection approver too).
+type Approval struct {
+	Hash       string    `json:"hash"`
+	By         []string  `json:"by"`                   // as editors (or administrators)
+	Protection []string  `json:"protection,omitempty"` // as data-protection approvers
+	At         time.Time `json:"at"`
+	Done       bool      `json:"done,omitempty"`
+}
+
+// DeliveryFormats are the formats a delivery may write.
+var DeliveryFormats = []string{"csv", "parquet", "jsonl"}
+
+// SendsHash is what an approval covers: what a delivery sends and where
+// (its table or query, split, format and target), not when or how it's
+// named. A change to it needs approving again.
+func (d Delivery) SendsHash() string {
+	h := sha256.Sum256([]byte(strings.Join([]string{d.Table, d.Query, d.SplitBy, d.Format, d.Target, d.PGP}, "\x00")))
+	return hex.EncodeToString(h[:])[:16]
+}
+
+// Approved says whether a delivery's approval covers what it sends now.
+func (d Delivery) Approved() bool {
+	return d.Approval != nil && d.Approval.Done && d.Approval.Hash == d.SendsHash()
+}
+
+// PersonalColumns are the columns a delivery sends that the project masks
+// for its readers (personal, until columns are tagged): of its table, or
+// those its query names.
+func (p *Project) PersonalColumns(d Delivery) []string {
+	var out []string
+	if p.Spec.Tables == nil || p.Spec.Tables.Readers == nil {
+		return out
+	}
+	q := strings.ToLower(d.Query)
+	for _, m := range p.Spec.Tables.Readers.Masks {
+		if d.Table != "" && m.Table == d.Table || d.Query != "" && strings.Contains(q, strings.ToLower(m.Column)) {
+			out = append(out, m.Table+"."+m.Column)
+		}
+	}
+	return sorted(out)
 }
 
 // An Import copies an application's data, or a database's by a cursor
@@ -609,6 +686,53 @@ func (p *Project) Validate() error {
 			}
 		default:
 			bad("imports: %s: source %q: one of %s", im.Name, im.Source, strings.Join(ImportSources, ", "))
+		}
+	}
+	seenDelivery := map[string]bool{}
+	for _, d := range p.Spec.Deliveries {
+		switch {
+		case !sourceNameRE.MatchString(d.Name):
+			bad("deliveries: name %q: 1 to 20 lowercase letters, digits and underscores, starting with a letter", d.Name)
+		case seenDelivery[d.Name]:
+			bad("deliveries: %q twice", d.Name)
+		case p.Spec.Tables == nil:
+			bad("deliveries: %s: it sends the project's tables, and it has none (tables)", d.Name)
+		}
+		seenDelivery[d.Name] = true
+		if (d.Table == "") == (d.Query == "") {
+			bad("deliveries: %s: a table or a query, one of them", d.Name)
+		}
+		if d.Table != "" && !identifierRE.MatchString(d.Table) {
+			bad("deliveries: %s: table %q isn't one of the project's names", d.Name, d.Table)
+		}
+		if q := strings.ToLower(strings.TrimSpace(d.Query)); d.Query != "" && (!strings.HasPrefix(q, "select") && !strings.HasPrefix(q, "with") || strings.Contains(q, ";")) {
+			bad("deliveries: %s: its query is one SELECT", d.Name)
+		}
+		if !slices.Contains(DeliveryFormats, d.Format) {
+			bad("deliveries: %s: format %q: one of %s", d.Name, d.Format, strings.Join(DeliveryFormats, ", "))
+		}
+		if d.Files == "" || strings.ContainsAny(d.Files, "/\\") || !strings.Contains(d.Files, "{date}") {
+			bad("deliveries: %s: files %q: a name with {date} (and {part}, split), no folders", d.Name, d.Files)
+		}
+		if (d.SplitBy != "") != strings.Contains(d.Files, "{part}") || d.SplitBy != "" && !identifierRE.MatchString(d.SplitBy) {
+			bad("deliveries: %s: splitBy (a column) and {part} in the files' name go together", d.Name)
+		}
+		if !cronRE.MatchString(d.Schedule) {
+			bad("deliveries: %s: schedule %q: five cron fields, as 0 6 * * 1", d.Name, d.Schedule)
+		}
+		if !secretRE.MatchString(d.Target) || d.PGP != "" && !secretRE.MatchString(d.PGP) {
+			bad("deliveries: %s: its target and pgp are connections' names", d.Name)
+		}
+		if c := d.Checks; c != nil {
+			if c.MinRows < 0 || c.MaxRows < 0 || c.MaxRows > 0 && c.MaxRows < c.MinRows {
+				bad("deliveries: %s: checks: rows from minRows to maxRows", d.Name)
+			}
+			if _, ok := Within(c.Within); c.Within != "" && !ok {
+				bad("deliveries: %s: checks: within %q: as 30m, 24h, 7d", d.Name, c.Within)
+			}
+			if len(c.Parts) > 0 && d.SplitBy == "" {
+				bad("deliveries: %s: checks: parts need splitBy", d.Name)
+			}
 		}
 	}
 	if l := p.Spec.Limits; l != nil {

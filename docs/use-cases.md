@@ -362,7 +362,7 @@ The company delivers files to clients and partners, and some carry consumer data
 - R9.5 A delivery log: every file sent, to whom, when, its size and checksum, and the snapshot of each table it read (R6.32), kept with the audit log; retries and alerts.
 
 **Open questions**
-- Which formats and targets do today's deliveries use, and how are they run now (scripts, an MFT product)?
+- Which formats and targets do today's deliveries use, and how are they run now (scripts, an MFT product)? **SFTP and S3 first** (decided 2026-10-18).
 - Who is the data-protection approver?
 
 ### 9.2 What did we send about this person?

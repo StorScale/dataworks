@@ -72,6 +72,7 @@ export type Spec = {
   notify?: { teams?: string; email?: string[] };
   sources?: Source[];
   imports?: Import[];
+  deliveries?: { name: string }[];
 };
 // An application's data (or a database's, by a cursor), copied into the project's tables on a schedule (dlt).
 export type APIResource = { name: string; path: string; dataSelector?: string; primaryKey?: string; cursor?: string; cursorParam?: string; cursorStart?: string };
@@ -248,6 +249,22 @@ export const auditCSV = (f: AuditFilter & { project?: string }) => `/api/audit?$
 export type Moment = { commit: string; time?: string; label: string };
 export const asOf = (name: string, at: string) => api<Moment>("GET", `/api/projects/${encodeURIComponent(name)}/asof?at=${encodeURIComponent(at)}`);
 export type Tag = { name: string; commit: string; keepUntil: string; note?: string; by?: string; nessie: string; inPlace: boolean };
+// --- A project's deliveries (9.1), imports' reset (8.2), copies' last changes (8.1)
+export type DeliveryRun = { date: string; rows: number; target: string; recorded: string; summary: string;
+  files: { name: string; rows: number; bytes: number; sha256: string }[]; approval?: { by?: string[]; protection?: string[] } };
+export type DeliveryView = {
+  name: string; table?: string; query?: string; format: string; gzip?: boolean; files: string; splitBy?: string; schedule: string;
+  target: string; pgp?: string; changedBy?: string; approval?: { by: string[]; protection?: string[]; at: string; done?: boolean };
+  approved: boolean; personal: string[]; needs: string[]; runs: DeliveryRun[];
+};
+export const getDeliveries = (name: string) => api<{ deliveries: DeliveryView[] }>("GET", `/api/projects/${encodeURIComponent(name)}/deliveries`);
+export const approveDelivery = (name: string, d: string) =>
+  api<{ approved: boolean; needs: string[] }>("POST", `/api/projects/${encodeURIComponent(name)}/deliveries/${encodeURIComponent(d)}/approve`);
+export const resetImport = (name: string, i: string) =>
+  api<{ run: string }>("POST", `/api/projects/${encodeURIComponent(name)}/imports/${encodeURIComponent(i)}/reset`);
+export type CopyTable = { source: string; from: string; table: string; lastChange?: string; error?: string };
+export const getCopies = (name: string) => api<{ copies: CopyTable[] }>("GET", `/api/projects/${encodeURIComponent(name)}/copies`);
+
 export const getTags = (name: string) => api<{ tags: Tag[]; keepHistory: string }>("GET", `/api/projects/${encodeURIComponent(name)}/tags`);
 export const makeTag = (name: string, tag: { name: string; at: string; keep: string; note: string }) =>
   api<Tag>("POST", `/api/projects/${encodeURIComponent(name)}/tags`, tag);

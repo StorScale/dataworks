@@ -15,6 +15,14 @@ RUN /opt/dlt/bin/pip install --no-cache-dir "dlt[filesystem,pyiceberg,sql-databa
       psycopg2-binary==2.9.10 pymysql==1.2.3
 # An import's run (the DAG file storscale_imports.py starts it here).
 COPY storscale_import_run.py /opt/dlt/storscale_import_run.py
+# Deliveries (use case 9.1): the files written (pyarrow), encrypted (gpg) and
+# sent (SFTP, S3), in a virtualenv of their own; the run in it.
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends gnupg && rm -rf /var/lib/apt/lists/* \
+    && python -m venv /opt/deliver && chown -R airflow:0 /opt/deliver
+USER airflow
+RUN /opt/deliver/bin/pip install --no-cache-dir trino==0.340.0 pyarrow==25.0.1 paramiko==5.0.0 boto3==1.43.108 requests==2.34.2
+COPY storscale_delivery_run.py /opt/deliver/storscale_delivery_run.py
 # dbt (use case 7.5), for projects' DAGs: in a virtualenv of its own too, run by
 # the platform's helper (storscale.dbt), which every DAG can import.
 USER root

@@ -200,6 +200,21 @@ func main() {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(bundles)
 		})
+		// platformd, at a GitLab merge request's event: apply the project now (its reviews).
+		mux.HandleFunc("POST /projects/{name}/kick", func(w http.ResponseWriter, req *http.Request) {
+			r.Kick(req.PathValue("name"))
+			w.WriteHeader(http.StatusAccepted)
+		})
+		// Every Airflow makes a DAG of each approved delivery it runs (storscale_deliveries.py, the bundle storscale).
+		mux.HandleFunc("GET /airflow/deliveries", func(w http.ResponseWriter, req *http.Request) {
+			ds, err := r.Deliveries(req.Context())
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(ds)
+		})
 		// The platform's Airflow makes a DAG of each project's import (stack/airflow/dags/storscale_imports.py).
 		mux.HandleFunc("GET /airflow/imports", func(w http.ResponseWriter, req *http.Request) {
 			imports, err := r.Imports(req.Context())

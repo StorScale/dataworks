@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"slices"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/StorScale/storscale-platform/internal/project"
@@ -35,6 +36,9 @@ type Reconciler struct {
 	Sources *TrinoSources
 	// Reviewer keeps projects' merge requests' data branches; nil: none.
 	Reviewer *Reviewer
+	// kicked are projects to apply at the next pass, whatever their last
+	// (a GitLab merge request's event, through platformd).
+	kicked sync.Map
 	// Copies copies projects' sources into their tables (Kubernetes); nil:
 	// a source that asks to be copied is told it can't be, here.
 	Copies *Copies
@@ -66,8 +70,9 @@ func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Sta
 	// The open merge requests (their data branches' policies go with the
 	// project's); on GitLab's error, those of before, kept.
 	var before []int
+	var prevSpec *project.Project
 	if prev, _ := r.Store.Status(ctx, p.Metadata.Name); prev != nil {
-		before = prev.Reviews
+		before, prevSpec = prev.Reviews, prev.Spec
 	}
 	mrs, gl, reviewsErr := r.openReviews(ctx, p)
 	st.Reviews = iids(mrs)
@@ -132,6 +137,14 @@ func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Sta
 			// be starting, and itself waits for projects (setup-trino); the
 			// next resync tries again.
 			r.Log.Warn("removing the git connection", "project", p.Metadata.Name, "error", err)
+		}
+	}
+	if len(p.Spec.Deliveries) > 0 || prevSpec != nil && len(prevSpec.Spec.Deliveries) > 0 {
+		err := r.applyDeliveries(ctx, p, prevSpec)
+		if len(p.Spec.Deliveries) > 0 {
+			part("deliveries", err)
+		} else if err != nil && r.Log != nil {
+			r.Log.Warn("removing the deliveries' connections", "project", p.Metadata.Name, "error", err)
 		}
 	}
 	if pl := p.Spec.Pipelines; r.Reviewer != nil && (pl != nil && pl.Reviews != nil || len(before) > 0) {
@@ -391,7 +404,8 @@ func (r *Reconciler) pass(ctx context.Context, last map[string]time.Time, resync
 		live[p.Metadata.Name] = true
 		st := byName[p.Metadata.Name]
 		since := time.Since(last[p.Metadata.Name])
-		due := st == nil || st.Observed != p.Hash() || since > resync || (st.Phase != project.Ready && since > retry)
+		_, kick := r.kicked.LoadAndDelete(p.Metadata.Name)
+		due := kick || st == nil || st.Observed != p.Hash() || since > resync || (st.Phase != project.Ready && since > retry)
 		if !due {
 			continue
 		}
@@ -434,6 +448,9 @@ func memberList(st *project.Status) []project.Person {
 	}
 	return st.Members
 }
+
+// Kick has the next pass apply a project at once (within seconds).
+func (r *Reconciler) Kick(name string) { r.kicked.Store(name, true) }
 
 // ownAirflow says whether the project runs its pipelines in an Airflow of
 // its own: on Kubernetes, with a repo.

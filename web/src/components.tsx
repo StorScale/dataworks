@@ -225,6 +225,7 @@ export function ProjectFrame() {
     ["pipelines", "Pipelines", !!spec?.pipelines && pipelines],
     ["dashboards", "Dashboards", has("dashboards")],
     ["tags", "Tags", !!spec?.tables],
+    ["deliveries", "Deliveries", !!spec?.deliveries?.length],
     ["access", "Access", true],
     ["audit", "Audit", view?.role === "editor" || admin],
   ];

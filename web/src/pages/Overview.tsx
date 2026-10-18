@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ago, deleteProject, Flow, FlowTable, getFlow, getPipelines, getProjectAlerts, getSemantic, muteProjectAlert, ProjectIssue, took, when } from "../api";
+import { ago, deleteProject, Flow, getCopies, FlowTable, getFlow, getPipelines, getProjectAlerts, getSemantic, muteProjectAlert, ProjectIssue, took, when } from "../api";
 import { checkName, ErrorBanner, failing, grants, StateDot, usePlatform, usePoll, useProject } from "../lib";
 
 // levels puts each table in a column: sources first, then what's made from them.
@@ -187,6 +187,7 @@ export default function Overview() {
               {view.status && <div className="muted">Checked {ago(new Date(view.status.updated))}.</div>}
             </div>
           </section>
+          {view.spec?.spec.sources?.some((s) => s.copy) && <Copies project={name} />}
           {admin && view.spec && (
             <section className="card">
               <h2>Administration</h2>
@@ -252,3 +253,23 @@ function Alerts({ name, canMute }: { name: string; canMute: boolean }) {
 }
 
 const namespaceNote = (name: string, ns?: string) => `in iceberg.${ns ?? name.replace(/-/g, "_")}`;
+
+// Copies are the project's sources' tables copied in by change capture, each
+// with when its last change was committed: how far behind its source.
+function Copies({ project }: { project: string }) {
+  const { data } = usePoll(() => getCopies(project), [project], 60_000);
+  return (
+    <section className="card" data-testid="copies">
+      <h2>Copies</h2>
+      <div className="list small" style={{ marginTop: 10 }}>
+        {(data?.copies ?? []).map((c) => (
+          <div key={c.table} className="row">
+            <span className="mono grow" title={`from ${c.source}: ${c.from}`}>{c.table}</span>
+            <span className="muted">{c.lastChange ? `changed ${ago(new Date(c.lastChange))}` : c.error ? "unknown" : "not yet"}</span>
+          </div>
+        ))}
+        {data && data.copies.length === 0 && <span className="muted">None yet.</span>}
+      </div>
+    </section>
+  );
+}

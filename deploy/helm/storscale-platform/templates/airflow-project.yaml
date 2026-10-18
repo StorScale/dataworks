@@ -24,6 +24,7 @@ env:
   {{- if eq $part "api-server" }}
   - {name: AIRFLOW_OAUTH_SECRET, valueFrom: {secretKeyRef: {name: storscale-env, key: AIRFLOW_OAUTH_SECRET}}}
   {{- end }}
+  - {name: STORSCALE_PROJECT, value: "@PROJECT@"}   # the platform's DAGs here are this project's (its deliveries)
   - {name: AIRFLOW__CORE__EXECUTOR, value: LocalExecutor}
   - {name: AIRFLOW__CORE__PARALLELISM, value: "4"}
   - {name: AIRFLOW__CORE__AUTH_MANAGER, value: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager}

@@ -15,7 +15,7 @@ import urllib.request
 
 import pendulum
 
-from airflow.sdk import BaseHook, dag, task
+from airflow.sdk import BaseHook, dag, get_current_context, task
 
 OPERATOR = os.environ.get("OPERATOR_URL", "http://platform-operator:8081")
 RUNNER = "/opt/dlt/storscale_import_run.py"   # in the image, beside dlt's virtualenv
@@ -43,6 +43,9 @@ def make(pi):
         def copy():
             env = {k: v for k, v in os.environ.items() if not k.startswith("AIRFLOW__")}
             env["STORSCALE_IMPORT"] = json.dumps(pi)
+            # A reset (the platform's, at an editor's ask): its tables and where it got to dropped, all copied again.
+            if (get_current_context()["dag_run"].conf or {}).get("reset"):
+                env["STORSCALE_IMPORT_RESET"] = "1"
             if pi.get("connId"):
                 c = BaseHook.get_connection(pi["connId"])
                 env["STORSCALE_IMPORT_SECRET"] = json.dumps({"host": c.host, "port": c.port, "database": c.schema,

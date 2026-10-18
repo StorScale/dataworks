@@ -66,6 +66,10 @@ type ImportError struct {
 // PlatformBundle holds the platform's own DAGs (Airflow's dags folder).
 const PlatformBundle = "dags-folder"
 
+// StorscaleBundle holds the platform's DAGs in its Airflow image (a merge
+// request's review, a project's deliveries), in every Airflow.
+const StorscaleBundle = "storscale"
+
 // Bundle is a project's own bundle, its pipelines repo.
 func Bundle(project string) string { return "project-" + project }
 
@@ -191,8 +195,13 @@ func (c *Client) Of(ctx context.Context, project string, runs int) ([]Pipeline, 
 	if err != nil {
 		return nil, err
 	}
+	// The platform's DAGs from its image (a project's deliveries), tagged as the project's.
+	platform, err := c.dags(ctx, url.Values{"bundle_name": {StorscaleBundle}, "tags": {"project:" + project}})
+	if err != nil {
+		return nil, err
+	}
 	out := []Pipeline{}
-	for _, d := range append(own, tagged...) {
+	for _, d := range append(append(own, tagged...), platform...) {
 		p := Pipeline{ID: d.ID, Paused: d.Paused, HasImportErrors: d.HasImportErrors, Runs: []Run{}, Tasks: []Task{}}
 		if d.Description != nil {
 			p.Description = *d.Description
