@@ -129,6 +129,7 @@ type tableMetadata struct {
 			ID     int `json:"schema-id"`
 			Fields []struct {
 				Name string `json:"name"`
+				Type any    `json:"type"` // a name (long, string, decimal(10,2)) or a nested type
 			} `json:"fields"`
 		} `json:"schemas"`
 		Current   *int64 `json:"current-snapshot-id"`
@@ -172,6 +173,66 @@ func (ic *Iceberg) Columns(ctx context.Context, namespace, table string) ([]stri
 		}
 	}
 	return nil, fmt.Errorf("%s.%s has no current schema", namespace, table)
+}
+
+// TypedColumns are a table's columns now, with their Trino types.
+func (ic *Iceberg) TypedColumns(ctx context.Context, namespace, table string) ([]Column, error) {
+	t, err := ic.load(ctx, namespace, table)
+	if err != nil {
+		return nil, err
+	}
+	for _, sc := range t.Metadata.Schemas {
+		if sc.ID == t.Metadata.CurrentSchema {
+			out := make([]Column, 0, len(sc.Fields))
+			for _, f := range sc.Fields {
+				out = append(out, Column{Name: f.Name, Type: TrinoType(f.Type)})
+			}
+			return out, nil
+		}
+	}
+	return nil, fmt.Errorf("%s.%s has no current schema", namespace, table)
+}
+
+// TrinoType is an Iceberg type as Trino names it: long is bigint, string
+// varchar, timestamptz timestamp(6) with time zone. A nested type (a
+// struct, list or map) is named by its kind: row, array, map.
+func TrinoType(t any) string {
+	switch v := t.(type) {
+	case string:
+		switch {
+		case v == "long":
+			return "bigint"
+		case v == "int":
+			return "integer"
+		case v == "string":
+			return "varchar"
+		case v == "float":
+			return "real"
+		case v == "timestamp":
+			return "timestamp(6)"
+		case v == "timestamptz":
+			return "timestamp(6) with time zone"
+		case v == "time":
+			return "time(6)"
+		case v == "binary":
+			return "varbinary"
+		case strings.HasPrefix(v, "fixed"):
+			return "varbinary"
+		case strings.HasPrefix(v, "decimal("):
+			return strings.ReplaceAll(v, " ", "")
+		}
+		return v // boolean, double, date, uuid
+	case map[string]any:
+		switch v["type"] {
+		case "struct":
+			return "row"
+		case "list":
+			return "array"
+		case "map":
+			return "map"
+		}
+	}
+	return ""
 }
 
 // Stats are a table's, now.

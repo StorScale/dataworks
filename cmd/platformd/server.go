@@ -21,6 +21,7 @@ import (
 
 	"github.com/StorScale/storscale-platform/internal/audit"
 	"github.com/StorScale/storscale-platform/internal/catalog"
+	"github.com/StorScale/storscale-platform/internal/flow"
 	"github.com/StorScale/storscale-platform/internal/pipelines"
 	"github.com/StorScale/storscale-platform/internal/store"
 )
@@ -60,12 +61,14 @@ type server struct {
 	verifier  *oidc.IDTokenVerifier
 	tokens    *oidc.IDTokenVerifier            // the realm's access tokens, any client's (a project's pipelines)
 	tokenUser func(raw string) (string, error) // in tests, who a token is (in place of tokens)
-	files     fileStore                        // the platform's files in its bucket (dbt's artifacts); nil without STORE_URL
-	secure    bool                             // cookies only over HTTPS
-	now       func() time.Time
-	store     store.Store       // nil: no projects
-	catalog   *catalog.Client   // nil: no Flow view
-	airflow   *pipelines.Client // nil: no pipelines
+	// in tests, a table's columns (in place of the catalog's)
+	tableColumns func(ctx context.Context, namespace, table string) ([]flow.Column, error)
+	files        fileStore // the platform's files in its bucket (dbt's artifacts); nil without STORE_URL
+	secure       bool      // cookies only over HTTPS
+	now          func() time.Time
+	store        store.Store       // nil: no projects
+	catalog      *catalog.Client   // nil: no Flow view
+	airflow      *pipelines.Client // nil: no pipelines
 	// projects' own Airflows (cfg.ProjectAirflows), by project, with the
 	// password they were made with
 	projectAirflows map[string]projectAirflow
@@ -198,6 +201,11 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/projects/{name}/imports/{import}", s.handleDeleteImport)
 	mux.HandleFunc("GET /api/connectors", s.handleConnectors)
 	mux.HandleFunc("POST /api/webhooks/gitlab/{name}", s.handleGitLabHook)
+	mux.HandleFunc("GET /api/projects/{name}/flows", s.handleFlows)
+	mux.HandleFunc("GET /api/projects/{name}/flows/{flow}", s.handleFlowView)
+	mux.HandleFunc("PUT /api/projects/{name}/flows/{flow}", s.handleSaveFlow)
+	mux.HandleFunc("POST /api/projects/{name}/flows/compile", s.handleFlowCompile)
+	mux.HandleFunc("POST /api/projects/{name}/flows/preview", s.handleFlowPreview)
 	mux.HandleFunc("GET /api/notebooks/projects", s.handleNotebookProjects)
 	mux.HandleFunc("POST /api/projects/{name}/notebooks/schedules", s.handleScheduleNotebook)
 	mux.HandleFunc("POST /api/projects/{name}/notebooks/runs/{dag}/{run}", s.handleNotebookRun)

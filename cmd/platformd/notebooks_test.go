@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"path"
 	"strings"
 	"sync"
 	"testing"
@@ -19,7 +20,8 @@ import (
 type fakeGitLab struct {
 	mu       sync.Mutex
 	branches map[string]bool
-	files    map[string]bool // branch:path
+	files    map[string]bool   // branch:path
+	contents map[string]string // branch:path -> content (what commits wrote, and what a test seeds)
 	commits  []map[string]any
 	mrs      []map[string]any
 	token    bool // every call signed in with the repo's token
@@ -38,6 +40,38 @@ func (g *fakeGitLab) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case p == "" && r.Method == "GET":
 		reply(200, map[string]string{"default_branch": "main"})
+	case p == "/repository/branches" && r.Method == "GET":
+		var names []map[string]string
+		for b := range g.branches {
+			if strings.Contains(b, r.URL.Query().Get("search")) {
+				names = append(names, map[string]string{"name": b})
+			}
+		}
+		reply(200, names)
+	case p == "/repository/tree":
+		var entries []map[string]string
+		dirs := map[string]bool{}
+		prefix := r.URL.Query().Get("path") + "/"
+		for key := range g.files {
+			b, fp, _ := strings.Cut(key, ":")
+			if b != r.URL.Query().Get("ref") || !strings.HasPrefix(fp, prefix) {
+				continue
+			}
+			entries = append(entries, map[string]string{"path": fp, "type": "blob"})
+			for d := path.Dir(fp); strings.HasPrefix(d, prefix) && !dirs[d]; d = path.Dir(d) {
+				dirs[d] = true
+				entries = append(entries, map[string]string{"path": d, "type": "tree"})
+			}
+		}
+		reply(200, entries)
+	case strings.HasPrefix(p, "/repository/files/") && strings.HasSuffix(p, "/raw"):
+		fp := strings.ReplaceAll(strings.TrimSuffix(strings.TrimPrefix(p, "/repository/files/"), "/raw"), "%2F", "/")
+		if text, ok := g.contents[r.URL.Query().Get("ref")+":"+fp]; ok {
+			w.WriteHeader(200)
+			w.Write([]byte(text))
+		} else {
+			reply(404, map[string]string{"message": "404 File Not Found"})
+		}
 	case strings.HasPrefix(p, "/repository/branches/"):
 		if g.branches[strings.ReplaceAll(strings.TrimPrefix(p, "/repository/branches/"), "%2F", "/")] {
 			reply(200, map[string]string{})
@@ -54,15 +88,32 @@ func (g *fakeGitLab) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case p == "/repository/commits":
 		g.commits = append(g.commits, body)
 		b := body["branch"].(string)
+		if from, _ := body["start_branch"].(string); from != "" && !g.branches[b] {
+			for key, text := range g.contents { // the new branch starts as the one it's from
+				if fb, fp, _ := strings.Cut(key, ":"); fb == from {
+					g.files[b+":"+fp], g.contents[b+":"+fp] = true, text
+				}
+			}
+		}
 		g.branches[b] = true
 		for _, a := range body["actions"].([]any) {
-			g.files[b+":"+a.(map[string]any)["file_path"].(string)] = true
+			act := a.(map[string]any)
+			fp := b + ":" + act["file_path"].(string)
+			if act["action"] == "delete" {
+				delete(g.files, fp)
+				delete(g.contents, fp)
+				continue
+			}
+			g.files[fp] = true
+			if g.contents != nil {
+				g.contents[fp], _ = act["content"].(string)
+			}
 		}
 		reply(201, map[string]string{"id": "0123456789abcdef0123"})
 	case p == "/merge_requests" && r.Method == "GET":
 		var open []map[string]any
 		for _, mr := range g.mrs {
-			if mr["source_branch"] == r.URL.Query().Get("source_branch") {
+			if src := r.URL.Query().Get("source_branch"); src == "" || mr["source_branch"] == src {
 				open = append(open, mr)
 			}
 		}
