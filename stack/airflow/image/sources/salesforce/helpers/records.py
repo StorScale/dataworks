@@ -1,13 +1,11 @@
 """Salesforce source helpers"""
 
+from typing import Any, Dict, Iterable, Optional, Set, cast
+
 import pendulum
-
-from typing import Optional, Iterable, Dict, Set, Any, cast
-
-from simple_salesforce.exceptions import SalesforceMalformedRequest
-from simple_salesforce import Salesforce
 from dlt.common.typing import TDataItem
-
+from simple_salesforce import Salesforce
+from simple_salesforce.exceptions import SalesforceMalformedRequest
 
 from ..settings import IS_PRODUCTION
 

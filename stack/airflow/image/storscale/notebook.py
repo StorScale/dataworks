@@ -20,8 +20,8 @@ from urllib.parse import quote
 
 import pendulum
 import requests
-
 from airflow.sdk import BaseHook, dag, get_current_context, task
+
 from storscale import dbt
 
 PAPERMILL = "/opt/notebook/bin/papermill"

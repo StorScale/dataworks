@@ -22,7 +22,6 @@ import time
 import requests
 
 from lakekit import BUCKETS, check, env, finish, mc, token
-
 from projects import platform, projects, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]

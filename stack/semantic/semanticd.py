@@ -29,9 +29,6 @@ import jwt
 import trino
 import yaml
 from botocore.exceptions import ClientError
-from starlette.requests import Request
-from starlette.responses import JSONResponse
-
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 from mcp.server.auth.settings import AuthSettings
@@ -44,6 +41,8 @@ from metricflow.sql.render.trino import TrinoSqlPlanRenderer
 from metricflow_semantic_interfaces.parsing.dir_to_model import parse_directory_of_yaml_files_to_semantic_manifest
 from metricflow_semantic_interfaces.validations.semantic_manifest_validator import SemanticManifestValidator
 from metricflow_semantics.model.semantic_manifest_lookup import SemanticManifestLookup
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 logging.basicConfig(level=logging.INFO, format="semanticd: %(message)s")
 log = logging.getLogger("semanticd")

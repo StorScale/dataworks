@@ -23,7 +23,6 @@ from urllib.parse import urlparse
 import requests
 
 from lakekit import check, finish, s3_root, sql
-
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]

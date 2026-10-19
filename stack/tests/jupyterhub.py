@@ -15,12 +15,12 @@ Jupyter Server API:
   5. what notebooks write is in Buckets, under each person's prefix.
 """
 import html
-from urllib.parse import urlparse
 import json
 import os
 import re
 import time
 import uuid
+from urllib.parse import urlparse
 
 import requests
 import websocket

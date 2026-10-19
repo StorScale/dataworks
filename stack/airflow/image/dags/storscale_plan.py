@@ -16,8 +16,8 @@ import tempfile
 
 import pendulum
 import requests
-
 from airflow.sdk import BaseHook, dag, get_current_context, task
+
 from storscale import dbt, git
 
 PLATFORM = os.environ.get("STORSCALE_PLATFORMD_URL", "http://platformd:8080")

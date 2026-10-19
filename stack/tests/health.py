@@ -17,12 +17,11 @@ import json
 import os
 import socket
 import threading
-import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from lakekit import check, finish, s3_root
-
 import k8s
+
+from lakekit import check, finish, s3_root
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]

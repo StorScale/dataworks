@@ -15,7 +15,8 @@ from superset.app import create_app
 
 app = create_app()
 with app.app_context():
-    from superset import db, security_manager as sm
+    from superset import db
+    from superset import security_manager as sm
     from superset.models.core import Database
 
     name = "Lakehouse (Trino)"

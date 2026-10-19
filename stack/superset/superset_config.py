@@ -3,7 +3,6 @@ Superset roles, and queries to Trino run as the person who signed in."""
 import os
 
 from flask_appbuilder.security.manager import AUTH_OAUTH
-
 from superset.security import SupersetSecurityManager
 
 SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]

@@ -29,7 +29,6 @@ import subprocess
 import tempfile
 
 import requests
-
 from airflow.sdk import BaseHook, task
 
 DBT = "/opt/dbt/bin/dbt"

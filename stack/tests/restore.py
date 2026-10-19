@@ -18,7 +18,6 @@ import sys
 import requests
 
 from lakekit import KEYCLOAK, REALM, allow, check, env, finish, ranger, res, s3_root, sql
-
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]

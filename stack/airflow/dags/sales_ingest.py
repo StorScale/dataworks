@@ -10,9 +10,8 @@ import csv
 import io
 
 import pendulum
-from botocore.exceptions import ClientError
-
 from airflow.sdk import dag, get_current_context, task
+from botocore.exceptions import ClientError
 
 NEW_ORDERS = [
     (101, "Gus", "4222222222222", "EU", 64.10, "2026-09-07"),

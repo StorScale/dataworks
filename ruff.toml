@@ -1,0 +1,12 @@
+# The Python of the stack (its services, the Airflow helpers, the end-to-end
+# suites): checked in CI with ruff. Lambdas bound to names are how the suites
+# write small predicates for wait(); that's kept.
+line-length = 170
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "B", "I"]
+ignore = ["E731", "E501", "B008", "B905"]  # long lines are the code's style; what matters here is what's wrong, not how wide
+
+[lint.isort]
+known-first-party = ["lakekit", "projects", "pipelines_git", "storscale", "storscale_connectors"]

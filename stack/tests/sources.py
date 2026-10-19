@@ -28,7 +28,6 @@ import psycopg2
 import requests
 
 from lakekit import check, denied, env, finish, sql
-
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]

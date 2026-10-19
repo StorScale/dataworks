@@ -20,10 +20,10 @@ import socket
 import threading
 from http.server import ThreadingHTTPServer
 
-from lakekit import check, finish, s3_root
-
 import k8s
 from health import Teams
+
+from lakekit import check, finish, s3_root
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]

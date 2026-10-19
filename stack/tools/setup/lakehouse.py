@@ -20,8 +20,22 @@ Ranger
 
 Safe to run again: everything is created or updated in place.
 """
-from lakekit import (BASE_POLICIES, RANGER, allow, bucket_rw, ensure_buckets_identity, env, keycloak_people, log,
-                     ranger, res, setup_buckets, setup_ranger, sync_people, wait_for)
+from lakekit import (
+    BASE_POLICIES,
+    RANGER,
+    allow,
+    bucket_rw,
+    ensure_buckets_identity,
+    env,
+    keycloak_people,
+    log,
+    ranger,
+    res,
+    setup_buckets,
+    setup_ranger,
+    sync_people,
+    wait_for,
+)
 
 ICEBERG = "iceberg"
 CATALOG_USER = "openmetadata"  # the catalog's service user: it reads every table, to describe and check them

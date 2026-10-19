@@ -21,7 +21,6 @@ import time
 import requests
 
 from lakekit import check, finish, sql
-
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]

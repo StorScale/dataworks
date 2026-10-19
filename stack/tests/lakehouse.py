@@ -16,8 +16,9 @@ import uuid
 
 import requests
 
-from lakekit import (audited_denials, check, code, finish, keys, s3_as, s3_root, wait_for_trino)
-from lakekit import denied as _denied, sql as _sql
+from lakekit import audited_denials, check, code, finish, keys, s3_as, s3_root, wait_for_trino
+from lakekit import denied as _denied
+from lakekit import sql as _sql
 
 # Every statement here runs in the iceberg catalog's sales schema.
 sql = functools.partial(_sql, catalog="iceberg", schema="sales")

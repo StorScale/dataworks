@@ -23,7 +23,6 @@ The project, its connections, its table and what was sent are removed after.
 """
 import gzip
 import hashlib
-import io
 import json
 import os
 import socket
@@ -31,11 +30,10 @@ import subprocess
 import tempfile
 import threading
 
+import k8s
 import paramiko
 
 from lakekit import check, env, finish, s3_root, sql
-
-import k8s
 from projects import platform, projects, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]

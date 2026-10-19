@@ -32,7 +32,6 @@ import time
 
 import boto3
 import requests
-
 from metadata.workflow.data_quality import TestSuiteWorkflow
 from metadata.workflow.metadata import MetadataWorkflow
 

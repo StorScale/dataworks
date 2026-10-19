@@ -12,9 +12,8 @@ import socket
 import sys
 import time
 
-import requests
-
 import k8s
+import requests
 
 
 def ready(kind, arg):

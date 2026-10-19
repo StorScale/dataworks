@@ -40,14 +40,13 @@ The projects and their tables are removed after.
 import json
 import os
 
+import catalog as om
 import requests
+import superset as ss
+from semantic import TOKENS, Agent, agent_token
 
 from lakekit import check, finish, sql
-
-import catalog as om
-import superset as ss
 from projects import platform, projects, wait
-from semantic import TOKENS, Agent, agent_token
 
 PLATFORM = os.environ["PLATFORM_URL"]
 H = {"X-Platform-Request": "1"}

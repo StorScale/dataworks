@@ -27,9 +27,8 @@ from urllib.parse import unquote
 
 import requests
 
-from lakekit import check, finish, sql
-
 import pipelines_git as pg
+from lakekit import check, finish, sql
 from projects import platform, projects, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]

@@ -23,9 +23,8 @@ import tempfile
 import threading
 from http.server import ThreadingHTTPServer
 
-from lakekit import check, finish
-
 import pipelines_git as pg
+from lakekit import check, finish
 from projects import platform, projects, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
