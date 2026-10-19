@@ -72,7 +72,7 @@ type upload struct {
 
 // handleUploads lists a project's uploads, as the person.
 func (s *server) handleUploads(w http.ResponseWriter, r *http.Request) {
-	who, token, ok := s.person(w, r)
+	who, token, ok := s.freshPerson(w, r)
 	if !ok {
 		return
 	}
@@ -104,7 +104,7 @@ func (s *server) handleUploads(w http.ResponseWriter, r *http.Request) {
 // handleUpload puts a file in the project's landing area, as the person
 // (an editor: the bucket refuses a reader), and answers with its preview.
 func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
-	who, token, ok := s.person(w, r)
+	who, token, ok := s.freshPerson(w, r)
 	if !ok {
 		return
 	}
@@ -166,7 +166,7 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 // handleUploadPreview is an upload's first rows, read again as the person.
 func (s *server) handleUploadPreview(w http.ResponseWriter, r *http.Request) {
-	who, token, ok := s.person(w, r)
+	who, token, ok := s.freshPerson(w, r)
 	if !ok {
 		return
 	}
@@ -207,7 +207,7 @@ func (s *server) handleUploadPreview(w http.ResponseWriter, r *http.Request) {
 
 // handleDeleteUpload removes an upload, as the person.
 func (s *server) handleDeleteUpload(w http.ResponseWriter, r *http.Request) {
-	who, token, ok := s.person(w, r)
+	who, token, ok := s.freshPerson(w, r)
 	if !ok {
 		return
 	}

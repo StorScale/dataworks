@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 
+	"golang.org/x/oauth2"
+
 	"github.com/StorScale/storscale-platform/internal/project"
 )
 
@@ -63,6 +65,17 @@ func (s *server) fail(w http.ResponseWriter, r *http.Request, status int, why st
 // the request's own Bearer token (a service's, a test's), or the session's,
 // refreshed. A session's change needs the header a cross-site form can't send.
 func (s *server) person(w http.ResponseWriter, r *http.Request) (who, token string, ok bool) {
+	return s.personWith(w, r, false)
+}
+
+// freshPerson is person with a session's token renewed now, whatever its
+// age: for what reads the token's own claims (Buckets' STS maps its groups
+// to policies), so a project made since the person signed in counts.
+func (s *server) freshPerson(w http.ResponseWriter, r *http.Request) (who, token string, ok bool) {
+	return s.personWith(w, r, true)
+}
+
+func (s *server) personWith(w http.ResponseWriter, r *http.Request, fresh bool) (who, token string, ok bool) {
 	if raw, has := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); has && raw != "" {
 		who, err := s.bearer(r)
 		if err != nil {
@@ -80,7 +93,11 @@ func (s *server) person(w http.ResponseWriter, r *http.Request) (who, token stri
 		return "", "", false
 	}
 	if sess.Token != nil {
-		tok, err := s.oauth.TokenSource(r.Context(), sess.Token).Token()
+		have := sess.Token
+		if fresh && have.RefreshToken != "" {
+			have = &oauth2.Token{RefreshToken: have.RefreshToken} // no access token: the source gets a new one
+		}
+		tok, err := s.oauth.TokenSource(r.Context(), have).Token()
 		if err != nil {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"login": "/auth/login"})
 			return "", "", false
