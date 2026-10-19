@@ -718,6 +718,12 @@ services:
     restart: unless-stopped
     <<: *superset
     command: ["python", "/app/pythonpath/semantic_sync.py"]
+    # Not Superset's own check (its web server, which this doesn't run): a round lately.
+    healthcheck:
+      test: ["CMD", "python", "/app/pythonpath/semantic_sync.py", "healthy"]
+      interval: 10s
+      start_period: 120s
+      retries: 30
     depends_on:
       superset-init: {condition: service_completed_successfully}
 
