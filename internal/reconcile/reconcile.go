@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/StorScale/storscale-platform/internal/llm"
 	"github.com/StorScale/storscale-platform/internal/project"
 	"github.com/StorScale/storscale-platform/internal/store"
 )
@@ -57,6 +58,7 @@ type Reconciler struct {
 	// a suggested tag counts before someone confirms it.
 	Protection       project.ProtectionRules
 	ProtectSuggested bool
+	Gateway          *llm.Gateway // the LLM gateway (12.1); nil: none
 	PlatformURL      string
 	assistantsDigest string
 	assistantsAt     time.Time
@@ -119,6 +121,9 @@ func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Sta
 		if err := r.applyImports(ctx, p); err != nil && r.Log != nil { // those it had go
 			r.Log.Warn("removing the imports' connections", "project", p.Metadata.Name, "error", err)
 		}
+	}
+	if r.Gateway != nil {
+		part("llm", r.applyLLM(ctx, p))
 	}
 	copying := slices.ContainsFunc(p.Spec.Sources, func(s project.Source) bool { return s.Copy != nil })
 	switch {
@@ -197,8 +202,10 @@ func (r *Reconciler) Delete(ctx context.Context, p *project.Project) error {
 		keep(r.Copies.Remove(ctx, p))
 	}
 	keep(r.removeImports(ctx, p))
-	keep(r.removeDeliveries(ctx, p)) // their targets' credentials with them
-	if r.Reviewer != nil {           // its merge requests' branches and catalogs
+	keep(r.removeDeliveries(ctx, p))                                             // their targets' credentials with them
+	keep(r.removeLLM(ctx, p))                                                    // its keys at the LLM gateway
+	keep(r.Keycloak.deleteClientsExcept(ctx, "agent-"+p.Metadata.Name+"-", nil)) // its agents' clients
+	if r.Reviewer != nil {                                                       // its merge requests' branches and catalogs
 		if prev, _ := r.Store.Status(ctx, p.Metadata.Name); prev != nil {
 			keep(r.applyReviews(ctx, p, nil, nil, prev.Reviews))
 		}

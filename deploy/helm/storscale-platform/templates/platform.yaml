@@ -60,6 +60,10 @@ spec:
             - {name: PRODUCT_CERTIFIER_GROUPS, value: {{ . | quote }}}   # who certifies data products
             {{- end }}
             - {name: ERASURE_DEADLINE_DAYS, value: {{ .Values.erasure.deadlineDays | quote }}}   # the CCPA's 45 (6.9)
+            {{- if .Values.llm.gateway }}
+            - {name: LLM_GATEWAY_URL, value: "http://llm:4000"}
+            - {name: LLM_GATEWAY_MASTER_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: LLM_MASTER_KEY}}}
+            {{- end }}
             - {name: INSTALL_TARGET, value: {{ .Values.install.target | quote }}}   # a project's repo's storscale/targets/<target>.yaml
             - {name: MAINTENANCE_KEEP_HISTORY, value: {{ .Values.maintenance.history.keep | quote }}}
             # The audit log, beside Ranger's in its Solr (audit.*).
@@ -163,6 +167,10 @@ spec:
             - {name: PIPELINES_DEFAULT_MEMORY, value: {{ .Values.pipelines.memory | quote }}}
             - {name: PROTECTION_TAGS, value: {{ .Values.protection.tags | toJson | quote }}}   # what the catalog's tags mean (12.5)
             - {name: PROTECTION_APPLY_SUGGESTED, value: {{ .Values.protection.applySuggested | quote }}}
+            {{- if .Values.llm.gateway }}
+            - {name: LLM_GATEWAY_URL, value: "http://llm:4000"}
+            - {name: LLM_GATEWAY_MASTER_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: LLM_MASTER_KEY}}}
+            {{- end }}
             - {name: PLATFORM_URL, value: {{ include "storscale.url" . | quote }}}
             # Projects' limits: Trino's resource groups (its limits' database), and buckets' sizes.
             - {name: TRINO_DB_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: TRINO_DB_PASSWORD}}}

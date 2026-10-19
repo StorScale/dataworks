@@ -154,6 +154,23 @@ deliveries:
 products:
   certifierGroups: ""
 
+# The LLM gateway (use case 12.1): what sits in front of the company's models.
+#   gateway: "stub"     the platform's stand-in (the tools image): keys and budgets, answers that repeat the question; for CI and installs without a provider
+#            "litellm"  LiteLLM, on the models listed, with the provider's key from the Secret storscale-llm (key: api_key)
+#            ""         none: no keys are made, no budgets kept
+# A project with llm.budget, and an approved agent with a budget, get a key each with that monthly budget (USD), kept as the project's connections.
+llm:
+  gateway: stub
+  litellm:
+    image: ghcr.io/berriai/litellm:main-v1.77.3
+    # The models, as LiteLLM names them (model_list): Anthropic's on Microsoft Foundry, say.
+    models:
+      - model_name: claude
+        litellm_params:
+          model: azure_ai/claude-sonnet-4-5
+          api_base: ""          # the Foundry resource's endpoint
+          api_key: os.environ/LLM_PROVIDER_KEY
+
 # Erasure (use case 6.9): how many days the company has to answer a request to
 # delete a person's data. The CCPA's 45, as the company's counsel reads it.
 erasure:

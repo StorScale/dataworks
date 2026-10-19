@@ -109,6 +109,9 @@ type config struct {
 	// ErasureDeadlineDays is how long the company has to answer a request
 	// to delete a person's data (use case 6.9): the CCPA's 45, by default.
 	ErasureDeadlineDays int
+	// LLMGatewayURL is the LLM gateway (use case 12.1), and its master key
+	// (to read the projects' keys' spend); empty: none.
+	LLMGatewayURL, LLMGatewayMasterKey string
 	// OperatorURL is the platform operator's (a GitLab webhook asks it to
 	// look at a project's merge requests at once).
 	OperatorURL string
@@ -159,11 +162,12 @@ func configFromEnv(get func(string) string) (config, error) {
 		DeliveryKeepFor:        or("DELIVERY_KEEP_FOR", "7y"),
 		ProductCertifierGroups: list("PRODUCT_CERTIFIER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers")),
 		ErasureDeadlineDays:    atoi(or("ERASURE_DEADLINE_DAYS", "45"), 45),
-		OperatorURL:            or("OPERATOR_URL", "http://platform-operator:8081"),
-		InstallTarget:          or("INSTALL_TARGET", "production"),
-		Listen:                 or("PLATFORM_LISTEN", ":8080"),
-		WebDir:                 or("PLATFORM_WEB_DIR", "/usr/share/storscale/web"),
-		StoreURL:               get("STORE_URL"), StoreBucket: or("STORE_BUCKET", "storscale-platform"),
+		LLMGatewayURL:          strings.TrimRight(get("LLM_GATEWAY_URL"), "/"), LLMGatewayMasterKey: get("LLM_GATEWAY_MASTER_KEY"),
+		OperatorURL:   or("OPERATOR_URL", "http://platform-operator:8081"),
+		InstallTarget: or("INSTALL_TARGET", "production"),
+		Listen:        or("PLATFORM_LISTEN", ":8080"),
+		WebDir:        or("PLATFORM_WEB_DIR", "/usr/share/storscale/web"),
+		StoreURL:      get("STORE_URL"), StoreBucket: or("STORE_BUCKET", "storscale-platform"),
 		ProjectStore:   get("PROJECT_STORE"),
 		StoreAccessKey: get("STORE_ACCESS_KEY"), StoreSecretKey: get("STORE_SECRET_KEY"),
 		CatalogURL: get("CATALOG_URL"), CatalogTokenFile: or("CATALOG_TOKEN_FILE", "/catalog/token"),

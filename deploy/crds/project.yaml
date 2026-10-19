@@ -333,6 +333,11 @@ spec:
                                 table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}\.[a-z_][a-z0-9_]{0,62}$'}
                                 cursor: {type: string}
                                 primaryKey: {type: string}
+                llm:
+                  description: "The project's use of the LLM gateway (12.1): a key of its own with a monthly budget in USD, kept as its connection <project>-llm."
+                  type: object
+                  properties:
+                    budget: {type: number}
                 agents:
                   description: "Programs of the project's own (12.2): each an identity of its own, allowed the tools named, approved by an editor other than its registrant; who registered and approved are the platform's."
                   type: array
@@ -345,6 +350,7 @@ spec:
                       owner: {type: string}
                       tools: {type: array, items: {type: string, enum: [list_projects, list_metrics, query_metrics, explain_query, list_terms, describe_term, search_terms, list_products, describe_product, query_product]}}
                       schedule: {type: string}
+                      budget: {type: number, description: "USD a month at the LLM gateway (12.1); none: no key."}
                       registeredBy: {type: string}
                       registeredAt: {type: string}
                       approvedBy: {type: string}
