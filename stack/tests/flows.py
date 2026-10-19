@@ -226,6 +226,8 @@ def main():
             c = bob.put(f"{PLATFORM}/api/projects/{NAME}/connections/{CONNECTION}", timeout=30, json={"values": values})
         ready = wait(lambda: (lambda x: x if x and (x.get("status") or {}).get("phase") == "Ready" else None)(
             (projects(bob) or {}).get(NAME)), 900, every=10)
+        sql("bob", "DROP TABLE IF EXISTS orders", "iceberg", NAME)  # a run before, on a cluster that keeps a deleted project's tables
+        sql("bob", "DROP TABLE IF EXISTS suppliers", "iceberg", NAME)  # a run before, on a cluster that keeps a deleted project's tables
         sql("bob", "CREATE TABLE orders AS SELECT * FROM (VALUES (1, 'EU', DOUBLE '10.0', false), (2, 'EU', DOUBLE '12.5', false), (3, 'US', DOUBLE '7.0', false), "
                    "(4, 'US', DOUBLE '100.0', true)) AS t (order_id, region, amount, test)", "iceberg", NAME)
         sql("bob", "CREATE TABLE suppliers AS SELECT * FROM (VALUES ('1', 'Acme'), ('2', 'Globex')) AS t (id, name)", "iceberg", NAME)

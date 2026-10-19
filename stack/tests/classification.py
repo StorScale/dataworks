@@ -78,6 +78,7 @@ def main():
         r = bob.put(f"{PLATFORM}/api/projects/{NAME}", data=json.dumps(SPEC), timeout=30)
         ready = wait(lambda: (lambda x: x if x and (x.get("status") or {}).get("phase") == "Ready" else None)(
             (projects(bob) or {}).get(NAME)), 900, every=10)
+        sql("bob", "DROP TABLE IF EXISTS customers", "iceberg", NAME)  # a run before, on a cluster that keeps a deleted project's tables
         sql("bob", "CREATE TABLE customers AS SELECT * FROM (VALUES "
                    "(1, 'Ana', 'ana@example.com', '+1 415 555 0101', 'likes blue'), "
                    "(2, 'Ben', 'ben@example.org', '+44 20 7946 0958', 'asked for a call'), "
