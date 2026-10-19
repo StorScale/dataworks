@@ -240,6 +240,9 @@ export type Maintenance = {
   tables: { name: string; now?: TableStats; lastRun?: TableRun }[];
 };
 export const getMaintenance = (name: string) => api<Maintenance>("GET", `/api/projects/${encodeURIComponent(name)}/maintenance`);
+// A run's log: each task's last try, so a failed run says why in the words of what ran.
+export const getRunLog = (name: string, pipeline: string, run: string) =>
+  api<{ log: string }>("GET", `/api/projects/${encodeURIComponent(name)}/pipelines/${encodeURIComponent(pipeline)}/runs/${encodeURIComponent(run)}/log`);
 export const runMaintenance = (name: string) => api<{ state: string }>("POST", `/api/projects/${encodeURIComponent(name)}/maintenance`);
 
 // --- The audit log: what people did in the platform, and every access Trino allowed or refused

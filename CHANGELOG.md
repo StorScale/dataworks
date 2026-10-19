@@ -4,7 +4,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+The pipeline canvas: a flow built from steps, previewed on a sample as the person, saved as dbt models in a merge request, with the company's metrics as a step and uploads as inputs; and a consolidation pass on the code.
+
+**Upgrading from 0.17.0:** `storscale upgrade --context <cluster> --version <this release>`, after a `--dry-run`. The Project CRD gains the `files` import source (`imports[].files`; the upgrade applies it). The Airflow image is rebuilt (Excel in the files import). Nothing to set: the Flows tab appears on projects with a repo and tables. Every error answer from platformd now carries a `request` ID beside its `error`, and the `X-Request-ID` header; anything parsing the error body by exact match should allow the new key.
+
 ### Changed
+- **A failed run says why on the Pipelines tab**: each task's last try's log (`GET /api/projects/{name}/pipelines/{pipeline}/runs/{run}/log`, members only), shown on request beside the run.
 - **platformd answers every refusal and failure the same way** (`{"error": why, "request": id}`), through one helper that also logs it (a failure of the platform's as an error, a refusal as information), and every request carries an ID (`X-Request-ID`, the caller's if it sends a plain one), so a person can quote it and the log finds it. Handlers that act as the person (flows, uploads) share one way of telling who asks and what project they're about.
 - **The project spec's checks are one validator per area** (members, tables, pipelines, sources, imports, deliveries, limits, ...), each with a table test, gathered by `Validate`; a new area adds its own.
 - **The stack's Python is checked in CI** (ruff, and a compile of every file), as the Go is formatted and vetted.
