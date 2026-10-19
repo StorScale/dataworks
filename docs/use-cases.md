@@ -520,7 +520,7 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 4. One night it loops. At its budget, the gateway stops it, and bob gets an alert.
 
 **Requirements**
-- R12.4 Agents registered in a project: identity, owner, tools and data allowed, budget. (Built 2026-10-19; the budget with the gateway, the same day.)
+- R12.4 Agents registered in a project: identity, owner, tools and data allowed, budget. (Built 2026-10-19; the budget with the gateway, and an agent run on its schedule from a notebook in the project's repo, the same day.)
 - R12.5 Approval before an agent runs; revoking it takes effect at once. (Built 2026-10-19: approved by an editor other than its registrant; revoked, its client is gone within a minute.)
 - R12.6 Spend caps that stop an agent, with an alert. (Built 2026-10-19.)
 

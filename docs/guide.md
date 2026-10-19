@@ -245,8 +245,18 @@ Sign in when the browser opens, as **alice**. Then ask, in Claude Code: *"What w
 3. The program signs in to Keycloak with those (client credentials) and asks the MCP server for `revenue` by region: it gets the whole company's numbers, as a reader of the project, and the audit names `agent-retail-nightly-summary`. Ask it for `list_products`: refused, naming the two tools it may use.
 4. Change its tools (add `list_products`): the approval is taken away, and its client with it, until alice approves again.
 5. **Revoke** it: within a minute it signs in no more.
+6. **Let the platform run it** (needs the project's repo, Lab 11). Put a notebook in the repo under the pipelines' path, say `notebooks/nightly_summary.ipynb`:
 
-**Check:** on the Audit tab, `agent.registered`, `agent.approved` and `agent.revoked`, each with who did it.
+   ```python
+   import buckets_lake
+   a = buckets_lake.agent()                                   # the MCP server, as the agent
+   revenue = a.call("query_metrics", project="retail", metrics=["revenue"], group_by=["order__region"])
+   print(buckets_lake.ask(f"Two sentences for the team's chat on yesterday's revenue by region: {revenue}"))
+   ```
+
+   Register the agent again with the same tools, a **schedule** of `0 6 * * *` and the **notebook** `notebooks/nightly_summary.ipynb`, and have alice approve it. Within a minute or two the Agents tab names its pipeline, `agent_retail_nightly_summary`, on the Pipelines tab: run it now. The run checks the repo out and executes the notebook as the agent: `buckets_lake.username()` says `service-account-agent-retail-nightly-summary`, the audit names it, a tool it wasn't given raises in the notebook naming what it may use, and `ask()` spends against the agent's own budget (Lab 21). The executed notebook, outputs and all, is linked from the run, and the Audit tab has `agent.ran`.
+
+**Check:** on the Audit tab, `agent.registered`, `agent.approved`, `agent.ran` and `agent.revoked`, each with who did it; the agent's run notebook shows the agent's own name as who ran it.
 
 ---
 

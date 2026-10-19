@@ -14,7 +14,10 @@ Schedule does (the person's Keycloak token):
      the run's executed notebook (its outputs) is kept, which alice reads
      from the Pipelines tab's link;
   4. a notebook whose cell fails: its run fails, and the kept notebook
-     shows the error.
+     shows the error;
+  5. an agent with a notebook in the repo and a schedule (12.2): approved by
+     another editor, it's a pipeline of the project's that runs the notebook
+     as the agent (its client, its tools), the run its record.
 
 The project and its connection are removed after.
 """
@@ -157,7 +160,7 @@ def main():
     bob, alice = platform("bob"), platform("alice")
     spec = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": NAME},
             "spec": {"description": "Notebooks on a schedule: the notebooks suite's.",
-                     "members": [{"group": "engineers", "role": "editor"}, {"user": "alice", "role": "reader"}], "tables": {},
+                     "members": [{"group": "engineers", "role": "editor"}, {"user": "alice", "role": "reader"}, {"user": "carol", "role": "editor"}], "tables": {},
                      "pipelines": {"serviceAccount": "airflow-pipelines", "repo": repo, "path": "dags", "credentials": {"secretRef": CONNECTION}}}}
     try:
         r = bob.put(f"{PLATFORM}/api/projects/{NAME}", data=json.dumps(spec), timeout=30)
@@ -201,6 +204,27 @@ def main():
         page = kept(bob, "notebook_broken", run_id) if run_id else ""
         check("a notebook whose cell fails: its run fails, and its kept notebook shows why",
               state == "failed" and "no rows today" in page, (state, page[:300]))
+
+        # 5. An agent on a schedule (12.2): its notebook in the repo, run as itself.
+        pg.push(work, {"dags/notebooks/summariser.ipynb": json.dumps(notebook(
+            "import buckets_lake\nprint('runs as', buckets_lake.username())",
+            "import json\na = buckets_lake.agent()\nprint('tools', a.tools())\nprint('sees the project:', '" + NAME + "' in json.dumps(a.call('list_projects')))",
+            "try:\n    a.call('list_metrics', project='" + NAME + "')\nexcept PermissionError as e:\n    print('refused:', e)"))}, "the agent's notebook")
+        carol = platform("carol")
+        reg = bob.put(f"{PLATFORM}/api/projects/{NAME}/agents/summariser", headers=H, timeout=30,
+                      json={"description": "sums the day for the team", "tools": ["list_projects"], "schedule": "0 6 * * *", "notebook": "notebooks/summariser.ipynb"})
+        ap = carol.post(f"{PLATFORM}/api/projects/{NAME}/agents/summariser/approve", headers=H, timeout=30)
+        listed = (bob.get(f"{PLATFORM}/api/projects/{NAME}/agents", timeout=30).json() or {}).get("agents", [])
+        mine = next((x for x in listed if x["name"] == "summariser"), {})
+        check("bob registers an agent with a notebook in the repo and a schedule; carol approves it, and it's a pipeline of the project's",
+              reg.ok and ap.ok and mine.get("dag") == f"agent_{NAME}_summariser", (reg.text[:200], ap.status_code, mine))
+        run_id, state = run(bob, f"agent_{NAME}_summariser")
+        page = kept(alice, f"agent_{NAME}_summariser", run_id) if run_id else ""
+        audit = wait(lambda: next((e for e in (bob.get(f"{PLATFORM}/api/projects/{NAME}/audit", timeout=30).json() or {}).get("events", [])
+                                   if e.get("action") == "agent.ran"), None), 60, every=5)
+        check("... its run executes the notebook as the agent: it asks the MCP server as itself, with its tools only, and the run is its record",
+              state == "success" and f"runs as service-account-agent-{NAME}-summariser" in page and "sees the project: True" in page and "refused:" in page and audit is not None,
+              (state, page[:600] if "runs as" not in page else [ln for ln in page.splitlines() if "runs as" in ln or "refused" in ln or "sees the" in ln][:4], audit))
     finally:
         # The connection, through the platform (the test pod may delete only
         # Secrets of its own names): the repo's credentials taken from the

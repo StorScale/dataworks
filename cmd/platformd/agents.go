@@ -26,13 +26,18 @@ type agentView struct {
 	Connection string `json:"connection"`
 	Approved   bool   `json:"approved"`
 	McpURL     string `json:"mcpUrl"`
+	DAG        string `json:"dag,omitempty"` // the pipeline that runs it on its schedule, once approved
 }
 
 func (s *server) agentViews(p *project.Project) []agentView {
 	out := []agentView{}
 	for _, a := range p.Spec.Agents {
-		out = append(out, agentView{Agent: a, ClientID: a.ClientID(p.Metadata.Name), Connection: a.ConnectionName(p.Metadata.Name),
-			Approved: a.Approved(), McpURL: s.cfg.PlatformURL + "/mcp"})
+		v := agentView{Agent: a, ClientID: a.ClientID(p.Metadata.Name), Connection: a.ConnectionName(p.Metadata.Name),
+			Approved: a.Approved(), McpURL: s.cfg.PlatformURL + "/mcp"}
+		if a.Runs() {
+			v.DAG = a.DAG(p.Metadata.Name)
+		}
+		out = append(out, v)
 	}
 	return out
 }

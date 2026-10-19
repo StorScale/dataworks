@@ -240,8 +240,8 @@ func (s *server) handleNotebookRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	dag, run := r.PathValue("dag"), r.PathValue("run")
-	if !strings.HasPrefix(dag, "notebook_") || !runFileRE.MatchString(dag) || !runFileRE.MatchString(run) {
-		s.fail(w, r, http.StatusBadRequest, "a notebook's DAG and run")
+	if !strings.HasPrefix(dag, "notebook_") && !strings.HasPrefix(dag, "agent_") || !runFileRE.MatchString(dag) || !runFileRE.MatchString(run) {
+		s.fail(w, r, http.StatusBadRequest, "a notebook's (or an agent's) DAG and run")
 		return
 	}
 	var body struct {
@@ -265,7 +265,11 @@ func (s *server) handleNotebookRun(w http.ResponseWriter, r *http.Request) {
 	if body.Failed != "" {
 		detail = "failed: " + body.Failed
 	}
-	s.record(r, who, "notebook.ran", "project:"+name+"/pipeline:"+dag, run+" "+detail)
+	action := "notebook.ran"
+	if strings.HasPrefix(dag, "agent_") { // an agent's run (12.2): the executed notebook is its record
+		action = "agent.ran"
+	}
+	s.record(r, who, action, "project:"+name+"/pipeline:"+dag, run+" "+detail)
 	writeJSON(w, http.StatusOK, map[string]string{"kept": run})
 }
 

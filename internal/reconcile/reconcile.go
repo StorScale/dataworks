@@ -164,6 +164,17 @@ func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Sta
 			r.Log.Warn("removing the deliveries' connections", "project", p.Metadata.Name, "error", err)
 		}
 	}
+	runs := func(x *project.Project) bool {
+		return x != nil && slices.ContainsFunc(x.Spec.Agents, func(a project.Agent) bool { return a.Runs() })
+	}
+	if runs(p) || runs(prevSpec) {
+		err := r.applyAgents(ctx, p, prevSpec)
+		if runs(p) {
+			part("agents", err)
+		} else if err != nil && r.Log != nil {
+			r.Log.Warn("removing the agents' connections", "project", p.Metadata.Name, "error", err)
+		}
+	}
 	if pl := p.Spec.Pipelines; r.Reviewer != nil && (pl != nil && pl.Reviews != nil || len(before) > 0) {
 		err := reviewsErr
 		if err == nil {
@@ -204,6 +215,7 @@ func (r *Reconciler) Delete(ctx context.Context, p *project.Project) error {
 	keep(r.removeImports(ctx, p))
 	keep(r.removeDeliveries(ctx, p))                                             // their targets' credentials with them
 	keep(r.removeLLM(ctx, p))                                                    // its keys at the LLM gateway
+	keep(r.removeAgents(ctx, p))                                                 // its scheduled agents\' connections
 	keep(r.Keycloak.deleteClientsExcept(ctx, "agent-"+p.Metadata.Name+"-", nil)) // its agents' clients
 	if r.Reviewer != nil {                                                       // its merge requests' branches and catalogs
 		if prev, _ := r.Store.Status(ctx, p.Metadata.Name); prev != nil {

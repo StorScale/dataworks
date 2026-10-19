@@ -417,13 +417,13 @@ export const classify = (name: string, table: string, column: string, tag: strin
 
 // --- Agents of the project's own (use case 12.2) -------------------------------------
 export type AgentView = {
-  name: string; description?: string; owner: string; tools?: string[]; schedule?: string; budget?: number;
+  name: string; description?: string; owner: string; tools?: string[]; schedule?: string; notebook?: string; budget?: number;
   registeredBy?: string; registeredAt?: string; approvedBy?: string; approvedAt?: string;
-  clientId: string; connection: string; approved: boolean; mcpUrl: string;
+  clientId: string; connection: string; approved: boolean; mcpUrl: string; dag?: string;
 };
 export const getAgents = (name: string) => api<{ agents: AgentView[]; tools: string[]; canEdit: boolean }>("GET", `/api/projects/${encodeURIComponent(name)}/agents`);
-export const putAgent = (name: string, a: { name: string; description?: string; owner: string; tools?: string[]; schedule?: string; budget?: number }) =>
-  api<AgentView[]>("PUT", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(a.name)}`, { description: a.description, owner: a.owner, tools: a.tools, schedule: a.schedule, budget: a.budget || undefined });
+export const putAgent = (name: string, a: { name: string; description?: string; owner: string; tools?: string[]; schedule?: string; notebook?: string; budget?: number }) =>
+  api<AgentView[]>("PUT", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(a.name)}`, { description: a.description, owner: a.owner, tools: a.tools, schedule: a.schedule, notebook: a.notebook, budget: a.budget || undefined });
 export type LLMUse = { who: string; budget: number; spend: number; key: boolean; error?: string; share?: number };
 export const getLLM = (name: string) => api<{ gateway: string; uses: LLMUse[] }>("GET", `/api/projects/${encodeURIComponent(name)}/llm`);
 export const approveAgent = (name: string, agent: string) =>
