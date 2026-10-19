@@ -238,7 +238,7 @@ spec:
                     required: [name, source]
                     properties:
                       name: {type: string, pattern: '^[a-z][a-z0-9_]{0,19}$'}
-                      source: {type: string, enum: [rest_api, sql_database]}
+                      source: {type: string, enum: [rest_api, sql_database, salesforce]}
                       connection: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
                       schedule: {type: string, description: "Cron (UTC), five fields; default hourly."}
                       api:
@@ -259,6 +259,15 @@ spec:
                                 cursor: {type: string}
                                 cursorParam: {type: string}
                                 cursorStart: {type: string}
+                      salesforce:
+                        description: "Salesforce's objects to copy (dlt's verified Salesforce source), and how far back the objects copied by their changes start."
+                        type: object
+                        required: [objects]
+                        properties:
+                          objects:
+                            type: array
+                            items: {type: string, enum: [account, campaign, campaign_member, contact, event, lead, opportunity, opportunity_contact_role, opportunity_line_item, pricebook_2, pricebook_entry, product_2, sf_user, task, user_role]}
+                          since: {type: string, pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'}
                       database:
                         type: object
                         required: [kind, tables]

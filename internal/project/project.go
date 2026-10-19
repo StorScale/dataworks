@@ -168,16 +168,35 @@ func (p *Project) PersonKeyOf(d Delivery) (table, column string) {
 // merged on it; one without, appended to. Each run copies only what's new
 // when a resource names a cursor (dlt keeps where it got to).
 type Import struct {
-	Name       string          `json:"name"`
-	Source     string          `json:"source"`               // one of ImportSources
-	Connection string          `json:"connection,omitempty"` // rest_api: its token (key token); sql_database: host, port, database, username, password
-	Schedule   string          `json:"schedule,omitempty"`   // cron (UTC); default hourly
-	API        *ImportAPI      `json:"api,omitempty"`
-	Database   *ImportDatabase `json:"database,omitempty"`
+	Name       string            `json:"name"`
+	Source     string            `json:"source"`               // one of ImportSources
+	Connection string            `json:"connection,omitempty"` // rest_api: its token (key token); sql_database: host, port, database, username, password
+	Schedule   string            `json:"schedule,omitempty"`   // cron (UTC); default hourly
+	API        *ImportAPI        `json:"api,omitempty"`
+	Database   *ImportDatabase   `json:"database,omitempty"`
+	Salesforce *ImportSalesforce `json:"salesforce,omitempty"`
 }
 
-// ImportSources are dlt's sources an import may be.
-var ImportSources = []string{"rest_api", "sql_database"}
+// ImportSources are dlt's sources an import may be: two general ones, and
+// the platform's connectors (use case 8.4).
+var ImportSources = []string{"rest_api", "sql_database", "salesforce"}
+
+// ImportSalesforce is Salesforce's objects to copy (dlt's verified Salesforce
+// source: its connection a kind of its own), and how far back the objects
+// copied by their changes start (Since, a date; default all of it).
+type ImportSalesforce struct {
+	Objects []string `json:"objects"`
+	Since   string   `json:"since,omitempty"`
+}
+
+// SalesforceObjects are the objects dlt's Salesforce source copies, by its
+// resources' names; Incremental, those copied by their changes and merged
+// (the others are replaced each run).
+var SalesforceObjects = []string{"account", "campaign", "campaign_member", "contact", "event", "lead", "opportunity",
+	"opportunity_contact_role", "opportunity_line_item", "pricebook_2", "pricebook_entry", "product_2", "sf_user", "task", "user_role"}
+
+var SalesforceIncremental = []string{"account", "campaign_member", "event", "opportunity", "opportunity_contact_role",
+	"opportunity_line_item", "task"}
 
 // ImportAPI is a REST API, as dlt's rest_api source takes it: its resources'
 // paths under BaseURL, each a list of objects (at DataSelector, a JSONPath,
@@ -734,6 +753,21 @@ func (p *Project) Validate() error {
 					bad("imports: %s: %s: a cursor names its field, its query parameter and where it starts", im.Name, r.Name)
 				}
 				landing(r.Name)
+			}
+		case "salesforce":
+			sf := im.Salesforce
+			if sf == nil || len(sf.Objects) == 0 || im.Connection == "" {
+				bad("imports: %s: a salesforce import names its objects (salesforce.objects) and a connection (kind salesforce)", im.Name)
+				break
+			}
+			for _, o := range sf.Objects {
+				if !slices.Contains(SalesforceObjects, o) {
+					bad("imports: %s: %q isn't one of Salesforce's objects: %s", im.Name, o, strings.Join(SalesforceObjects, ", "))
+				}
+				landing(o)
+			}
+			if _, err := time.Parse("2006-01-02", sf.Since); sf.Since != "" && err != nil {
+				bad("imports: %s: since %q: a date, as 2024-01-01", im.Name, sf.Since)
 			}
 		case "sql_database":
 			d := im.Database

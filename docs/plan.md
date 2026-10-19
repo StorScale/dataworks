@@ -283,6 +283,20 @@ Every container runs without privilege escalation, with the default seccomp prof
 
 **Order and effort:** (1) the access check and the operator's fix, a day; (2) reading as of a tag, time or commit on the SQL page, with the checks above, a day; (3) tags: API, Tags tab, keep and removal, audit, two days; (4) the History tab, two days. **Built (2026-10-17):** all four. Tags are the project's (`tables.tags`: a name, a commit, keepUntil, a note, who), the operator keeps Nessie's as they say; the platform turns a tag or a time into its commit. Not yet: notebooks and dashboards read as of a moment by the name alone (no picker), and deliveries (9.1) recording their commit.
 
+### One-click connectors, Salesforce first (use case 8.4), how (design, 2026-10-18)
+
+**A connector is an import of a kind the platform keeps.** 8.2's imports (dlt, in the project's Airflow, its tables `<import>_<object>`) gain a third source beside `rest_api` and `sql_database`: `salesforce`, with the objects to copy (`account`, `opportunity`, `campaign`, `lead`, `contact`, …: the source's resources) and, if wanted, `since` (how much history: the incremental objects start there). Gong and HighSpot follow as kinds of their own on dlt's REST support; SAP comes by 8.1 and 8.3 (HANA or BW as a database) or by OData.
+
+**The code is dlt's.** dlt's verified Salesforce source (Apache-2.0, on `simple_salesforce`), copied into the Airflow image at a pinned commit, with `simple-salesforce` in the imports' virtualenv. Each object is a dlt resource: those Salesforce changes in place (accounts, opportunities, campaign members, tasks) copied incrementally by their modification stamps and merged; the others replaced each run.
+
+**Sign-in.** A connection of a new kind, `salesforce` (7.6): a user's name, password and security token; or a connected app's consumer key and secret beside the user's; or an instance's address and a session (a token from elsewhere). The sandbox (`test.salesforce.com`) by `domain: test`.
+
+**From a form, by the project's editors.** The project's Sources tab gets Add a connector: Salesforce, then the connection (or a new one, on the Connections tab), the objects (ticked), the schedule, and since when. The platform writes the import into the project's spec: the editors' own endpoint for imports (`PUT /api/projects/<p>/imports/<name>`, and `DELETE`), the import checked as any spec change and recorded in the audit log; administrators keep the whole spec.
+
+**Checks:** the `imports` suite plays Salesforce (its REST API's describe and query, the bulk API refused so the source falls back to queries): bob adds a Salesforce import from the form's endpoint with two objects; it runs; the tables are there with the records; a second run after a record changes merges it (the incremental object), and alice (a reader) can't add one.
+
+**Left:** Salesforce's deleted records (its `queryAll` and `IsDeleted`), OAuth sign-in from the form (a connected app's web flow, the token kept), Gong, HighSpot and SAP.
+
 ### Customer, defined once (use case 10.1), how (design, 2026-10-18)
 
 **The company's model is a project's.** A project marked `semantic.shared: true` (the install's `company`, say) holds the company-wide semantic model: MetricFlow's semantic models, entities and metrics over its tables (`Customer`, `Revenue`, `Campaign`, `Booking`). Its editors are the governance group, so it changes as any project's model does: by its editors, or released from its repo (7.4: plan, then applied by another). Who may read the data behind it is Ranger's, as for any project: the shared project's readers.
