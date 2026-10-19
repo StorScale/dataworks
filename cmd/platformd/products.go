@@ -71,7 +71,7 @@ func (s *server) handleProducts(w http.ResponseWriter, r *http.Request) {
 	}
 	specs, err := s.store.Projects(r.Context())
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the project store isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the project store isn't answering")
 		return
 	}
 	out := []productView{}
@@ -99,12 +99,12 @@ func (s *server) handleProducts(w http.ResponseWriter, r *http.Request) {
 func (s *server) productOf(w http.ResponseWriter, r *http.Request) (*project.Project, *project.Product) {
 	p, err := s.store.Project(r.Context(), r.PathValue("project"))
 	if err != nil || p == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such project"})
+		s.fail(w, r, http.StatusNotFound, "no such project")
 		return nil, nil
 	}
 	pr := p.ProductOf(r.PathValue("product"))
 	if pr == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such product"})
+		s.fail(w, r, http.StatusNotFound, "no such product")
 		return nil, nil
 	}
 	return p, pr
@@ -116,11 +116,11 @@ func (s *server) changeRequest(w http.ResponseWriter, r *http.Request) *session 
 		return nil
 	}
 	if r.Header.Get("X-Platform-Request") != "1" {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing X-Platform-Request"})
+		s.fail(w, r, http.StatusForbidden, "missing X-Platform-Request")
 		return nil
 	}
 	if s.files == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "the platform keeps no files here"})
+		s.fail(w, r, http.StatusServiceUnavailable, "the platform keeps no files here")
 		return nil
 	}
 	return sess
@@ -143,19 +143,19 @@ func (s *server) handleRequestProduct(w http.ResponseWriter, r *http.Request) {
 	json.NewDecoder(io.LimitReader(r.Body, 8192)).Decode(&body)
 	switch {
 	case body.Consumer == "" || body.Consumer == p.Metadata.Name:
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "the project to read it in (consumer), not its own"})
+		s.fail(w, r, http.StatusUnprocessableEntity, "the project to read it in (consumer), not its own")
 		return
 	case !s.editorOfProject(r, sess.User, body.Consumer):
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "the editors of " + body.Consumer + " ask for it"})
+		s.fail(w, r, http.StatusForbidden, "the editors of "+body.Consumer+" ask for it")
 		return
 	case slices.Contains(pr.Consumers, body.Consumer):
-		writeJSON(w, http.StatusConflict, map[string]string{"error": body.Consumer + " reads it already"})
+		s.fail(w, r, http.StatusConflict, body.Consumer+" reads it already")
 		return
 	}
 	q := productRequest{Consumer: body.Consumer, By: sess.User.Username, At: s.now().UTC().Format("2006-01-02T15:04:05Z"), Why: strings.TrimSpace(body.Why)}
 	data, _ := json.Marshal(q)
 	if err := s.files.PutFile(r.Context(), requestKey(p.Metadata.Name, pr.Name, body.Consumer), data, "application/json"); err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	s.record(r, sess.User.Username, "product.requested", "project:"+p.Metadata.Name+"/product:"+pr.Name, "for "+body.Consumer)
@@ -173,25 +173,25 @@ func (s *server) handleAnswerRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.editorOfProject(r, sess.User, p.Metadata.Name) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "the editors of " + p.Metadata.Name + " answer requests for its products"})
+		s.fail(w, r, http.StatusForbidden, "the editors of "+p.Metadata.Name+" answer requests for its products")
 		return
 	}
 	answer := r.PathValue("answer")
 	if answer != "approve" && answer != "decline" {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "approve or decline"})
+		s.fail(w, r, http.StatusNotFound, "approve or decline")
 		return
 	}
 	consumer, approve := r.PathValue("consumer"), answer == "approve"
 	key := requestKey(p.Metadata.Name, pr.Name, consumer)
 	if data, err := s.files.GetFile(r.Context(), key); err != nil || data == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no request from " + consumer})
+		s.fail(w, r, http.StatusNotFound, "no request from "+consumer)
 		return
 	}
 	if approve && !slices.Contains(pr.Consumers, consumer) {
 		pr.Consumers = append(pr.Consumers, consumer)
 		sort.Strings(pr.Consumers)
 		if err := s.saveSpec(r.Context(), p); err != nil {
-			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			s.fail(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 		s.kick(r.Context(), p.Metadata.Name)
@@ -215,17 +215,17 @@ func (s *server) handleRemoveConsumer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.editorOfProject(r, sess.User, p.Metadata.Name) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "the editors of " + p.Metadata.Name + " decide who reads its products"})
+		s.fail(w, r, http.StatusForbidden, "the editors of "+p.Metadata.Name+" decide who reads its products")
 		return
 	}
 	consumer := r.PathValue("consumer")
 	if !slices.Contains(pr.Consumers, consumer) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": consumer + " doesn't read it"})
+		s.fail(w, r, http.StatusNotFound, consumer+" doesn't read it")
 		return
 	}
 	pr.Consumers = slices.DeleteFunc(pr.Consumers, func(c string) bool { return c == consumer })
 	if err := s.saveSpec(r.Context(), p); err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	s.kick(r.Context(), p.Metadata.Name)
@@ -241,7 +241,7 @@ func (s *server) handleCertify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.isAdmin(sess.User) && !s.inGroups(sess.User.Groups, s.cfg.ProductCertifierGroups) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "the governance group (" + strings.Join(s.cfg.ProductCertifierGroups, ", ") + ") certifies products"})
+		s.fail(w, r, http.StatusForbidden, "the governance group ("+strings.Join(s.cfg.ProductCertifierGroups, ", ")+") certifies products")
 		return
 	}
 	p, pr := s.productOf(w, r)
@@ -255,7 +255,7 @@ func (s *server) handleCertify(w http.ResponseWriter, r *http.Request) {
 		pr.Certification = nil
 	}
 	if err := s.saveSpec(r.Context(), p); err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	s.record(r, sess.User.Username, "product."+map[bool]string{true: "certified", false: "uncertified"}[certify],

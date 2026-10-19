@@ -53,17 +53,17 @@ notebook.schedule(project=%q, name=%q, schedule=%q, owner=%q)
 // notebook in: they're its editor, and it has a repo.
 func (s *server) handleNotebookProjects(w http.ResponseWriter, r *http.Request) {
 	if s.store == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "projects aren't set up"})
+		s.fail(w, r, http.StatusServiceUnavailable, "projects aren't set up")
 		return
 	}
 	who, err := s.bearer(r)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusUnauthorized, err.Error())
 		return
 	}
 	sts, err := s.store.Statuses(r.Context())
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the project store isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the project store isn't answering")
 		return
 	}
 	type option struct {
@@ -126,19 +126,19 @@ func (s *server) repoOf(r *http.Request, p *project.Project) (*gitlab.Client, st
 // branch of the project's repo, and opens (or updates) a merge request.
 func (s *server) handleScheduleNotebook(w http.ResponseWriter, r *http.Request) {
 	if s.store == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "projects aren't set up"})
+		s.fail(w, r, http.StatusServiceUnavailable, "projects aren't set up")
 		return
 	}
 	who, err := s.bearer(r)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusUnauthorized, err.Error())
 		return
 	}
 	name := r.PathValue("name")
 	st, err := s.store.Status(r.Context(), name)
 	if err != nil || st == nil || !editorIn(st.Members, who) {
 		s.recordRefusal(r, who, "notebook.scheduled", "project:"+name, "not an editor")
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "the project's editors schedule notebooks in it"})
+		s.fail(w, r, http.StatusForbidden, "the project's editors schedule notebooks in it")
 		return
 	}
 	var body struct {
@@ -147,7 +147,7 @@ func (s *server) handleScheduleNotebook(w http.ResponseWriter, r *http.Request) 
 		Notebook json.RawMessage `json:"notebook"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 16<<20)).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	var nb struct {
@@ -155,29 +155,29 @@ func (s *server) handleScheduleNotebook(w http.ResponseWriter, r *http.Request) 
 	}
 	switch {
 	case !strings.HasSuffix(body.Path, ".ipynb"):
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "a notebook (.ipynb)"})
+		s.fail(w, r, http.StatusUnprocessableEntity, "a notebook (.ipynb)")
 		return
 	case !project.ValidCron(body.Schedule):
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "a schedule as cron's five fields (UTC): 0 5 * * *"})
+		s.fail(w, r, http.StatusUnprocessableEntity, "a schedule as cron's five fields (UTC): 0 5 * * *")
 		return
 	case json.Unmarshal(body.Notebook, &nb) != nil || nb.Cells == nil:
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "the notebook isn't one (no cells)"})
+		s.fail(w, r, http.StatusUnprocessableEntity, "the notebook isn't one (no cells)")
 		return
 	}
 	p, err := s.store.Project(r.Context(), name)
 	if err != nil || p == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such project"})
+		s.fail(w, r, http.StatusNotFound, "no such project")
 		return
 	}
 	gl, target, err := s.repoOf(r, p)
 	if err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	ctx := r.Context()
 	if target == "" {
 		if target, err = gl.DefaultBranch(ctx); err != nil {
-			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			s.fail(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 	}
@@ -203,20 +203,20 @@ func (s *server) handleScheduleNotebook(w http.ResponseWriter, r *http.Request) 
 		files[i].Action = map[bool]string{true: "update", false: "create"}[there]
 	}
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	msg := fmt.Sprintf("Schedule %s (%s, UTC)\n\nScheduled by %s from JupyterLab, through the platform.", path.Base(body.Path), body.Schedule, who)
 	commit, err := gl.Commit(ctx, branch, from, msg, "", "", files)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	mr, made, err := gl.MergeRequestFor(ctx, branch, target, "Schedule "+path.Base(body.Path),
 		fmt.Sprintf("%s's notebook `%s`, run at `%s` (UTC) as the project's pipelines, by the DAG `notebook_%s`. Each run's executed notebook is linked from the run on the project's Pipelines tab.\n\nScheduled from JupyterLab through the platform.",
 			who, path.Base(body.Path), body.Schedule, nbName))
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	s.record(r, who, "notebook.scheduled", "project:"+name+"/pipeline:notebook_"+nbName,
@@ -241,7 +241,7 @@ func (s *server) handleNotebookRun(w http.ResponseWriter, r *http.Request) {
 	}
 	dag, run := r.PathValue("dag"), r.PathValue("run")
 	if !strings.HasPrefix(dag, "notebook_") || !runFileRE.MatchString(dag) || !runFileRE.MatchString(run) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "a notebook's DAG and run"})
+		s.fail(w, r, http.StatusBadRequest, "a notebook's DAG and run")
 		return
 	}
 	var body struct {
@@ -250,7 +250,7 @@ func (s *server) handleNotebookRun(w http.ResponseWriter, r *http.Request) {
 		Failed   string          `json:"failed"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 64<<20)).Decode(&body); err != nil || len(body.Notebook) == 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "the executed notebook, as JSON"})
+		s.fail(w, r, http.StatusBadRequest, "the executed notebook, as JSON")
 		return
 	}
 	err := s.files.PutFile(r.Context(), notebookRunKey(name, dag, run, "ipynb"), body.Notebook, "application/x-ipynb+json")
@@ -258,7 +258,7 @@ func (s *server) handleNotebookRun(w http.ResponseWriter, r *http.Request) {
 		err = s.files.PutFile(r.Context(), notebookRunKey(name, dag, run, "html"), []byte(body.HTML), "text/html")
 	}
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	detail := "ran"
@@ -282,7 +282,7 @@ func (s *server) handleNotebookRunView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.files == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "the platform keeps no files here"})
+		s.fail(w, r, http.StatusServiceUnavailable, "the platform keeps no files here")
 		return
 	}
 	dag, run, format := r.PathValue("dag"), r.PathValue("run"), r.URL.Query().Get("format")
@@ -290,16 +290,16 @@ func (s *server) handleNotebookRunView(w http.ResponseWriter, r *http.Request) {
 		format = "html"
 	}
 	if !runFileRE.MatchString(dag) || !runFileRE.MatchString(run) || format != "html" && format != "ipynb" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "a notebook's DAG and run, as html or ipynb"})
+		s.fail(w, r, http.StatusBadRequest, "a notebook's DAG and run, as html or ipynb")
 		return
 	}
 	data, err := s.files.GetFile(r.Context(), notebookRunKey(v.Name, dag, run, format))
 	switch {
 	case err != nil:
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	case data == nil:
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no notebook kept for that run"})
+		s.fail(w, r, http.StatusNotFound, "no notebook kept for that run")
 		return
 	}
 	if format == "html" {

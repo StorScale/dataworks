@@ -127,7 +127,7 @@ func (s *server) handleAsOf(w http.ResponseWriter, r *http.Request) {
 	}
 	m, err := s.history.resolve(r.Context(), v.Spec, r.URL.Query().Get("at"))
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, m)
@@ -153,15 +153,15 @@ func (s *server) handleTags(w http.ResponseWriter, r *http.Request) {
 	p := v.Spec
 	if r.Method != "GET" {
 		if r.Header.Get("X-Platform-Request") != "1" {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing X-Platform-Request"})
+			s.fail(w, r, http.StatusForbidden, "missing X-Platform-Request")
 			return
 		}
 		if v.Role != project.Editor && !s.isAdmin(sess.User) {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "the project's editors make and remove its tags"})
+			s.fail(w, r, http.StatusForbidden, "the project's editors make and remove its tags")
 			return
 		}
 		if p.Spec.Tables == nil {
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "the project has no tables"})
+			s.fail(w, r, http.StatusConflict, "the project has no tables")
 			return
 		}
 	}
@@ -171,30 +171,30 @@ func (s *server) handleTags(w http.ResponseWriter, r *http.Request) {
 			Name, At, Keep, Note string
 		}
 		if json.NewDecoder(r.Body).Decode(&req) != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "want {name, at, keep, note}"})
+			s.fail(w, r, http.StatusBadRequest, "want {name, at, keep, note}")
 			return
 		}
 		until, ok := keepUntil(req.Keep, time.Now().UTC())
 		if !ok {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "keep: as 90d or 7y"})
+			s.fail(w, r, http.StatusBadRequest, "keep: as 90d or 7y")
 			return
 		}
 		m, err := s.history.resolve(r.Context(), p, req.At)
 		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			s.fail(w, r, http.StatusBadRequest, err.Error())
 			return
 		}
 		tag := project.Tag{Name: req.Name, Commit: m.Commit, KeepUntil: until, Note: req.Note, By: sess.User.Username}
 		next := *p
 		tables := *p.Spec.Tables
 		if slices.ContainsFunc(tables.Tags, func(t project.Tag) bool { return t.Name == req.Name }) {
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "the project has a tag " + req.Name + " already"})
+			s.fail(w, r, http.StatusConflict, "the project has a tag "+req.Name+" already")
 			return
 		}
 		tables.Tags = append(append([]project.Tag{}, tables.Tags...), tag)
 		next.Spec.Tables = &tables
 		if err := s.saveSpec(r.Context(), &next); err != nil {
-			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+			s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 			return
 		}
 		s.record(r, sess.User.Username, "tag.made", "project:"+v.Name+"/tag:"+req.Name,
@@ -207,13 +207,13 @@ func (s *server) handleTags(w http.ResponseWriter, r *http.Request) {
 		tables := *p.Spec.Tables
 		kept := slices.DeleteFunc(append([]project.Tag{}, tables.Tags...), func(t project.Tag) bool { return t.Name == name })
 		if len(kept) == len(tables.Tags) {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "no tag " + name})
+			s.fail(w, r, http.StatusNotFound, "no tag "+name)
 			return
 		}
 		tables.Tags = kept
 		next.Spec.Tables = &tables
 		if err := s.saveSpec(r.Context(), &next); err != nil {
-			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+			s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 			return
 		}
 		s.record(r, sess.User.Username, "tag.removed", "project:"+v.Name+"/tag:"+name, "")
@@ -271,12 +271,12 @@ func (s *server) handleHistory(w http.ResponseWriter, r *http.Request) {
 	t := v.Spec.Spec.Tables
 	table := r.URL.Query().Get("table")
 	if t == nil || !identRE.MatchString(table) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "want ?table=<one of the project's tables>"})
+		s.fail(w, r, http.StatusBadRequest, "want ?table=<one of the project's tables>")
 		return
 	}
 	commits, err := s.history.nessie.History(r.Context(), t.Namespace+"."+table, 50, 5000)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	tagsAt := map[string][]string{}

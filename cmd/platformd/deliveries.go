@@ -91,7 +91,7 @@ func (s *server) handleApproveDelivery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Header.Get("X-Platform-Request") != "1" {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing X-Platform-Request"})
+		s.fail(w, r, http.StatusForbidden, "missing X-Platform-Request")
 		return
 	}
 	v := s.project(w, r, sess)
@@ -102,7 +102,7 @@ func (s *server) handleApproveDelivery(w http.ResponseWriter, r *http.Request) {
 	p := v.Spec
 	i := slices.IndexFunc(p.Spec.Deliveries, func(d project.Delivery) bool { return d.Name == name })
 	if i < 0 {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such delivery"})
+		s.fail(w, r, http.StatusNotFound, "no such delivery")
 		return
 	}
 	d := &p.Spec.Deliveries[i]
@@ -111,10 +111,10 @@ func (s *server) handleApproveDelivery(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case who == d.ChangedBy:
 		s.recordRefusal(r, who, "delivery.approved", "project:"+v.Name+"/"+name, "changed it")
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "someone other than who changed what it sends approves it"})
+		s.fail(w, r, http.StatusForbidden, "someone other than who changed what it sends approves it")
 		return
 	case !editor && !protection:
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "the project's editors (and data-protection approvers) approve deliveries"})
+		s.fail(w, r, http.StatusForbidden, "the project's editors (and data-protection approvers) approve deliveries")
 		return
 	}
 	hash := d.SendsHash()
@@ -131,7 +131,7 @@ func (s *server) handleApproveDelivery(w http.ResponseWriter, r *http.Request) {
 	need := s.needs(p, *d)
 	d.Approval.Done = len(need) == 0
 	if err := s.saveSpec(r.Context(), p); err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	detail := fmt.Sprintf("sends %s (%s) to %s", either(d.Table, "a query"), d.Format, d.Target)
@@ -166,7 +166,7 @@ func (s *server) handleDeliveryLog(w http.ResponseWriter, r *http.Request) {
 	}
 	var run map[string]any
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<20)).Decode(&run); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "the run, as JSON: " + err.Error()})
+		s.fail(w, r, http.StatusBadRequest, "the run, as JSON: "+err.Error())
 		return
 	}
 	at := s.now().UTC()
@@ -185,7 +185,7 @@ func (s *server) handleDeliveryLog(w http.ResponseWriter, r *http.Request) {
 	data, _ := json.Marshal(run)
 	if err := s.files.PutFile(r.Context(), fmt.Sprintf("deliveries/%s/%s/%s.json", name, delivery, at.Format("20060102T150405.000Z")),
 		data, "application/json"); err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	s.record(r, who, "delivery.sent", "project:"+name+"/"+delivery, fmt.Sprint(run["summary"]))
@@ -225,7 +225,7 @@ func (s *server) handleResetImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Header.Get("X-Platform-Request") != "1" {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing X-Platform-Request"})
+		s.fail(w, r, http.StatusForbidden, "missing X-Platform-Request")
 		return
 	}
 	v := s.project(w, r, sess)
@@ -233,22 +233,22 @@ func (s *server) handleResetImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if v.Role != project.Editor && !s.isAdmin(sess.User) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "the project's editors reset its imports"})
+		s.fail(w, r, http.StatusForbidden, "the project's editors reset its imports")
 		return
 	}
 	name := r.PathValue("import")
 	if !slices.ContainsFunc(v.Spec.Spec.Imports, func(i project.Import) bool { return i.Name == name }) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such import"})
+		s.fail(w, r, http.StatusNotFound, "no such import")
 		return
 	}
 	if s.airflow == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "no Airflow here"})
+		s.fail(w, r, http.StatusServiceUnavailable, "no Airflow here")
 		return
 	}
 	dag := "import_" + strings.ReplaceAll(v.Name, "-", "_") + "_" + name
 	runID := "reset-" + s.now().UTC().Format("20060102T150405")
 	if _, err := s.airflow.Trigger(r.Context(), dag, runID, map[string]any{"reset": true, "requested_by": sess.User.Username}); err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	s.record(r, sess.User.Username, "import.reset", "project:"+v.Name+"/"+name, "its tables and where it got to dropped, all copied again")
@@ -263,18 +263,18 @@ func (s *server) handleResetImport(w http.ResponseWriter, r *http.Request) {
 func (s *server) handleGitLabHook(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if s.store == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "no projects here"})
+		s.fail(w, r, http.StatusServiceUnavailable, "no projects here")
 		return
 	}
 	p, err := s.store.Project(r.Context(), name)
 	if err != nil || p == nil || p.Spec.Pipelines == nil || p.Spec.Pipelines.Reviews == nil || p.Spec.Pipelines.Credentials == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such project with reviews"})
+		s.fail(w, r, http.StatusNotFound, "no such project with reviews")
 		return
 	}
 	secret, err := s.store.Connection(r.Context(), name, p.Spec.Pipelines.Credentials.SecretRef)
 	want := secret["webhookToken"]
 	if err != nil || want == "" || subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Gitlab-Token")), []byte(want)) != 1 {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "the webhook's token isn't the project's (webhookToken)"})
+		s.fail(w, r, http.StatusUnauthorized, "the webhook's token isn't the project's (webhookToken)")
 		return
 	}
 	if kind := r.Header.Get("X-Gitlab-Event"); kind != "Merge Request Hook" && kind != "Push Hook" {
@@ -284,7 +284,7 @@ func (s *server) handleGitLabHook(w http.ResponseWriter, r *http.Request) {
 	req, _ := http.NewRequestWithContext(r.Context(), "POST", s.cfg.OperatorURL+"/projects/"+name+"/kick", nil)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the operator: " + err.Error()})
+		s.fail(w, r, http.StatusBadGateway, "the operator: "+err.Error())
 		return
 	}
 	res.Body.Close()

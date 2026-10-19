@@ -284,15 +284,15 @@ func (s *server) handleMaintenance(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == "POST" {
 		if r.Header.Get("X-Platform-Request") != "1" {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing X-Platform-Request"})
+			s.fail(w, r, http.StatusForbidden, "missing X-Platform-Request")
 			return
 		}
 		if v.Role != project.Editor && !s.isAdmin(sess.User) {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "the project's editors ask for its maintenance"})
+			s.fail(w, r, http.StatusForbidden, "the project's editors ask for its maintenance")
 			return
 		}
 		if t := v.Spec.Spec.Tables; t == nil || (t.Maintenance != nil && t.Maintenance.Paused) {
-			writeJSON(w, http.StatusConflict, map[string]string{"error": "the project's tables have no maintenance (none, or paused)"})
+			s.fail(w, r, http.StatusConflict, "the project's tables have no maintenance (none, or paused)")
 			return
 		}
 		s.expireTags(r.Context()) // tags past their keepUntil, as the nightly round does
@@ -312,7 +312,7 @@ func (s *server) handleMaintenance(w http.ResponseWriter, r *http.Request) {
 	out["paused"] = t.Maintenance != nil && t.Maintenance.Paused
 	names, err := m.iceberg.Tables(r.Context(), t.Namespace)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	m.mu.Lock()

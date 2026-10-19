@@ -25,18 +25,18 @@ func (s *server) handlePutImport(w http.ResponseWriter, r *http.Request) {
 	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&im); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "an import, as JSON: " + err.Error()})
+		s.fail(w, r, http.StatusBadRequest, "an import, as JSON: "+err.Error())
 		return
 	}
 	im.Name = r.PathValue("import")
 	if im.Connection != "" {
 		cs, err := s.store.Connections(r.Context(), v.Name)
 		if err != nil {
-			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the project store isn't answering"})
+			s.fail(w, r, http.StatusBadGateway, "the project store isn't answering")
 			return
 		}
 		if !slices.ContainsFunc(cs, func(c store.StoredConnection) bool { return c.Name == im.Connection }) {
-			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "no connection " + im.Connection + " among the project's (its Connections tab)"})
+			s.fail(w, r, http.StatusUnprocessableEntity, "no connection "+im.Connection+" among the project's (its Connections tab)")
 			return
 		}
 	}
@@ -50,7 +50,7 @@ func (s *server) handlePutImport(w http.ResponseWriter, r *http.Request) {
 		p.Spec.Imports[i] = im
 	}
 	if err := s.saveSpec(r.Context(), &p); err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	what := map[bool]string{true: "added", false: "changed"}[added] + ": " + im.Source
@@ -72,11 +72,11 @@ func (s *server) handleDeleteImport(w http.ResponseWriter, r *http.Request) {
 	p := *v.Spec
 	p.Spec.Imports = slices.DeleteFunc(slices.Clone(p.Spec.Imports), func(x project.Import) bool { return x.Name == name })
 	if len(p.Spec.Imports) == len(v.Spec.Spec.Imports) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such import"})
+		s.fail(w, r, http.StatusNotFound, "no such import")
 		return
 	}
 	if err := s.saveSpec(r.Context(), &p); err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	s.record(r, sess.User.Username, "import.removed", "project:"+v.Name+"/import:"+name, "its tables stay")

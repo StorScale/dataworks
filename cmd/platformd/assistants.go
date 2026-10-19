@@ -34,7 +34,7 @@ func (s *server) administrator(w http.ResponseWriter, r *http.Request, what stri
 		return nil
 	}
 	if !s.isAdmin(sess.User) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "administrators " + what})
+		s.fail(w, r, http.StatusForbidden, "administrators "+what)
 		return nil
 	}
 	return sess
@@ -70,7 +70,7 @@ func (s *server) handleAssistants(w http.ResponseWriter, r *http.Request) {
 	}
 	list, err := s.assistants(r)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the platform store isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the platform store isn't answering")
 		return
 	}
 	out := []assistantView{}
@@ -86,17 +86,17 @@ func (s *server) handlePutAssistant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.files == nil {
-		writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "this install has no file store for assistants"})
+		s.fail(w, r, http.StatusNotImplemented, "this install has no file store for assistants")
 		return
 	}
 	var a project.Assistant
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&a); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	a.Name = r.PathValue("name")
 	if err := a.Check(); err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	a.AddedBy, a.AddedAt = sess.User.Username, time.Now().UTC()
@@ -108,7 +108,7 @@ func (s *server) handlePutAssistant(w http.ResponseWriter, r *http.Request) {
 	}
 	b, _ := json.Marshal(a)
 	if err := s.files.PutFile(r.Context(), assistantKey(a.Name), b, "application/json"); err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the platform store isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the platform store isn't answering")
 		return
 	}
 	s.record(r, sess.User.Username, "assistant.register", "assistant:"+a.Name, strings.Join(a.RedirectURIs, " "))
@@ -122,11 +122,11 @@ func (s *server) handleDeleteAssistant(w http.ResponseWriter, r *http.Request) {
 	}
 	name := r.PathValue("name")
 	if s.files == nil || !project.NameOK(name) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such assistant"})
+		s.fail(w, r, http.StatusNotFound, "no such assistant")
 		return
 	}
 	if err := s.files.DeleteFile(r.Context(), assistantKey(name)); err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the platform store isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the platform store isn't answering")
 		return
 	}
 	s.record(r, sess.User.Username, "assistant.remove", "assistant:"+name, "")

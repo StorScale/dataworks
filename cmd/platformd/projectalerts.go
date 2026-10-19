@@ -290,11 +290,11 @@ func (s *server) handleProjectAlerts(w http.ResponseWriter, r *http.Request) {
 	pa := s.projectAlerts
 	if r.Method == "POST" {
 		if r.Header.Get("X-Platform-Request") != "1" {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing X-Platform-Request"})
+			s.fail(w, r, http.StatusForbidden, "missing X-Platform-Request")
 			return
 		}
 		if v.Role != project.Editor && !s.isAdmin(sess.User) {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "the project's editors mute its alerts"})
+			s.fail(w, r, http.StatusForbidden, "the project's editors mute its alerts")
 			return
 		}
 		var req struct {
@@ -302,7 +302,7 @@ func (s *server) handleProjectAlerts(w http.ResponseWriter, r *http.Request) {
 			Hours float64 `json:"hours"` // 0: unmute
 		}
 		if json.NewDecoder(r.Body).Decode(&req) != nil || req.Key == "" || req.Hours < 0 || req.Hours > 24*7 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "want {key, hours}: up to a week"})
+			s.fail(w, r, http.StatusBadRequest, "want {key, hours}: up to a week")
 			return
 		}
 		pa.mu.Lock()
