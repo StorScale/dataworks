@@ -171,6 +171,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/projects/{name}", s.handleDeleteProject)
 	mux.HandleFunc("GET /api/access", s.handleAccess)
 	mux.HandleFunc("GET /api/projects/{name}/flow", s.handleFlow)
+	mux.HandleFunc("GET /api/terms", s.handleSemantic)
 	mux.HandleFunc("GET /api/projects/{name}/semantic", s.handleSemantic)
 	mux.HandleFunc("PUT /api/projects/{name}/semantic", s.handleSemantic)
 	mux.HandleFunc("POST /api/projects/{name}/semantic/query", s.handleSemantic)

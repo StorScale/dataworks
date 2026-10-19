@@ -83,6 +83,7 @@ code, .mono { font-family: var(--mono); font-size: 13px; }
 .brand:hover { color: #fff; text-decoration: none; }
 .brand img { width: 26px; height: 26px; }
 .brand img.logo { width: auto; max-width: 220px; height: 26px; object-fit: contain; }
+.bar-button, a.bar-button:hover { text-decoration: none; }
 .bar-button { display: flex; align-items: center; gap: 8px; background: var(--bar-2); color: var(--bar-ink); border: 1px solid var(--bar-line); border-radius: 8px; padding: 0 12px; min-height: 40px; font: inherit; cursor: pointer; }
 .bar-button .label { color: var(--bar-muted); }
 .bar-button strong { font-weight: 600; }

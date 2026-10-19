@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useMatch, useNavigate, useParams } from "react-router-dom";
-import { ApiError, getFlow, getPipelines, getProject, getSemantic, listProjects, ProjectView, signOut } from "./api";
+import { ApiError, getFlow, getPipelines, getProject, getSemantic, getTerms, listProjects, ProjectView, signOut, type Term } from "./api";
 import { initials, lastProject, Phase, ProjectContext, rememberProject, RolePill, Spinner, usePlatform, usePoll } from "./lib";
 
 // useMenu is a menu that closes when someone clicks elsewhere or presses Escape.
@@ -20,7 +20,7 @@ function useMenu() {
 
 // TopBar is on every page: the platform, the project you're in, search, your tools, you.
 export function TopBar() {
-  const { user, admin, projects, brand } = usePlatform();
+  const { user, admin, projects, brand, semantic } = usePlatform();
   const project = useMatch("/p/:project/*")?.params.project;
   const account = useMenu();
   return (
@@ -31,6 +31,7 @@ export function TopBar() {
       {projects && <ProjectSwitcher current={project} />}
       <Search project={project} />
       <span className="grow" />
+      {semantic && <Link to="/terms" className="bar-button" data-testid="nav-terms">Business terms</Link>}
       <ToolsMenu />
       <div className="account" ref={account.ref}>
         <button onClick={() => account.setOpen(!account.open)} aria-expanded={account.open} aria-haspopup="menu" data-testid="whoami">
@@ -140,6 +141,13 @@ function Search({ project }: { project?: string }) {
   const load = async () => {
     if (index?.for === key) return;
     const hits: Hit[] = [];
+    // The business's words first: the company's terms, found by their synonyms too.
+    if (semantic) {
+      const t = await getTerms().catch(() => ({ terms: [] as Term[] }));
+      for (const term of t.terms) {
+        hits.push({ kind: "Term", label: term.label, sub: [term.definition, ...term.synonyms].filter(Boolean).join(" · "), to: `/terms/${encodeURIComponent(term.name)}` });
+      }
+    }
     if (!project) {
       const r = await listProjects().catch(() => ({ projects: [] as ProjectView[] }));
       for (const p of r.projects) hits.push({ kind: "Project", label: p.name, sub: p.spec?.spec.description, to: `/p/${p.name}` });
@@ -163,7 +171,8 @@ function Search({ project }: { project?: string }) {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const hits = !words.length || index?.for !== key ? [] : index.hits
     .filter((h) => words.every((w) => `${h.label} ${h.sub ?? ""}`.toLowerCase().includes(w)))
-    .sort((a, b) => Number(!a.label.toLowerCase().startsWith(words[0])) - Number(!b.label.toLowerCase().startsWith(words[0])))
+    .sort((a, b) => Number(a.kind !== "Term") - Number(b.kind !== "Term")
+      || Number(!a.label.toLowerCase().startsWith(words[0])) - Number(!b.label.toLowerCase().startsWith(words[0])))
     .slice(0, 12);
   const go = (h: Hit) => { setOpen(false); setQ(""); input.current?.blur(); navigate(h.to); };
 
@@ -175,7 +184,7 @@ function Search({ project }: { project?: string }) {
         <input
           ref={input}
           value={q}
-          placeholder={project ? `Search ${project}: tables, columns, metrics, pipelines` : "Search projects"}
+          placeholder={project ? `Search ${project}: terms, tables, columns, metrics, pipelines` : "Search terms and projects"}
           onFocus={() => { setOpen(true); load(); }}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onChange={(e) => { setQ(e.target.value); setSel(0); setOpen(true); }}

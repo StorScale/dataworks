@@ -265,6 +265,13 @@ export const approveDelivery = (name: string, d: string) =>
   api<{ approved: boolean; needs: string[] }>("POST", `/api/projects/${encodeURIComponent(name)}/deliveries/${encodeURIComponent(d)}/approve`);
 export const resetImport = (name: string, i: string) =>
   api<{ run: string }>("POST", `/api/projects/${encodeURIComponent(name)}/imports/${encodeURIComponent(i)}/reset`);
+// --- The company's terms (10.1): the shared semantic models' entities, metrics and dimensions, in the business's words
+export type Term = {
+  name: string; label: string; kind: "entity" | "metric" | "dimension" | ""; definition: string; owner: string; synonyms: string[];
+  project: string; tables: string[]; metrics: string[]; usedBy: string[];
+};
+export const getTerms = () => api<{ terms: Term[] }>("GET", "/api/terms");
+
 // --- A project's connections (7.6): credentials given once, never shown again
 export type ConnectionField = { key: string; label: string; secret?: boolean; required?: boolean; multiline?: boolean };
 export type ConnectionKind = { kind: string; label: string; for: string; fields: ConnectionField[]; oneOf?: string[] };

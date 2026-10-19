@@ -172,6 +172,106 @@ def projects():
     return out
 
 
+GLOSSARY = "BusinessTerms"
+
+
+def model_of(project):
+    s3 = boto3.client("s3", endpoint_url="http://buckets:9000", region_name="us-east-1",
+                      aws_access_key_id=env["STORE_ACCESS_KEY"], aws_secret_access_key=env["STORE_SECRET_KEY"])
+    try:
+        return s3.get_object(Bucket="storscale-platform", Key=f"semantic/{project}.yaml")["Body"].read().decode()
+    except Exception:  # noqa: BLE001 (none)
+        return ""
+
+
+def term_tables(term, docs):
+    """The tables a term comes from (as semanticd says them): an entity's or a
+    dimension's semantic models; a metric's measures', through the metrics it's made of."""
+    models = [d["semantic_model"] for d in docs if "semantic_model" in d]
+    metrics = {d["metric"]["name"]: d["metric"] for d in docs if "metric" in d}
+    rel = lambda sm: tuple(str((sm.get("node_relation") or {}).get(k, "")) for k in ("database", "schema_name", "alias"))
+    out, name = set(), term["name"]
+    for sm in models:
+        if any(x.get("name") == name for x in (sm.get("entities") or []) + (sm.get("dimensions") or [])):
+            out.add(rel(sm))
+    seen = set()
+
+    def walk(m):
+        if m in seen or m not in metrics:
+            return
+        seen.add(m)
+        tp = metrics[m].get("type_params") or {}
+        measure = tp.get("measure")
+        measure = measure.get("name") if isinstance(measure, dict) else measure
+        for sm in models:
+            if measure and any(x.get("name") == measure for x in sm.get("measures") or []):
+                out.add(rel(sm))
+        for ref in [tp.get("numerator"), tp.get("denominator"), *(tp.get("metrics") or [])]:
+            walk(ref.get("name") if isinstance(ref, dict) else ref)
+    walk(name)
+    return sorted(out)
+
+
+def glossary_terms():
+    """The company's terms: every shared project's model's `terms:` document (use case 10.1)."""
+    import yaml
+    out = {}
+    for p in projects():
+        if not ((p.get("spec") or {}).get("semantic") or {}).get("shared"):
+            continue
+        try:
+            docs = [d for d in yaml.safe_load_all(model_of(p["metadata"]["name"])) if isinstance(d, dict)]
+        except yaml.YAMLError:
+            continue
+        model = [d for d in docs if "terms" not in d]
+        for t in (t for d in docs if "terms" in d for t in d["terms"] or []):
+            if isinstance(t, dict) and t.get("name"):
+                out[t["name"]] = {**t, "tables": term_tables(t, model)}
+    return out
+
+
+def sync_glossary():
+    """OpenMetadata's glossary Business terms, as the shared models' terms say:
+    each term with its definition, owner and synonyms, and the tables it comes
+    from tagged with it; terms no longer there removed."""
+    h = admin_headers()
+    terms = glossary_terms()
+    if not terms and requests.get(f"{OM}/v1/glossaries/name/{GLOSSARY}", headers=h, timeout=10).status_code == 404:
+        return
+    requests.put(f"{OM}/v1/glossaries", headers=h, timeout=10, json={
+        "name": GLOSSARY, "displayName": "Business terms",
+        "description": "The company's words for its data, from the platform's shared semantic model: kept by the platform."}).raise_for_status()
+    have = requests.get(f"{OM}/v1/glossaryTerms", headers=h, timeout=10, params={"glossary": GLOSSARY, "limit": 1000}).json().get("data", [])
+    for t in have:
+        if t["name"] not in terms:
+            requests.delete(f"{OM}/v1/glossaryTerms/{t['id']}", headers=h, timeout=10, params={"hardDelete": "true", "recursive": "true"})
+    for name, t in terms.items():
+        body = {"glossary": GLOSSARY, "name": name, "displayName": t.get("label") or name.replace("_", " ").capitalize(),
+                "description": t.get("definition") or "No definition yet.", "synonyms": [str(x) for x in t.get("synonyms") or []]}
+        if t.get("owner"):
+            u = requests.get(f"{OM}/v1/users/name/{t['owner']}", headers=h, timeout=10)
+            if u.ok:
+                body["owners"] = [{"id": u.json()["id"], "type": "user"}]
+        r = requests.put(f"{OM}/v1/glossaryTerms", headers=h, timeout=10, json=body)
+        if not r.ok:
+            log.warning("glossary: %s: %s", name, r.text[:200])
+            continue
+        fqn = f"{GLOSSARY}.{name}"
+        for database, schema, table in t["tables"]:
+            tr = requests.get(f"{OM}/v1/tables/name/{SERVICE}.{database}.{schema}.{table}", headers=h, timeout=10, params={"fields": "tags"})
+            if not tr.ok:
+                continue   # not described yet: the next round
+            tags = tr.json().get("tags") or []
+            if any(x.get("tagFQN") == fqn for x in tags):
+                continue
+            patch = [{"op": "add", "path": f"/tags/{len(tags)}",
+                      "value": {"tagFQN": fqn, "source": "Glossary", "labelType": "Manual", "state": "Confirmed"}}]
+            pr = requests.patch(f"{OM}/v1/tables/{tr.json()['id']}", headers={**h, "Content-Type": "application/json-patch+json"},
+                                timeout=10, data=json.dumps(patch))
+            if not pr.ok:
+                log.warning("glossary: tagging %s.%s with %s: %s", schema, table, name, pr.text[:200])
+
+
 def copy_lineage():
     """Each copied source table, upstream of its copy (both described by now,
     the copy once its first commit is in): an edge, its columns matched by
@@ -337,6 +437,10 @@ def main():
                 ingest_dbt(token)
                 copy_lineage()
                 import_lineage()
+                try:
+                    sync_glossary()
+                except Exception as e:  # noqa: BLE001 (the next round tries again)
+                    log.warning("glossary: %s", e)
                 last_metadata = time.time()
                 log.info("metadata: ingested trino")
             run_checks(token)

@@ -10,6 +10,7 @@ import Tags from "./pages/Tags";
 import Connections from "./pages/Connections";
 import Deliveries from "./pages/Deliveries";
 import Releases from "./pages/Releases";
+import Terms from "./pages/Terms";
 import Data from "./pages/Data";
 import Home from "./pages/Home";
 import Metrics from "./pages/Metrics";
@@ -57,6 +58,8 @@ function Shell() {
       <TopBar />
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/terms/:term" element={<Terms />} />
         <Route path="/p/:project" element={<ProjectFrame />}>
           <Route index element={<Overview />} />
           <Route path="data" element={<Data />} />

@@ -283,6 +283,22 @@ Every container runs without privilege escalation, with the default seccomp prof
 
 **Order and effort:** (1) the access check and the operator's fix, a day; (2) reading as of a tag, time or commit on the SQL page, with the checks above, a day; (3) tags: API, Tags tab, keep and removal, audit, two days; (4) the History tab, two days. **Built (2026-10-17):** all four. Tags are the project's (`tables.tags`: a name, a commit, keepUntil, a note, who), the operator keeps Nessie's as they say; the platform turns a tag or a time into its commit. Not yet: notebooks and dashboards read as of a moment by the name alone (no picker), and deliveries (9.1) recording their commit.
 
+### Customer, defined once (use case 10.1), how (design, 2026-10-18)
+
+**The company's model is a project's.** A project marked `semantic.shared: true` (the install's `company`, say) holds the company-wide semantic model: MetricFlow's semantic models, entities and metrics over its tables (`Customer`, `Revenue`, `Campaign`, `Booking`). Its editors are the governance group, so it changes as any project's model does: by its editors, or released from its repo (7.4: plan, then applied by another). Who may read the data behind it is Ranger's, as for any project: the shared project's readers.
+
+**Projects build on it.** A project names the shared models its own builds on (`semantic.uses: [company]`), and semanticd compiles its model with them before its own: its metrics use `customer` and `revenue` without defining them, its semantic models join to the shared ones by entity. Building on it is a project's choice, not imposed: MetricFlow wants a model's measure names unique and a name one kind of thing throughout, so a project with its own `customer` dimension (the `sales` example) would break if the company's model were laid on it unasked. A project that defines a name the company's model has is refused, saying it's the company's. A change to the shared model that would break a model built on it (a name it uses gone, a clash) is refused, naming the projects, so the governance group sees what depends on what. A query runs as the person, in the project, as before: the shared tables are named in full, and Ranger decides.
+
+**Terms.** What MetricFlow doesn't hold, a model's `terms:` document holds: each business term (an entity, a metric, a dimension) with its owner, its definition in plain words, and its synonyms. semanticd takes it out before MetricFlow reads the model, and checks each term names something the model has.
+
+**Terms first.** semanticd answers `/api/terms`: every shared term with its definition, owner, kind, the metrics on it (an entity's), the tables it comes from, and the projects whose models use it. The platform's Business terms page lists them, a page per term, and the search box finds terms before tables (synonyms too).
+
+**In the catalog.** catalog-sync keeps an OpenMetadata glossary, Business terms, in step with the shared terms (definitions, owners as reviewers, synonyms), and tags the tables each term comes from with it, so the catalog's search and a table's page show the business's words.
+
+**Checks:** the `business` suite: a shared project (`company`, customers and bookings, terms with owners) and a project building on it (`campaigns`, `semantic.uses: [company]`, its own metric on the company's); the terms listed with definitions, owners and where they're used; alice (a reader of both) asks for the campaigns metric by customer segment, under her rules; a project redefining `revenue` refused; a shared change that would break `campaigns` refused, naming it; the catalog's glossary has the terms, and the tables are tagged.
+
+**Order and effort:** semanticd's merge and checks, a day; terms and the Business terms page, a day; the glossary, a day; the checks, a day.
+
 ### What was sent about a person (use case 9.2), how (built 2026-10-18)
 
 **Decided (2026-10-18):** found again from the tables, never kept in the log; searched by the data-protection approvers (`deliveries.approverGroups`); the tables as read kept for `deliveries.keepFor` (default 7 years).
