@@ -206,6 +206,54 @@ func (k *Keycloak) ensurePipelinesClient(ctx context.Context, clientID, name, se
 	return nil
 }
 
+// ensureAgentClient is an agent's client (12.2): confidential, client
+// credentials, with the pipelines' mappers and the MCP server's audience.
+func (k *Keycloak) ensureAgentClient(ctx context.Context, clientID, name, secret, platformURL string) error {
+	mappers := append(append([]map[string]any{}, pipelinesMappers...), map[string]any{
+		"name": "audience: the MCP server", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper",
+		"config": map[string]string{"included.custom.audience": strings.TrimRight(platformURL, "/") + "/mcp",
+			"access.token.claim": "true", "id.token.claim": "false"}})
+	rep := map[string]any{"clientId": clientID, "name": name, "enabled": true, "publicClient": false,
+		"clientAuthenticatorType": "client-secret", "secret": secret, "standardFlowEnabled": false,
+		"directAccessGrantsEnabled": false, "serviceAccountsEnabled": true, "protocolMappers": mappers}
+	id, err := k.clientUUID(ctx, clientID)
+	if err != nil {
+		return err
+	}
+	if id == "" {
+		if err := k.do(ctx, "POST", "/clients", rep, nil); err != nil && !isStatus(err, http.StatusConflict) {
+			return fmt.Errorf("client %s: %w", clientID, err)
+		}
+		return nil
+	}
+	delete(rep, "protocolMappers")
+	rep["id"] = id
+	if err := k.do(ctx, "PUT", "/clients/"+id, rep, nil); err != nil {
+		return fmt.Errorf("client %s: %w", clientID, err)
+	}
+	return nil
+}
+
+// deleteClientsExcept removes the clients whose IDs start with a prefix,
+// but those to keep.
+func (k *Keycloak) deleteClientsExcept(ctx context.Context, prefix string, keep map[string]bool) error {
+	var clients []struct {
+		ID       string `json:"id"`
+		ClientID string `json:"clientId"`
+	}
+	if err := k.do(ctx, "GET", "/clients?search=true&clientId="+url.QueryEscape(prefix)+"&max=1000", nil, &clients); err != nil {
+		return err
+	}
+	for _, c := range clients {
+		if strings.HasPrefix(c.ClientID, prefix) && !keep[c.ClientID] {
+			if err := k.do(ctx, "DELETE", "/clients/"+c.ID, nil, nil); err != nil {
+				return fmt.Errorf("client %s: %w", c.ClientID, err)
+			}
+		}
+	}
+	return nil
+}
+
 func (k *Keycloak) deleteClient(ctx context.Context, clientID string) error {
 	id, err := k.clientUUID(ctx, clientID)
 	if id == "" || err != nil {

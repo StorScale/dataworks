@@ -62,6 +62,8 @@ var ConnectionKinds = []ConnectionKind{
 		{Key: "secretKey", Label: "Secret key", Secret: true, Required: true}}},
 	{Kind: "pgp", Label: "A recipient's PGP key", For: "deliveries' encryption", Fields: []ConnectionField{
 		{Key: "pgpPublicKey", Label: "Public key (armored)", Required: true, Multi: true}}},
+	{Kind: "agent", Label: "An agent's secret", For: "an agent of the project's (12.2; made when it's approved)", Fields: []ConnectionField{
+		{Key: "clientId", Label: "Client"}, {Key: "secret", Label: "Secret", Secret: true, Required: true}}},
 	{Kind: "teams", Label: "A Teams channel", For: "the project's alerts (notify.teams)", Fields: []ConnectionField{
 		{Key: "webhook", Label: "Workflows webhook URL", Secret: true, Required: true}}},
 }

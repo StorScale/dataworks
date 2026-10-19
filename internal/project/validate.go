@@ -15,7 +15,7 @@ import (
 // validators are the checks, in the order their problems are reported.
 var validators = []func(p *Project, bad func(format string, a ...any)){
 	(*Project).checkMembers, (*Project).checkTables, (*Project).checkFiles, (*Project).checkPipelines,
-	(*Project).productProblems, (*Project).checkSemantic, (*Project).checkHistory, (*Project).checkNotify,
+	(*Project).productProblems, (*Project).agentProblems, (*Project).checkSemantic, (*Project).checkHistory, (*Project).checkNotify,
 	(*Project).checkSources, (*Project).checkImports, (*Project).checkDeliveries, (*Project).checkLimits,
 }
 
