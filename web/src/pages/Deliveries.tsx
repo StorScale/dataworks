@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { approveDelivery, getDeliveries, searchDeliveries, type SearchHit } from "../api";
+import { approveDelivery, erasePerson, getDeliveries, getErasures, searchDeliveries, type Erasure, type SearchHit } from "../api";
 import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
 
 // Deliveries send files to clients and partners on a schedule (SFTP, S3).
@@ -28,6 +28,7 @@ export default function Deliveries() {
       </p>
       <ErrorBanner error={actionError} />
       {data.canSearch && <PersonSearch project={name} />}
+      {data.canSearch && <Erasures project={name} />}
       {data.deliveries.length === 0 && <p className="muted">No deliveries. The project's spec names them (deliveries).</p>}
       {data.deliveries.map((d) => (
         <div key={d.name} className="card stack" style={{ gap: 8 }} data-testid={`delivery-${d.name}`}>
@@ -76,11 +77,51 @@ export default function Deliveries() {
 
 // What was sent about a person (data-protection approvers): each run that
 // carried their rows, found again from the tables as they were then.
+// Erasures are the project's records of people's data deleted (use case 6.9):
+// what was deleted where, the deliveries that had carried it, and when the
+// tables' old versions stop holding it. Never the person's ID.
+function Erasures({ project }: { project: string }) {
+  const list = usePoll(() => getErasures(project), [project], 30_000);
+  if (!list.data || list.data.erasures.length === 0) return null;
+  return (
+    <div className="card stack" style={{ gap: 8 }} data-testid="erasures">
+      <strong>Erasures</strong>
+      <div className="small muted">Each answered within {list.data.deadlineDays} days of the request, as the law sets; the records are kept, without anyone's ID.</div>
+      <table className="t">
+        <thead><tr><th>When</th><th>Asked on</th><th>Due by</th><th>Deleted</th><th>Deliveries</th><th>By</th><th>Verified by</th></tr></thead>
+        <tbody>
+          {list.data.erasures.map((e) => (
+            <tr key={e.id}>
+              <td className="small">{new Date(e.at).toLocaleString()}</td>
+              <td className="small">{e.requestedOn}</td>
+              <td className="small">{e.dueBy}</td>
+              <td className="small">{e.tables.map((t) => `${t.table}: ${t.rows}`).join(", ") || "–"}{e.errors ? " (with errors)" : ""}</td>
+              <td className="small">{e.deliveries.length}</td>
+              <td className="small">{e.by}</td>
+              <td className="small">{e.verifiedBy}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function PersonSearch({ project }: { project: string }) {
   const [person, setPerson] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ person: string; runs: SearchHit[]; checked: number; notKept: number }>();
   const [error, setError] = useState<string>();
+  const [erased, setErased] = useState<Erasure>();
+  const erase = async () => {
+    const requestedOn = prompt("When did the person ask (a date, 2026-10-19)? Leave empty for today.", "") ?? "";
+    if (requestedOn === null) return;
+    const verifiedBy = prompt("Who verified the request (the privacy tool, or a person)? Leave empty for yourself.", "") ?? "";
+    if (!confirm(`Delete every row of ${person.trim()} from this project's tables of people's data? This can't be undone, and is recorded.`)) return;
+    setBusy(true);
+    setError(undefined);
+    try { setErased(await erasePerson(project, person.trim(), requestedOn, verifiedBy)); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  };
   const search = async () => {
     setBusy(true);
     setError(undefined);
@@ -92,7 +133,16 @@ function PersonSearch({ project }: { project: string }) {
         <strong>What was sent about a person</strong>
         <input className="mono" placeholder="Their ID, as C-1042" value={person} onChange={(e) => setPerson(e.target.value)} aria-label="A person's ID" />
         <button className="btn" disabled={busy || !person.trim()}>{busy ? "Searching…" : "Search"}</button>
+        <button className="btn" type="button" disabled={busy || !person.trim()} onClick={erase} data-testid="erase">Erase this person</button>
       </form>
+      {erased && (
+        <div className="banner info" data-testid="erased">
+          <strong>Erased.</strong> {erased.tables.map((t) => `${t.rows} rows from ${t.table}`).join(", ") || "nothing to delete"};
+          {" "}{erased.deliveries.length} deliveries had carried their data. Due by {erased.dueBy}; recorded as {erased.id}, without the ID.
+          {erased.agesOutBy && <> The tables' old versions hold the rows until about {erased.agesOutBy}{(erased.closes ?? []).length > 0 ? `, and the closes ${erased.closes!.join(", ")} keep theirs` : ""}.</>}
+          {erased.errors && <div className="small">Not done: {Object.entries(erased.errors).map(([k, v]) => `${k}: ${v}`).join("; ")}</div>}
+        </div>
+      )}
       <div className="small muted">
         Each run of a delivery of personal data is run again on the tables as they were when it read them, for this person's rows.
         The log keeps no one's ID; the search isn't recorded with it either.

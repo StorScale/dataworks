@@ -143,6 +143,14 @@ func (p *Project) checkHistory(bad func(format string, a ...any)) {
 				bad("tables: freshness: within %q: as 30m, 24h or 7d", f.Within)
 			}
 		}
+		for _, rt := range t.Retention {
+			if !identifierRE.MatchString(rt.Table) || !identifierRE.MatchString(rt.Column) {
+				bad("tables: retention: %q.%q: a table and the column that dates its rows", rt.Table, rt.Column)
+			}
+			if !KeepOK(rt.Keep) {
+				bad("tables: retention: %s: keep %q: as 730d or 2y", rt.Table, rt.Keep)
+			}
+		}
 		people := map[string]bool{}
 		for _, pk := range t.People {
 			switch {

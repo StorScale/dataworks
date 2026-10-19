@@ -172,7 +172,7 @@ jobs:
             "$RUNNER_TEMP/backup/storscale-backup-cert.pem" > "$RUNNER_TEMP/backup/values.json"
           echo "STORSCALE_K8S_VALUES=$STORSCALE_K8S_VALUES $RUNNER_TEMP/backup/values.json" >> "$GITHUB_ENV"
       - run: bin/storscale up --dir stack --k8s
-      - run: bin/storscale test --dir stack --k8s realm health lakehouse superset airflow jupyterhub catalog semantic business projects project_alerts audit maintenance history sources copies imports pipelines_git reviews releases notebooks flows classification agents deliveries limits monitoring
+      - run: bin/storscale test --dir stack --k8s realm health lakehouse superset airflow jupyterhub catalog semantic business projects project_alerts audit maintenance history sources copies imports pipelines_git reviews releases notebooks flows classification agents erasure deliveries limits monitoring
       # One pod of each replicated service gone (as a node's would be): the
       # others go on serving, as the sign-in and lakehouse suites check.
       - name: One of each replicated service lost

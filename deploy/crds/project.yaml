@@ -100,6 +100,16 @@ spec:
                         properties:
                           table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                           column: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                    retention:
+                      description: "Rows older than keep (by the column that dates them) are deleted by the nightly maintenance (use case 6.9, R6.27)."
+                      type: array
+                      items:
+                        type: object
+                        required: [table, column, keep]
+                        properties:
+                          table: {type: string}
+                          column: {type: string}
+                          keep: {type: string, pattern: '^[1-9][0-9]{0,4}(d|y)$'}
                     maintenance:
                       description: "How the platform keeps the tables in shape each night: small files compacted."
                       type: object

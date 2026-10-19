@@ -427,3 +427,13 @@ export const putAgent = (name: string, a: { name: string; description?: string; 
 export const approveAgent = (name: string, agent: string) =>
   api<{ approved: boolean; by: string; clientId: string; secret?: string; mcpUrl: string }>("POST", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(agent)}/approve`, {});
 export const removeAgent = (name: string, agent: string) => api<void>("DELETE", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(agent)}`);
+
+// --- Erasure of a person's data (use case 6.9) ------------------------------------------
+export type Erasure = {
+  id: string; project: string; personHash: string; requestedOn: string; dueBy: string; by: string; verifiedBy: string; at: string;
+  tables: { table: string; column: string; rows: number }[]; deliveries: SearchHit[]; deliveriesChecked: number; deliveriesNotCheckable: number;
+  historyKept?: string; agesOutBy?: string; closes?: string[]; errors?: Record<string, string>;
+};
+export const getErasures = (name: string) => api<{ erasures: Erasure[]; deadlineDays: number; canErase: boolean }>("GET", `/api/projects/${encodeURIComponent(name)}/erasures`);
+export const erasePerson = (name: string, person: string, requestedOn?: string, verifiedBy?: string) =>
+  api<Erasure>("POST", `/api/projects/${encodeURIComponent(name)}/erasures`, { person, requestedOn: requestedOn || undefined, verifiedBy: verifiedBy || undefined });

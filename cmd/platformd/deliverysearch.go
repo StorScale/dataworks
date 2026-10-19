@@ -94,42 +94,19 @@ func asOf(sql, catalog, namespace, commit string, tables []string) string {
 
 func quoteText(v string) string { return "'" + strings.ReplaceAll(v, "'", "''") + "'" }
 
-// handleDeliverySearch: the runs of a project's deliveries that sent rows of
-// a person's ID, to the data-protection approvers (and administrators).
-func (s *server) handleDeliverySearch(w http.ResponseWriter, r *http.Request) {
-	sess := s.signedIn(w, r)
-	if sess == nil {
-		return
-	}
-	who := sess.User.Username
-	name := r.PathValue("name")
-	if !s.isAdmin(sess.User) && !s.inGroups(sess.User.Groups, s.cfg.DeliveryApproverGroups) {
-		s.recordRefusal(r, who, "deliveries.searched", "project:"+name, "not a data-protection approver")
-		s.fail(w, r, http.StatusForbidden, "the data-protection approvers ("+strings.Join(s.cfg.DeliveryApproverGroups, ", ")+") search the delivery log")
-		return
-	}
-	person := strings.TrimSpace(r.URL.Query().Get("person"))
-	if person == "" || len(person) > 200 {
-		s.fail(w, r, http.StatusUnprocessableEntity, "a person's ID (person=)")
-		return
-	}
-	if s.files == nil || s.maintainer == nil {
-		s.fail(w, r, http.StatusServiceUnavailable, "searching needs the platform's files and its Trino account (maintenance)")
-		return
-	}
-	p, err := s.store.Project(r.Context(), name)
-	if err != nil || p == nil || p.Spec.Tables == nil {
-		s.fail(w, r, http.StatusNotFound, "no such project with tables")
-		return
-	}
+// searchPerson runs each kept delivery of a project again, at the moment it
+// read the tables, counting a person's rows: the runs that carried their
+// data (with any that couldn't be told about), how many runs were checked,
+// and how many couldn't be (not personal, or from before reads were kept).
+func (s *server) searchPerson(ctx context.Context, p *project.Project, person string) (hits []searchHit, checked, unkept int, err error) {
 	t := p.Spec.Tables
-	keys, err := s.files.ListFiles(r.Context(), "deliveries/"+name+"/")
+	name := p.Metadata.Name
+	keys, err := s.files.ListFiles(ctx, "deliveries/"+name+"/")
 	if err != nil {
-		s.fail(w, r, http.StatusBadGateway, err.Error())
-		return
+		return nil, 0, 0, err
 	}
 	var tables []string
-	if rows, err := s.maintainer.trino.Exec(r.Context(), "SHOW TABLES FROM "+trino.Quote(t.Catalog)+"."+trino.Quote(t.Namespace)); err == nil {
+	if rows, err := s.maintainer.trino.Exec(ctx, "SHOW TABLES FROM "+trino.Quote(t.Catalog)+"."+trino.Quote(t.Namespace)); err == nil {
 		for _, row := range rows {
 			if len(row) > 0 {
 				tables = append(tables, fmt.Sprint(row[0]))
@@ -138,9 +115,9 @@ func (s *server) handleDeliverySearch(w http.ResponseWriter, r *http.Request) {
 	}
 	// Longest first: orders_by_region before orders.
 	sort.Slice(tables, func(i, j int) bool { return len(tables[i]) > len(tables[j]) })
-	hits, checked, unkept := []searchHit{}, 0, 0
+	hits, checked, unkept = []searchHit{}, 0, 0
 	for _, k := range keys {
-		data, err := s.files.GetFile(r.Context(), k)
+		data, err := s.files.GetFile(ctx, k)
 		if err != nil || data == nil {
 			continue
 		}
@@ -179,7 +156,7 @@ func (s *server) handleDeliverySearch(w http.ResponseWriter, r *http.Request) {
 				asOf(d.Query, t.Catalog, t.Namespace, commit, tables), trino.Quote(column), quoteText(person))
 		}
 		if sql != "" {
-			rows, err := s.maintainer.trino.Exec(r.Context(), sql)
+			rows, err := s.maintainer.trino.Exec(ctx, sql)
 			switch {
 			case err != nil:
 				hit.Error = "it couldn't be run again: " + err.Error()
@@ -191,6 +168,43 @@ func (s *server) handleDeliverySearch(w http.ResponseWriter, r *http.Request) {
 		if hit.Rows > 0 || hit.Error != "" {
 			hits = append(hits, hit)
 		}
+	}
+	sort.Slice(hits, func(i, j int) bool { return hits[i].Sent > hits[j].Sent })
+	return hits, checked, unkept, nil
+}
+
+// handleDeliverySearch: the runs of a project's deliveries that sent rows of
+// a person's ID, to the data-protection approvers (and administrators).
+func (s *server) handleDeliverySearch(w http.ResponseWriter, r *http.Request) {
+	sess := s.signedIn(w, r)
+	if sess == nil {
+		return
+	}
+	who := sess.User.Username
+	name := r.PathValue("name")
+	if !s.isAdmin(sess.User) && !s.inGroups(sess.User.Groups, s.cfg.DeliveryApproverGroups) {
+		s.recordRefusal(r, who, "deliveries.searched", "project:"+name, "not a data-protection approver")
+		s.fail(w, r, http.StatusForbidden, "the data-protection approvers ("+strings.Join(s.cfg.DeliveryApproverGroups, ", ")+") search the delivery log")
+		return
+	}
+	person := strings.TrimSpace(r.URL.Query().Get("person"))
+	if person == "" || len(person) > 200 {
+		s.fail(w, r, http.StatusUnprocessableEntity, "a person's ID (person=)")
+		return
+	}
+	if s.files == nil || s.maintainer == nil {
+		s.fail(w, r, http.StatusServiceUnavailable, "searching needs the platform's files and its Trino account (maintenance)")
+		return
+	}
+	p, err := s.store.Project(r.Context(), name)
+	if err != nil || p == nil || p.Spec.Tables == nil {
+		s.fail(w, r, http.StatusNotFound, "no such project with tables")
+		return
+	}
+	hits, checked, unkept, err := s.searchPerson(r.Context(), p, person)
+	if err != nil {
+		s.fail(w, r, http.StatusBadGateway, err.Error())
+		return
 	}
 	sort.Slice(hits, func(i, j int) bool { return hits[i].Sent > hits[j].Sent })
 	// Recorded without the ID: the audit log holds no one's data either.

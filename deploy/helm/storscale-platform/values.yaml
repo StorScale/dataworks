@@ -154,6 +154,11 @@ deliveries:
 products:
   certifierGroups: ""
 
+# Erasure (use case 6.9): how many days the company has to answer a request to
+# delete a person's data. The CCPA's 45, as the company's counsel reads it.
+erasure:
+  deadlineDays: 45
+
 # Protection by tag (use case 12.5): what the catalog's Protection tags mean.
 # A column tagged personal, financial or health (found by catalog-sync, or
 # declared by its project) is masked in Trino for everyone but the groups

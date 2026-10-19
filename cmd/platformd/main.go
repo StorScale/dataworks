@@ -39,6 +39,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -105,6 +106,9 @@ type config struct {
 	// ProductCertifierGroups certify data products (use case 10.3): the
 	// governance group; default the administrators.
 	ProductCertifierGroups []string
+	// ErasureDeadlineDays is how long the company has to answer a request
+	// to delete a person's data (use case 6.9): the CCPA's 45, by default.
+	ErasureDeadlineDays int
 	// OperatorURL is the platform operator's (a GitLab webhook asks it to
 	// look at a project's merge requests at once).
 	OperatorURL string
@@ -154,6 +158,7 @@ func configFromEnv(get func(string) string) (config, error) {
 		DeliveryApproverGroups: list("DELIVERY_APPROVER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers")),
 		DeliveryKeepFor:        or("DELIVERY_KEEP_FOR", "7y"),
 		ProductCertifierGroups: list("PRODUCT_CERTIFIER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers")),
+		ErasureDeadlineDays:    atoi(or("ERASURE_DEADLINE_DAYS", "45"), 45),
 		OperatorURL:            or("OPERATOR_URL", "http://platform-operator:8081"),
 		InstallTarget:          or("INSTALL_TARGET", "production"),
 		Listen:                 or("PLATFORM_LISTEN", ":8080"),
@@ -183,4 +188,12 @@ func configFromEnv(get func(string) string) (config, error) {
 		return c, errors.New("DELIVERY_KEEP_FOR: as 7y or 400d")
 	}
 	return c, nil
+}
+
+func atoi(s string, def int) int {
+	n, err := strconv.Atoi(s)
+	if err != nil || n <= 0 {
+		return def
+	}
+	return n
 }

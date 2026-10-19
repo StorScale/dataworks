@@ -305,6 +305,16 @@ Every container runs without privilege escalation, with the default seccomp prof
 
 **Order and effort:** the tools and the citations, a day; registered assistants, a day; the checks, half a day.
 
+### Erase a customer (use case 6.9), how (built 2026-10-19, under the CCPA)
+
+**Asked by the approvers.** The data-protection approvers (`deliveries.approverGroups`, who also search the delivery log) and administrators ask, with the person's ID, when the person asked (the 45-day clock starts there: `erasure.deadlineDays`), and who verified the request (the privacy tool, or a person). The platform deletes the person's rows from each table the project declares as people's data (`tables.people`, by its person column), as its maintenance account (which reads and deletes unmasked; the setup gives it `delete`), and runs 9.2's search first, so the record names the deliveries that carried the person's data (R6.28).
+
+**Recorded, never the data.** `erasures/<project>/<id>.json`: a hash of the ID (so the same request is recognised; the ID itself is nowhere), the dates (asked, due, done), who asked and who verified, what was deleted where, the deliveries, and where the rows still are: the tables' old versions for as long as the history is kept (6.10's window, the record's `agesOutBy`), and any close tagged while they were there (6.10's tension with erasure, now visible per record rather than hidden). The audit log has the erasure without the ID. The records are kept at least two years.
+
+**Retention (R6.27).** `tables.retention`: a table, the column that dates its rows, and how long to keep them (`730d`, `2y`); the nightly maintenance (6.5) deletes rows past it before compacting.
+
+**Left:** the tables lineage says were made from the declared ones (the catalog knows), the files' prefixes in the landing area, the data branches (short-lived: a merge request's), expiring the old versions early where the law wants it sooner than the history window, and the privacy tool's own sign-in (an agent of 12.2's kind). Open with the privacy team: who may ask besides the approvers, and the backup window.
+
 ### A new column of personal data, protected by its tag (use case 12.5), how (design, 2026-10-19; built 2026-10-19)
 
 **Built as designed, with one change:** the detection is catalog-sync's own (column names, and patterns over a sample of each text column's values read as the catalog's Trino account: email addresses, phone numbers, card numbers by Luhn, national IDs, bank accounts), not OpenMetadata's PII processor, which needs presidio and spaCy with a language model (some 600 MB more in the image) for what names and free text need; that stays an option to add when a company wants it. The rest is as below: the `Protection` classification in the catalog, the file in the bucket, the operator's mask policies (Ranger's `public` group masked, the excepted groups first with no mask), the Data page's confirm and remove, the alert. The `classification` suite runs in the suites' own lane.

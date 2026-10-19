@@ -161,9 +161,9 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 
 **Requirements**
 - R6.25 Each project declares where its consumer data is: the tables, the column that identifies a person, and the files' prefixes; the catalog shows it. Classification (12.5) later finds what's undeclared. (Built 2026-10-18: the tables and their person's column, `tables.people`; not yet the files' prefixes, or the catalog showing it.)
-- R6.26 Erasure by a person's ID across the declared tables and what lineage says came from them, carried through snapshots, data branches and files, within the law's deadline, and recorded without the data; an API for the privacy tool.
-- R6.27 Retention per table (rows older than a set age deleted), applied by the maintenance of 6.5.
-- R6.28 The erasure's record lists the deliveries that carried the person's data (R9.6).
+- R6.26 Erasure by a person's ID across the declared tables and what lineage says came from them, carried through snapshots, data branches and files, within the law's deadline, and recorded without the data; an API for the privacy tool. (Built 2026-10-19 for the declared tables, with the record and the deadline; the old versions age out with the history window; lineage's tables, files, data branches and the tool's own sign-in are left.)
+- R6.27 Retention per table (rows older than a set age deleted), applied by the maintenance of 6.5. (Built 2026-10-19: `tables.retention`.)
+- R6.28 The erasure's record lists the deliveries that carried the person's data (R9.6). (Built 2026-10-19.)
 
 **Decided (2026-10-19):** the CCPA, as amended by the CPRA: a deletion request answered within 45 days (one 45-day extension with notice), verified first, its record kept at least 24 months, the deliveries that carried the person's data named so recipients can be told (see plan.md, "Decisions").
 
