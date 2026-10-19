@@ -4,6 +4,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-19
+
+The business layer: the company's terms defined once and built on, Superset's datasets on the same definitions, certified data products read in place across projects; and Salesforce from a connector's form.
+
+**Upgrading from 0.16.1:** `storscale upgrade --context <cluster> --version 0.17.0`, after a `--dry-run`. The Project CRD gains `spec.semantic`, `spec.products`, `spec.tables.people` and the `salesforce` import source (the upgrade applies it). A new Deployment, `superset-sync`, keeps Superset's datasets from the semantic models. To set, if wanted: `products.certifierGroups` (who certifies data products; default the administrators). Nothing else to set.
+
 ### Added
 - **The company's terms** ([docs/use-cases.md](docs/use-cases.md), 10.1): a project marked `semantic.shared` holds a semantic model others build on (`semantic.uses`), compiled with theirs and not defined again in them; a change to it that would break a model built on it is refused, naming the project. A model's `terms:` (owner, definition, synonyms) are the platform's: a Business terms page (in the top bar), a page per term (its tables, metrics and the projects using it), terms first in search, and OpenMetadata's glossary, Business terms, kept in step, the tables tagged. The `business` suite checks it.
 - **Dashboards on the same definitions** (10.2, Superset): `superset-sync` keeps a Superset dataset for each semantic model, with its metrics defined and the dimensions of the models it joins to by entity, so a chart's numbers are the semantic layer's, under the person's rules. Power BI is to decide (how people reach it and sign in).
