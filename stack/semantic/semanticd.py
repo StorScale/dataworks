@@ -149,26 +149,119 @@ class CompileOnlyTrino:
     def render_bind_parameter_key(self, k): raise NotImplementedError
 
 
-def with_time_spine(text, project):
+def with_time_spine(docs, project):
     """MetricFlow needs a time spine declared, even when no query uses one."""
-    docs = [d for d in yaml.safe_load_all(text) if d]
     if not any("project_configuration" in d for d in docs):
         ns = (get_json(f"projects/{project}.json") or {}).get("spec", {}).get("tables", {}).get("namespace") or project.replace("-", "_")
-        docs.append({"project_configuration": {"time_spines": [{
+        docs = docs + [{"project_configuration": {"time_spines": [{
             "node_relation": {"database": "iceberg", "schema_name": ns, "alias": "time_spine_day"},
-            "primary_column": {"name": "date_day", "time_granularity": "day"}}]}})
+            "primary_column": {"name": "date_day", "time_granularity": "day"}}]}}]
     return docs
+
+
+# --- The company's model (use case 10.1) ---------------------------------------------------
+#
+# A project marked semantic.shared holds a model the others build on: each
+# project's model is compiled with the shared ones before its own. A model's
+# `terms:` document (the business's words for what it defines: an owner, a
+# definition, synonyms) is the platform's, taken out before MetricFlow reads it.
+
+def shared_projects():
+    out = []
+    for page in store.get_paginator("list_objects_v2").paginate(Bucket=STORE_BUCKET, Prefix="projects/"):
+        for o in page.get("Contents", []):
+            p = get_json(o["Key"]) or {}
+            if ((p.get("spec") or {}).get("semantic") or {}).get("shared"):
+                out.append(p["metadata"]["name"])
+    return sorted(out)
+
+
+def split(text):
+    """A model's documents for MetricFlow, and its terms."""
+    try:
+        docs = [d for d in yaml.safe_load_all(text or "") if d]
+    except yaml.YAMLError as e:
+        raise ValueError(f"not YAML: {e}") from e
+    out, terms = [], []
+    for d in docs:
+        if not isinstance(d, dict):
+            raise ValueError("each document of a model is a mapping (semantic_model, metric, terms)")
+        if "terms" in d:
+            terms += d["terms"] or []
+        else:
+            out.append(d)
+    return out, terms
+
+
+def defined(docs):
+    """What a model's documents define, by kind: semantic models, metrics, entities, dimensions."""
+    out = {"semantic_model": set(), "metric": set(), "entity": set(), "dimension": set()}
+    for d in docs:
+        if "semantic_model" in d:
+            sm = d["semantic_model"]
+            out["semantic_model"].add(sm.get("name"))
+            out["entity"] |= {e.get("name") for e in sm.get("entities") or []}
+            out["dimension"] |= {x.get("name") for x in sm.get("dimensions") or []}
+        if "metric" in d:
+            out["metric"].add(d["metric"].get("name"))
+    return out
+
+
+def uses(project):
+    """The shared models a project's builds on (its spec's semantic.uses), those that are shared."""
+    spec = (get_json(f"projects/{project}.json") or {}).get("spec") or {}
+    shared = set(shared_projects())
+    return [u for u in (spec.get("semantic") or {}).get("uses") or [] if u in shared and u != project]
+
+
+def shared_docs(project, override=None):
+    """The documents of the shared models a project builds on, override a
+    (project, text) in place of one's saved model: and which project each name is from."""
+    docs, owner = [], {}
+    for sp in uses(project):
+        text = override[1] if override and override[0] == sp else model_yaml(sp)
+        if not text:
+            continue
+        theirs, _ = split(text)
+        for d in theirs:
+            if "project_configuration" in d:
+                continue   # each project's own time spine
+            docs.append(d)
+        for kind, names in defined(theirs).items():
+            if kind in ("semantic_model", "metric"):
+                for n in names:
+                    owner[(kind, n)] = sp
+    return docs, owner
+
+
+def check_terms(terms, docs):
+    have = defined(docs)
+    problems = []
+    for t in terms:
+        if not isinstance(t, dict) or not t.get("name"):
+            problems.append("terms: each has a name: an entity, metric or dimension of the model")
+            continue
+        kind = t.get("kind") or next((k for k in ("entity", "metric", "dimension") if t["name"] in have[k]), None)
+        if kind not in ("entity", "metric", "dimension") or t["name"] not in have[kind]:
+            problems.append(f"terms: {t['name']} isn't an entity, metric or dimension of this model")
+    if problems:
+        raise ValueError("; ".join(problems))
 
 
 _engines = {}  # project -> (hash of its model, engine, summary)
 
 
-def compile_model(project, text):
-    """MetricFlow's engine for a model, and what it offers; or ValueError, saying what's wrong."""
-    try:
-        docs = with_time_spine(text, project)
-    except yaml.YAMLError as e:
-        raise ValueError(f"not YAML: {e}") from e
+def compile_model(project, text, override=None):
+    """MetricFlow's engine for a project's model (built on the shared ones), and
+    what it offers; or ValueError, saying what's wrong."""
+    own, terms = split(text)
+    base, owner = shared_docs(project, override)
+    clash = sorted(f"{n} (the {kind.replace('_', ' ')} of {owner[(kind, n)]})" for kind, names in defined(own).items()
+                   if kind in ("semantic_model", "metric") for n in names if (kind, n) in owner)
+    if clash:
+        raise ValueError("the company's model has these already, so build on them rather than defining them again: " + ", ".join(clash))
+    check_terms(terms, own)
+    docs = with_time_spine(base + own, project)
     with tempfile.TemporaryDirectory() as d:
         for i, doc in enumerate(docs):
             with open(os.path.join(d, f"{i:03}.yaml"), "w") as f:
@@ -181,19 +274,53 @@ def compile_model(project, text):
     if result.errors:
         raise ValueError("; ".join(str(e.message) if hasattr(e, "message") else str(e) for e in result.errors))
     engine = MetricFlowEngine(SemanticManifestLookup(manifest), CompileOnlyTrino())
+    ours = defined(own)["metric"]
     metrics = [{"name": m.name, "description": m.description or "", "type": str(m.type.value),
-                "dimensions": sorted({d.granularity_free_dunder_name for d in m.dimensions} | {"metric_time"})}
+                "dimensions": sorted({d.granularity_free_dunder_name for d in m.dimensions} | {"metric_time"}),
+                **({} if m.name in ours else {"from": owner.get(("metric", m.name), "")})}
                for m in engine.list_metrics()]
     tables = sorted(f"{sm.node_relation.database}.{sm.node_relation.schema_name}.{sm.node_relation.alias}"
                     for sm in manifest.semantic_models)
-    return engine, {"metrics": metrics, "tables": tables}
+    return engine, {"metrics": metrics, "tables": tables, "terms": terms, "builtOn": sorted(set(owner.values()))}
+
+
+def users_of(shared):
+    """The projects whose models build on a shared one."""
+    out = []
+    for page in store.get_paginator("list_objects_v2").paginate(Bucket=STORE_BUCKET, Prefix="projects/"):
+        for o in page.get("Contents", []):
+            p = get_json(o["Key"]) or {}
+            if shared in ((p.get("spec") or {}).get("semantic") or {}).get("uses") or []:
+                out.append(p["metadata"]["name"])
+    return sorted(out)
+
+
+def broken_by(project, text):
+    """The projects building on a shared model whose models its new text would break, and why."""
+    out = {}
+    for other in users_of(project):
+        mine = model_yaml(other)
+        if not mine:
+            continue
+        try:
+            compile_model(other, mine, override=(project, text))
+        except ValueError as e:
+            out[other] = str(e)[:300]
+    return out
+
+
+def models_digest(project, text):
+    h = hashlib.sha256(text.encode())
+    for sp in uses(project):
+        h.update(b"\0" + sp.encode() + b"\0" + (model_yaml(sp) or "").encode())
+    return h.hexdigest()
 
 
 def engine_for(project):
     text = model_yaml(project)
     if text is None:
         raise LookupError(f"project {project} has no semantic model")
-    digest = hashlib.sha256(text.encode()).hexdigest()
+    digest = models_digest(project, text)   # the shared models' changes count too
     cached = _engines.get(project)
     if cached and cached[0] == digest:
         return cached[1], cached[2]
@@ -369,6 +496,7 @@ def put_model(c, project, body, request):
         raise PermissionError(f"only {project}'s editors change its semantic model")
     text = body.get("yaml", "")
     _, summary = compile_model(project, text)  # ValueError: what's wrong
+    refuse_breaking(project, text)
     store.put_object(Bucket=STORE_BUCKET, Key=f"semantic/{project}.yaml", Body=text.encode(), ContentType="application/yaml")
     _engines.pop(project, None)
     log.info("model: %s saved %s's semantic model (%d metrics)", c.username, project, len(summary["metrics"]))
@@ -379,7 +507,86 @@ def check_model(c, project, body, request):
     """Whether a model is one, not saved (a plan of the project's repo, use case 7.4): its members (and pipelines)."""
     member(c, project)
     _, summary = compile_model(project, body.get("yaml", ""))  # ValueError: what's wrong
+    refuse_breaking(project, body.get("yaml", ""))
     return {"project": project, **summary}
+
+
+def refuse_breaking(project, text):
+    """A shared model's change may not break the projects that build on it."""
+    if project not in shared_projects():
+        return
+    broken = broken_by(project, text)
+    if broken:
+        raise ValueError("it would break the models of " + "; ".join(f"{p} ({why})" for p, why in sorted(broken.items())))
+
+
+def tables_of(term, docs):
+    """The tables a term comes from: an entity's or a dimension's semantic
+    models, a metric's measures' (and the metrics it's made of)."""
+    models = {d["semantic_model"]["name"]: d["semantic_model"] for d in docs if "semantic_model" in d}
+    metrics = {d["metric"]["name"]: d["metric"] for d in docs if "metric" in d}
+    rel = lambda sm: ".".join(str(sm.get("node_relation", {}).get(k, "")) for k in ("database", "schema_name", "alias"))
+    out, kind, name = set(), term.get("kind"), term["name"]
+    if kind in (None, "entity", "dimension"):
+        for sm in models.values():
+            if any(x.get("name") == name for x in (sm.get("entities") or []) + (sm.get("dimensions") or [])):
+                out.add(rel(sm))
+    seen = set()
+
+    def walk(m):
+        if m in seen or m not in metrics:
+            return
+        seen.add(m)
+        tp = metrics[m].get("type_params") or {}
+        measure = tp.get("measure")
+        measure = measure.get("name") if isinstance(measure, dict) else measure
+        for sm in models.values():
+            if measure and any(x.get("name") == measure for x in sm.get("measures") or []):
+                out.add(rel(sm))
+        for k in ("numerator", "denominator"):
+            ref = tp.get(k)
+            walk(ref.get("name") if isinstance(ref, dict) else ref)
+        for ref in tp.get("metrics") or []:
+            walk(ref.get("name") if isinstance(ref, dict) else ref)
+    if kind in (None, "metric"):
+        walk(name)
+    return sorted(out)
+
+
+def strings(x):
+    if isinstance(x, dict):
+        return set().union(*(strings(v) for v in x.values())) if x else set()
+    if isinstance(x, list):
+        return set().union(*(strings(v) for v in x)) if x else set()
+    return {x} if isinstance(x, str) else set()
+
+
+def get_terms(c, project, body, request):
+    """The company's terms (every shared project's), to anyone signed in: each
+    with its definition, owner and synonyms, the tables it comes from, the
+    metrics on it (an entity's), and the projects whose models use it."""
+    models = {}
+    for page in store.get_paginator("list_objects_v2").paginate(Bucket=STORE_BUCKET, Prefix="semantic/"):
+        for o in page.get("Contents", []):
+            name = o["Key"][len("semantic/"):].removesuffix(".yaml")
+            with suppress(ValueError):
+                models[name] = split(model_yaml(name) or "")
+    out = []
+    builders = {sp: users_of(sp) for sp in shared_projects()}
+    for sp in builders:
+        docs, terms = models.get(sp, ([], []))
+        have = defined(docs)
+        for t in terms:
+            if not isinstance(t, dict) or not t.get("name"):
+                continue
+            kind = t.get("kind") or next((k for k in ("entity", "metric", "dimension") if t["name"] in have[k]), "")
+            on = sorted(d["metric"]["name"] for d in docs if "metric" in d and kind == "entity"
+                        and set(tables_of({"name": d["metric"]["name"], "kind": "metric"}, docs)) & set(tables_of({**t, "kind": kind}, docs)))
+            used = sorted(p for p in builders[sp] if t["name"] in strings(models.get(p, ([], []))[0]))
+            out.append({"name": t["name"], "label": t.get("label") or t["name"].replace("_", " ").capitalize(), "kind": kind,
+                        "definition": t.get("definition", ""), "owner": t.get("owner", ""), "synonyms": t.get("synonyms") or [],
+                        "project": sp, "tables": tables_of({**t, "kind": kind}, docs), "metrics": on, "usedBy": used})
+    return {"terms": sorted(out, key=lambda x: x["label"].lower())}
 
 
 def post_query(c, project, body, request):
@@ -406,6 +613,7 @@ def post_sql(c, project, body, request):
 
 
 mcp.custom_route("/api/projects/{project}/sql", methods=["POST"])(api(post_sql))
+mcp.custom_route("/api/terms", methods=["GET"])(api(get_terms))
 mcp.custom_route("/api/projects/{project}/semantic", methods=["GET"])(api(get_model))
 mcp.custom_route("/api/projects/{project}/semantic", methods=["PUT"])(api(put_model))
 mcp.custom_route("/api/projects/{project}/semantic/check", methods=["POST"])(api(check_model))

@@ -181,6 +181,14 @@ spec:
                   properties:
                     teams: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
                     email: {type: array, items: {type: string}}
+                semantic:
+                  description: "How the project's semantic model stands among the others': shared, it's the company's (Customer, Revenue), for projects to build on; uses, the shared models this one builds on (and may not define again)."
+                  type: object
+                  properties:
+                    shared: {type: boolean}
+                    uses:
+                      type: array
+                      items: {type: string, pattern: '^[a-z][a-z0-9-]{1,38}[a-z0-9]$'}
                 deliveries:
                   type: array
                   description: >-

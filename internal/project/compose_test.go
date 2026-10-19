@@ -135,3 +135,17 @@ func TestPeoplesTablesArePersonal(t *testing.T) {
 		t.Error("a bad table name: no error")
 	}
 }
+
+func TestAModelBuildsOnSharedOnesByName(t *testing.T) {
+	for in, want := range map[string]string{
+		`{"shared": true}`:            "",
+		`{"uses": ["company"]}`:       "",
+		`{"uses": ["sales"]}`:         "doesn't build on itself",
+		`{"uses": ["Not A Project"]}`: "isn't a project's name",
+	} {
+		_, err := Parse([]byte(`{"metadata":{"name":"sales"},"spec":{"members":[{"user":"bob","role":"editor"}],"semantic":` + in + `}}`))
+		if want == "" && err != nil || want != "" && (err == nil || !strings.Contains(err.Error(), want)) {
+			t.Errorf("%s: %v, want %q", in, err, want)
+		}
+	}
+}

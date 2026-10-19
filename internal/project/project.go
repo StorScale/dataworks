@@ -51,6 +51,16 @@ type Spec struct {
 	Sources     []Source   `json:"sources,omitempty"`
 	Imports     []Import   `json:"imports,omitempty"`
 	Deliveries  []Delivery `json:"deliveries,omitempty"`
+	Semantic    *Semantic  `json:"semantic,omitempty"`
+}
+
+// Semantic is how the project's semantic model stands among the others'
+// (use case 10.1). Shared, it's the company's (Customer, Revenue), for
+// projects to build on. Uses names the shared models this project's model
+// builds on: compiled with them first, it may not define their names again.
+type Semantic struct {
+	Shared bool     `json:"shared,omitempty"`
+	Uses   []string `json:"uses,omitempty"`
 }
 
 // A Delivery sends files to a client or partner on a schedule (use case
@@ -568,6 +578,16 @@ func (p *Project) Validate() error {
 		}
 		for _, e := range pl.problems() {
 			bad("pipelines: %s", e)
+		}
+	}
+	if sm := p.Spec.Semantic; sm != nil {
+		for _, u := range sm.Uses {
+			switch {
+			case !nameRE.MatchString(u):
+				bad("semantic: uses: %q isn't a project's name", u)
+			case u == p.Metadata.Name:
+				bad("semantic: uses: a project's model doesn't build on itself")
+			}
 		}
 	}
 	if t := p.Spec.Tables; t != nil {
