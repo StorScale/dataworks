@@ -1,6 +1,6 @@
 # StorScale Platform: a lab guide
 
-A walk through the platform with a small company's data, for anyone who will use it: analysts, data engineers, the people who own a project, and whoever decides whether to run it. Each lab takes ten to twenty minutes, says what the business gets out of it, and ends with something you can check. The labs build on each other: Part I shows the platform doing the work (thirteen labs, an afternoon); Part II shows it keeping its promises on versions, reviews, rules and records (six more).
+A walk through the platform with a small company's data, for anyone who will use it: analysts, data engineers, the people who own a project, and whoever decides whether to run it. Each lab takes ten to twenty minutes, says what the business gets out of it, and ends with something you can check. The labs build on each other: Part I shows the platform doing the work (thirteen labs, an afternoon); Part II shows it keeping its promises on versions, reviews, rules and records (seven more).
 
 **What you need.** The platform running: on your machine, `storscale up`, then `http://storscale.localhost:8800` (the [README](../README.md) says how); or your company's install, at its own address. Three people exist in the example sign-in: **alice**, an analyst; **bob**, an engineer, who also administers the platform; and **carol**, who has no access. Their password is `LAKEHOUSE_USER_PASSWORD` in `stack/.env` on a local install. Two browser windows, or one normal and one private, make switching between alice and bob easy.
 
@@ -230,10 +230,9 @@ Sign in when the browser opens, as **alice**. Then ask, in Claude Code: *"What w
 2. **Deliveries:** a project sends files to clients and partners on a schedule (the Deliveries tab: a table or query, a format, a name with `{date}`, where to, when). A delivery of a table of people's data needs a data-protection approver's approval before it runs, with the personal columns named; the Deliveries tab shows what each run sent and who approved. (Setting one up needs a target: an SFTP server or an S3 bucket of your own, given on the Connections tab.)
 3. **The search:** on the Deliveries tab, an approver enters a customer's ID. The platform runs each kept delivery again at the moment it read the data and lists the runs that carried that person's rows, when, to whom, and who approved. The audit log records that a search was made, never the ID.
 
-4. **Erase a customer.** On the Deliveries tab, type a customer's ID (say `17`) and press **Erase this person**: when they asked, who verified the request, then confirm. Within seconds their rows are gone from every table the project declared as people's data (`uploads_customers` here; declare `uploads_orders` by `customer_id` too and both go). The answer says what was deleted where, by when the request is due (45 days from when they asked, as the CCPA sets), the deliveries that had carried their data, and until when the tables' old versions (Lab 14) still hold the rows. The record is listed below, without the ID; the audit log says an erasure happened, without the ID.
-5. **Retention.** On the project's Edit page, under `tables`, add `"retention": [{"table": "uploads_campaign_responses", "column": "responded_on", "keep": "730d"}]`: responses older than two years are deleted at each nightly maintenance round (press **Run now** under maintenance on the Data page's Storage tab to see it at once).
+4. **Erase a customer:** Lab 20 does it end to end, with the record and the 45-day clock.
 
-**Check:** as bob, open **Data** → `uploads_customers` → **History**: every change to the table, who made it, and "read it as it was" for any of them. That's the same machinery the search uses, and the erasure's note about old versions means exactly this: the rows are gone from now on, and from the past once the history window passes.
+**Check:** as bob, open **Data** → `uploads_customers` → **History**: every change to the table, who made it, and "read it as it was" for any of them. That's the same machinery the search and the erasure (Lab 20) use.
 
 ---
 
@@ -435,6 +434,24 @@ storscale/
 5. A plan older than the project's current spec (someone edited it by hand in between) is refused: plan again from the repo, so the repo stays the truth.
 
 **Check:** the Releases tab lists `v1.0`, `v1.1`, `v1.0` with who planned and applied each; `SELECT count(*) FROM uploads_orders` is unchanged by the rollback.
+
+---
+
+## Lab 20: Erase a customer
+
+**Value:** a request to be forgotten is answered inside the law's deadline by someone with the right to, in every table that holds the person, with a record the auditor can read and the privacy officer can act on, and without the platform itself keeping the person's ID. The company follows the CCPA: 45 days to answer, the request verified first, the recipients of the person's data told.
+
+As **bob** (an administrator; on a company install, the data-protection approvers' group), on `retail`:
+
+1. **Declare where people are.** Lab 2 declared `uploads_customers` by `customer_id`. Add the orders too: on the project's Edit page, under `tables`, make it `"people": [{"table": "uploads_customers", "column": "customer_id"}, {"table": "uploads_orders", "column": "customer_id"}]`. The catalog tags both columns `personal`, confirmed (Lab 4), and both tables count as people's data from now on: a delivery of either needs a data-protection approver, and an erasure reaches both.
+2. **Who's in the data.** On the SQL tab: `SELECT customer_id, count(*) FROM uploads_orders GROUP BY 1 ORDER BY 2 DESC LIMIT 3`. Pick a customer with several orders, say `17`. `SELECT * FROM uploads_customers WHERE customer_id = 17` shows them.
+3. **What was sent about them.** On the Deliveries tab, type `17` and **Search**: each delivery of people's data is run again on the tables as they were when it read them, and the runs that carried this person's rows are listed with when, to whom and who approved. (With no deliveries set up, the answer is none; Lab 9 says how to set one up.) The search isn't recorded with the ID.
+4. **Erase.** Same box, **Erase this person**: when they asked (today), who verified the request (you, or "the privacy tool"), confirm. In seconds the answer says: 1 row from `uploads_customers`, their orders from `uploads_orders`, the deliveries that had carried their data, the due date 45 days after the request, the record's ID, and until when the tables' old versions still hold the rows. `SELECT * FROM uploads_customers WHERE customer_id = 17` is empty now, for everyone.
+5. **The record.** The Erasures list on the same tab: when, asked on, due by, what was deleted where, how many deliveries, by whom, verified by whom. Open the Audit tab: an `erasure` entry with the record's ID and the counts, and nowhere the number 17. The record is kept at least two years; it carries a hash of the ID, so a second request for the same person is recognisable, and never the ID.
+6. **What the past keeps.** Lab 14 showed every version of a table is kept for the history window. The erased rows are in those old versions until the window passes (the record's "ages out by"), and in any close tagged while they were there (the record names the closes). That's the one place erasure and "the data as it was" meet; the record makes it visible rather than silent, and Finance and the privacy team decide between them what a close may keep.
+7. **Retention, so there's less to erase.** Under `tables`, add `"retention": [{"table": "uploads_campaign_responses", "column": "responded_on", "keep": "730d"}]`. Responses older than two years are deleted by the nightly maintenance; press **Run now** on the Data page's Storage tab to see a round happen. Rows that age out never need erasing.
+
+**Check:** customer 17 has no rows in either table; the Erasures list has one entry with the due date 45 days after today; the Audit tab's `erasure` entry names the record and not the person.
 
 ---
 
