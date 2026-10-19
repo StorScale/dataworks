@@ -1255,6 +1255,22 @@ func (p *Project) tablePolicies() []RangerPolicy {
 	if t.Readers != nil {
 		view = *t.Readers
 	}
+	// The projects consuming its data products (use case 10.3) see its
+	// namespace, read the products' tables, and have the readers' masks and
+	// row filters on them: in these policies, as Ranger keeps one to a resource.
+	consumers, allConsumers := p.consumerGroups()
+	for _, g := range allConsumers {
+		schema.PolicyItems = append(schema.PolicyItems, allow(g, "use", "show"))
+	}
+	alsoFor := func(it RangerItem, table string) []RangerItem {
+		its := []RangerItem{it}
+		for _, g := range consumers[table] {
+			c := it
+			c.Groups = []string{g}
+			its = append(its, c)
+		}
+		return its
+	}
 	out := []RangerPolicy{schema}
 	if len(view.Tables) == 0 {
 		tables.PolicyItems = append(tables.PolicyItems, allow(readers, "select", "show"))
@@ -1264,7 +1280,7 @@ func (p *Project) tablePolicies() []RangerPolicy {
 		for _, tb := range sorted(view.Tables) {
 			out = append(out, RangerPolicy{Name: named("read:" + tb), Description: desc,
 				Resources:   atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", tb, "column", "*")),
-				PolicyItems: []RangerItem{allow(readers, "select", "show")}})
+				PolicyItems: alsoFor(allow(readers, "select", "show"), tb)})
 		}
 	}
 	for _, m := range view.Masks {
@@ -1272,14 +1288,14 @@ func (p *Project) tablePolicies() []RangerPolicy {
 		it.DataMaskInfo = &RangerMask{DataMaskType: m.Type}
 		out = append(out, RangerPolicy{Name: named("mask:" + m.Table + "." + m.Column), PolicyType: 1, Description: desc,
 			Resources:           atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", m.Table, "column", m.Column)),
-			DataMaskPolicyItems: []RangerItem{it}})
+			DataMaskPolicyItems: alsoFor(it, m.Table)})
 	}
 	for _, f := range view.RowFilters {
 		it := allow(readers, "select")
 		it.RowFilterInfo = &RangerRowFilter{FilterExpr: f.Filter}
 		out = append(out, RangerPolicy{Name: named("filter:" + f.Table), PolicyType: 2, Description: desc,
 			Resources:            atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", f.Table)),
-			RowFilterPolicyItems: []RangerItem{it}})
+			RowFilterPolicyItems: alsoFor(it, f.Table)})
 	}
 	return out
 }

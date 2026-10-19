@@ -1,6 +1,8 @@
 package project
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -45,23 +47,45 @@ func TestProducts(t *testing.T) {
 		t.Error("certified after its contract changed")
 	}
 
-	// Its consumers read its table, under the producer's mask and row filter on it, and nothing else.
+	// Its consumers read its table, under the producer's mask and row filter
+	// on it, and nothing else: in the producer's policies where one covers
+	// the same resource (Ranger keeps one policy to a resource).
 	p.Spec.Products[0].Consumers = []string{"campaigns"}
-	var names []string
-	for _, pol := range p.ProductPolicies() {
-		names = append(names, pol.Name)
-		if pol.Name == "project:company:product:bookings" {
-			if g := pol.PolicyItems; len(g) != 3 || g[0].Groups[0] != "campaigns-readers" || g[1].Groups[0] != "campaigns-editors" || g[2].Groups[0] != "campaigns-pipelines" {
-				t.Errorf("the table's readers: %+v", g)
+	pols := map[string]RangerPolicy{}
+	resourceOf := map[string]string{}
+	for _, pol := range p.RangerPolicies() {
+		pols[pol.Name] = pol
+		key := fmt.Sprintf("%d %v", pol.PolicyType, pol.Resources)
+		if other, ok := resourceOf[key]; ok {
+			t.Errorf("%s and %s cover the same resource: Ranger refuses the second", other, pol.Name)
+		}
+		resourceOf[key] = pol.Name
+	}
+	groups := func(items []RangerItem) []string {
+		var out []string
+		for _, it := range items {
+			out = append(out, it.Groups...)
+		}
+		return out
+	}
+	consumers := []string{"campaigns-readers", "campaigns-editors", "campaigns-pipelines"}
+	has := func(name string, items []RangerItem) {
+		got := groups(items)
+		for _, g := range consumers {
+			if !slices.Contains(got, g) {
+				t.Errorf("%s: no %s in %v", name, g, got)
 			}
 		}
-		if pol.PolicyType == 2 && pol.RowFilterPolicyItems[0].RowFilterInfo.FilterExpr != "amount < 2000" {
-			t.Errorf("filter: %+v", pol.RowFilterPolicyItems[0])
-		}
 	}
-	want := "project:company:product:bookings:namespace,project:company:product:bookings,project:company:product:bookings:mask:amount,project:company:product:bookings:filter"
-	if strings.Join(names, ",") != want {
-		t.Errorf("policies:\n %s\nwant\n %s", strings.Join(names, ","), want)
+	has("namespace", pols["project:company:namespace"].PolicyItems)
+	has("the table", pols["project:company:product-table:bookings"].PolicyItems)
+	has("the mask on bookings", pols["project:company:mask:bookings.amount"].DataMaskPolicyItems)
+	has("the filter on bookings", pols["project:company:filter:bookings"].RowFilterPolicyItems)
+	if got := groups(pols["project:company:mask:customers.segment"].DataMaskPolicyItems); slices.Contains(got, "campaigns-readers") {
+		t.Errorf("customers isn't a product: its mask names campaigns: %v", got)
+	}
+	if f := pols["project:company:filter:bookings"].RowFilterPolicyItems; f[len(f)-1].RowFilterInfo.FilterExpr != "amount < 2000" {
+		t.Errorf("the consumers' filter: %+v", f[len(f)-1])
 	}
 	p.Spec.Products[0].Consumers = nil
 	if got := p.ProductPolicies(); len(got) != 0 {

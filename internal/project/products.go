@@ -100,66 +100,58 @@ func (p *Project) productProblems(bad func(string, ...any)) {
 	}
 }
 
-// ProductPolicies let each product's consumers read its table, as the
-// producer's readers do: the producer's masks and row filters on it hold
-// for them too. Nothing else of the producer's is theirs.
+// consumerGroups are, for each of the project's tables that is a product
+// with consumers, the consuming projects' groups (readers, editors and
+// pipelines), and all of them together.
+func (p *Project) consumerGroups() (map[string][]string, []string) {
+	byTable := map[string][]string{}
+	var all []string
+	for _, pr := range p.Spec.Products {
+		for _, c := range sorted(pr.Consumers) {
+			for _, g := range []string{GroupOf(c, Reader), GroupOf(c, Editor), GroupOf(c, "pipelines")} {
+				if !slices.Contains(byTable[pr.Table], g) {
+					byTable[pr.Table] = append(byTable[pr.Table], g)
+				}
+				if !slices.Contains(all, g) {
+					all = append(all, g)
+				}
+			}
+		}
+	}
+	return byTable, all
+}
+
+// ProductPolicies let each product's consumers read its table, and only it,
+// as the producer's readers do (the producer's masks and row filters on it
+// hold for them: tablePolicies adds them to those policies, as Ranger keeps
+// one policy to a resource). These are its tables' own read policies, where
+// the producer has none for that table alone.
 func (p *Project) ProductPolicies() []RangerPolicy {
 	t := p.Spec.Tables
 	if t == nil {
 		return nil
 	}
-	desc := "From the project " + p.Metadata.Name + ": a data product's consumers, which the platform operator keeps."
-	var view ReaderView
+	byTable, _ := p.consumerGroups()
+	var listed []string
 	if t.Readers != nil {
-		view = *t.Readers
+		listed = t.Readers.Tables
 	}
+	desc := "From the project " + p.Metadata.Name + ": a data product's consumers, which the platform operator keeps."
 	var out []RangerPolicy
 	for _, pr := range p.Spec.Products {
-		if len(pr.Consumers) == 0 {
+		groups := byTable[pr.Table]
+		if len(groups) == 0 || slices.Contains(listed, pr.Table) || slices.ContainsFunc(out, func(x RangerPolicy) bool {
+			return x.Name == p.RangerPrefix()+"product-table:"+pr.Table
+		}) {
 			continue
 		}
-		var groups []string
-		for _, c := range sorted(pr.Consumers) {
-			groups = append(groups, GroupOf(c, Reader), GroupOf(c, Editor), GroupOf(c, "pipelines"))
+		var items []RangerItem
+		for _, g := range groups {
+			items = append(items, allow(g, "select", "show"))
 		}
-		items := func(accesses ...string) []RangerItem {
-			var its []RangerItem
-			for _, g := range groups {
-				its = append(its, allow(g, accesses...))
-			}
-			return its
-		}
-		named := p.RangerPrefix() + "product:" + pr.Name
-		out = append(out,
-			RangerPolicy{Name: named + ":namespace", Description: desc, Resources: resources("catalog", t.Catalog, "schema", t.Namespace),
-				PolicyItems: items("use", "show")},
-			RangerPolicy{Name: named, Description: desc,
-				Resources:   atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", pr.Table, "column", "*")),
-				PolicyItems: items("select", "show")})
-		for _, m := range view.Masks {
-			if m.Table != pr.Table {
-				continue
-			}
-			its := items("select")
-			for i := range its {
-				its[i].DataMaskInfo = &RangerMask{DataMaskType: m.Type}
-			}
-			out = append(out, RangerPolicy{Name: named + ":mask:" + m.Column, PolicyType: 1, Description: desc,
-				Resources:           atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", m.Table, "column", m.Column)),
-				DataMaskPolicyItems: its})
-		}
-		for _, f := range view.RowFilters {
-			if f.Table != pr.Table {
-				continue
-			}
-			its := items("select")
-			for i := range its {
-				its[i].RowFilterInfo = &RangerRowFilter{FilterExpr: f.Filter}
-			}
-			out = append(out, RangerPolicy{Name: named + ":filter", PolicyType: 2, Description: desc,
-				Resources:            atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", f.Table)),
-				RowFilterPolicyItems: its})
-		}
+		out = append(out, RangerPolicy{Name: p.RangerPrefix() + "product-table:" + pr.Table, Description: desc,
+			Resources:   atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", pr.Table, "column", "*")),
+			PolicyItems: items})
 	}
 	return out
 }
