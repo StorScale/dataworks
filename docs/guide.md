@@ -1,6 +1,6 @@
 # StorScale Platform: a lab guide
 
-A walk through the platform with a small company's data, for anyone who will use it: analysts, data engineers, the people who own a project, and whoever decides whether to run it. Each lab takes ten to twenty minutes, says what the business gets out of it, and ends with something you can check. The labs build on each other; the whole guide is an afternoon.
+A walk through the platform with a small company's data, for anyone who will use it: analysts, data engineers, the people who own a project, and whoever decides whether to run it. Each lab takes ten to twenty minutes, says what the business gets out of it, and ends with something you can check. The labs build on each other: Part I shows the platform doing the work (twelve labs, an afternoon); Part II shows it keeping its promises on versions, reviews, rules and records (six more).
 
 **What you need.** The platform running: on your machine, `storscale up`, then `http://storscale.localhost:8800` (the [README](../README.md) says how); or your company's install, at its own address. Three people exist in the example sign-in: **alice**, an analyst; **bob**, an engineer, who also administers the platform; and **carol**, who has no access. Their password is `LAKEHOUSE_USER_PASSWORD` in `stack/.env` on a local install. Two browser windows, or one normal and one private, make switching between alice and bob easy.
 
@@ -273,6 +273,138 @@ This lab needs a GitLab repo the platform can reach. Give the project its token 
 5. **Limits:** on a project's Edit page, how many queries at once, how much memory each, how much storage; one project can't starve the others.
 
 **Check:** Administration → Health shows every service up; `retail`'s Audit tab shows this afternoon's work.
+
+---
+
+# Part II: versioning and governance
+
+The labs above show the platform doing work. These show it keeping its promises: every version of the data is there to go back to, every change is reviewed and released on purpose, and who may see what is declared once, enforced everywhere and written down.
+
+---
+
+## Lab 13: The data as it was
+
+**Value:** a number in last month's board pack can be reproduced today, to the row, however the tables have changed since. Month-end closes are kept for as long as Finance says, whatever retention does to the rest.
+
+As **bob**, on `retail`:
+
+1. Open **Data** → `uploads_orders` → **History**: every change to the table so far (the import's load), who made it, when, and how many rows it added. Each entry has **Read it as it was**.
+2. Change the data. On the **SQL** tab, run `INSERT INTO uploads_orders VALUES (306, 7, DATE '2026-10-01', 'EU', 'web', 88.0, false, false)`, then `UPDATE uploads_orders SET amount = 1.0 WHERE order_id = 1`. Back on **History**: two more entries, yours.
+3. On the first entry's **Read it as it was**: the SQL tab opens with the table named at that commit (`"uploads_orders#<hash>"`). `SELECT count(*), round(sum(amount), 2) FROM ...` gives the table as the import left it: 305 rows and the old amount. The same query without the suffix gives 306 rows and the changed amount.
+4. Any moment, not only a commit: on the SQL tab, type `2026-10-19` (or any date and time) in **As of** and press Enter. The query's tables are rewritten to the commit current at that moment. `now` puts them back.
+5. **A close that's kept.** On the **Tags** tab, make a tag: name `close-2026-09`, at `now`, keep for `7y`, note "September's close". The tag names a commit; the platform keeps that commit's data however old it gets, where the rest of the history is kept for the install's window (the Data page says how long). On the SQL tab, **As of** `close-2026-09` reads every table of the project as it was at the close.
+6. Reports and files that must be reproducible use the same thing: a delivery records the commit it read (Lab 9), and the catalog's lineage names the commit each run read.
+
+**Check:** `SELECT count(*) FROM uploads_orders` as of `close-2026-09` gives 306 (the close came after your insert); as of the first history entry it gives 305.
+
+---
+
+## Lab 14: Who did what
+
+**Value:** "who read the payroll table last month" is a search, not an investigation. Every read in Trino, every refusal, every change to a project and every approval is in one log, with the person, and for an assistant's question, the assistant and the person.
+
+1. As **bob**, open `retail` → **Audit**. Search `uploads_customers`: every query that touched it, by whom, allowed or refused, and the query itself. Filter by person `alice`, then **Refused only**: the reads her rules refused.
+2. Make a refusal: as **alice**, on the SQL tab, `SELECT * FROM uploads_campaign_responses` after Lab 15 has taken it from the readers' list; or, as **carol** (no project), any query. Back on bob's Audit tab, the refusal is there within a minute, with the reason Ranger gave.
+3. Filter by **Source**: Trino's reads (Ranger's log), the platform's own actions (projects saved, tags made, agents approved, classifications confirmed, uploads), the assistants' questions (Lab 8: the agent and the person both named).
+4. Administration → **Audit** is the same log for every project, for the platform's administrators.
+5. Nothing in the log can be edited from the platform; it's written as things happen and read by whoever may.
+
+**Check:** the entries from Labs 3 to 10 are all there, in order: the uploads, the import's runs, the tags confirmed, the agent approved and revoked, with the right names on each.
+
+---
+
+## Lab 15: Rules for readers, and every tool following
+
+**Value:** a rule is written once, in words anyone can read on the Access tab, and holds in SQL, dashboards, notebooks, the canvas, deliveries and assistants alike. There's no tool where the rule is forgotten.
+
+As **bob**, open `retail` → **Edit**:
+
+1. **Which tables readers see:** in "Tables readers may read", enter `uploads_orders, uploads_customers, uploads_campaigns`. Readers (the analysts) lose `uploads_campaign_responses`; editors keep everything.
+2. **What they see of them:** in the JSON box, under `tables.readers`, add a mask beside the row filter from Lab 2:
+
+   ```json
+   "masks": [{"table": "uploads_customers", "column": "signed_up", "type": "MASK_DATE_SHOW_YEAR"}]
+   ```
+
+   Readers see the year a customer signed up, not the day. (The email and phone columns are already masked by their tags, Lab 4: a project's own masks and the install's protection rules add up.)
+3. Save, and open **Access**: the rules in words. "Readers: the EU rows of uploads_orders; signed_up shows the year", and the three tables they may read.
+4. As **alice**, see them hold: the Data tab lists three tables; **Preview** of `uploads_customers` shows `2026-01-01` for every date; the SQL tab refuses `uploads_campaign_responses`; a chart on the dashboard (Lab 7) still shows EU only; the assistant (Lab 8) answers EU only; the canvas's previews (Lab 5) read under the same rules.
+5. **Roles, not people:** rules name groups (`analysts`), so a new analyst gets them the day they join the group, and loses them the day they leave. A member named as a user (alice as an editor, Lab 2) is the exception for when a person needs more than their group.
+
+**Check:** alice's preview of `uploads_customers` has every `signed_up` on January the first; bob's has the real dates.
+
+---
+
+## Lab 16: Checks and freshness
+
+**Value:** a table that's wrong or late tells its owner before a dashboard reader notices, and the catalog shows every table's checks and their last result.
+
+As **bob**, open `retail` → **Edit** and, in the JSON box under `tables`, add:
+
+```json
+"checks": [
+  {"table": "uploads_orders", "check": "notNull", "column": "customer_id"},
+  {"table": "uploads_orders", "check": "rowCount", "min": 300},
+  {"table": "uploads_customers", "check": "unique", "column": "email"}
+],
+"freshness": [{"table": "uploads_orders", "within": "24h"}]
+```
+
+Save. (The freshness part has a form of its own on the page; checks don't yet.)
+
+1. The platform runs the checks in the catalog every minute. Open **Data** → `uploads_orders` → **Quality**: the three checks, passing, with when they last ran.
+2. Break one: on the SQL tab, `INSERT INTO uploads_orders (order_id, region, amount, refunded, test) VALUES (307, 'EU', 5.0, false, false)` (no customer). Within a minute **Quality** shows `notNull` on `customer_id` failing ("nullCount=1"), the project's **Overview** lists it as an issue, and the people the project notifies (a Teams channel or email, set on the Edit page) are told. The catalog's own page for the table shows the same test, failed.
+3. Fix it: `DELETE FROM uploads_orders WHERE order_id = 307`. The next round passes, the issue clears, and the channel is told it's resolved.
+4. **Freshness:** `uploads_orders` must change within a day. Tomorrow, if nothing has loaded it, the Overview says it's stale and the channel hears; a load (the import's hourly run writes nothing when nothing changed, so set the window to what the business expects). The same rule is what a data product's contract promises (Lab 17).
+
+**Check:** Quality shows three checks passing again, and the Audit tab shows your insert and delete.
+
+---
+
+## Lab 17: A certified data product, read in place
+
+**Value:** one team publishes a table with a promise (its columns, how fresh it stays, the checks it passes); another team reads it where it is, under the publisher's rules, with no copy to go stale. The governance group certifies what it has checked, and a broken promise is the publisher's alert, naming who depends on it.
+
+1. **Publish.** As **bob**, on `retail` → **Edit**, add in the JSON box:
+
+   ```json
+   "products": [{"name": "orders", "table": "uploads_orders", "description": "Harbor Outfitters' orders, net of test rows", "owner": "bob", "version": "1",
+                 "terms": ["revenue"], "contract": {"columns": ["order_id", "customer_id", "ordered_on", "region", "amount"], "within": "24h"}}]
+   ```
+
+   Save. The **Data products** page (the Tools menu) lists `orders`: its owner, version, contract, the term **Revenue** it holds, no consumers yet, not certified.
+2. **A second team asks.** Make a project `marketing` (Administration → Projects → New: `analysts` as editors, tick Tables). As **alice** (an editor of `marketing`), open **Data products** and press **Ask for it** on `orders`, for `marketing`, with a reason.
+3. **The publisher approves.** As **bob**, the product's card shows the request; approve it. Within a minute `marketing`'s people may read `iceberg.retail.uploads_orders` in place: as alice, on `marketing`'s SQL tab, `SELECT region, count(*) FROM iceberg.retail.uploads_orders GROUP BY 1` works, and gives EU only: retail's row filter holds for consumers too. Nothing was copied; there's one table.
+4. **Certify.** As **bob** (the install's certifiers are its administrators unless set otherwise), press **Certify** on the card: the product is marked certified, first in the list, and the catalog shows it as a data product with its table marked Gold. The certification records what it certified: the table, the version and the contract.
+5. **A promise changed.** Edit the product's contract (drop `amount` from its columns) and save: the certification lapses, because what was checked isn't what's promised now. Put it back and certify again.
+6. **A promise broken.** Rename a contracted column: `ALTER TABLE uploads_orders RENAME COLUMN region TO country`. Within a minute `retail`'s Overview lists the broken contract, naming `marketing` as the consumer that depends on it; a merge request that would drop the column fails its status (Lab 11) saying the same. Rename it back.
+7. **Taking it away** is the publisher's too: remove `marketing` from the product's consumers, and its reads are refused at once.
+
+**Check:** `marketing`'s alice reads `iceberg.retail.uploads_orders` with EU rows only, and the Data products page shows `orders` certified with `marketing` as its consumer.
+
+---
+
+## Lab 18: Released on purpose (with a git repo)
+
+**Value:** what runs in production is a tag in git, planned by one person and applied by another, with the difference spelled out first; going back is applying an earlier tag, and the data written in between stays.
+
+With the repo from Lab 11, put the project itself in it:
+
+```
+storscale/
+  project.yaml              # the spec: members, tables and their rules, checks, products, agents
+  semantic.yaml             # the metrics, terms and tests of Lab 6
+  targets/development.yaml  # what differs per install: laid over project.yaml (maps merged, lists replaced)
+  targets/production.yaml
+```
+
+1. Tag the repo `v1.0`. As **alice**, open `retail` → **Releases** and plan `v1.0`: the platform checks the repo out at the tag in the project's Airflow, composes the spec for this install's target, checks it as any spec, and shows what would change: members, readers' rules, checks, products, and the metrics added, removed or changed.
+2. As **bob** (an administrator other than the planner), **Apply**. The spec and the model are saved as if edited by hand, approvals kept, and the release is recorded: the tag, its commit, who planned, who applied, when. The Audit tab has it.
+3. Change the model in the repo (revenue excluding partner orders, say), open a merge request: the review (Lab 11) builds it on a data branch and the note says which of the model's tests changed their answers and by how much, before anyone merges. Merge, tag `v1.1`, plan, apply: the next question on the Metrics tab follows the new definition.
+4. **Rollback:** plan `v1.0` and apply it. The spec and the metrics are `v1.0`'s again; the tables' data written since stays, with its history (Lab 13), and the Releases tab says so.
+5. A plan older than the project's current spec (someone edited it by hand in between) is refused: plan again from the repo, so the repo stays the truth.
+
+**Check:** the Releases tab lists `v1.0`, `v1.1`, `v1.0` with who planned and applied each; `SELECT count(*) FROM uploads_orders` is unchanged by the rollback.
 
 ---
 
