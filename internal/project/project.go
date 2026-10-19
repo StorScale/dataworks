@@ -795,6 +795,17 @@ type RangerAccess struct {
 
 type RangerMask struct {
 	DataMaskType string `json:"dataMaskType"`
+	ValueExpr    string `json:"valueExpr,omitempty"` // CUSTOM: the expression, {col} the column
+}
+
+// maskInfo is Ranger's mask for one of MaskTypes. MASK_HASH is written as a
+// custom expression on Trino's own sha256: the plugin's built-in transformer
+// for it names a function Trino doesn't have.
+func maskInfo(maskType string) *RangerMask {
+	if maskType == "MASK_HASH" {
+		return &RangerMask{DataMaskType: "CUSTOM", ValueExpr: "to_hex(sha256(to_utf8(cast({col} as varchar))))"}
+	}
+	return &RangerMask{DataMaskType: maskType}
 }
 
 type RangerRowFilter struct {
@@ -886,7 +897,7 @@ func (p *Project) sourcePolicies() []RangerPolicy {
 		for _, m := range src.Masks {
 			sc, tb, _ := strings.Cut(m.Table, ".")
 			it := allow(p.Group(Reader), "select")
-			it.DataMaskInfo = &RangerMask{DataMaskType: m.Type}
+			it.DataMaskInfo = maskInfo(m.Type)
 			out = append(out, RangerPolicy{Name: named + ":mask:" + m.Table + "." + m.Column, PolicyType: 1, Description: desc,
 				Resources:           resources("catalog", cat, "schema", sc, "table", tb, "column", m.Column),
 				DataMaskPolicyItems: []RangerItem{it}})
@@ -988,7 +999,7 @@ func (p *Project) tablePolicies() []RangerPolicy {
 	}
 	for _, m := range view.Masks {
 		it := allow(readers, "select")
-		it.DataMaskInfo = &RangerMask{DataMaskType: m.Type}
+		it.DataMaskInfo = maskInfo(m.Type)
 		out = append(out, RangerPolicy{Name: named("mask:" + m.Table + "." + m.Column), PolicyType: 1, Description: desc,
 			Resources:           atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", m.Table, "column", m.Column)),
 			DataMaskPolicyItems: alsoFor(it, m.Table)})

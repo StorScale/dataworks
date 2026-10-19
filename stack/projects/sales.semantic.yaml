@@ -49,7 +49,7 @@ tests:
   - name: revenue_by_region
     metrics: [revenue]
     group_by: [order__region]
-    expect: {rows: 2}          # EU and US
+    expect: {rows: 3}          # EU, US and APAC
   - name: one_order_count
     metrics: [order_count]
     expect: {rows: 1}

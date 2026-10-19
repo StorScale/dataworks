@@ -32,7 +32,6 @@ SPEC = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "meta
                  "members": [{"group": "engineers", "role": "editor"}, {"user": "alice", "role": "editor"}], "tables": {}}}
 MODEL = """semantic_model:
   name: orders
-  model: ref('orders')
   node_relation: {database: iceberg, schema_name: agented, alias: orders}
   defaults: {agg_time_dimension: ordered_on}
   entities:

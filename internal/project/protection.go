@@ -120,7 +120,7 @@ func (p *Project) ProtectionPolicies(cols []ProtectedColumn, rules ProtectionRul
 			items = append(items, it)
 		}
 		it := allow("public", "select")
-		it.DataMaskInfo = &RangerMask{DataMaskType: rule.Mask}
+		it.DataMaskInfo = maskInfo(rule.Mask)
 		items = append(items, it)
 		out = append(out, RangerPolicy{Name: p.RangerPrefix() + "protect:" + c.Table + "." + c.Column, PolicyType: 1,
 			Description:         fmt.Sprintf("The project %s's %s.%s is %s (%s in the catalog): masked for everyone but %s.", p.Metadata.Name, c.Table, c.Column, c.Tag, c.State, exceptWords(rule.Except)),

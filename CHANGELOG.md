@@ -10,6 +10,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 - **An agent of the project's own** (12.2, first part): a project's editors register an agent (its Agents tab, or `PUT /api/projects/{name}/agents/{agent}`: a name, what it's for, its owner, the MCP server's tools it may use, a schedule); an editor other than the one who registered it approves it, which makes its secret (shown once, kept as the project's connection `<project>-agent-<name>`), and the operator makes it a confidential Keycloak client (`agent-<project>-<name>`, client credentials) whose service account reads as the project's readers do. The MCP server lets it use only the tools it was given, and names them when it asks for another; a change to its tools or owner takes the approval away; revoked, its client is gone within a minute. Each call is in Ranger's audit as the agent. The `agents` suite checks it. Not yet: the gateway and budgets (12.1), scheduled agents as pipelines.
 - **A project with an Airflow of its own sees its imports' runs** on its Pipelines tab (they run in the platform's Airflow), starts them and reads their logs there, and their failures are its alerts.
 
+### Fixed
+- **A hash mask (`MASK_HASH`) on Trino** is written as a custom expression on Trino's own `sha256`: Ranger's built-in transformer names a function Trino doesn't have, so a reader's query failed instead of showing hashes.
+
 ### Changed
 - **The Flows tab shows on any project with tables** (it showed only with a pipelines repo, which only saving needs): building and previewing work without one; the save button says what's missing. The browser suite walks the canvas.
 - **The project editor's form takes the pipelines repo**: its address, the DAGs' folder, the branch, the connection with its token or key, and the GitLab review settings, beside the service account (they were only in the JSON).
