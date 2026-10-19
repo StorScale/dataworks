@@ -51,6 +51,15 @@ def make(pi):
                 secret = {"host": c.host, "port": c.port, "database": c.schema, "username": c.login, "password": c.password}
                 secret.update(c.extra_dejson or {})   # a connector's sign-in (8.4: Salesforce's keys)
                 env["STORSCALE_IMPORT_SECRET"] = json.dumps(secret)
+            if im["source"] == "files":
+                # The project's landing area is read as the pipelines (their Keycloak
+                # client, exchanged with Buckets' STS for credentials by the runner).
+                k = BaseHook.get_connection("keycloak_pipelines")
+                scheme = (k.extra_dejson or {}).get("scheme", "http")
+                host = f"{k.host}:{k.port}" if k.port else k.host
+                env["STORSCALE_IMPORT_IDENTITY"] = json.dumps({
+                    "token_url": f"{scheme}://{host}/{k.schema}/realms/lakehouse/protocol/openid-connect/token",
+                    "client_id": k.login, "client_secret": k.password})
             subprocess.run([PYTHON, RUNNER], env=env, check=True)
         copy()
     return dag_id, the_import()

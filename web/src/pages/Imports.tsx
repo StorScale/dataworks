@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { getConnections, getConnectors, putImport, removeImport, resetImport, type Connection, type Connector, type Import } from "../api";
 import { ErrorBanner, Spinner, usePlatform, useProject } from "../lib";
 
-const sourceLabel: Record<Import["source"], string> = { rest_api: "a REST API", sql_database: "a database", salesforce: "Salesforce" };
+const sourceLabel: Record<Import["source"], string> = { rest_api: "a REST API", sql_database: "a database", salesforce: "Salesforce", files: "uploaded files" };
 
 // The project's imports: applications' and databases' data copied into its
 // tables on a schedule (dlt). Its editors add one from a connector's form
@@ -46,6 +46,7 @@ export default function Imports() {
             {im.salesforce && <>Objects: <span className="mono">{im.salesforce.objects.join(", ")}</span>{im.salesforce.since ? `, from ${im.salesforce.since}` : ""}. </>}
             {im.api && <>From <span className="mono">{im.api.baseUrl}</span>: {im.api.resources.map((r) => r.name).join(", ")}. </>}
             {im.database && <>Tables: <span className="mono">{im.database.tables.map((t) => t.table).join(", ")}</span>. </>}
+            {im.files && <>Files: <span className="mono">{im.files.tables.map((t) => `${t.file} → ${im.name}_${t.name}`).join(", ")}</span> (from the landing area). </>}
             Into <span className="mono">{im.name}_*</span>, {im.schedule ? <>at <span className="mono">{im.schedule}</span> (UTC)</> : "hourly"}
             {im.connection && <>, signed in with <span className="mono">{im.connection}</span></>}.
           </div>

@@ -33,10 +33,11 @@ const (
 	Window  = "window"
 	Formula = "formula"
 	Output  = "output"
-	Code    = "code" // a model written or changed by hand (11.2)
+	Metric  = "metric" // a metric query on the semantic layer's definitions (11.2's step 3)
+	Code    = "code"   // a model written or changed by hand (11.2)
 )
 
-var Kinds = []string{Input, Select, Retype, Filter, Join, Union, Dedupe, Group, Pivot, Unpivot, Window, Formula, Output, Code}
+var Kinds = []string{Input, Select, Retype, Filter, Join, Union, Dedupe, Group, Pivot, Unpivot, Window, Formula, Output, Metric, Code}
 
 // A Column is one of a step's result, with its Trino type ("" when the
 // platform can't tell: a formula without a type, a code step not yet run).
@@ -128,6 +129,9 @@ type Step struct {
 	Windows []WindowFunction `json:"windows,omitempty" yaml:"windows,omitempty"`
 	// output: the table it makes (Table), and its checks
 	Checks []Check `json:"checks,omitempty" yaml:"checks,omitempty"`
+	// metric: a metric query (its metrics, grouped by By, filtered by Where),
+	// whose SQL the semantic layer gives, so a flow's revenue is the company's
+	Metrics []string `json:"metrics,omitempty" yaml:"metrics,omitempty"`
 	// code: the model as written (its whole body, config and all)
 	SQL string `json:"sql,omitempty" yaml:"-"`
 	// The canvas's layout.
@@ -202,7 +206,7 @@ func (f *Flow) Check() error {
 		s := &f.Steps[i]
 		want := [2]int{1, 1}
 		switch s.Kind {
-		case Input:
+		case Input, Metric:
 			want = [2]int{0, 0}
 		case Join:
 			want = [2]int{2, 2}

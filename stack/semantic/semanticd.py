@@ -332,12 +332,15 @@ def engine_for(project):
 
 # --- Queries -------------------------------------------------------------------------------
 
-def compile_query(project, metrics, group_by=(), where=(), order_by=(), limit=None):
+def compile_query(project, metrics, group_by=(), where=(), order_by=(), limit=None, cap=True):
+    """The SQL of a metric query. cap: at most MAX_ROWS (every query that runs
+    here); without it, the whole answer (a flow's metric step, which dbt
+    materialises)."""
     engine, _ = engine_for(project)
     try:
         req = MetricFlowQueryRequest.create(metric_names=list(metrics), group_by_names=list(group_by) or None,
                                             where_constraints=list(where) or None, order_by_names=list(order_by) or None,
-                                            limit=min(int(limit or MAX_ROWS), MAX_ROWS))
+                                            limit=min(int(limit or MAX_ROWS), MAX_ROWS) if cap else None)
         return engine.explain(req).sql_statement.sql
     except Exception as e:  # noqa: BLE001 (MetricFlow's query errors vary)
         raise ValueError(f"MetricFlow can't answer that: {e}") from e
@@ -373,10 +376,10 @@ def run(c: Caller, project, sql, metrics, limit=MAX_ROWS):
             "rows": [[v if isinstance(v, (int, float, str, type(None))) else str(v) for v in r] for r in rows]}
 
 
-def answer(c: Caller, project, metrics, group_by=(), where=(), order_by=(), limit=None, run_it=True):
+def answer(c: Caller, project, metrics, group_by=(), where=(), order_by=(), limit=None, run_it=True, cap=True):
     if not metrics:
         raise ValueError("ask for at least one metric")
-    sql = compile_query(project, metrics, group_by, where, order_by, limit)
+    sql = compile_query(project, metrics, group_by, where, order_by, limit, cap=cap or run_it)
     out = {"project": project, "sql": sql}
     if run_it:
         started = time.time()
@@ -784,9 +787,12 @@ def cite(project, metrics, group_by=()):
 
 
 def post_query(c, project, body, request):
+    """A metric query, run as the caller; explain: its SQL only (with limit 0,
+    uncapped: the canvas's metric step, which dbt materialises in full)."""
     member(c, project)
+    explain = bool(body.get("explain"))
     return answer(c, project, body.get("metrics", []), body.get("group_by", []), body.get("where", []),
-                  body.get("order_by", []), body.get("limit"), run_it=not body.get("explain"))
+                  body.get("order_by", []), body.get("limit"), run_it=not explain, cap=not (explain and body.get("limit") == 0))
 
 
 def post_sql(c, project, body, request):

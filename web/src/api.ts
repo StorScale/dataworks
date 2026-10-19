@@ -77,7 +77,8 @@ export type Spec = {
 // An application's data (or a database's, by a cursor), copied into the project's tables on a schedule (dlt).
 export type APIResource = { name: string; path: string; dataSelector?: string; primaryKey?: string; cursor?: string; cursorParam?: string; cursorStart?: string };
 export type Import = {
-  name: string; source: "rest_api" | "sql_database" | "salesforce"; connection?: string; schedule?: string;
+  name: string; source: "rest_api" | "sql_database" | "salesforce" | "files"; connection?: string; schedule?: string;
+  files?: { tables: { name: string; file: string; primaryKey?: string }[] };
   api?: { baseUrl: string; resources: APIResource[] };
   database?: { kind: "postgresql" | "mysql"; tables: { table: string; cursor?: string; primaryKey?: string }[] };
   salesforce?: { objects: string[]; since?: string };
@@ -364,7 +365,7 @@ export type FlowStep = {
   unpivot?: string[]; name?: string;
   windows?: { function: string; column?: string; as: string; offset?: number }[];
   checks?: { column: string; test: string; values?: string[] }[];
-  sql?: string; x: number; y: number;
+  metrics?: string[]; sql?: string; x: number; y: number;
 };
 export type CanvasFlow = { name: string; schedule?: string; steps: FlowStep[] };
 export type FlowStepResult = { model: string; columns: StepColumn[] | null; sql: string; error?: string; unknown?: boolean };
@@ -383,3 +384,20 @@ export const compileFlow = (name: string, flow: CanvasFlow) => api<FlowView>("PO
 export const previewFlow = (name: string, flow: CanvasFlow, step: string, limit = 100) =>
   api<FlowPreview>("POST", `${flowsPath(name)}/preview`, { flow, step, limit });
 export const saveFlow = (name: string, flow: CanvasFlow) => api<FlowSaved>("PUT", `${flowsPath(name)}/${encodeURIComponent(flow.name)}`, { flow });
+
+// --- Uploads: files in the project's landing area (R11.3), put there as the person ---
+export type Upload = { name: string; size: number; at: string; format?: string };
+export type UploadPreview = { columns: { name: string; type: string }[]; rows: string[][]; partial?: boolean; note?: string };
+export const getUploads = (name: string) => api<{ uploads: Upload[]; prefix: string; bucket: string }>("GET", `/api/projects/${encodeURIComponent(name)}/uploads`);
+export const getUploadPreview = (name: string, file: string) =>
+  api<{ name: string; preview: UploadPreview; table: string }>("GET", `/api/projects/${encodeURIComponent(name)}/uploads/${encodeURIComponent(file)}`);
+export const removeUpload = (name: string, file: string) => api<void>("DELETE", `/api/projects/${encodeURIComponent(name)}/uploads/${encodeURIComponent(file)}`);
+export async function uploadFile(name: string, file: File): Promise<{ upload: Upload; preview: UploadPreview; table: string }> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  const res = await fetch(`/api/projects/${encodeURIComponent(name)}/uploads`, { method: "POST", headers: { "X-Platform-Request": "1" }, body: form });
+  const json = await res.json().catch(() => ({}));
+  if (res.status === 401) { signIn(); throw new ApiError(401, "signed out"); }
+  if (!res.ok) throw new ApiError(res.status, json.error ?? `HTTP ${res.status}`);
+  return json;
+}

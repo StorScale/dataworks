@@ -535,3 +535,25 @@ func TestDeliveries(t *testing.T) {
 		}
 	}
 }
+
+func TestFilesImport(t *testing.T) {
+	for _, tc := range []struct{ im, want string }{
+		{`{"name":"uploads","source":"files","files":{"tables":[{"name":"suppliers","file":"suppliers.csv"},{"name":"prices","file":"prices-*.xlsx","primaryKey":"sku"}]}}`, ""},
+		{`{"name":"uploads","source":"files"}`, "names its tables"},
+		{`{"name":"uploads","source":"files","connection":"x","files":{"tables":[{"name":"a","file":"a.csv"}]}}`, "needs no connection"},
+		{`{"name":"uploads","source":"files","files":{"tables":[{"name":"a","file":"../a.csv"}]}}`, "a file of landing/uploads/"},
+		{`{"name":"uploads","source":"files","files":{"tables":[{"name":"a","file":"a.txt"}]}}`, "ending in one of csv, xlsx, jsonl, parquet"},
+		{`{"name":"uploads","source":"files","files":{"tables":[{"name":"a","file":"a.csv"},{"name":"a","file":"b.csv"}]}}`, "two resources would both be uploads_a"},
+	} {
+		_, err := Parse([]byte(`{"metadata":{"name":"sales"},"spec":{"members":[{"user":"bob","role":"editor"}],"tables":{},"imports":[` + tc.im + `]}}`))
+		switch {
+		case tc.want == "" && err != nil:
+			t.Errorf("%s: %v", tc.im, err)
+		case tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)):
+			t.Errorf("%s: %v, want %q", tc.im, err, tc.want)
+		}
+	}
+	if FileFormat("Prices.XLS") != "xlsx" || FileFormat("a.parquet") != "parquet" || FileFormat("a") != "" {
+		t.Error("formats")
+	}
+}

@@ -357,3 +357,46 @@ func TestDAG(t *testing.T) {
 		t.Error("no schedule isn't None")
 	}
 }
+
+// A metric step's SQL is the semantic layer's; unknown until someone can ask it.
+func TestMetricStep(t *testing.T) {
+	f := &Flow{Name: "rev", Steps: []Step{
+		{ID: "revenue", Kind: Metric, Metrics: []string{"revenue"}, By: []string{"order__region"}, Where: "x"},
+		{ID: "eu", Kind: Filter, Inputs: []string{"revenue"}, Where: "order__region = 'EU'"},
+		{ID: "out", Kind: Output, Inputs: []string{"eu"}, Table: "revenue_eu"},
+	}}
+	e := env()
+	var asked [][]string
+	e.MetricSQL = func(metrics, by []string, where string) (string, []Column, error) {
+		asked = append(asked, append(append(metrics, by...), where))
+		return "SELECT region AS order__region, SUM(amount) AS revenue\nFROM iceberg.sales.orders\nGROUP BY 1\n", []Column{{"order__region", "varchar"}, {"revenue", "double"}}, nil
+	}
+	c, err := Compile(f, e)
+	if err != nil || len(c.Errors()) > 0 {
+		t.Fatalf("%v %v", err, c.Errors())
+	}
+	if got := describe(c.Steps["out"].Columns); got != "order__region varchar, revenue double" || len(asked) != 1 || asked[0][2] != "x" {
+		t.Errorf("columns %s, asked %v", got, asked)
+	}
+	sql, err := c.Preview("eu", func(_, _, _ string) float64 { return 100 }, 10)
+	if err != nil || !strings.Contains(sql, "\"revenue\" as (\n  SELECT region AS order__region") || !strings.Contains(sql, `from "revenue"`) {
+		t.Errorf("preview: %v\n%s", err, sql)
+	}
+	m := Files(c)["models/flows/rev/rev__revenue.sql"]
+	if !strings.HasPrefix(m, "-- storscale-step:\n--   kind: metric\n--   where: x\n--   by:\n--     - order__region\n--   metrics:\n--     - revenue\n--   sql: ") || !strings.Contains(m, "materialized='ephemeral'") {
+		t.Errorf("model:\n%s", m)
+	}
+	e.MetricSQL = func(_, _ []string, _ string) (string, []Column, error) { return "", nil, nil }
+	c, _ = Compile(f, e)
+	if r := c.Steps["revenue"]; !r.Unknown || r.Error != "" || !c.Steps["eu"].Unknown {
+		t.Errorf("unknown: %+v %+v", r, c.Steps["eu"])
+	}
+	if _, err := c.Preview("revenue", nil, 10); err == nil || !strings.Contains(err.Error(), "isn't known yet") {
+		t.Errorf("preview unknown: %v", err)
+	}
+	f.Steps[0].Metrics = nil
+	c, _ = Compile(f, e)
+	if r := c.Steps["revenue"]; r.Error != "a metric step names at least one metric" {
+		t.Errorf("no metrics: %+v", r)
+	}
+}

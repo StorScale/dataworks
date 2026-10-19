@@ -17,6 +17,10 @@ type Env struct {
 	Namespace   string
 	Columns     func(catalog, namespace, table string) ([]Column, error)
 	CodeColumns map[string][]Column
+	// MetricSQL is the semantic layer's SQL for a metric query, and its
+	// columns; an empty SQL with no error means it can't be told yet (no one
+	// to ask as).
+	MetricSQL func(metrics, groupBy []string, where string) (string, []Column, error)
 }
 
 // A StepResult is what the compiler made of a step: its columns, the SQL
@@ -97,6 +101,25 @@ func Compile(f *Flow, env Env) (*Compiled, error) {
 				res.Columns = cols
 			} else {
 				res.Unknown = true
+			}
+			continue
+		}
+		if s.Kind == Metric {
+			switch {
+			case len(s.Metrics) == 0:
+				res.Error = "a metric step names at least one metric"
+			case env.MetricSQL == nil:
+				res.Error = "the semantic layer isn't set up, which gives a metric step its SQL"
+			default:
+				sql, cols, err := env.MetricSQL(s.Metrics, s.By, s.Where)
+				switch {
+				case err != nil:
+					res.Error = err.Error()
+				case sql == "":
+					res.Unknown = true
+				default:
+					res.SQL, res.Columns = strings.TrimSpace(sql), cols
+				}
 			}
 			continue
 		}
@@ -792,6 +815,10 @@ func (c *Compiled) Preview(stepID string, sample Sampler, limit int) (string, er
 			var err error
 			if sql, err = codeSQL(f, st, r); err != nil {
 				return "", err
+			}
+		} else if st.Kind == Metric {
+			if sql = c.Steps[id].SQL; sql == "" {
+				return "", fmt.Errorf("step %s: its SQL isn't known yet (sign in, so the semantic layer can be asked as you)", id)
 			}
 		} else {
 			var inputs [][]Column

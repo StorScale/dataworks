@@ -5,7 +5,8 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
-  compileFlow, getFlowView, getFlows, previewFlow, saveFlow, type CanvasFlow, type StepColumn, type FlowItem, type FlowPreview, type FlowStep, type FlowView,
+  compileFlow, getFlowView, getFlows, getUploadPreview, getUploads, previewFlow, putImport, removeUpload, saveFlow, uploadFile,
+  type CanvasFlow, type StepColumn, type FlowItem, type FlowPreview, type FlowStep, type FlowView, type Upload, type UploadPreview,
 } from "../api";
 import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
 import { Results } from "./Data";
@@ -19,13 +20,13 @@ import { Results } from "./Data";
 
 const KINDS: [string, string][] = [
   ["input", "Input"], ["select", "Select and rename"], ["retype", "Retype"], ["filter", "Filter"], ["join", "Join"], ["union", "Union"],
-  ["dedupe", "Deduplicate"], ["group", "Group by"], ["pivot", "Pivot"], ["unpivot", "Unpivot"], ["window", "Window"], ["formula", "Formula"], ["output", "Output"],
+  ["dedupe", "Deduplicate"], ["group", "Group by"], ["pivot", "Pivot"], ["unpivot", "Unpivot"], ["window", "Window"], ["formula", "Formula"], ["metric", "Metric"], ["output", "Output"],
 ];
 const label = (kind: string) => KINDS.find((k) => k[0] === kind)?.[1] ?? (kind === "code" ? "Code" : kind);
 const AGGREGATES = ["sum", "count", "min", "max", "avg", "count_distinct"];
 const WINDOWS = ["rank", "dense_rank", "row_number", "running_sum", "sum", "avg", "min", "max", "count", "lag", "lead"];
 const TESTS = ["not_null", "unique", "accepted_values"];
-const inputsOf = (kind: string) => (kind === "input" ? 0 : kind === "join" ? 2 : kind === "union" || kind === "code" ? 99 : 1);
+const inputsOf = (kind: string) => (kind === "input" || kind === "metric" ? 0 : kind === "join" ? 2 : kind === "union" || kind === "code" ? 99 : 1);
 
 type StepNodeData = { step: FlowStep; columns?: StepColumn[] | null; error?: string; unknown?: boolean };
 
@@ -34,7 +35,7 @@ function StepNode({ data, selected }: NodeProps<Node<StepNodeData>>) {
   const cols = data.columns?.length;
   return (
     <div className={"stepnode" + (selected ? " selected" : "") + (data.error ? " alert" : "")} data-testid={`step-${step.id}`}>
-      {step.kind !== "input" && <Handle type="target" position={Position.Left} />}
+      {inputsOf(step.kind) > 0 && <Handle type="target" position={Position.Left} />}
       <div className="kind">{label(step.kind)}</div>
       <div className="name">{step.kind === "input" ? step.table || step.id : step.kind === "output" ? step.table || step.id : step.id}</div>
       <div className="cols">{data.error ? "can't compile" : data.unknown ? "columns unknown" : cols !== undefined ? `${cols} columns` : ""}</div>
@@ -76,6 +77,70 @@ export default function Flows() {
           {f.mergeRequest && <a href={f.mergeRequest} target="_blank" rel="noreferrer" className="small">merge request</a>}
         </div>
       ))}
+      <Uploads project={name} canEdit={canEdit} />
+    </div>
+  );
+}
+
+// Uploads are the files in the project's landing area (landing/uploads/ in
+// its bucket), put there as you; a CSV is previewed with the types the
+// platform reads. Importing one makes it a table (the import "uploads",
+// run by the project's pipelines), which a flow takes as an input.
+function Uploads({ project, canEdit }: { project: string; canEdit: boolean }) {
+  const { view, reload } = useProject();
+  const list = usePoll(() => getUploads(project), [project]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const [shown, setShown] = useState<{ name: string; preview: UploadPreview; table: string }>();
+  const imports = view?.spec?.spec.imports ?? [];
+  const uploads = imports.find((i) => i.name === "uploads" && i.source === "files");
+  const tableOf = (file: string) => uploads?.files?.tables.find((t) => t.file === file)?.name;
+  const act = async (f: () => Promise<unknown>) => {
+    setBusy(true);
+    setError(undefined);
+    try { await f(); list.reload(); } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  };
+  const upload = (file: File) => act(async () => { const r = await uploadFile(project, file); setShown({ name: r.upload.name, ...r }); });
+  const importAs = (file: string, table: string) => act(async () => {
+    const tables = [...(uploads?.files?.tables ?? []).filter((t) => t.file !== file), { name: table, file }];
+    await putImport(project, { name: "uploads", source: "files", schedule: uploads?.schedule ?? "0 * * * *", files: { tables } });
+    reload();
+  });
+  return (
+    <div className="card stack" style={{ gap: 8 }} data-testid="uploads">
+      <div className="row">
+        <strong>Uploads</strong>
+        <span className="small muted">Files in the project's landing area; a CSV or Excel file imported becomes a table a flow can read.</span>
+        <span className="grow" />
+        {canEdit && <label className="btn small">{busy ? "…" : "Upload a file"}
+          <input type="file" accept=".csv,.xlsx,.xls,.jsonl,.parquet" style={{ display: "none" }} disabled={busy} data-testid="upload-file"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }} />
+        </label>}
+      </div>
+      <ErrorBanner error={error ?? list.error} />
+      {list.data?.uploads.length === 0 && <p className="small muted" style={{ margin: 0 }}>No uploads yet.</p>}
+      {list.data?.uploads.map((u: Upload) => (
+        <div key={u.name} className="row small" data-testid={`upload-${u.name}`}>
+          <button className="linkish mono" onClick={() => act(async () => setShown(await getUploadPreview(project, u.name)))}>{u.name}</button>
+          <span className="muted">{(u.size / 1024).toFixed(1)} KB</span>
+          {tableOf(u.name) && <span className="pill">table uploads_{tableOf(u.name)}</span>}
+          <span className="grow" />
+          {canEdit && u.format && !tableOf(u.name) && <button className="btn small" disabled={busy} data-testid={`import-${u.name}`}
+            onClick={() => { const t = prompt("The table's name (uploads_<name>):", (shown?.name === u.name && shown.table) || u.name.replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9_]+/g, "_")); if (t) importAs(u.name, t); }}>Import as a table</button>}
+          {canEdit && <button className="btn small" disabled={busy} onClick={() => { if (confirm(`Remove ${u.name}?`)) act(() => removeUpload(project, u.name)); }}>Remove</button>}
+        </div>
+      ))}
+      {shown && (
+        <div data-testid="upload-preview">
+          <p className="small muted" style={{ margin: "4px 0" }}>{shown.name}: {shown.preview.note ?? `${shown.preview.columns.length} columns, as the platform reads them${shown.preview.partial ? " (the first part of the file)" : ""}.`}</p>
+          {shown.preview.columns.length > 0 && (
+            <div className="scroll-x"><table className="t data">
+              <thead><tr>{shown.preview.columns.map((c) => <th key={c.name}>{c.name} <span className="muted">{c.type}</span></th>)}</tr></thead>
+              <tbody>{shown.preview.rows.map((r, i) => <tr key={i}>{r.map((v, j) => <td key={j}>{v}</td>)}</tr>)}</tbody>
+            </table></div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -322,7 +387,7 @@ function Settings({ step, steps, inputs, canEdit, update, remove }: SettingsProp
         <span className="grow" />
         {canEdit && <button className="btn small" onClick={remove} data-testid="remove-step">Remove</button>}
       </div>
-      {step.kind !== "input" && (
+      {inputsOf(step.kind) > 0 && (
         <label>Inputs
           <input value={list(step.inputs)} readOnly={ro} onChange={(e) => set({ inputs: split(e.target.value).slice(0, inputsOf(step.kind)) })} list={`steps-${step.id}`} placeholder={inputsOf(step.kind) > 1 ? "step, step" : "a step"} data-testid="inputs" />
           <datalist id={`steps-${step.id}`}>{others.map((o) => <option key={o} value={o} />)}</datalist>
@@ -397,6 +462,12 @@ function Settings({ step, steps, inputs, canEdit, update, remove }: SettingsProp
             <input value={c.expression ?? ""} readOnly={ro} placeholder="amount * 1.2" onChange={(e) => s({ ...c, expression: e.target.value })} style={{ flex: "2 1 120px" }} />
             <input value={c.type ?? ""} readOnly={ro} placeholder="type" onChange={(e) => s({ ...c, type: e.target.value || undefined })} style={{ flex: "0 1 70px" }} />
           </>} />
+      </>}
+      {step.kind === "metric" && <>
+        <span className="small muted">A metric query on the project's definitions (and the company's it builds on): its SQL is the semantic layer's.</span>
+        <label>Metrics<input value={list(step.metrics)} readOnly={ro} onChange={(e) => set({ metrics: split(e.target.value) })} placeholder="revenue, order_count" data-testid="metrics" /></label>
+        <label>Group by<input value={list(step.by)} readOnly={ro} onChange={(e) => set({ by: split(e.target.value) })} placeholder="order__region, metric_time__week" /></label>
+        <label>Where<input value={step.where ?? ""} readOnly={ro} onChange={(e) => set({ where: e.target.value || undefined })} placeholder="{{ Dimension('order__region') }} = 'EU'" /></label>
       </>}
       {step.kind === "output" && <>
         <label>Table<input value={step.table ?? ""} readOnly={ro} onChange={(e) => set({ table: e.target.value })} placeholder="weekly_revenue" data-testid="output-table" /></label>
