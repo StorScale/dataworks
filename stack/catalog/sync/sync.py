@@ -401,8 +401,9 @@ THEME = {
                          "customFaviconUrlPath": "/_storscale/brand/icon"},
     "customTheme": {"primaryColor": "#10151c", "hoverColor": "#e8ecf1", "selectedColor": "#0b0f14", "errorColor": "#b4232a",
                     "successColor": "#1e7d4f", "warningColor": "#b86e00", "infoColor": "#8b97a8",
-                    # The home page's Welcome card (unset: OpenMetadata's blue), as the platform's top bar.
-                    "panelBackgroundColor": "#10151c"},
+                    # The home page's Welcome card (unset: OpenMetadata's blue): a charcoal
+                    # blue, under its white text and its light pattern.
+                    "panelBackgroundColor": "#2c3e50"},
 }
 
 
