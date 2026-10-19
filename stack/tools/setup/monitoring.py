@@ -14,6 +14,7 @@ import os
 import re
 
 import k8s
+from botocore.config import Config
 
 from lakekit import env, log, mc, s3_root, setup_buckets
 
@@ -38,10 +39,16 @@ else:
     os.chmod("/token/token", 0o644)
     log("Prometheus: metrics user, and its token in /token/token")
 
-s3 = s3_root()
-for i in range(40):
-    s3.put_object(Bucket="photos", Key=f"2026/10/img-{i:04d}.jpg", Body=os.urandom(64 * 1024 * (1 + i % 8)))
-for i in range(20):
-    s3.put_object(Bucket="backups", Key=f"db/dump-{i:03d}.bin", Body=io.BytesIO(os.urandom(1024 * 1024)))
-log("data: photos, logs, backups")
+# Sample objects for the dashboards: not worth stopping an install or upgrade for.
+# A write that hangs (a stuck lock in Buckets, 2026-10-19) is given up after a
+# short wait and the rest skipped, with a warning.
+s3 = s3_root(config=Config(read_timeout=20, connect_timeout=10, retries={"max_attempts": 2}))
+try:
+    for i in range(40):
+        s3.put_object(Bucket="photos", Key=f"2026/10/img-{i:04d}.jpg", Body=os.urandom(64 * 1024 * (1 + i % 8)))
+    for i in range(20):
+        s3.put_object(Bucket="backups", Key=f"db/dump-{i:03d}.bin", Body=io.BytesIO(os.urandom(1024 * 1024)))
+    log("data: photos, logs, backups")
+except Exception as e:  # noqa: BLE001 (the dashboards' sample data is all that's missing)
+    log(f"data: the sample objects for the dashboards weren't all written ({type(e).__name__}: {str(e)[:120]}); going on without them")
 log("done")
