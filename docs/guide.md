@@ -1,6 +1,6 @@
 # StorScale Platform: a lab guide
 
-A walk through the platform with a small company's data, for anyone who will use it: analysts, data engineers, the people who own a project, and whoever decides whether to run it. Each lab takes ten to twenty minutes, says what the business gets out of it, and ends with something you can check. The labs build on each other: Part I shows the platform doing the work (twelve labs, an afternoon); Part II shows it keeping its promises on versions, reviews, rules and records (six more).
+A walk through the platform with a small company's data, for anyone who will use it: analysts, data engineers, the people who own a project, and whoever decides whether to run it. Each lab takes ten to twenty minutes, says what the business gets out of it, and ends with something you can check. The labs build on each other: Part I shows the platform doing the work (thirteen labs, an afternoon); Part II shows it keeping its promises on versions, reviews, rules and records (six more).
 
 **What you need.** The platform running: on your machine, `storscale up`, then `http://storscale.localhost:8800` (the [README](../README.md) says how); or your company's install, at its own address. Three people exist in the example sign-in: **alice**, an analyst; **bob**, an engineer, who also administers the platform; and **carol**, who has no access. Their password is `LAKEHOUSE_USER_PASSWORD` in `stack/.env` on a local install. Two browser windows, or one normal and one private, make switching between alice and bob easy.
 
@@ -262,7 +262,34 @@ This lab needs a GitLab repo the platform can reach. Give the project its token 
 
 ---
 
-## Lab 12: Operate it
+## Lab 12: A notebook on a schedule (with a git repo)
+
+**Value:** an analyst's notebook becomes a pipeline with one button, and stays a reviewed, versioned change: no notebook running from someone's laptop, no copy pasted into a DAG by an engineer.
+
+With the repo from Lab 11, as **alice**, open **Tools → Notebooks** (JupyterLab opens in the platform, signed in as her) and make a notebook, `weekly_summary.ipynb`, with one cell:
+
+```python
+import io, pandas as pd, buckets_lake
+s3 = buckets_lake.s3()                      # Buckets, as the person running the notebook: no keys in it
+orders = pd.read_csv(io.BytesIO(s3.get_object(Bucket="retail", Key="landing/uploads/orders.csv")["Body"].read()))
+real = orders[~orders.test & ~orders.refunded]
+weekly = (real.assign(week=pd.to_datetime(real.ordered_on).dt.to_period("W").astype(str))
+              .groupby(["region", "week"]).amount.sum().round(2).reset_index())
+s3.put_object(Bucket="retail", Key="landing/reports/weekly-summary.csv", Body=weekly.to_csv(index=False).encode())
+weekly.tail()
+```
+
+1. Run it: the last weeks' revenue by region, and a file in the project's landing area. It ran as alice, under her rules.
+2. Press **Schedule** on the notebook's toolbar (it's also on the notebook's menu in the file browser). Pick `retail` (the projects she edits that have a repo) and `0 6 * * 1`: Mondays at six, UTC. The platform takes the notebook with its outputs cleared (what it computed may be data no repo should hold) and commits it with a small DAG to the project's repo, on a branch of its own, `storscale/schedule-weekly-summary`, with a merge request.
+3. Open the merge request in GitLab: `dags/notebooks/weekly_summary.ipynb` and `dags/notebook_weekly_summary.py`, five lines that say which notebook, which project and when. Scheduling again updates the same branch and merge request. Merge it.
+4. Within a minute the **Pipelines** tab lists `notebook_weekly_summary`. Press **Run now**. The run goes as the project's pipelines, not as alice: it reads the landing area and writes the report there because the pipelines may (and only there). When it ends, the run has a **notebook** link: the executed notebook, its outputs in it, kept by the platform.
+5. Break it on purpose: change the cell to read a file that isn't there, schedule again, merge, run. The run fails, the project's alerts say so, and the kept notebook shows the cell and its error.
+
+**Check:** the run's notebook shows the table of weekly revenue, and `landing/reports/weekly-summary.csv` is in the `retail` bucket (read it from a notebook with `buckets_lake.s3().get_object`).
+
+---
+
+## Lab 13: Operate it
 
 **Value:** the people who run the platform see its health, who did what, and that one project can't slow another; the people who own a project are told when something breaks.
 
@@ -282,7 +309,7 @@ The labs above show the platform doing work. These show it keeping its promises:
 
 ---
 
-## Lab 13: The data as it was
+## Lab 14: The data as it was
 
 **Value:** a number in last month's board pack can be reproduced today, to the row, however the tables have changed since. Month-end closes are kept for as long as Finance says, whatever retention does to the rest.
 
@@ -299,12 +326,12 @@ As **bob**, on `retail`:
 
 ---
 
-## Lab 14: Who did what
+## Lab 15: Who did what
 
 **Value:** "who read the payroll table last month" is a search, not an investigation. Every read in Trino, every refusal, every change to a project and every approval is in one log, with the person, and for an assistant's question, the assistant and the person.
 
 1. As **bob**, open `retail` → **Audit**. Search `uploads_customers`: every query that touched it, by whom, allowed or refused, and the query itself. Filter by person `alice`, then **Refused only**: the reads her rules refused.
-2. Make a refusal: as **alice**, on the SQL tab, `SELECT * FROM uploads_campaign_responses` after Lab 15 has taken it from the readers' list; or, as **carol** (no project), any query. Back on bob's Audit tab, the refusal is there within a minute, with the reason Ranger gave.
+2. Make a refusal: as **alice**, on the SQL tab, `SELECT * FROM uploads_campaign_responses` after Lab 16 has taken it from the readers' list; or, as **carol** (no project), any query. Back on bob's Audit tab, the refusal is there within a minute, with the reason Ranger gave.
 3. Filter by **Source**: Trino's reads (Ranger's log), the platform's own actions (projects saved, tags made, agents approved, classifications confirmed, uploads), the assistants' questions (Lab 8: the agent and the person both named).
 4. Administration → **Audit** is the same log for every project, for the platform's administrators.
 5. Nothing in the log can be edited from the platform; it's written as things happen and read by whoever may.
@@ -313,7 +340,7 @@ As **bob**, on `retail`:
 
 ---
 
-## Lab 15: Rules for readers, and every tool following
+## Lab 16: Rules for readers, and every tool following
 
 **Value:** a rule is written once, in words anyone can read on the Access tab, and holds in SQL, dashboards, notebooks, the canvas, deliveries and assistants alike. There's no tool where the rule is forgotten.
 
@@ -335,7 +362,7 @@ As **bob**, open `retail` → **Edit**:
 
 ---
 
-## Lab 16: Checks and freshness
+## Lab 17: Checks and freshness
 
 **Value:** a table that's wrong or late tells its owner before a dashboard reader notices, and the catalog shows every table's checks and their last result.
 
@@ -355,13 +382,13 @@ Save. (The freshness part has a form of its own on the page; checks don't yet.)
 1. The platform runs the checks in the catalog every minute. Open **Data** → `uploads_orders` → **Quality**: the three checks, passing, with when they last ran.
 2. Break one: on the SQL tab, `INSERT INTO uploads_orders (order_id, region, amount, refunded, test) VALUES (307, 'EU', 5.0, false, false)` (no customer). Within a minute **Quality** shows `notNull` on `customer_id` failing ("nullCount=1"), the project's **Overview** lists it as an issue, and the people the project notifies (a Teams channel or email, set on the Edit page) are told. The catalog's own page for the table shows the same test, failed.
 3. Fix it: `DELETE FROM uploads_orders WHERE order_id = 307`. The next round passes, the issue clears, and the channel is told it's resolved.
-4. **Freshness:** `uploads_orders` must change within a day. Tomorrow, if nothing has loaded it, the Overview says it's stale and the channel hears; a load (the import's hourly run writes nothing when nothing changed, so set the window to what the business expects). The same rule is what a data product's contract promises (Lab 17).
+4. **Freshness:** `uploads_orders` must change within a day. Tomorrow, if nothing has loaded it, the Overview says it's stale and the channel hears; a load (the import's hourly run writes nothing when nothing changed, so set the window to what the business expects). The same rule is what a data product's contract promises (Lab 18).
 
 **Check:** Quality shows three checks passing again, and the Audit tab shows your insert and delete.
 
 ---
 
-## Lab 17: A certified data product, read in place
+## Lab 18: A certified data product, read in place
 
 **Value:** one team publishes a table with a promise (its columns, how fresh it stays, the checks it passes); another team reads it where it is, under the publisher's rules, with no copy to go stale. The governance group certifies what it has checked, and a broken promise is the publisher's alert, naming who depends on it.
 
@@ -384,7 +411,7 @@ Save. (The freshness part has a form of its own on the page; checks don't yet.)
 
 ---
 
-## Lab 18: Released on purpose (with a git repo)
+## Lab 19: Released on purpose (with a git repo)
 
 **Value:** what runs in production is a tag in git, planned by one person and applied by another, with the difference spelled out first; going back is applying an earlier tag, and the data written in between stays.
 
@@ -401,7 +428,7 @@ storscale/
 1. Tag the repo `v1.0`. As **alice**, open `retail` → **Releases** and plan `v1.0`: the platform checks the repo out at the tag in the project's Airflow, composes the spec for this install's target, checks it as any spec, and shows what would change: members, readers' rules, checks, products, and the metrics added, removed or changed.
 2. As **bob** (an administrator other than the planner), **Apply**. The spec and the model are saved as if edited by hand, approvals kept, and the release is recorded: the tag, its commit, who planned, who applied, when. The Audit tab has it.
 3. Change the model in the repo (revenue excluding partner orders, say), open a merge request: the review (Lab 11) builds it on a data branch and the note says which of the model's tests changed their answers and by how much, before anyone merges. Merge, tag `v1.1`, plan, apply: the next question on the Metrics tab follows the new definition.
-4. **Rollback:** plan `v1.0` and apply it. The spec and the metrics are `v1.0`'s again; the tables' data written since stays, with its history (Lab 13), and the Releases tab says so.
+4. **Rollback:** plan `v1.0` and apply it. The spec and the metrics are `v1.0`'s again; the tables' data written since stays, with its history (Lab 14), and the Releases tab says so.
 5. A plan older than the project's current spec (someone edited it by hand in between) is refused: plan again from the repo, so the repo stays the truth.
 
 **Check:** the Releases tab lists `v1.0`, `v1.1`, `v1.0` with who planned and applied each; `SELECT count(*) FROM uploads_orders` is unchanged by the rollback.
