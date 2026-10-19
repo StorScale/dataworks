@@ -123,12 +123,23 @@ func (p *Project) ProtectionPolicies(cols []ProtectedColumn, rules ProtectionRul
 	for _, key := range keys {
 		c := byColumn[key]
 		rule := rules[c.Tag]
+		// Who sees the column as it is: the project's editors and its pipelines
+		// (they own and write the data; Trino refuses a write to a table the
+		// writer is masked on), the platform's maintenance account (erasure,
+		// retention), and the groups the install excepts. Everyone else is masked.
 		var items []RangerItem
-		for _, g := range sorted(rule.Except) {
+		clear := []string{p.Group(Editor)}
+		if p.Spec.Pipelines != nil {
+			clear = append(clear, p.Group("pipelines"))
+		}
+		clear = append(clear, sorted(rule.Except)...)
+		for _, g := range clear {
 			it := allow(g, "select")
 			it.DataMaskInfo = &RangerMask{DataMaskType: "MASK_NONE"}
 			items = append(items, it)
 		}
+		items = append(items, RangerItem{Groups: []string{}, Users: []string{MaintenanceUser}, Accesses: []RangerAccess{{Type: "select", IsAllowed: true}},
+			DataMaskInfo: &RangerMask{DataMaskType: "MASK_NONE"}})
 		it := allow("public", "select")
 		it.DataMaskInfo = maskInfo(rule.Mask, c.Type)
 		items = append(items, it)

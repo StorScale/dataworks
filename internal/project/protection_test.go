@@ -31,10 +31,18 @@ func TestProtectionPolicies(t *testing.T) {
 		t.Errorf("policies: %s", got)
 	}
 	email := pols[1]
-	if email.PolicyType != 1 || len(email.DataMaskPolicyItems) != 2 ||
-		email.DataMaskPolicyItems[0].Groups[0] != "data-protection" || email.DataMaskPolicyItems[0].DataMaskInfo.DataMaskType != "MASK_NONE" ||
-		email.DataMaskPolicyItems[1].Groups[0] != "public" || email.DataMaskPolicyItems[1].DataMaskInfo.DataMaskType != "CUSTOM" || !strings.Contains(email.DataMaskPolicyItems[1].DataMaskInfo.ValueExpr, "sha256") {
-		t.Errorf("email's policy: %+v", email)
+	items := email.DataMaskPolicyItems
+	clear := []string{}
+	for _, it := range items[:len(items)-1] {
+		if it.DataMaskInfo.DataMaskType != "MASK_NONE" {
+			t.Errorf("not clear: %+v", it)
+		}
+		clear = append(clear, append(it.Groups, it.Users...)...)
+	}
+	last := items[len(items)-1]
+	if email.PolicyType != 1 || strings.Join(clear, " ") != "sales-editors data-protection maintenance" ||
+		last.Groups[0] != "public" || last.DataMaskInfo.DataMaskType != "CUSTOM" || !strings.Contains(last.DataMaskInfo.ValueExpr, "sha256") {
+		t.Errorf("email's policy: %s; %+v", strings.Join(clear, " "), last)
 	}
 	if tb := email.Resources["table"].Values; len(tb) != 3 || tb[0] != "customers" || email.Resources["column"].Values[0] != "email" {
 		t.Errorf("email's resources: %+v", email.Resources)
@@ -46,6 +54,13 @@ func TestProtectionPolicies(t *testing.T) {
 		t.Errorf("pay's policy: %+v", pay.DataMaskPolicyItems)
 	}
 	// Suggested tags left out when the install says so.
+	// With pipelines, they see it as it is too (they write the tables).
+	p.Spec.Pipelines = &Pipelines{ServiceAccount: "airflow-pipelines"}
+	withPipes := p.ProtectionPolicies(cols, rules, true)[1].DataMaskPolicyItems
+	if withPipes[1].Groups[0] != "sales-pipelines" {
+		t.Errorf("pipelines not clear: %+v", withPipes)
+	}
+	p.Spec.Pipelines = nil
 	if pols := p.ProtectionPolicies(cols, rules, false); len(pols) != 2 {
 		t.Errorf("without suggested: %d policies", len(pols))
 	}
