@@ -15,17 +15,15 @@
 its slot within seconds, often before Prometheus's next scrape sees it.)
 """
 import html
-import json
 import os
 import re
 import time
 
+import k8s
 import requests
 from botocore.exceptions import ClientError
 
 from lakekit import check, env, finish, s3
-
-import k8s
 
 
 def drive(mode):

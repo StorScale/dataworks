@@ -1,19 +1,18 @@
+import json
 from typing import Optional, Union, cast
 
-import json
-
-from dlt.sources.helpers.requests import Session
-from simple_salesforce import Salesforce
-from simple_salesforce.util import Proxies
-from simple_salesforce.api import DEFAULT_API_VERSION
-from dlt.common.typing import TSecretStrValue
-from dlt.common.configuration.specs import (
-    CredentialsConfiguration,
-    configspec,
-    BaseConfiguration,
-)
 from dlt.common.configuration import with_config
 from dlt.common.configuration.exceptions import ConfigurationValueError
+from dlt.common.configuration.specs import (
+    BaseConfiguration,
+    CredentialsConfiguration,
+    configspec,
+)
+from dlt.common.typing import TSecretStrValue
+from dlt.sources.helpers.requests import Session
+from simple_salesforce import Salesforce
+from simple_salesforce.api import DEFAULT_API_VERSION
+from simple_salesforce.util import Proxies
 
 
 @configspec

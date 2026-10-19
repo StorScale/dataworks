@@ -16,7 +16,6 @@ These play an administrator, then an upgrade:
 
 Then it takes its additions away.
 """
-import json
 import os
 import subprocess
 import sys

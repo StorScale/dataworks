@@ -24,6 +24,14 @@ jobs:
         run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
       - run: go vet ./...
       - run: go test ./...
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: The Python of the stack, checked (ruff) and compiled
+        run: |
+          pip install -q ruff==0.15.6
+          ruff check stack
+          python3 -m compileall -q stack
       - uses: actions/setup-node@v4
         with:
           node-version: 24

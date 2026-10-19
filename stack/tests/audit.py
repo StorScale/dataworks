@@ -16,7 +16,6 @@ import json
 import os
 
 from lakekit import check, denied, finish
-
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]

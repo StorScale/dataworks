@@ -21,9 +21,8 @@ import uuid
 import boto3
 import requests
 import trino as trino_client
-from botocore.config import Config
-
 from airflow.sdk import BaseHook
+from botocore.config import Config
 
 BUCKETS = "http://buckets:9000"
 REALM = "lakehouse"

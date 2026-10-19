@@ -6,9 +6,8 @@ editors and readers (AIRFLOW_ROLE_GROUPS, from the operator)."""
 import json
 import os
 
-from flask_appbuilder.security.manager import AUTH_OAUTH
-
 from airflow.providers.fab.auth_manager.security_manager.override import FabAirflowSecurityManagerOverride
+from flask_appbuilder.security.manager import AUTH_OAUTH
 
 KEYCLOAK = os.environ["KEYCLOAK_URL"] + "/realms/lakehouse"
 # Its own cookie name: the platform's tools share one address (Superset's

@@ -14,6 +14,7 @@ import os
 import re
 
 import k8s
+
 from lakekit import env, log, mc, s3_root, setup_buckets
 
 PROMETHEUS_POLICY = [{"Effect": "Allow", "Action": ["admin:Prometheus"], "Resource": ["arn:aws:s3:::*"]}]

@@ -32,24 +32,22 @@ connections: in Compose an object in the platform's bucket
 (connections/<project>/<name>.json), in Kubernetes a Secret labelled
 with the project. One labelled for another project is refused first.
 """
-import html
-import re
 import base64
+import html
 import json
 import os
+import re
 import secrets
 import socket
 import subprocess
 import tempfile
 import threading
-import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import k8s
 import requests
 
 from lakekit import check, env, finish, s3_root, sql
-
-import k8s
 from projects import platform, projects, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]

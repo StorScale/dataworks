@@ -168,7 +168,7 @@ def apply(wanted):
         t.metrics = [SqlMetric(metric_name=m["metric_name"], expression=m["expression"], description=m["description"]) for m in w["metrics"]]
         log.info("dataset %s of %s: %d columns, metrics %s", w["table_name"], w["project"], len(w["columns"]),
                  ", ".join(m["metric_name"] for m in w["metrics"]) or "none")
-    for (project, model), t in have.items():
+    for (project, _model), t in have.items():
         db.session.delete(t)
         log.info("dataset %s of %s: its model is gone, removed", t.table_name, project)
     db.session.commit()

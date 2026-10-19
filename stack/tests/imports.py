@@ -31,11 +31,10 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
+import k8s
 import requests
 
 from lakekit import check, denied, env, finish, s3_root, sql
-
-import k8s
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]

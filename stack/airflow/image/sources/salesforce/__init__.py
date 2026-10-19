@@ -7,17 +7,15 @@ Salesforce api docs: https://developer.salesforce.com/docs/apis
 To get the security token: https://onlinehelp.coveo.com/en/ces/7.0/administrator/getting_the_security_token_for_your_salesforce_account.htm
 """
 
-from dlt.sources import DltResource
-from dlt.sources import incremental
-
 from typing import Iterable, Optional
 
 import dlt
-from dlt.sources.helpers.requests import Session
 from dlt.common.typing import TDataItem
+from dlt.sources import DltResource, incremental
+from dlt.sources.helpers.requests import Session
 
-from .helpers.records import get_records
 from .helpers.client import SalesforceAuth, make_salesforce_client
+from .helpers.records import get_records
 
 
 @dlt.source(name="salesforce")

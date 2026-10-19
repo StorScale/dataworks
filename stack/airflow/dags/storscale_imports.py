@@ -14,7 +14,6 @@ import subprocess
 import urllib.request
 
 import pendulum
-
 from airflow.sdk import BaseHook, dag, get_current_context, task
 
 OPERATOR = os.environ.get("OPERATOR_URL", "http://platform-operator:8081")

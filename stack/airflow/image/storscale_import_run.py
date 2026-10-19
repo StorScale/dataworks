@@ -109,7 +109,7 @@ def files():
         import pandas as pd
         for item in items:
             with item.open() as f:
-                for sheet, frame in pd.read_excel(f, sheet_name=None).items():
+                for _sheet, frame in pd.read_excel(f, sheet_name=None).items():
                     for row in frame.to_dict(orient="records"):
                         yield row
 

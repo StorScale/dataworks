@@ -16,9 +16,9 @@ import json
 import sys
 import time
 
+import k8s
 import pandas as pd
 
-import k8s
 from lakekit import load_sales_tables, log, s3_root
 
 STORE = "storscale-platform"

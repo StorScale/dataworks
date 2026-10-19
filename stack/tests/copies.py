@@ -23,12 +23,11 @@ import json
 import os
 import time
 
+import k8s
 import psycopg2
 import requests
 
 from lakekit import check, denied, env, finish, sql
-
-import k8s
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
