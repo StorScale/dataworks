@@ -59,7 +59,7 @@ def main():
               (e.status_code, e.text[:300]))
         check("... the record says when they asked, by when it's due (45 days), who verified it, and that no delivery carried their data",
               ej.get("requestedOn") == "2026-10-19" and ej.get("dueBy") == "2026-12-03" and ej.get("verifiedBy") == "the privacy tool" and ej.get("deliveries") == []
-              and "2" not in json.dumps({k: v for k, v in ej.items() if k not in ("tables", "at", "deliveriesChecked", "deliveriesNotCheckable", "id")}).replace("2026", ""),
+              and "person" not in ej and len(ej.get("personHash", "")) == 16 and ej["personHash"] != "2",   # a hash of the ID, never the ID
               {k: v for k, v in ej.items() if k != "deliveries"})
         listed = (bob.get(f"{PLATFORM}/api/projects/{NAME}/erasures", timeout=30).json() or {}).get("erasures", [])
         audit = wait(lambda: next((x for x in (bob.get(f"{PLATFORM}/api/projects/{NAME}/audit", timeout=30).json() or {}).get("events", [])

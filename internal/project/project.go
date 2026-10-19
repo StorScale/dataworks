@@ -329,6 +329,10 @@ func CopyTable(s Source, table string) string {
 // and read none of its data.
 const CatalogUser = "openmetadata"
 
+// MaintenanceUser is the platform's Trino account for table maintenance,
+// erasure and retention: it reads and writes every table, unmasked.
+const MaintenanceUser = "maintenance"
+
 // SourceKinds are the databases a source may be (Trino's connectors).
 var SourceKinds = []string{"postgresql", "mysql", "sqlserver", "oracle"}
 
