@@ -4,6 +4,17 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **The company's terms** ([docs/use-cases.md](docs/use-cases.md), 10.1): a project marked `semantic.shared` holds a semantic model others build on (`semantic.uses`), compiled with theirs and not defined again in them; a change to it that would break a model built on it is refused, naming the project. A model's `terms:` (owner, definition, synonyms) are the platform's: a Business terms page (in the top bar), a page per term (its tables, metrics and the projects using it), terms first in search, and OpenMetadata's glossary, Business terms, kept in step, the tables tagged. The `business` suite checks it.
+- **Dashboards on the same definitions** (10.2, Superset): `superset-sync` keeps a Superset dataset for each semantic model, with its metrics defined and the dimensions of the models it joins to by entity, so a chart's numbers are the semantic layer's, under the person's rules. Power BI is to decide (how people reach it and sign in).
+- **Salesforce from a connector's form** (8.4): an import's source may be `salesforce` (dlt's verified source, copied in at a pinned commit), its objects and since when, signed in by a connection of kind salesforce (and a CA to trust, for a proxy that inspects TLS). The project's editors add, change and remove imports on the new Imports tab. The `imports` suite plays Salesforce.
+
+### Changed
+- **The catalog's Welcome card is charcoal blue** (`#2c3e50`, OpenMetadata's `panelBackgroundColor`), not OpenMetadata's blue.
+
+### Fixed
+- **The notebooks suite on a real cluster** cleans up its connection through the platform (the test pod may delete only Secrets of its own names), so a second run there doesn't meet the first's.
+
 ## [0.16.1] - 2026-10-18
 
 The catalog's logo fitted to its sidebar and its colours the platform's; a deleted project's deliveries' connections removed.

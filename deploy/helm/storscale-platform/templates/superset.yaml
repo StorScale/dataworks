@@ -80,3 +80,29 @@ spec:
   selector: {{- include "storscale.selector" (list .Release.Name "superset") | nindent 4 }}
   ports:
     - {name: http, port: 8088, targetPort: http}
+---
+# Superset's datasets from the semantic models (use case 10.2): one, so two
+# never write at once.
+{{- $sync := fromYaml (include "storscale.superset.pod" .) }}
+{{- $_ := set (index $sync.containers 0) "name" "sync" }}
+{{- $_ := set (index $sync.containers 0) "command" (list "python" "/app/pythonpath/semantic_sync.py") }}
+{{- $_ := set (index $sync.containers 0) "resources" (dict "requests" (dict "cpu" "20m" "memory" "384Mi") "limits" (dict "memory" "768Mi")) }}
+{{- $_ := set $sync "enableServiceLinks" false }}
+{{- $_ := set $sync "initContainers" (concat ($sync.initContainers | default list) (fromYamlArray (include "storscale.wait" (list . "setup" (list "job" "superset-init"))))) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: superset-sync
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  progressDeadlineSeconds: {{ .Values.progressDeadlineSeconds }}
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {{- include "storscale.selector" (list .Release.Name "superset-sync") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "storscale.selector" (list .Release.Name "superset-sync") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "storscale.filesConfigMap" (list . "superset" "superset") | sha256sum }}
+    spec: {{- toYaml $sync | nindent 6 }}

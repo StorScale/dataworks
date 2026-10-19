@@ -15,7 +15,10 @@ These check (use case 10.1):
   4. a change to the company's model that would break campaigns' is refused,
      naming campaigns;
   5. the catalog's glossary has the terms, and the company's tables are
-     tagged with them.
+     tagged with them;
+  6. Superset has the company's models as datasets, their metrics defined
+     (10.2): alice's chart of bookings by customer segment there agrees with
+     the semantic layer's answer, both under her rules.
 
 The projects and their tables are removed after.
 """
@@ -25,6 +28,7 @@ import os
 from lakekit import check, finish, sql
 
 import catalog as om
+import superset as ss
 from projects import platform, projects, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
@@ -155,6 +159,23 @@ def main():
         names = sorted(t["name"] for t in (gt.json().get("data", []) if gt.ok else []))
         check("the catalog's glossary has the terms, and the company's customers table is tagged Customer",
               {"customer", "bookings_total"} <= set(names) and found, (names, found))
+
+        # 6. Superset's datasets.
+        sup = ss.sign_in("alice")
+
+        def dataset():
+            r = sup.get(f"{ss.SS}/api/v1/dataset/", params={"q": "(page_size:100)"}, timeout=30)
+            return next((d for d in (r.json().get("result", []) if r.ok else []) if d["table_name"] == "bookings (semantic)"), None)
+        d = wait(dataset, 300, every=10)
+        r = sup.post(f"{ss.SS}/api/v1/chart/data", headers=ss.headers(sup), timeout=120, json={
+            "datasource": {"id": d["id"], "type": "table"} if d else {}, "result_format": "json", "result_type": "full",
+            "queries": [{"metrics": ["bookings_total"], "columns": ["customer__segment"], "orderby": [["customer__segment", True]], "row_limit": 100}]})
+        chart = [[x["customer__segment"], round(float(x["bookings_total"]))] for x in r.json()["result"][0]["data"]] if r.ok and d else r.text[:300]
+        sem = alice.post(f"{PLATFORM}/api/projects/{COMPANY}/semantic/query", headers=H, timeout=120,
+                         json={"metrics": ["bookings_total"], "group_by": ["customer__segment"], "order_by": ["customer__segment"]})
+        answer = [[x[0], round(float(x[1]))] for x in sem.json().get("rows", [])] if sem.ok else sem.text[:300]
+        check("Superset has the company's bookings as a dataset, and alice's chart there agrees with the semantic layer",
+              d is not None and chart == answer == [["enterprise", 4000], ["small business", 500]], (chart, answer))
     finally:
         for name, tables in ((COMPANY, ("customers", "bookings")), (CAMPAIGNS, ())):
             for t in tables:
