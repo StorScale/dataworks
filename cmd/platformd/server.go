@@ -22,6 +22,7 @@ import (
 	"github.com/StorScale/storscale-platform/internal/audit"
 	"github.com/StorScale/storscale-platform/internal/catalog"
 	"github.com/StorScale/storscale-platform/internal/flow"
+	"github.com/StorScale/storscale-platform/internal/llm"
 	"github.com/StorScale/storscale-platform/internal/pipelines"
 	"github.com/StorScale/storscale-platform/internal/store"
 )
@@ -63,8 +64,9 @@ type server struct {
 	tokenUser func(raw string) (string, error) // in tests, who a token is (in place of tokens)
 	// in tests, a table's columns (in place of the catalog's)
 	tableColumns func(ctx context.Context, namespace, table string) ([]flow.Column, error)
-	files        fileStore // the platform's files in its bucket (dbt's artifacts); nil without STORE_URL
-	secure       bool      // cookies only over HTTPS
+	gateway      *llm.Gateway // the LLM gateway (12.1); nil: none
+	files        fileStore    // the platform's files in its bucket (dbt's artifacts); nil without STORE_URL
+	secure       bool         // cookies only over HTTPS
 	now          func() time.Time
 	store        store.Store       // nil: no projects
 	catalog      *catalog.Client   // nil: no Flow view
@@ -137,6 +139,9 @@ func newServer(ctx context.Context, cfg config, log *slog.Logger) (*server, erro
 	if cfg.AirflowURL != "" {
 		s.airflow = pipelines.New(cfg.AirflowURL, cfg.AirflowUser, cfg.AirflowPassword)
 	}
+	if cfg.LLMGatewayURL != "" { // the LLM gateway (12.1): the keys' spend, read for the pages and the alerts
+		s.gateway = &llm.Gateway{URL: cfg.LLMGatewayURL, MasterKey: cfg.LLMGatewayMasterKey}
+	}
 	if cfg.CatalogURL != "" {
 		s.catalog = catalog.New(cfg.CatalogURL, cfg.CatalogTokenFile, "trino")
 	}
@@ -205,6 +210,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/webhooks/gitlab/{name}", s.handleGitLabHook)
 	mux.HandleFunc("GET /api/projects/{name}/erasures", s.handleErasures)
 	mux.HandleFunc("POST /api/projects/{name}/erasures", s.handleErase)
+	mux.HandleFunc("GET /api/projects/{name}/llm", s.handleLLM)
 	mux.HandleFunc("GET /api/projects/{name}/agents", s.handleAgents)
 	mux.HandleFunc("PUT /api/projects/{name}/agents/{agent}", s.handlePutAgent)
 	mux.HandleFunc("POST /api/projects/{name}/agents/{agent}/approve", s.handleApproveAgent)

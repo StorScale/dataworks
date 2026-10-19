@@ -50,6 +50,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/StorScale/storscale-platform/internal/llm"
 	"github.com/StorScale/storscale-platform/internal/pipelines"
 	"github.com/StorScale/storscale-platform/internal/project"
 	"github.com/StorScale/storscale-platform/internal/reconcile"
@@ -86,6 +87,10 @@ func main() {
 	}
 	// Projects: in the bucket (Compose), or Project resources with a copy in
 	// the bucket for the services that read them there (Kubernetes).
+	var gateway *llm.Gateway // the LLM gateway (12.1), when the install has one
+	if u := os.Getenv("LLM_GATEWAY_URL"); u != "" {
+		gateway = &llm.Gateway{URL: u, MasterKey: os.Getenv("LLM_GATEWAY_MASTER_KEY")}
+	}
 	protection, err := project.ParseProtection(os.Getenv("PROTECTION_TAGS"))
 	if err != nil {
 		log.Error("settings", "error", err)
@@ -106,6 +111,7 @@ func main() {
 		Store:              st,
 		PlatformURL:        os.Getenv("PLATFORM_URL"),
 		Protection:         protection,
+		Gateway:            gateway,
 		ProtectSuggested:   env("PROTECTION_APPLY_SUGGESTED", "true") != "false",
 		Log:                log,
 		RangerUserPassword: rangerPassword,

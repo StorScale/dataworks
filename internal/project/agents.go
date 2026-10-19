@@ -20,6 +20,7 @@ type Agent struct {
 	Owner       string   `json:"owner"`           // a person: who answers for it
 	Tools       []string `json:"tools,omitempty"` // of the MCP server's, by name; none: all a reader may use
 	Schedule    string   `json:"schedule,omitempty"`
+	Budget      float64  `json:"budget,omitempty"` // USD a month at the LLM gateway (12.1); 0: no key
 	// The platform's, kept as they were on each save: who registered it, who
 	// approved it (someone else), and when. Changed tools or owner need
 	// approval again.
@@ -49,7 +50,7 @@ func (a Agent) Approved() bool { return a.ApprovedBy != "" }
 
 // Fingerprint is what approval covers: a change to it needs approval again.
 func (a Agent) Fingerprint() string {
-	return a.Owner + "|" + strings.Join(sorted(a.Tools), ",") + "|" + a.Schedule
+	return a.Owner + "|" + strings.Join(sorted(a.Tools), ",") + "|" + a.Schedule + "|" + fmt.Sprint(a.Budget)
 }
 
 func (p *Project) agentProblems(bad func(string, ...any)) {
@@ -72,6 +73,9 @@ func (p *Project) agentProblems(bad func(string, ...any)) {
 		}
 		if a.Schedule != "" && !cronRE.MatchString(a.Schedule) {
 			bad("agents: %s: schedule %q: five cron fields, as 0 6 * * 1", a.Name, a.Schedule)
+		}
+		if a.Budget < 0 || a.Budget > 1_000_000 {
+			bad("agents: %s: budget %v: USD a month, up to a million", a.Name, a.Budget)
 		}
 		if a.ApprovedBy != "" && a.ApprovedBy == a.RegisteredBy {
 			bad("agents: %s: approved by the one who registered it", a.Name)

@@ -455,6 +455,31 @@ As **bob** (an administrator; on a company install, the data-protection approver
 
 ---
 
+## Lab 21: Models through the gateway, on a budget
+
+**Value:** every call to a model goes through one gateway the company controls, with a key per project and per agent, each with a monthly budget: the spend is visible beside the budget, the project is warned at 80%, and at the budget the gateway stops answering rather than the bill growing. Nobody pastes a provider's key into a notebook. (On a company install the gateway is LiteLLM on the company's models, Anthropic's through Microsoft Foundry; a lab install runs the platform's stand-in, which answers by repeating the question and charges a cent per hundred characters, so a budget is reached in minutes.)
+
+As **bob**, on `retail`:
+
+1. **Give the project a budget.** On the project's Edit page, add `"llm": {"budget": 0.05}` to the spec (five cents a month, for the lab; a real project gets dollars). Save. Within a minute the **Agents** tab's gateway card says `retail: 0.00 of 0.05 spent`, and the **Connections** tab lists `retail-llm`, kind `llm`, added by `platform-operator`, with its key, the gateway's address and the budget set. The key is shown nowhere: a pipeline in the project's Airflow, a notebook's job or an agent's deployment reads it as the project's connection (on Kubernetes, the Secret `retail-llm`).
+2. **Ask through it.** For the lab, read the key as the administrator (`kubectl -n storscale get secret retail-llm -o jsonpath='{.data.llmKey}' | base64 -d`; on Compose it's `connections/retail/retail-llm.json` in the platform's bucket) and, in a notebook cell:
+
+   ```python
+   import requests
+   r = requests.post("http://llm:4000/chat/completions", headers={"Authorization": "Bearer " + KEY},
+                     json={"model": "default", "messages": [{"role": "user", "content": "How were sales in the west last week?"}]})
+   print(r.status_code, r.json()["choices"][0]["message"]["content"])
+   ```
+
+   The stand-in answers by repeating the question; LiteLLM would answer from the model. Run the cell four times: the Agents tab shows `0.04 of 0.05 spent`, and the project's Overview carries an alert: the project has used 80% of its LLM budget.
+3. **At the budget.** Run it twice more: the second answer is `400`, "Budget has been exceeded", the gateway's own refusal, the same whether the stand-in or LiteLLM. The alert now says the project is at its budget and the gateway answers it no more this month.
+4. **Raise it.** Change the spec to `"llm": {"budget": 1}`: the operator makes a new key (the old one answers no more, so a program holding it reads the connection again) and the tab shows `0.00 of 1.00 spent`.
+5. **An agent's own budget.** On the Agents tab, register `nightly-summary` as in Lab 10 with a **budget** of `0.50`, and have alice approve it. Its row shows `0.00 of 0.50 spent` once the operator has made its key, kept beside its secret in the agent's connection; the agent spends against its own budget, not the project's, and an agent that loops is stopped at its budget with bob alerted. **Revoke** it: its key goes with its client.
+
+**Check:** the Agents tab shows the project's spend and the agent's against their budgets; the Audit tab has the budget changes as project edits; a call past the budget is refused by the gateway, not by the platform.
+
+---
+
 ## Where to go next
 
 - [use-cases.md](use-cases.md): the stories the platform is built around, phase by phase, with their requirements and what's built.

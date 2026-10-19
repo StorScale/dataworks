@@ -16,7 +16,7 @@ import (
 var validators = []func(p *Project, bad func(format string, a ...any)){
 	(*Project).checkMembers, (*Project).checkTables, (*Project).checkFiles, (*Project).checkPipelines,
 	(*Project).productProblems, (*Project).agentProblems, (*Project).checkSemantic, (*Project).checkHistory, (*Project).checkNotify,
-	(*Project).checkSources, (*Project).checkImports, (*Project).checkDeliveries, (*Project).checkLimits,
+	(*Project).checkSources, (*Project).checkImports, (*Project).checkDeliveries, (*Project).checkLimits, (*Project).checkLLM,
 }
 
 // Validate says what's wrong with a project, all at once.
@@ -398,6 +398,13 @@ func (p *Project) checkDeliveries(bad func(format string, a ...any)) {
 				bad("deliveries: %s: checks: parts need splitBy", d.Name)
 			}
 		}
+	}
+}
+
+// checkLLM checks the project's gateway budget.
+func (p *Project) checkLLM(bad func(format string, a ...any)) {
+	if l := p.Spec.LLM; l != nil && (l.Budget < 0 || l.Budget > 1_000_000) {
+		bad("llm: budget %v: USD a month, up to a million", l.Budget)
 	}
 }
 

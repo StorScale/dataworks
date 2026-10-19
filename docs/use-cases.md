@@ -509,7 +509,7 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 
 **Requirements**
 - R12.1 Every answer from the semantic layer, run as the person, with its definitions cited.
-- R12.2 An LLM gateway (LiteLLM) in front of the models: per project and per person budgets, cost recorded, and guardrails (no secrets or masked values sent out).
+- R12.2 An LLM gateway (LiteLLM) in front of the models: per project and per person budgets, cost recorded, and guardrails (no secrets or masked values sent out). (Built 2026-10-19: the gateway, keys and budgets per project and per agent, spend shown; guardrails and per-person budgets left.)
 - R12.3 Agents' calls audited with the person behind them (R6.11).
 
 ### 12.2 An agent of the project's own
@@ -520,9 +520,9 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 4. One night it loops. At its budget, the gateway stops it, and bob gets an alert.
 
 **Requirements**
-- R12.4 Agents registered in a project: identity, owner, tools and data allowed, budget. (Built 2026-10-19 but the budget, which waits for the gateway.)
+- R12.4 Agents registered in a project: identity, owner, tools and data allowed, budget. (Built 2026-10-19; the budget with the gateway, the same day.)
 - R12.5 Approval before an agent runs; revoking it takes effect at once. (Built 2026-10-19: approved by an editor other than its registrant; revoked, its client is gone within a minute.)
-- R12.6 Spend caps that stop an agent, with an alert.
+- R12.6 Spend caps that stop an agent, with an alert. (Built 2026-10-19.)
 
 ### 12.3 A metric change, tested
 

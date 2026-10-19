@@ -55,6 +55,7 @@ type Spec struct {
 	Semantic    *Semantic  `json:"semantic,omitempty"`
 	Products    []Product  `json:"products,omitempty"`
 	Agents      []Agent    `json:"agents,omitempty"` // programs of the project's own (12.2)
+	LLM         *LLM       `json:"llm,omitempty"`    // the project's use of the LLM gateway (12.1)
 }
 
 // Semantic is how the project's semantic model stands among the others'
@@ -328,6 +329,12 @@ func CopyTable(s Source, table string) string {
 // what's in a source (its schemas, tables and columns), to describe them,
 // and read none of its data.
 const CatalogUser = "openmetadata"
+
+// LLM is a project's use of the LLM gateway (use case 12.1): a key of its
+// own with a monthly budget (USD), kept as its connection <project>-llm.
+type LLM struct {
+	Budget float64 `json:"budget"`
+}
 
 // MaintenanceUser is the platform's Trino account for table maintenance,
 // erasure and retention: it reads and writes every table, unmasked.

@@ -284,6 +284,8 @@ services:
       # The data-protection approvers: beside the administrators (bob), the
       # analysts (alice), so the example has one besides who changes a delivery.
       DELIVERY_APPROVER_GROUPS: engineers,analysts
+      LLM_GATEWAY_URL: http://llm:4000
+      LLM_GATEWAY_MASTER_KEY: ${LLM_MASTER_KEY:-sk-storscale-local}
       # Airflow, for the projects' pipelines and their runs, as the platform's own Airflow account.
       AIRFLOW_URL: http://airflow:8090/pipelines
       AIRFLOW_USER: storscale-platform
@@ -332,6 +334,22 @@ services:
       interval: 5s
       retries: 60
 
+  # The LLM gateway's stand-in (use case 12.1): keys with budgets, answers
+  # that repeat the question. LiteLLM takes its place on an install with a
+  # provider (the chart's llm.gateway: litellm).
+  llm:
+    <<: *tools
+    restart: unless-stopped
+    command: ["python", "-u", "/tools/llm_stub.py"]
+    volumes:
+      - ./tools:/tools:ro
+    environment:
+      LLM_MASTER_KEY: ${LLM_MASTER_KEY:-sk-storscale-local}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness')"]
+      interval: 5s
+      retries: 30
+
   # Applies projects to Keycloak, Ranger, Buckets and Nessie, and writes
   # back each one's status.
   platform-operator:
@@ -348,6 +366,8 @@ services:
       PLATFORM_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}
       # What the catalog's Protection tags mean (use case 12.5): the engineers (the example's data-protection approvers) see such columns as they are.
       PROTECTION_TAGS: '{"personal": {"mask": "MASK_HASH", "except": ["engineers"]}, "financial": {"mask": "MASK", "except": ["engineers"]}, "health": {"mask": "MASK_NULL", "except": ["engineers"]}}'
+      LLM_GATEWAY_URL: http://llm:4000
+      LLM_GATEWAY_MASTER_KEY: ${LLM_MASTER_KEY:-sk-storscale-local}
       RANGER_URL: http://ranger-admin:6080
       RANGER_PASSWORD: ${RANGER_PASSWORD}
       NESSIE_URL: http://nessie:19120

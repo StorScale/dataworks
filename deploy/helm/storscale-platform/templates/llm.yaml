@@ -1,0 +1,90 @@
+{{/* The LLM gateway (use case 12.1): the platform's stand-in, or LiteLLM in
+     front of the company's models. Either answers at http://llm:4000 with the
+     master key in storscale-env (LLM_MASTER_KEY); the operator makes a key per
+     project and per agent there, with their budgets. */}}
+{{- if .Values.llm.gateway }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  progressDeadlineSeconds: {{ .Values.progressDeadlineSeconds }}
+  selector:
+    matchLabels: {{- include "storscale.selector" (list .Release.Name "llm") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "storscale.selector" (list .Release.Name "llm") | nindent 8 }}
+    spec:
+      enableServiceLinks: false
+      serviceAccountName: storscale
+      containers:
+      {{- if eq .Values.llm.gateway "stub" }}
+        - name: llm
+          image: {{ include "storscale.image" (list . "tools") }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          command: ["python", "-u", "/tools/llm_stub.py"]
+          env:
+            - {name: LLM_MASTER_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: LLM_MASTER_KEY}}}
+            - {name: LLM_STUB_STATE, value: /state/keys.json}
+          ports:
+            - {name: http, containerPort: 4000}
+          readinessProbe:
+            httpGet: {path: /health/liveliness, port: http}
+            periodSeconds: 5
+          volumeMounts:
+            - {name: files-tools, mountPath: /tools, readOnly: true}
+            - {name: state, mountPath: /state}
+          {{- include "storscale.resources" (list "10m" "32Mi" "128Mi") | nindent 10 }}
+      {{- else }}
+        - name: llm
+          image: {{ .Values.llm.litellm.image }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          args: ["--config", "/config/config.yaml", "--port", "4000"]
+          env:
+            - {name: LITELLM_MASTER_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: LLM_MASTER_KEY}}}
+            - {name: LLM_PROVIDER_KEY, valueFrom: {secretKeyRef: {name: storscale-llm, key: api_key, optional: true}}}
+            - {name: DATABASE_URL, value: "postgresql://litellm:$(LITELLM_DB_PASSWORD)@postgres:5432/litellm"}
+            - {name: LITELLM_DB_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: LLM_MASTER_KEY}}}
+          ports:
+            - {name: http, containerPort: 4000}
+          readinessProbe:
+            httpGet: {path: /health/liveliness, port: http}
+            periodSeconds: 10
+            initialDelaySeconds: 20
+          volumeMounts:
+            - {name: config, mountPath: /config, readOnly: true}
+          {{- include "storscale.resources" (list "100m" "512Mi" "2Gi") | nindent 10 }}
+      {{- end }}
+      volumes:
+        {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 8 }}
+        - {name: state, emptyDir: {}}
+        - {name: config, configMap: {name: llm-config, optional: true}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "storscale.selector" (list .Release.Name "llm") | nindent 4 }}
+  ports:
+    - {name: http, port: 4000, targetPort: http}
+{{- if eq .Values.llm.gateway "litellm" }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llm-config
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    model_list:
+{{ toYaml .Values.llm.litellm.models | indent 6 }}
+    general_settings:
+      master_key: os.environ/LITELLM_MASTER_KEY
+      database_url: os.environ/DATABASE_URL
+{{- end }}
+{{- end }}
