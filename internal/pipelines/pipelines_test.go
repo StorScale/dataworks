@@ -162,3 +162,24 @@ func TestImportErrorsAreTheProjectsRepos(t *testing.T) {
 		t.Errorf("sales' import errors: %+v %v, want its repo's only", errs, err)
 	}
 }
+
+// A run's log: each task's last try, structured events as lines.
+func TestRunLog(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /auth/token", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]string{"access_token": "tok"})
+	})
+	mux.HandleFunc("GET /api/v2/dags/flow_weekly/dagRuns/manual__1/taskInstances", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"task_instances": []map[string]any{{"task_id": "dbt_build", "try_number": 2}}})
+	})
+	mux.HandleFunc("GET /api/v2/dags/flow_weekly/dagRuns/manual__1/taskInstances/dbt_build/logs/2", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"content": []any{"plain line",
+			map[string]any{"timestamp": "2026-10-19T13:25:10", "level": "error", "event": "dbt build failed (exit 1)"}}})
+	})
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+	text, err := New(ts.URL, "storscale-platform", "secret").RunLog(context.Background(), "flow_weekly", "manual__1")
+	if err != nil || text != "=== dbt_build (try 2)\nplain line\n2026-10-19T13:25:10 error dbt build failed (exit 1)\n" {
+		t.Errorf("%v\n%s", err, text)
+	}
+}

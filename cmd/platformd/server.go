@@ -190,6 +190,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/projects/{name}/sql", s.handleSemantic)
 	mux.HandleFunc("GET /api/projects/{name}/pipelines", s.handlePipelines)
 	mux.HandleFunc("POST /api/projects/{name}/pipelines/{pipeline}/runs", s.handleStartRun)
+	mux.HandleFunc("GET /api/projects/{name}/pipelines/{pipeline}/runs/{run}/log", s.handleRunLog)
 	mux.HandleFunc("POST /api/projects/{name}/dbt/artifacts", s.handleDbtArtifacts)
 	mux.HandleFunc("GET /api/projects/{name}/dbt/artifacts/{artifact}", s.handleDbtArtifact)
 	mux.HandleFunc("GET /api/projects/{name}/deliveries", s.handleDeliveries)

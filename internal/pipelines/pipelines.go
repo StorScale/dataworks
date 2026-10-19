@@ -265,6 +265,47 @@ func (c *Client) Of(ctx context.Context, project string, runs int) ([]Pipeline, 
 	return out, nil
 }
 
+// RunLog is what a run's tasks logged, each task's last try, as text: why
+// a run failed, in the words of what ran (dbt's, dlt's, the notebook's).
+func (c *Client) RunLog(ctx context.Context, dag, run string) (string, error) {
+	var ts struct {
+		Tasks []struct {
+			ID  string `json:"task_id"`
+			Try int    `json:"try_number"`
+		} `json:"task_instances"`
+	}
+	base := fmt.Sprintf("/dags/%s/dagRuns/%s/taskInstances", url.PathEscape(dag), url.PathEscape(run))
+	if err := c.call(ctx, "GET", base, nil, &ts); err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	for _, t := range ts.Tasks {
+		try := max(t.Try, 1)
+		var lg struct {
+			Content []json.RawMessage `json:"content"`
+		}
+		if err := c.call(ctx, "GET", fmt.Sprintf("%s/%s/logs/%d", base, url.PathEscape(t.ID), try), nil, &lg); err != nil {
+			fmt.Fprintf(&b, "=== %s (try %d): no log: %v\n", t.ID, try, err)
+			continue
+		}
+		fmt.Fprintf(&b, "=== %s (try %d)\n", t.ID, try)
+		for _, raw := range lg.Content {
+			var line string
+			if json.Unmarshal(raw, &line) != nil { // a structured event: its time, level and text
+				var ev struct {
+					Timestamp string `json:"timestamp"`
+					Level     string `json:"level"`
+					Event     string `json:"event"`
+				}
+				json.Unmarshal(raw, &ev)
+				line = strings.TrimSpace(ev.Timestamp + " " + ev.Level + " " + ev.Event)
+			}
+			b.WriteString(line + "\n")
+		}
+	}
+	return b.String(), nil
+}
+
 // ImportErrors are the files of the project's repo Airflow couldn't load.
 func (c *Client) ImportErrors(ctx context.Context, project string) ([]ImportError, error) {
 	out := []ImportError{}
