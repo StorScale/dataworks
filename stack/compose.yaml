@@ -713,6 +713,14 @@ services:
       start_period: 30s
       retries: 60
 
+  # Superset's datasets from the semantic models (use case 10.2), kept every minute.
+  superset-sync:
+    restart: unless-stopped
+    <<: *superset
+    command: ["python", "/app/pythonpath/semantic_sync.py"]
+    depends_on:
+      superset-init: {condition: service_completed_successfully}
+
   # --- Pipelines: Airflow -------------------------------------------------------------------
   airflow-db:
     restart: unless-stopped

@@ -4,5 +4,5 @@
 FROM apache/superset:6.1.0
 USER root
 RUN uv pip install --python /app/.venv/bin/python --no-cache \
-      "trino[sqlalchemy]==0.340.0" authlib==1.8.0 psycopg2-binary==2.9.13
+      "trino[sqlalchemy]==0.340.0" authlib==1.8.0 psycopg2-binary==2.9.13 boto3==1.43.108
 USER superset
