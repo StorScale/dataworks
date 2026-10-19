@@ -74,6 +74,38 @@ func (r *Ranger) syncPolicies(ctx context.Context, prefix string, want []project
 	return nil
 }
 
+// knownGroups drops from the policies' items the groups Ranger doesn't have,
+// the items left naming no one, and the policies left with no items.
+func knownGroups(policies []project.RangerPolicy, have map[string]int) []project.RangerPolicy {
+	keep := func(items []project.RangerItem) []project.RangerItem {
+		var out []project.RangerItem
+		for _, it := range items {
+			var gs []string
+			for _, g := range it.Groups {
+				if _, ok := have[g]; ok {
+					gs = append(gs, g)
+				}
+			}
+			if len(gs) == 0 && len(it.Users) == 0 {
+				continue
+			}
+			it.Groups = gs
+			out = append(out, it)
+		}
+		return out
+	}
+	out := make([]project.RangerPolicy, 0, len(policies))
+	for _, p := range policies {
+		p.PolicyItems = keep(p.PolicyItems)
+		p.DataMaskPolicyItems = keep(p.DataMaskPolicyItems)
+		p.RowFilterPolicyItems = keep(p.RowFilterPolicyItems)
+		if len(p.PolicyItems)+len(p.DataMaskPolicyItems)+len(p.RowFilterPolicyItems) > 0 {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 type rangerGroup struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`

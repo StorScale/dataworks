@@ -314,7 +314,8 @@ func (r *Reconciler) applyRanger(ctx context.Context, p *project.Project, ppl pe
 	if p.Spec.Pipelines != nil {
 		named = append(named, p.Group("pipelines"))
 	}
-	if _, err := r.Ranger.ensureGroups(ctx, named); err != nil {
+	have, err := r.Ranger.ensureGroups(ctx, named)
+	if err != nil {
 		return err
 	}
 	if err := r.Ranger.syncGroupMembers(ctx, p.Groups(), want, r.RangerUserPassword); err != nil {
@@ -325,7 +326,10 @@ func (r *Reconciler) applyRanger(ctx context.Context, p *project.Project, ppl pe
 			return err
 		}
 	}
-	return r.Ranger.syncPolicies(ctx, p.RangerPrefix(), append(p.RangerPolicies(), p.ReviewPolicies(reviews)...))
+	// Another project's groups (a data product's consumers) are left out
+	// until Ranger has them: it refuses a policy naming a group it doesn't
+	// know, and the next resync adds them.
+	return r.Ranger.syncPolicies(ctx, p.RangerPrefix(), knownGroups(append(p.RangerPolicies(), p.ReviewPolicies(reviews)...), have))
 }
 
 func (r *Reconciler) applyBuckets(ctx context.Context, p *project.Project) error {
