@@ -1,0 +1,61 @@
+customer_id,first_name,last_name,email,phone,region,segment,signed_up
+1,Dev,Kowalski,dev.kowalski1@example.com,+1 415 555 9385,US,small business,2026-05-03
+2,Dev,Hansen,dev.hansen2@example.com,+61 2 9999 7891,APAC,small business,2025-10-08
+3,Ximena,Yilmaz,ximena.yilmaz3@example.com,+1 415 555 8226,US,consumer,2025-11-11
+4,Chloe,Dubois,chloe.dubois4@example.com,+44 20 7946 2606,EU,consumer,2026-02-22
+5,Viktor,Patel,viktor.patel5@example.com,+1 415 555 4444,US,consumer,2025-06-28
+6,Lena,Zimmerman,lena.zimmerman6@example.com,+44 20 7946 9414,EU,small business,2026-01-06
+7,Kai,Chen,kai.chen7@example.com,+1 415 555 5786,US,consumer,2025-03-14
+8,Uma,Walsh,uma.walsh8@example.com,+1 415 555 6062,US,consumer,2025-12-30
+9,Lena,Larsen,lena.larsen9@example.com,+1 415 555 2485,US,consumer,2025-10-27
+10,Rosa,Patel,rosa.patel10@example.com,+61 2 9999 7970,APAC,consumer,2026-01-20
+11,Tomas,Patel,tomas.patel11@example.com,+44 20 7946 9595,EU,consumer,2025-08-04
+12,Sam,Patel,sam.patel12@example.com,+1 415 555 1415,US,consumer,2026-01-28
+13,Elena,Brooks,elena.brooks13@example.com,+61 2 9999 9572,APAC,small business,2025-02-22
+14,Wren,Tanaka,wren.tanaka14@example.com,+44 20 7946 3333,EU,consumer,2025-04-28
+15,Dev,Usman,dev.usman15@example.com,+1 415 555 8690,US,small business,2026-05-07
+16,Rosa,Ito,rosa.ito16@example.com,+1 415 555 6040,US,consumer,2025-11-28
+17,Quinn,Walsh,quinn.walsh17@example.com,+1 415 555 7585,US,consumer,2025-05-31
+18,Iris,Alvarez,iris.alvarez18@example.com,+44 20 7946 8507,EU,small business,2026-04-20
+19,Priya,Larsen,priya.larsen19@example.com,+61 2 9999 5261,APAC,small business,2025-08-27
+20,Quinn,Yilmaz,quinn.yilmaz20@example.com,+61 2 9999 8114,APAC,consumer,2026-04-10
+21,Ben,Jensen,ben.jensen21@example.com,+44 20 7946 2611,EU,consumer,2026-01-02
+22,Zara,Quiroga,zara.quiroga22@example.com,+44 20 7946 3999,EU,enterprise,2026-03-08
+23,Ximena,Patel,ximena.patel23@example.com,+61 2 9999 5365,APAC,enterprise,2025-07-09
+24,Dev,Garcia,dev.garcia24@example.com,+1 415 555 7738,US,consumer,2026-04-15
+25,Ana,Chen,ana.chen25@example.com,+44 20 7946 9955,EU,enterprise,2025-02-12
+26,Tomas,Zimmerman,tomas.zimmerman26@example.com,+44 20 7946 2979,EU,small business,2026-01-20
+27,Rosa,Ito,rosa.ito27@example.com,+1 415 555 6853,US,consumer,2025-06-10
+28,Viktor,Schmidt,viktor.schmidt28@example.com,+1 415 555 9060,US,small business,2026-04-26
+29,Elena,Rossi,elena.rossi29@example.com,+44 20 7946 3149,EU,enterprise,2026-03-25
+30,Wren,Quiroga,wren.quiroga30@example.com,+44 20 7946 7844,EU,small business,2026-04-24
+31,Elena,Zimmerman,elena.zimmerman31@example.com,+1 415 555 6013,US,consumer,2025-07-19
+32,Zara,Ekwueme,zara.ekwueme32@example.com,+1 415 555 4222,US,consumer,2026-05-06
+33,Dev,Moreau,dev.moreau33@example.com,+61 2 9999 1841,APAC,small business,2025-11-27
+34,Lena,Yilmaz,lena.yilmaz34@example.com,+61 2 9999 1419,APAC,consumer,2025-06-17
+35,Viktor,Jensen,viktor.jensen35@example.com,+44 20 7946 2988,EU,consumer,2025-08-27
+36,Sam,Tanaka,sam.tanaka36@example.com,+1 415 555 3521,US,consumer,2025-04-16
+37,Nia,Tanaka,nia.tanaka37@example.com,+44 20 7946 4822,EU,small business,2025-02-05
+38,Rosa,Moreau,rosa.moreau38@example.com,+44 20 7946 3840,EU,consumer,2025-10-06
+39,Ben,Okafor,ben.okafor39@example.com,+61 2 9999 4088,APAC,consumer,2025-12-14
+40,Ana,Ekwueme,ana.ekwueme40@example.com,+1 415 555 4583,US,small business,2025-09-22
+41,Elena,Fischer,elena.fischer41@example.com,+1 415 555 4047,US,consumer,2025-08-06
+42,Rosa,Novak,rosa.novak42@example.com,+61 2 9999 7278,APAC,consumer,2025-06-26
+43,Femi,Ito,femi.ito43@example.com,+1 415 555 7811,US,consumer,2025-04-01
+44,Kai,Quiroga,kai.quiroga44@example.com,+1 415 555 2967,US,consumer,2025-09-26
+45,Zara,Ito,zara.ito45@example.com,+1 415 555 4511,US,consumer,2026-05-04
+46,Chloe,Okafor,chloe.okafor46@example.com,+1 415 555 7684,US,consumer,2026-03-03
+47,Viktor,Fischer,viktor.fischer47@example.com,+61 2 9999 6766,APAC,small business,2025-06-30
+48,Rosa,Varga,rosa.varga48@example.com,+1 415 555 9820,US,consumer,2025-11-14
+49,Wren,Ito,wren.ito49@example.com,+1 415 555 4513,US,consumer,2025-10-16
+50,Iris,Varga,iris.varga50@example.com,+1 415 555 2662,US,small business,2025-02-19
+51,Nia,Fischer,nia.fischer51@example.com,+44 20 7946 1990,EU,small business,2026-01-05
+52,Zara,Fischer,zara.fischer52@example.com,+1 415 555 2741,US,consumer,2025-05-22
+53,Sam,Chen,sam.chen53@example.com,+44 20 7946 6154,EU,consumer,2025-05-12
+54,Chloe,Alvarez,chloe.alvarez54@example.com,+44 20 7946 5211,EU,consumer,2025-01-08
+55,Ben,Dubois,ben.dubois55@example.com,+44 20 7946 6077,EU,consumer,2025-12-18
+56,Rosa,Schmidt,rosa.schmidt56@example.com,+61 2 9999 6739,APAC,consumer,2025-08-22
+57,Tomas,Usman,tomas.usman57@example.com,+1 415 555 1622,US,enterprise,2025-06-11
+58,Tomas,Garcia,tomas.garcia58@example.com,+1 415 555 7981,US,enterprise,2026-03-26
+59,Dev,Varga,dev.varga59@example.com,+44 20 7946 9212,EU,small business,2026-04-18
+60,Iris,Moreau,iris.moreau60@example.com,+44 20 7946 6837,EU,consumer,2026-01-02
