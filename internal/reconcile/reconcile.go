@@ -7,6 +7,7 @@ package reconcile
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -51,7 +52,11 @@ type Reconciler struct {
 	// Files reads the store's files, for the assistants platformd registers
 	// (use case 10.4); nil: no assistants' clients. PlatformURL is the
 	// platform's address, their tokens' MCP audience.
-	Files            fileReader
+	Files fileReader
+	// Protection by tag (12.5): what the catalog's tags mean, and whether
+	// a suggested tag counts before someone confirms it.
+	Protection       project.ProtectionRules
+	ProtectSuggested bool
 	PlatformURL      string
 	assistantsDigest string
 	assistantsAt     time.Time
@@ -335,8 +340,29 @@ func (r *Reconciler) applyRanger(ctx context.Context, p *project.Project, ppl pe
 	}
 	// Another project's groups (a data product's consumers) are left out
 	// until Ranger has them: it refuses a policy naming a group it doesn't
-	// know, and the next resync adds them.
-	return r.Ranger.syncPolicies(ctx, p.RangerPrefix(), knownGroups(append(p.RangerPolicies(), p.ReviewPolicies(reviews)...), have))
+	// know, and the next resync adds them. Ranger's public group is everyone.
+	have["public"] = 0
+	policies := append(p.RangerPolicies(), p.ReviewPolicies(reviews)...)
+	policies = append(policies, p.ProtectionPolicies(r.classification(ctx, p), r.Protection, r.ProtectSuggested)...)
+	return r.Ranger.syncPolicies(ctx, p.RangerPrefix(), knownGroups(policies, have))
+}
+
+// classification is what the catalog has tagged of a project's columns, as
+// catalog-sync wrote it (classification/<project>.json); none when the
+// platform keeps no files here, or nothing's tagged yet.
+func (r *Reconciler) classification(ctx context.Context, p *project.Project) []project.ProtectedColumn {
+	if r.Files == nil {
+		return nil
+	}
+	b, err := r.Files.GetFile(ctx, "classification/"+p.Metadata.Name+".json")
+	if err != nil || b == nil {
+		return nil
+	}
+	var c project.Classification
+	if err := json.Unmarshal(b, &c); err != nil {
+		return nil
+	}
+	return c.Columns
 }
 
 func (r *Reconciler) applyBuckets(ctx context.Context, p *project.Project) error {

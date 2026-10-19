@@ -202,6 +202,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/projects/{name}/imports/{import}", s.handleDeleteImport)
 	mux.HandleFunc("GET /api/connectors", s.handleConnectors)
 	mux.HandleFunc("POST /api/webhooks/gitlab/{name}", s.handleGitLabHook)
+	mux.HandleFunc("GET /api/projects/{name}/classification", s.handleClassification)
+	mux.HandleFunc("POST /api/projects/{name}/classification", s.handleClassify)
 	mux.HandleFunc("GET /api/projects/{name}/uploads", s.handleUploads)
 	mux.HandleFunc("POST /api/projects/{name}/uploads", s.handleUpload)
 	mux.HandleFunc("GET /api/projects/{name}/uploads/{file}", s.handleUploadPreview)

@@ -31,6 +31,7 @@ import sys
 import time
 
 import boto3
+import classify
 import requests
 from metadata.workflow.data_quality import TestSuiteWorkflow
 from metadata.workflow.metadata import MetadataWorkflow
@@ -51,6 +52,7 @@ OM = "http://openmetadata:8585/api"
 SERVICE = "trino"
 EVERY = int(env.get("SYNC_EVERY", "20"))
 METADATA_EVERY = int(env.get("METADATA_EVERY", "60"))
+CLASSIFY_EVERY = int(env.get("CLASSIFY_EVERY", "120"))   # where personal data is (use case 12.5)
 CHECKS = {  # a project's check -> OpenMetadata's test definition
     "unique": "columnValuesToBeUnique",
     "notNull": "columnValuesToBeNotNull",
@@ -479,9 +481,29 @@ def theme_settings():
     r.raise_for_status()
 
 
+def trino_cursor_factory():
+    """Connections to Trino as the catalog's account, for the classification's samples."""
+    import trino.auth
+    import trino.dbapi
+
+    def connect(catalog, schema):
+        return trino.dbapi.connect(host="trino", port=8443, http_scheme="https", verify="/tls/cert.pem", user="openmetadata",
+                                   auth=trino.auth.BasicAuthentication("openmetadata", env["OPENMETADATA_TRINO_PASSWORD"]),
+                                   catalog=catalog, schema=schema, source="catalog-sync/classification")
+    return connect
+
+
+def classify_projects():
+    """Where personal data is: declared and found, tagged in the catalog, written for the operator."""
+    s3 = boto3.client("s3", endpoint_url="http://buckets:9000", region_name="us-east-1",
+                      aws_access_key_id=env["STORE_ACCESS_KEY"], aws_secret_access_key=env["STORE_SECRET_KEY"])
+    classify.run(OM, admin_headers(), SERVICE, projects(), trino_cursor_factory(), s3, "storscale-platform")
+
+
 def main():
     os.makedirs("/catalog", exist_ok=True)
     last_metadata = 0.0
+    last_classified = 0.0
     shared = None   # the token last written to the Secret
     while True:
         try:
@@ -516,6 +538,12 @@ def main():
                     log.warning("data products: %s", e)
                 last_metadata = time.time()
                 log.info("metadata: ingested trino")
+            if time.time() - last_classified > CLASSIFY_EVERY:
+                try:
+                    classify_projects()
+                except Exception as e:  # noqa: BLE001 (the next round tries again)
+                    log.warning("classification: %s", e)
+                last_classified = time.time()
             run_checks(token)
             with open("/catalog/ready", "w") as f:
                 f.write(str(time.time()))

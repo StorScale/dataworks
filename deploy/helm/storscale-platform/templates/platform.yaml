@@ -160,6 +160,8 @@ spec:
             - {name: AIRFLOW_DB_HOST, value: "airflow-db:5432"}
             - {name: POSTGRES_ADMIN_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: POSTGRES_ADMIN_PASSWORD}}}
             - {name: PIPELINES_DEFAULT_MEMORY, value: {{ .Values.pipelines.memory | quote }}}
+            - {name: PROTECTION_TAGS, value: {{ .Values.protection.tags | toJson | quote }}}   # what the catalog's tags mean (12.5)
+            - {name: PROTECTION_APPLY_SUGGESTED, value: {{ .Values.protection.applySuggested | quote }}}
             - {name: PLATFORM_URL, value: {{ include "storscale.url" . | quote }}}
             # Projects' limits: Trino's resource groups (its limits' database), and buckets' sizes.
             - {name: TRINO_DB_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: TRINO_DB_PASSWORD}}}

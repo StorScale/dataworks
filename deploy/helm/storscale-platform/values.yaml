@@ -154,6 +154,18 @@ deliveries:
 products:
   certifierGroups: ""
 
+# Protection by tag (use case 12.5): what the catalog's Protection tags mean.
+# A column tagged personal, financial or health (found by catalog-sync, or
+# declared by its project) is masked in Trino for everyone but the groups
+# excepted here. applySuggested: a tag the catalog suggested protects at once,
+# before someone confirms it (false: confirmed tags only).
+protection:
+  applySuggested: true
+  tags:
+    personal: {mask: MASK_HASH, except: []}     # the data-protection approvers, say: [data-protection]
+    financial: {mask: MASK, except: []}
+    health: {mask: MASK_NULL, except: []}
+
 # Projects as code (use case 7.4): which of a project's targets this install
 # is. A plan of the project's repo lays storscale/targets/<target>.yaml over
 # storscale/project.yaml.

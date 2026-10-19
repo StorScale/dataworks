@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ago, getFlow, getHistory, getMaintenance, runMaintenance, runSQL, SQLAnswer, TableStats, when } from "../api";
+import { SQLAnswer, TableStats, ago, classify, getClassification, getFlow, getHistory, getMaintenance, runMaintenance, runSQL, when } from "../api";
 import { CheckPill, checkName, ErrorBanner, failing, limits, maskLabel, Spinner, usePlatform, usePoll, useProject } from "../lib";
 import { FlowStrip } from "./Overview";
 
@@ -16,6 +16,8 @@ export default function Data() {
   const spec = view?.spec?.spec;
   const [params, setParams] = useSearchParams();
   const flow = usePoll(() => getFlow(name), [name], 30_000);
+  const klass = usePoll(() => getClassification(name), [name], 30_000);
+  const [klassError, setKlassError] = useState<string>();
   const tables = flow.data?.tables.filter((t) => !t.external) ?? [];
   const table = tables.find((t) => t.name === params.get("table")) ?? tables[0];
   const tab: Tab = (TABS as readonly string[]).includes(params.get("tab") ?? "") ? (params.get("tab") as Tab) : "columns";
@@ -27,6 +29,10 @@ export default function Data() {
 
   const reader = view?.role === "reader";
   const lim = limits(spec, table.name);
+  const protectedOf = (col: string) => (klass.data?.columns ?? []).filter((c) => c.table === table.name && c.column === col);
+  const decide = async (col: string, tag: string, action: "confirm" | "remove") => {
+    try { await classify(name, table.name, col, tag, action); klass.reload(); } catch (e) { setKlassError((e as Error).message); }
+  };
   const narrowed = lim.filters.length > 0 || Object.keys(lim.masks).length > 0 || lim.hidden;
   const into = flow.data.edges.filter((e) => e.to === table.fqn);
   const outOf = flow.data.edges.filter((e) => e.from === table.fqn);
@@ -77,16 +83,29 @@ export default function Data() {
               ))}
             </div>
 
+            {tab === "columns" && klassError && <ErrorBanner error={klassError} />}
             {tab === "columns" && (
               <div className="scroll-x">
                 <table className="t" data-testid="columns">
-                  <thead><tr><th>Column</th><th>Type</th><th>Readers see</th><th>Comes from</th></tr></thead>
+                  <thead><tr><th>Column</th><th>Type</th><th>Readers see</th><th>Protection</th><th>Comes from</th></tr></thead>
                   <tbody>
                     {table.columns.map((c) => (
                       <tr key={c.name}>
                         <td className="mono">{c.name}</td>
                         <td className="mono muted">{c.type || "–"}</td>
                         <td>{lim.hidden ? <span className="pill amber">nothing</span> : lim.masks[c.name] ? <span className="pill amber">{maskLabel(lim.masks[c.name])}</span> : <span className="muted small">all of it</span>}</td>
+                        <td data-testid={`protection-${c.name}`}>
+                          {protectedOf(c.name).map((pc) => (
+                            <span key={pc.tag} className="row" style={{ gap: 6, display: "inline-flex" }}>
+                              <span className={"pill " + (pc.state === "confirmed" ? "amber" : "blue")} title={pc.declared ? "declared by the project" : pc.automated ? "found by the catalog" : "tagged in the catalog"}>
+                                {pc.tag}{pc.state === "suggested" ? " (suggested)" : ""}
+                              </span>
+                              {!reader && pc.state === "suggested" && <button className="linkish small" onClick={() => decide(c.name, pc.tag, "confirm")} data-testid={`confirm-${c.name}`}>confirm</button>}
+                              {!reader && !pc.declared && <button className="linkish small" onClick={() => decide(c.name, pc.tag, "remove")} data-testid={`unprotect-${c.name}`}>remove</button>}
+                            </span>
+                          ))}
+                          {protectedOf(c.name).length === 0 && <span className="muted small">–</span>}
+                        </td>
                         <td className="mono small muted">{madeFrom(c.name).join(", ") || ""}</td>
                       </tr>
                     ))}
