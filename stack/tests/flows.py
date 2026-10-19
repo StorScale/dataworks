@@ -171,7 +171,11 @@ def run(bob, dag, project=NAME):
     if not run_id:
         return None, f"not started: HTTP {r.status_code}"
     state = lambda: next((x["state"] for p in pipelines() if p["id"] == dag for x in p.get("runs", []) if x["id"] == run_id and x["state"] in ("success", "failed")), None)
-    return run_id, wait(state, 900, every=10) or "still running"
+    done = wait(state, 900, every=10) or "still running"
+    if done != "success":  # why, in the words of what ran
+        r = bob.get(f"{PLATFORM}/api/projects/{project}/pipelines/{dag}/runs/{requests.utils.quote(run_id, safe='')}/log", timeout=60)
+        done += ": " + "\n".join((r.json().get("log", "") if r.ok else r.text).splitlines()[-60:])
+    return run_id, done
 
 
 def catalog():

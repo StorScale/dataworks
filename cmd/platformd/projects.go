@@ -374,6 +374,34 @@ func (s *server) handlePipelines(w http.ResponseWriter, r *http.Request) {
 // handleStartRun starts a run of one of the project's pipelines, for its
 // editors (and administrators). The run itself goes as the pipelines'
 // service account, whoever starts it.
+// handleRunLog is what a run's tasks logged, to the project's members: why
+// it failed, in the words of what ran.
+func (s *server) handleRunLog(w http.ResponseWriter, r *http.Request) {
+	sess := s.signedIn(w, r)
+	if sess == nil {
+		return
+	}
+	if s.airflow == nil {
+		s.fail(w, r, http.StatusServiceUnavailable, "pipelines aren't set up (no AIRFLOW_URL)")
+		return
+	}
+	v := s.project(w, r, sess)
+	if v == nil {
+		return
+	}
+	af, _, err := s.pipelinesOf(r.Context(), v)
+	if err != nil {
+		s.fail(w, r, http.StatusBadGateway, err.Error())
+		return
+	}
+	text, err := af.RunLog(r.Context(), r.PathValue("pipeline"), r.PathValue("run"))
+	if err != nil {
+		s.fail(w, r, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"log": text})
+}
+
 func (s *server) handleStartRun(w http.ResponseWriter, r *http.Request) {
 	sess := s.signedIn(w, r)
 	if sess == nil {
