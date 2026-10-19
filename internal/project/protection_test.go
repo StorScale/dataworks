@@ -6,7 +6,7 @@ import (
 )
 
 func TestProtectionPolicies(t *testing.T) {
-	p, err := Parse([]byte(`{"metadata":{"name":"sales"},"spec":{"members":[{"user":"bob","role":"editor"}],"tables":{}}}`))
+	p, err := Parse([]byte(`{"metadata":{"name":"sales"},"spec":{"members":[{"user":"bob","role":"editor"}],"tables":{"readers":{"masks":[{"table":"orders","column":"card_number","type":"MASK_SHOW_LAST_4"}]}}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -15,8 +15,8 @@ func TestProtectionPolicies(t *testing.T) {
 		t.Fatal(err)
 	}
 	cols := []ProtectedColumn{
-		{Table: "customers", Column: "email", Tag: "personal", State: "suggested", Automated: true},
-		{Table: "customers", Column: "customer_id", Tag: "personal", State: "confirmed", Declared: true},
+		{Table: "customers", Column: "email", Tag: "personal", State: "suggested", Automated: true, Type: "varchar"},
+		{Table: "customers", Column: "customer_id", Tag: "personal", State: "confirmed", Declared: true, Type: "int"},
 		{Table: "staff", Column: "pay", Tag: "salary", State: "confirmed"},
 		{Table: "staff", Column: "pay", Tag: "personal", State: "confirmed"},  // a column tagged twice: the stronger rule (health, financial, personal; then others) wins
 		{Table: "notes", Column: "text", Tag: "mystery", State: "confirmed"},  // no rule: ignored
@@ -38,6 +38,9 @@ func TestProtectionPolicies(t *testing.T) {
 	}
 	if tb := email.Resources["table"].Values; len(tb) != 3 || tb[0] != "customers" || email.Resources["column"].Values[0] != "email" {
 		t.Errorf("email's resources: %+v", email.Resources)
+	}
+	if id := pols[0]; id.DataMaskPolicyItems[len(id.DataMaskPolicyItems)-1].DataMaskInfo.DataMaskType != "MASK_NULL" { // a hash can't be an int: nulled
+		t.Errorf("customer_id's policy: %+v", id.DataMaskPolicyItems)
 	}
 	if pay := pols[2]; pay.DataMaskPolicyItems[len(pay.DataMaskPolicyItems)-1].DataMaskInfo.DataMaskType != "CUSTOM" { // personal outranks a tag the install added
 		t.Errorf("pay's policy: %+v", pay.DataMaskPolicyItems)

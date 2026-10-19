@@ -167,7 +167,7 @@ func TestCheckShape(t *testing.T) {
 		steps []Step
 		want  string
 	}{
-		{"no output", []Step{{ID: "a", Kind: Input, Table: "orders"}}, "a flow has one output step; this one has 0"},
+		{"two outputs", []Step{{ID: "a", Kind: Input, Table: "orders"}, {ID: "o", Kind: Output, Inputs: []string{"a"}, Table: "t"}, {ID: "p", Kind: Output, Inputs: []string{"a"}, Table: "u"}}, "a flow has one output step; this one has 2"},
 		{"circle", []Step{{ID: "a", Kind: Filter, Inputs: []string{"b"}, Where: "x"}, {ID: "b", Kind: Filter, Inputs: []string{"a"}, Where: "x"}, {ID: "o", Kind: Output, Inputs: []string{"a"}, Table: "t"}},
 			"go round in a circle"},
 		{"join arity", []Step{{ID: "a", Kind: Input, Table: "orders"}, {ID: "j", Kind: Join, Inputs: []string{"a"}}, {ID: "o", Kind: Output, Inputs: []string{"j"}, Table: "t"}},

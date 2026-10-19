@@ -21,6 +21,7 @@ type ProtectedColumn struct {
 	Column    string `json:"column"`
 	Tag       string `json:"tag"`                 // personal, financial, health
 	State     string `json:"state"`               // suggested, confirmed
+	Type      string `json:"type,omitempty"`      // the column's type, as the catalog names it (varchar, int, date)
 	Declared  bool   `json:"declared,omitempty"`  // by the project (tables.people)
 	Automated bool   `json:"automated,omitempty"` // found by the catalog, not a person
 }
@@ -86,6 +87,12 @@ func (p *Project) ProtectionPolicies(cols []ProtectedColumn, rules ProtectionRul
 	if t == nil {
 		return nil
 	}
+	own := map[string]bool{} // columns the project masks itself: its rule stands, and Ranger takes one policy per resource
+	if t.Readers != nil {
+		for _, m := range t.Readers.Masks {
+			own[m.Table+"."+m.Column] = true
+		}
+	}
 	byColumn := map[string]ProtectedColumn{} // the strongest tag per column: the first rule in tag order wins
 	order := map[string]int{}
 	for i, tag := range []string{"health", "financial", "personal"} {
@@ -99,6 +106,9 @@ func (p *Project) ProtectionPolicies(cols []ProtectedColumn, rules ProtectionRul
 			continue
 		}
 		key := c.Table + "." + c.Column
+		if own[key] {
+			continue
+		}
 		if have, ok := byColumn[key]; ok && rank(order, have.Tag) <= rank(order, c.Tag) {
 			continue
 		}
@@ -120,7 +130,7 @@ func (p *Project) ProtectionPolicies(cols []ProtectedColumn, rules ProtectionRul
 			items = append(items, it)
 		}
 		it := allow("public", "select")
-		it.DataMaskInfo = maskInfo(rule.Mask)
+		it.DataMaskInfo = maskInfo(rule.Mask, c.Type)
 		items = append(items, it)
 		out = append(out, RangerPolicy{Name: p.RangerPrefix() + "protect:" + c.Table + "." + c.Column, PolicyType: 1,
 			Description:         fmt.Sprintf("The project %s's %s.%s is %s (%s in the catalog): masked for everyone but %s.", p.Metadata.Name, c.Table, c.Column, c.Tag, c.State, exceptWords(rule.Except)),

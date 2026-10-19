@@ -11,7 +11,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 - **A project with an Airflow of its own sees its imports' runs** on its Pipelines tab (they run in the platform's Airflow), starts them and reads their logs there, and their failures are its alerts.
 
 ### Fixed
-- **A hash mask (`MASK_HASH`) on Trino** is written as a custom expression on Trino's own `sha256`: Ranger's built-in transformer names a function Trino doesn't have, so a reader's query failed instead of showing hashes.
+- **A hash mask (`MASK_HASH`) on Trino** is written as a custom expression on Trino's own `sha256`: Ranger's built-in transformer names a function Trino doesn't have, so a reader's query failed instead of showing hashes. A mask must give the column's type back, so on a column that isn't text (a number, a date) a hash mask nulls the value instead; and a column the project masks itself keeps its own policy (Ranger takes one per column).
 
 ### Changed
 - **The Flows tab shows on any project with tables** (it showed only with a pipelines repo, which only saving needs): building and previewing work without one; the save button says what's missing. The browser suite walks the canvas.

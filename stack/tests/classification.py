@@ -69,7 +69,7 @@ def reads(user, column):
         rows = sql(user, f"SELECT {column} FROM customers ORDER BY customer_id", "iceberg", NAME)
         return rows[0][0] if rows else None
     except Exception as e:  # noqa: BLE001 (refused, or not yet)
-        return f"error: {str(e)[:80]}"
+        return f"error: {str(e)[:300]}"
 
 
 def main():
@@ -94,7 +94,8 @@ def main():
         om = catalog()
         in_catalog = column_tags(om, "customer_id")
         check("... as the catalog's own page shows", in_catalog is not None and in_catalog.get("Protection.personal") == "Confirmed", in_catalog)
-        alerts = (bob.get(f"{PLATFORM}/api/projects/{NAME}/alerts", timeout=30).json() or {}).get("issues", [])
+        issues = lambda: (bob.get(f"{PLATFORM}/api/projects/{NAME}/alerts", timeout=30).json() or {}).get("issues", [])
+        alerts = wait(lambda: (lambda xs: xs if any(i["key"] == "protect/customers/email" for i in xs) else None)(issues()), 150, every=10) or issues()
         check("the project's alerts say a column was protected on the catalog's word",
               any(i["key"] == "protect/customers/email" and i["kind"] == "protect" for i in alerts), [i["key"] for i in alerts])
         check("... and the note column, plain text, isn't tagged", ("customers", "note", "personal") not in found, sorted(k for k in found if k[1] == "note"))
