@@ -237,10 +237,10 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/health", s.handleHealth)
 	mux.HandleFunc("POST /api/health/{action}", s.handleHealthAction)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		s.fail(w, r, http.StatusNotFound, "not found")
 	})
 	mux.Handle("/", s.web())
-	return securityHeaders(mux)
+	return securityHeaders(requestIDs(mux))
 }
 
 // handleLogin sends the browser to Keycloak.
@@ -329,7 +329,7 @@ func (s *server) handleSession(w http.ResponseWriter, r *http.Request) {
 // address, which ends the Keycloak session too.
 func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-Platform-Request") != "1" { // not a cross-site form post
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing X-Platform-Request"})
+		s.fail(w, r, http.StatusForbidden, "missing X-Platform-Request")
 		return
 	}
 	end := url.Values{"client_id": {s.cfg.ClientID}, "post_logout_redirect_uri": {s.cfg.PlatformURL + "/"}}

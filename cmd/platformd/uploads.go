@@ -72,23 +72,23 @@ type upload struct {
 
 // handleUploads lists a project's uploads, as the person.
 func (s *server) handleUploads(w http.ResponseWriter, r *http.Request) {
-	who, token, ok := s.flowPerson(w, r)
+	who, token, ok := s.person(w, r)
 	if !ok {
 		return
 	}
-	p, _, ok := s.flowProject(w, r, who)
+	p, _, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
 	c, err := s.bucketAs(r.Context(), token)
 	if err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusServiceUnavailable, err.Error())
 		return
 	}
 	out := []upload{}
 	for o := range c.ListObjects(r.Context(), bucketOf(p), minio.ListObjectsOptions{Prefix: uploadsPrefix}) {
 		if o.Err != nil {
-			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "Buckets: " + o.Err.Error()})
+			s.fail(w, r, http.StatusBadGateway, "Buckets: "+o.Err.Error())
 			return
 		}
 		name := strings.TrimPrefix(o.Key, uploadsPrefix)
@@ -104,27 +104,27 @@ func (s *server) handleUploads(w http.ResponseWriter, r *http.Request) {
 // handleUpload puts a file in the project's landing area, as the person
 // (an editor: the bucket refuses a reader), and answers with its preview.
 func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
-	who, token, ok := s.flowPerson(w, r)
+	who, token, ok := s.person(w, r)
 	if !ok {
 		return
 	}
-	p, role, ok := s.flowProject(w, r, who)
+	p, role, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
 	if role != project.Editor {
 		s.recordRefusal(r, who, "upload", "project:"+p.Metadata.Name, "not an editor")
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "the project's editors upload files to it"})
+		s.fail(w, r, http.StatusForbidden, "the project's editors upload files to it")
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, uploadMax+1<<20)
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "a file, as multipart form data (file), up to 256 MB: " + err.Error()})
+		s.fail(w, r, http.StatusBadRequest, "a file, as multipart form data (file), up to 256 MB: "+err.Error())
 		return
 	}
 	f, hdr, err := r.FormFile("file")
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "a file, as multipart form data (file)"})
+		s.fail(w, r, http.StatusBadRequest, "a file, as multipart form data (file)")
 		return
 	}
 	defer f.Close()
@@ -133,12 +133,12 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		name = given
 	}
 	if !uploadNameRE.MatchString(name) || name == "." || name == ".." {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "a file's name is letters, digits, dots, dashes and underscores: " + name})
+		s.fail(w, r, http.StatusUnprocessableEntity, "a file's name is letters, digits, dots, dashes and underscores: "+name)
 		return
 	}
 	c, err := s.bucketAs(r.Context(), token)
 	if err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusServiceUnavailable, err.Error())
 		return
 	}
 	head := make([]byte, previewBytes)
@@ -156,7 +156,7 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			code = http.StatusForbidden
 			err = errors.New("Buckets refused it: the bucket's policy doesn't let you write it")
 		}
-		writeJSON(w, code, map[string]string{"error": err.Error()})
+		s.fail(w, r, code, err.Error())
 		return
 	}
 	s.record(r, who, "upload", "project:"+p.Metadata.Name, fmt.Sprintf("%s (%d bytes)", name, info.Size))
@@ -166,27 +166,27 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 // handleUploadPreview is an upload's first rows, read again as the person.
 func (s *server) handleUploadPreview(w http.ResponseWriter, r *http.Request) {
-	who, token, ok := s.flowPerson(w, r)
+	who, token, ok := s.person(w, r)
 	if !ok {
 		return
 	}
-	p, _, ok := s.flowProject(w, r, who)
+	p, _, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
 	name := r.PathValue("file")
 	if !uploadNameRE.MatchString(name) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such upload"})
+		s.fail(w, r, http.StatusNotFound, "no such upload")
 		return
 	}
 	c, err := s.bucketAs(r.Context(), token)
 	if err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusServiceUnavailable, err.Error())
 		return
 	}
 	obj, err := c.GetObject(r.Context(), bucketOf(p), uploadsPrefix+name, minio.GetObjectOptions{})
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	defer obj.Close()
@@ -199,7 +199,7 @@ func (s *server) handleUploadPreview(w http.ResponseWriter, r *http.Request) {
 		} else if resp.Code == "AccessDenied" {
 			code = http.StatusForbidden
 		}
-		writeJSON(w, code, map[string]string{"error": err.Error()})
+		s.fail(w, r, code, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"name": name, "preview": previewOf(name, head[:n], n == previewBytes), "table": tableNameOf(name)})
@@ -207,26 +207,26 @@ func (s *server) handleUploadPreview(w http.ResponseWriter, r *http.Request) {
 
 // handleDeleteUpload removes an upload, as the person.
 func (s *server) handleDeleteUpload(w http.ResponseWriter, r *http.Request) {
-	who, token, ok := s.flowPerson(w, r)
+	who, token, ok := s.person(w, r)
 	if !ok {
 		return
 	}
-	p, role, ok := s.flowProject(w, r, who)
+	p, role, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
 	name := r.PathValue("file")
 	if role != project.Editor || !uploadNameRE.MatchString(name) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "the project's editors remove its uploads"})
+		s.fail(w, r, http.StatusForbidden, "the project's editors remove its uploads")
 		return
 	}
 	c, err := s.bucketAs(r.Context(), token)
 	if err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusServiceUnavailable, err.Error())
 		return
 	}
 	if err := c.RemoveObject(r.Context(), bucketOf(p), uploadsPrefix+name, minio.RemoveObjectOptions{}); err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	s.record(r, who, "upload.removed", "project:"+p.Metadata.Name, name)

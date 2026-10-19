@@ -105,27 +105,27 @@ func (s *server) handleDeliverySearch(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if !s.isAdmin(sess.User) && !s.inGroups(sess.User.Groups, s.cfg.DeliveryApproverGroups) {
 		s.recordRefusal(r, who, "deliveries.searched", "project:"+name, "not a data-protection approver")
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "the data-protection approvers (" + strings.Join(s.cfg.DeliveryApproverGroups, ", ") + ") search the delivery log"})
+		s.fail(w, r, http.StatusForbidden, "the data-protection approvers ("+strings.Join(s.cfg.DeliveryApproverGroups, ", ")+") search the delivery log")
 		return
 	}
 	person := strings.TrimSpace(r.URL.Query().Get("person"))
 	if person == "" || len(person) > 200 {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "a person's ID (person=)"})
+		s.fail(w, r, http.StatusUnprocessableEntity, "a person's ID (person=)")
 		return
 	}
 	if s.files == nil || s.maintainer == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "searching needs the platform's files and its Trino account (maintenance)"})
+		s.fail(w, r, http.StatusServiceUnavailable, "searching needs the platform's files and its Trino account (maintenance)")
 		return
 	}
 	p, err := s.store.Project(r.Context(), name)
 	if err != nil || p == nil || p.Spec.Tables == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such project with tables"})
+		s.fail(w, r, http.StatusNotFound, "no such project with tables")
 		return
 	}
 	t := p.Spec.Tables
 	keys, err := s.files.ListFiles(r.Context(), "deliveries/"+name+"/")
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	var tables []string

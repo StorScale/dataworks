@@ -100,7 +100,7 @@ func (s *server) handlePlans(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.files == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "the platform keeps no files here (no STORE_URL)"})
+		s.fail(w, r, http.StatusServiceUnavailable, "the platform keeps no files here (no STORE_URL)")
 		return
 	}
 	v := s.project(w, r, sess)
@@ -109,7 +109,7 @@ func (s *server) handlePlans(w http.ResponseWriter, r *http.Request) {
 	}
 	keys, err := s.files.ListFiles(r.Context(), "plans/"+v.Name+"/")
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	sort.Sort(sort.Reverse(sort.StringSlice(keys)))
@@ -150,11 +150,11 @@ func (s *server) handlePlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Header.Get("X-Platform-Request") != "1" {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing X-Platform-Request"})
+		s.fail(w, r, http.StatusForbidden, "missing X-Platform-Request")
 		return
 	}
 	if s.files == nil || s.airflow == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "plans need the platform's files and Airflow"})
+		s.fail(w, r, http.StatusServiceUnavailable, "plans need the platform's files and Airflow")
 		return
 	}
 	v := s.project(w, r, sess)
@@ -162,11 +162,11 @@ func (s *server) handlePlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if v.Role != project.Editor && !s.isAdmin(sess.User) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "the project's editors plan its releases"})
+		s.fail(w, r, http.StatusForbidden, "the project's editors plan its releases")
 		return
 	}
 	if pl := v.Spec.Spec.Pipelines; pl == nil || pl.Repo == "" {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "the project has no repo (pipelines.repo)"})
+		s.fail(w, r, http.StatusUnprocessableEntity, "the project has no repo (pipelines.repo)")
 		return
 	}
 	var body struct {
@@ -174,7 +174,7 @@ func (s *server) handlePlan(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&body)
 	if !refRE.MatchString(body.Ref) || strings.Contains(body.Ref, "..") {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "a ref of the repo: a tag (v1.3), a branch, or a commit"})
+		s.fail(w, r, http.StatusUnprocessableEntity, "a ref of the repo: a tag (v1.3), a branch, or a commit")
 		return
 	}
 	rnd := make([]byte, 3)
@@ -183,7 +183,7 @@ func (s *server) handlePlan(w http.ResponseWriter, r *http.Request) {
 	p := &plan{ID: now.Format("20060102T150405Z") + "-" + hex.EncodeToString(rnd), Ref: body.Ref,
 		Target: s.cfg.InstallTarget, By: sess.User.Username, At: now, State: "fetching", Changes: []string{}}
 	if err := s.putPlan(r.Context(), v.Name, p); err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	af, _, err := s.pipelinesOf(r.Context(), v)
@@ -194,7 +194,7 @@ func (s *server) handlePlan(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		p.State, p.Error = "failed", "its run didn't start: "+err.Error()
 		s.putPlan(r.Context(), v.Name, p)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": p.Error})
+		s.fail(w, r, http.StatusBadGateway, p.Error)
 		return
 	}
 	s.record(r, sess.User.Username, "release.planned", "project:"+v.Name, "ref "+p.Ref+" for "+p.Target)
@@ -211,11 +211,11 @@ func (s *server) handlePlanFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := s.getPlan(r.Context(), name, r.PathValue("plan"))
 	if err != nil || p == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such plan"})
+		s.fail(w, r, http.StatusNotFound, "no such plan")
 		return
 	}
 	if p.State != "fetching" {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "the plan is " + p.State})
+		s.fail(w, r, http.StatusConflict, "the plan is "+p.State)
 		return
 	}
 	var body struct {
@@ -224,14 +224,14 @@ func (s *server) handlePlanFiles(w http.ResponseWriter, r *http.Request) {
 		Error  string            `json:"error"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<20)).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	p.Commit = body.Commit
 	fail := func(why string) {
 		p.State, p.Error = "failed", why
 		if err := s.putPlan(r.Context(), name, p); err != nil {
-			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			s.fail(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 		writeJSON(w, http.StatusOK, p)
@@ -252,12 +252,12 @@ func (s *server) handlePlanFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	before, err := s.store.Project(r.Context(), name)
 	if err != nil || before == nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the project store isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the project store isn't answering")
 		return
 	}
 	base, model, err := s.base(r.Context(), before)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	changes := project.SpecChanges(before, composed)
@@ -282,7 +282,7 @@ func (s *server) handlePlanFiles(w http.ResponseWriter, r *http.Request) {
 		p.Changes = []string{}
 	}
 	if err := s.putPlan(r.Context(), name, p); err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, p)
@@ -325,7 +325,7 @@ func (s *server) handleApplyPlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.files == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "the platform keeps no files here (no STORE_URL)"})
+		s.fail(w, r, http.StatusServiceUnavailable, "the platform keeps no files here (no STORE_URL)")
 		return
 	}
 	v := s.project(w, r, sess)
@@ -336,38 +336,38 @@ func (s *server) handleApplyPlan(w http.ResponseWriter, r *http.Request) {
 	p, err := s.getPlan(r.Context(), v.Name, r.PathValue("plan"))
 	switch {
 	case err != nil:
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	case p == nil:
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such plan"})
+		s.fail(w, r, http.StatusNotFound, "no such plan")
 		return
 	case p.State != "ready":
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "the plan is " + p.State})
+		s.fail(w, r, http.StatusConflict, "the plan is "+p.State)
 		return
 	case p.By == who:
 		s.recordRefusal(r, who, "release.applied", "project:"+v.Name, "planned it")
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "someone other than who planned it applies it"})
+		s.fail(w, r, http.StatusForbidden, "someone other than who planned it applies it")
 		return
 	}
 	base, _, err := s.base(r.Context(), v.Spec)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	if base != p.Base {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "the project has changed since it was planned: plan it again"})
+		s.fail(w, r, http.StatusConflict, "the project has changed since it was planned: plan it again")
 		return
 	}
 	spec := p.Spec
 	keepDeliveryApprovals(v.Spec, spec, p.By)
 	project.KeepProductState(v.Spec, spec)
 	if err := s.saveSpec(r.Context(), spec); err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	if p.Semantic != nil {
 		if err := s.files.PutFile(r.Context(), "semantic/"+v.Name+".yaml", []byte(*p.Semantic), "application/yaml"); err != nil {
-			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the spec is saved, the semantic model isn't: " + err.Error()})
+			s.fail(w, r, http.StatusBadGateway, "the spec is saved, the semantic model isn't: "+err.Error())
 			return
 		}
 	}

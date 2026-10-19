@@ -152,7 +152,7 @@ func (s *server) handleProjectAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if v.Role != project.Editor && !s.isAdmin(sess.User) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "a project's audit log is for its editors"})
+		s.fail(w, r, http.StatusForbidden, "a project's audit log is for its editors")
 		return
 	}
 	q := auditQuery(r)
@@ -168,14 +168,14 @@ func (s *server) handleAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.isAdmin(sess.User) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "the platform's audit log is its administrators'"})
+		s.fail(w, r, http.StatusForbidden, "the platform's audit log is its administrators'")
 		return
 	}
 	q := auditQuery(r)
 	if name := r.URL.Query().Get("project"); name != "" && s.store != nil {
 		p, err := s.store.Project(r.Context(), name)
 		if err != nil || p == nil {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such project"})
+			s.fail(w, r, http.StatusNotFound, "no such project")
 			return
 		}
 		q.Resources = projectResources(p)
@@ -197,7 +197,7 @@ func (s *server) answerAudit(w http.ResponseWriter, r *http.Request, q audit.Que
 	events, err := s.audit.Find(r.Context(), q)
 	if err != nil {
 		s.log.Error("audit", "error", err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the audit log isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the audit log isn't answering")
 		return
 	}
 	if r.URL.Query().Get("format") == "csv" {

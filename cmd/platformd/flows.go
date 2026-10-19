@@ -39,76 +39,6 @@ type flowSQL struct {
 	Seconds float64  `json:"seconds"`
 }
 
-// flowPerson is who asks, with the Keycloak token the preview runs with:
-// the session's (refreshed) or the request's own Bearer token.
-func (s *server) flowPerson(w http.ResponseWriter, r *http.Request) (who, token string, ok bool) {
-	if raw, has := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); has && raw != "" {
-		who, err := s.bearer(r)
-		if err != nil {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
-			return "", "", false
-		}
-		return who, raw, true
-	}
-	sess := s.member(w, r)
-	if sess == nil {
-		return "", "", false
-	}
-	if r.Method != http.MethodGet && r.Header.Get("X-Platform-Request") != "1" {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing X-Platform-Request"})
-		return "", "", false
-	}
-	if sess.Token != nil {
-		tok, err := s.oauth.TokenSource(r.Context(), sess.Token).Token()
-		if err != nil {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"login": "/auth/login"})
-			return "", "", false
-		}
-		if tok.AccessToken != sess.Token.AccessToken {
-			s.mu.Lock()
-			sess.Token = tok
-			s.mu.Unlock()
-		}
-		token = tok.AccessToken
-	}
-	return sess.User.Username, token, true
-}
-
-// flowProject is the project a flow request is about, and the person's role
-// in it (an administrator's session counts as an editor's); it answers when
-// they're not a member.
-func (s *server) flowProject(w http.ResponseWriter, r *http.Request, who string) (*project.Project, string, bool) {
-	if s.store == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "projects aren't set up"})
-		return nil, "", false
-	}
-	name := r.PathValue("name")
-	st, err := s.store.Status(r.Context(), name)
-	if err != nil || st == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such project"})
-		return nil, "", false
-	}
-	role := ""
-	for _, m := range st.Members {
-		if m.Username == who && m.Role != "pipelines" {
-			role = m.Role
-		}
-	}
-	if sess := s.session(r); sess != nil && s.isAdmin(sess.User) {
-		role = project.Editor
-	}
-	if role == "" {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "not a member of the project"})
-		return nil, "", false
-	}
-	p, err := s.store.Project(r.Context(), name)
-	if err != nil || p == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such project"})
-		return nil, "", false
-	}
-	return p, role, true
-}
-
 // flowEnv is what the compiler knows of the project: its namespace, and the
 // columns of the tables a flow may read (its own, and the products it
 // consumes: a table it can't read isn't described either).
@@ -363,11 +293,11 @@ func flowBranch(name string) string { return "storscale/flow-" + strings.Replace
 // the branch the pipelines follow, and those saved on branches of their own
 // and not merged yet.
 func (s *server) handleFlows(w http.ResponseWriter, r *http.Request) {
-	who, _, ok := s.flowPerson(w, r)
+	who, _, ok := s.person(w, r)
 	if !ok {
 		return
 	}
-	p, _, ok := s.flowProject(w, r, who)
+	p, _, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
@@ -379,7 +309,7 @@ func (s *server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if target == "" {
 		if target, err = gl.DefaultBranch(ctx); err != nil {
-			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			s.fail(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 	}
@@ -391,7 +321,7 @@ func (s *server) handleFlows(w http.ResponseWriter, r *http.Request) {
 	byName := map[string]*item{}
 	tree, err := gl.Tree(ctx, path.Join(dbtDir(p), "models", "flows"), target)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	prefix := path.Join(dbtDir(p), "models", "flows") + "/"
@@ -469,38 +399,38 @@ func (s *server) readFlow(ctx context.Context, gl *gitlab.Client, p *project.Pro
 
 // handleFlowView is one flow, read from the repo and compiled.
 func (s *server) handleFlowView(w http.ResponseWriter, r *http.Request) {
-	who, token, ok := s.flowPerson(w, r)
+	who, token, ok := s.person(w, r)
 	if !ok {
 		return
 	}
-	p, _, ok := s.flowProject(w, r, who)
+	p, _, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
 	name := r.PathValue("flow")
 	if !flow.NameOK(name) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such flow"})
+		s.fail(w, r, http.StatusNotFound, "no such flow")
 		return
 	}
 	gl, target, err := s.repoOf(r, p)
 	if err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	ctx := r.Context()
 	if target == "" {
 		if target, err = gl.DefaultBranch(ctx); err != nil {
-			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			s.fail(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 	}
 	f, branch, err := s.readFlow(ctx, gl, p, target, name)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	if f == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no flow " + name + " in the repo"})
+		s.fail(w, r, http.StatusNotFound, "no flow "+name+" in the repo")
 		return
 	}
 	c, err := s.compileFlow(ctx, token, p, f)
@@ -522,14 +452,14 @@ func (s *server) handleFlowView(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, v)
 }
 
-func readFlowBody(w http.ResponseWriter, r *http.Request) (*flow.Flow, string, int, bool) {
+func (s *server) readFlowBody(w http.ResponseWriter, r *http.Request) (*flow.Flow, string, int, bool) {
 	var body struct {
 		Flow  *flow.Flow `json:"flow"`
 		Step  string     `json:"step"`
 		Limit int        `json:"limit"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 4<<20)).Decode(&body); err != nil || body.Flow == nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "a flow, as JSON"})
+		s.fail(w, r, http.StatusBadRequest, "a flow, as JSON")
 		return nil, "", 0, false
 	}
 	return body.Flow, body.Step, body.Limit, true
@@ -538,21 +468,21 @@ func readFlowBody(w http.ResponseWriter, r *http.Request) (*flow.Flow, string, i
 // handleFlowCompile compiles a flow as the canvas holds it: each step's
 // columns and SQL, or why not. Nothing runs.
 func (s *server) handleFlowCompile(w http.ResponseWriter, r *http.Request) {
-	who, token, ok := s.flowPerson(w, r)
+	who, token, ok := s.person(w, r)
 	if !ok {
 		return
 	}
-	p, _, ok := s.flowProject(w, r, who)
+	p, _, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
-	f, _, _, ok := readFlowBody(w, r)
+	f, _, _, ok := s.readFlowBody(w, r)
 	if !ok {
 		return
 	}
 	c, err := s.compileFlow(r.Context(), token, p, f)
 	if err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	v := viewOf(c)
@@ -562,15 +492,15 @@ func (s *server) handleFlowCompile(w http.ResponseWriter, r *http.Request) {
 
 // handleFlowPreview runs a step's query, on a sample of each input, as the person.
 func (s *server) handleFlowPreview(w http.ResponseWriter, r *http.Request) {
-	who, token, ok := s.flowPerson(w, r)
+	who, token, ok := s.person(w, r)
 	if !ok {
 		return
 	}
-	p, _, ok := s.flowProject(w, r, who)
+	p, _, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
-	f, step, limit, ok := readFlowBody(w, r)
+	f, step, limit, ok := s.readFlowBody(w, r)
 	if !ok {
 		return
 	}
@@ -580,18 +510,18 @@ func (s *server) handleFlowPreview(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	c, err := s.compileFlow(ctx, token, p, f)
 	if err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	sql, err := c.Preview(step, s.flowSampler(ctx), limit)
 	if err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	started := time.Now()
 	ans, code, err := s.runSQL(ctx, token, p.Metadata.Name, sql, limit)
 	if err != nil {
-		writeJSON(w, code, map[string]string{"error": err.Error(), "sql": sql})
+		s.fail(w, r, code, err.Error())
 		return
 	}
 	s.log.Info("flow preview", "project", p.Metadata.Name, "flow", f.Name, "step", step, "user", who, "rows", len(ans.Rows), "took", time.Since(started).Round(time.Millisecond))
@@ -625,36 +555,36 @@ func feeds(f *flow.Flow, to, from string) bool {
 // and a dbt project if the repo has none yet. Steps no longer in the flow
 // lose their models. Editors only.
 func (s *server) handleSaveFlow(w http.ResponseWriter, r *http.Request) {
-	who, token, ok := s.flowPerson(w, r)
+	who, token, ok := s.person(w, r)
 	if !ok {
 		return
 	}
-	p, role, ok := s.flowProject(w, r, who)
+	p, role, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
 	name := r.PathValue("flow")
 	if role != project.Editor {
 		s.recordRefusal(r, who, "flow.saved", "project:"+p.Metadata.Name, "not an editor")
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "the project's editors save flows in it"})
+		s.fail(w, r, http.StatusForbidden, "the project's editors save flows in it")
 		return
 	}
-	f, _, _, ok := readFlowBody(w, r)
+	f, _, _, ok := s.readFlowBody(w, r)
 	if !ok {
 		return
 	}
 	switch {
 	case !flow.NameOK(name) || f.Name != name:
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "the flow's name is lowercase letters, digits and underscores, and the one in the address"})
+		s.fail(w, r, http.StatusUnprocessableEntity, "the flow's name is lowercase letters, digits and underscores, and the one in the address")
 		return
 	case f.Schedule != "" && !project.ValidCron(f.Schedule):
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "a schedule as cron's five fields (UTC): 0 6 * * 1, or none"})
+		s.fail(w, r, http.StatusUnprocessableEntity, "a schedule as cron's five fields (UTC): 0 6 * * 1, or none")
 		return
 	}
 	ctx := r.Context()
 	c, err := s.compileFlow(ctx, token, p, f)
 	if err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	if errs := c.Errors(); len(errs) > 0 {
@@ -663,12 +593,12 @@ func (s *server) handleSaveFlow(w http.ResponseWriter, r *http.Request) {
 	}
 	gl, target, err := s.repoOf(r, p)
 	if err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	if target == "" {
 		if target, err = gl.DefaultBranch(ctx); err != nil {
-			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			s.fail(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 	}
@@ -682,7 +612,7 @@ func (s *server) handleSaveFlow(w http.ResponseWriter, r *http.Request) {
 	branch := flowBranch(name)
 	has, err := gl.HasBranch(ctx, branch)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	ref, from := target, target
@@ -702,7 +632,7 @@ func (s *server) handleSaveFlow(w http.ResponseWriter, r *http.Request) {
 	for _, fp := range paths {
 		there, err := gl.HasFile(ctx, fp, ref)
 		if err != nil {
-			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			s.fail(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 		changes = append(changes, gitlab.FileChange{Action: map[bool]string{true: "update", false: "create"}[there], FilePath: fp, Content: files[fp]})
@@ -724,7 +654,7 @@ func (s *server) handleSaveFlow(w http.ResponseWriter, r *http.Request) {
 	steps := len(f.Steps)
 	msg := fmt.Sprintf("Flow %s: %d steps into %s\n\nBuilt on the platform's canvas by %s.", name, steps, f.OutputStep().Table, who)
 	if _, err := gl.Commit(ctx, branch, from, msg, "", "", changes); err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "GitLab refused the commit: " + err.Error()})
+		s.fail(w, r, http.StatusBadGateway, "GitLab refused the commit: "+err.Error())
 		return
 	}
 	when := "by hand"
@@ -735,7 +665,7 @@ func (s *server) handleSaveFlow(w http.ResponseWriter, r *http.Request) {
 		fmt.Sprintf("%s's flow `%s`, built on the platform's canvas: %d steps into the table `%s`, as dbt models in `%s/models/flows/%s/`, built %s by the DAG `flow_%s` with its checks.\n\nSaving the flow again updates this branch.",
 			who, name, steps, f.OutputStep().Table, dbt, name, when, name))
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the merge request: " + err.Error()})
+		s.fail(w, r, http.StatusBadGateway, "the merge request: "+err.Error())
 		return
 	}
 	s.record(r, who, "flow.saved", "project:"+p.Metadata.Name, fmt.Sprintf("%s: %d steps into %s, on %s", name, steps, f.OutputStep().Table, branch))

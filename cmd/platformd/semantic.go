@@ -20,13 +20,13 @@ func (s *server) handleSemantic(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"login": "/auth/login"})
 		return
 	case !s.allowed(sess.User.Groups):
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "no access"})
+		s.fail(w, r, http.StatusForbidden, "no access")
 		return
 	case s.cfg.SemanticURL == "":
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "the semantic layer isn't set up (no SEMANTIC_URL)"})
+		s.fail(w, r, http.StatusServiceUnavailable, "the semantic layer isn't set up (no SEMANTIC_URL)")
 		return
 	case r.Method != http.MethodGet && r.Header.Get("X-Platform-Request") != "1":
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing X-Platform-Request"})
+		s.fail(w, r, http.StatusForbidden, "missing X-Platform-Request")
 		return
 	case sess.Token == nil:
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"login": "/auth/login"})
@@ -45,7 +45,7 @@ func (s *server) handleSemantic(w http.ResponseWriter, r *http.Request) {
 	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	req, _ := http.NewRequestWithContext(r.Context(), r.Method, s.cfg.SemanticURL+r.URL.Path, bytes.NewReader(body))
@@ -54,7 +54,7 @@ func (s *server) handleSemantic(w http.ResponseWriter, r *http.Request) {
 	res, err := semanticClient.Do(req)
 	if err != nil {
 		s.log.Error("semantic layer", "error", err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the semantic layer isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the semantic layer isn't answering")
 		return
 	}
 	defer res.Body.Close()

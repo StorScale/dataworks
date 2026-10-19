@@ -33,9 +33,9 @@ func (s *server) signedIn(w http.ResponseWriter, r *http.Request) *session {
 	case sess == nil:
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"login": "/auth/login"})
 	case !s.allowed(sess.User.Groups):
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "no access"})
+		s.fail(w, r, http.StatusForbidden, "no access")
 	case s.store == nil:
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "projects aren't set up (no STORE_URL)"})
+		s.fail(w, r, http.StatusServiceUnavailable, "projects aren't set up (no STORE_URL)")
 	default:
 		return sess
 	}
@@ -50,11 +50,11 @@ func (s *server) admin(w http.ResponseWriter, r *http.Request) *session {
 		return nil
 	}
 	if r.Header.Get("X-Platform-Request") != "1" {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing X-Platform-Request"})
+		s.fail(w, r, http.StatusForbidden, "missing X-Platform-Request")
 		return nil
 	}
 	if !s.isAdmin(sess.User) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only administrators change projects"})
+		s.fail(w, r, http.StatusForbidden, "only administrators change projects")
 		return nil
 	}
 	return sess
@@ -107,7 +107,7 @@ func (s *server) handleProjects(w http.ResponseWriter, r *http.Request) {
 	views, err := s.views(r, sess.User)
 	if err != nil {
 		s.log.Error("projects", "error", err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the project store isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the project store isn't answering")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"projects": views, "admin": s.isAdmin(sess.User)})
@@ -120,7 +120,7 @@ func (s *server) handleProject(w http.ResponseWriter, r *http.Request) {
 	}
 	views, err := s.views(r, sess.User)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the project store isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the project store isn't answering")
 		return
 	}
 	for _, v := range views {
@@ -129,7 +129,7 @@ func (s *server) handleProject(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such project"})
+	s.fail(w, r, http.StatusNotFound, "no such project")
 }
 
 // handlePutProject creates or changes a project. The operator applies it.
@@ -140,7 +140,7 @@ func (s *server) handlePutProject(w http.ResponseWriter, r *http.Request) {
 	}
 	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	p, err := project.Parse(body)
@@ -148,7 +148,7 @@ func (s *server) handlePutProject(w http.ResponseWriter, r *http.Request) {
 		err = errorString("the project's name must be " + r.PathValue("name"))
 	}
 	if err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	before, _ := s.store.Project(r.Context(), p.Metadata.Name)
@@ -158,11 +158,11 @@ func (s *server) handlePutProject(w http.ResponseWriter, r *http.Request) {
 		var refused *store.APIError
 		if errors.As(err, &refused) && refused.Code >= 400 && refused.Code < 500 && refused.Code != http.StatusForbidden {
 			// Kubernetes checked the project against its schema (deploy/crds/project.yaml).
-			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": refused.Message})
+			s.fail(w, r, http.StatusUnprocessableEntity, refused.Message)
 			return
 		}
 		s.log.Error("saving a project", "project", p.Metadata.Name, "error", err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the project store isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the project store isn't answering")
 		return
 	}
 	s.log.Info("project saved", "project", p.Metadata.Name, "by", sess.User.Username)
@@ -178,14 +178,14 @@ func (s *server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	p, err := s.store.Project(r.Context(), name)
 	if err == nil && p == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such project"})
+		s.fail(w, r, http.StatusNotFound, "no such project")
 		return
 	}
 	if err == nil {
 		err = s.store.DeleteProject(r.Context(), name)
 	}
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the project store isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the project store isn't answering")
 		return
 	}
 	s.log.Info("project deleted", "project", name, "by", sess.User.Username)
@@ -200,12 +200,12 @@ func (s *server) handleAccess(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.isAdmin(sess.User) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only administrators review access"})
+		s.fail(w, r, http.StatusForbidden, "only administrators review access")
 		return
 	}
 	views, err := s.views(r, sess.User)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the project store isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the project store isn't answering")
 		return
 	}
 	type person struct {
@@ -245,12 +245,12 @@ func (s *server) handleFlow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.catalog == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "the catalog isn't set up (no CATALOG_URL)"})
+		s.fail(w, r, http.StatusServiceUnavailable, "the catalog isn't set up (no CATALOG_URL)")
 		return
 	}
 	views, err := s.views(r, sess.User)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the project store isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the project store isn't answering")
 		return
 	}
 	for _, v := range views {
@@ -265,13 +265,13 @@ func (s *server) handleFlow(w http.ResponseWriter, r *http.Request) {
 		flow, err := s.catalog.Flow(r.Context(), t.Catalog, t.Namespace)
 		if err != nil {
 			s.log.Error("flow", "project", v.Name, "error", err)
-			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			s.fail(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
 		writeJSON(w, http.StatusOK, flow)
 		return
 	}
-	writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such project"})
+	s.fail(w, r, http.StatusNotFound, "no such project")
 }
 
 type errorString string
@@ -282,7 +282,7 @@ func (e errorString) Error() string { return string(e) }
 func (s *server) project(w http.ResponseWriter, r *http.Request, sess *session) *projectView {
 	views, err := s.views(r, sess.User)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the project store isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the project store isn't answering")
 		return nil
 	}
 	for i := range views {
@@ -290,7 +290,7 @@ func (s *server) project(w http.ResponseWriter, r *http.Request, sess *session) 
 			return &views[i]
 		}
 	}
-	writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such project"})
+	s.fail(w, r, http.StatusNotFound, "no such project")
 	return nil
 }
 
@@ -336,7 +336,7 @@ func (s *server) handlePipelines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.airflow == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "pipelines aren't set up (no AIRFLOW_URL)"})
+		s.fail(w, r, http.StatusServiceUnavailable, "pipelines aren't set up (no AIRFLOW_URL)")
 		return
 	}
 	v := s.project(w, r, sess)
@@ -346,13 +346,13 @@ func (s *server) handlePipelines(w http.ResponseWriter, r *http.Request) {
 	af, ui, err := s.pipelinesOf(r.Context(), v)
 	if err != nil {
 		s.log.Error("pipelines", "project", v.Name, "error", err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	ps, err := af.Of(r.Context(), v.Name, 12)
 	if err != nil {
 		s.log.Error("pipelines", "project", v.Name, "error", err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	out := map[string]any{"pipelines": ps, "canRun": v.Role == project.Editor || s.isAdmin(sess.User)}
@@ -380,11 +380,11 @@ func (s *server) handleStartRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Header.Get("X-Platform-Request") != "1" {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing X-Platform-Request"})
+		s.fail(w, r, http.StatusForbidden, "missing X-Platform-Request")
 		return
 	}
 	if s.airflow == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "pipelines aren't set up (no AIRFLOW_URL)"})
+		s.fail(w, r, http.StatusServiceUnavailable, "pipelines aren't set up (no AIRFLOW_URL)")
 		return
 	}
 	v := s.project(w, r, sess)
@@ -392,17 +392,17 @@ func (s *server) handleStartRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if v.Role != project.Editor && !s.isAdmin(sess.User) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "only the project's editors run its pipelines"})
+		s.fail(w, r, http.StatusForbidden, "only the project's editors run its pipelines")
 		return
 	}
 	af, _, err := s.pipelinesOf(r.Context(), v)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	run, err := af.Start(r.Context(), v.Name, r.PathValue("pipeline"), sess.User.Username)
 	if err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 	s.log.Info("pipeline run started", "project", v.Name, "pipeline", r.PathValue("pipeline"), "run", run, "by", sess.User.Username)

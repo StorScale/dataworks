@@ -253,15 +253,15 @@ func (s *server) handleHealthAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Header.Get("X-Platform-Request") != "1" {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing X-Platform-Request"})
+		s.fail(w, r, http.StatusForbidden, "missing X-Platform-Request")
 		return
 	}
 	if !s.isAdmin(sess.User) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "administrators only"})
+		s.fail(w, r, http.StatusForbidden, "administrators only")
 		return
 	}
 	if s.health == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "health checks are off"})
+		s.fail(w, r, http.StatusServiceUnavailable, "health checks are off")
 		return
 	}
 	switch r.PathValue("action") {
@@ -271,7 +271,7 @@ func (s *server) handleHealthAction(w http.ResponseWriter, r *http.Request) {
 			Hours   float64 `json:"hours"` // 0: unmute
 		}
 		if json.NewDecoder(r.Body).Decode(&req) != nil || req.Service == "" || req.Hours < 0 || req.Hours > 24*7 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "want {service, hours}: up to a week"})
+			s.fail(w, r, http.StatusBadRequest, "want {service, hours}: up to a week")
 			return
 		}
 		var until time.Time
@@ -295,7 +295,7 @@ func (s *server) handleHealthAction(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"targets": res})
 	default:
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such action"})
+		s.fail(w, r, http.StatusNotFound, "no such action")
 	}
 }
 
@@ -326,7 +326,7 @@ func (s *server) member(w http.ResponseWriter, r *http.Request) *session {
 	case sess == nil:
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"login": "/auth/login"})
 	case !s.allowed(sess.User.Groups):
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "no access"})
+		s.fail(w, r, http.StatusForbidden, "no access")
 	default:
 		return sess
 	}

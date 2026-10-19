@@ -58,7 +58,7 @@ func (s *server) handleConnections(w http.ResponseWriter, r *http.Request) {
 	cs, err := s.store.Connections(r.Context(), v.Name)
 	if err != nil {
 		s.log.Error("connections", "project", v.Name, "error", err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the project store isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the project store isn't answering")
 		return
 	}
 	out := []connectionView{}
@@ -77,7 +77,7 @@ func (s *server) editorOf(w http.ResponseWriter, r *http.Request, what string) (
 		return nil, nil
 	}
 	if r.Header.Get("X-Platform-Request") != "1" {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "missing X-Platform-Request"})
+		s.fail(w, r, http.StatusForbidden, "missing X-Platform-Request")
 		return nil, nil
 	}
 	v := s.project(w, r, sess)
@@ -85,7 +85,7 @@ func (s *server) editorOf(w http.ResponseWriter, r *http.Request, what string) (
 		return nil, nil
 	}
 	if v.Role != project.Editor && !s.isAdmin(sess.User) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "the project's editors " + what})
+		s.fail(w, r, http.StatusForbidden, "the project's editors "+what)
 		return nil, nil
 	}
 	return sess, v
@@ -105,7 +105,7 @@ func (s *server) handlePutConnection(w http.ResponseWriter, r *http.Request) {
 		Values map[string]string `json:"values"`
 	}
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
 	adding := r.Method == http.MethodPost
@@ -114,7 +114,7 @@ func (s *server) handlePutConnection(w http.ResponseWriter, r *http.Request) {
 	}
 	cs, err := s.store.Connections(r.Context(), v.Name)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the project store isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the project store isn't answering")
 		return
 	}
 	i := slices.IndexFunc(cs, func(c store.StoredConnection) bool { return c.Name == body.Name })
@@ -122,16 +122,16 @@ func (s *server) handlePutConnection(w http.ResponseWriter, r *http.Request) {
 	var c store.StoredConnection
 	switch {
 	case adding && i >= 0:
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "the project has a connection " + body.Name + " already: give it new values"})
+		s.fail(w, r, http.StatusConflict, "the project has a connection "+body.Name+" already: give it new values")
 		return
 	case adding:
 		if why := project.ConnectionNameProblem(v.Name, body.Name); why != "" {
-			writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": why})
+			s.fail(w, r, http.StatusUnprocessableEntity, why)
 			return
 		}
 		c = store.StoredConnection{ConnectionMeta: store.ConnectionMeta{Name: body.Name, Kind: body.Kind, AddedBy: who, AddedAt: now}, Data: map[string]string{}}
 	case i < 0:
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such connection"})
+		s.fail(w, r, http.StatusNotFound, "no such connection")
 		return
 	default:
 		c = cs[i]
@@ -142,7 +142,7 @@ func (s *server) handlePutConnection(w http.ResponseWriter, r *http.Request) {
 	}
 	k := project.KindOf(c.Kind)
 	if k == nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": "kind: one of git, ssh, database, api, sftp, s3, pgp, teams"})
+		s.fail(w, r, http.StatusUnprocessableEntity, "kind: one of git, ssh, database, api, sftp, s3, pgp, teams")
 		return
 	}
 	data := map[string]string{}
@@ -163,18 +163,18 @@ func (s *server) handlePutConnection(w http.ResponseWriter, r *http.Request) {
 		changed = append(changed, key)
 	}
 	if problems := k.ValuesProblems(data); len(problems) > 0 {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": strings.Join(problems, "; ")})
+		s.fail(w, r, http.StatusUnprocessableEntity, strings.Join(problems, "; "))
 		return
 	}
 	c.Data = data
 	if err := s.store.PutConnection(r.Context(), v.Name, c); err != nil {
 		if errors.Is(err, store.ErrNotTheProjects) {
 			s.recordRefusal(r, who, "connection.saved", "project:"+v.Name+"/connection:"+c.Name, "not the project's")
-			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
+			s.fail(w, r, http.StatusConflict, err.Error())
 			return
 		}
 		s.log.Error("saving a connection", "project", v.Name, "connection", c.Name, "error", err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the project store isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the project store isn't answering")
 		return
 	}
 	sort.Strings(changed)
@@ -197,15 +197,15 @@ func (s *server) handleDeleteConnection(w http.ResponseWriter, r *http.Request) 
 	}
 	cs, err := s.store.Connections(r.Context(), v.Name)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "the project store isn't answering"})
+		s.fail(w, r, http.StatusBadGateway, "the project store isn't answering")
 		return
 	}
 	if !slices.ContainsFunc(cs, func(c store.StoredConnection) bool { return c.Name == name }) {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no such connection"})
+		s.fail(w, r, http.StatusNotFound, "no such connection")
 		return
 	}
 	if err := s.store.DeleteConnection(r.Context(), v.Name, name); err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
 	s.record(r, sess.User.Username, "connection.removed", "project:"+v.Name+"/connection:"+name, "")
