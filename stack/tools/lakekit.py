@@ -303,15 +303,18 @@ def wait_for_trino(timeout=180):
     sys.exit(f"setup: Trino runs no queries: {str(last).splitlines()[0][:200] if last else ''}")
 
 
-def s3(**creds):
+def s3(config=None, **creds):
+    """A boto3 S3 client on Buckets; config: botocore settings laid over the
+    defaults (timeouts, retries)."""
     import boto3
     from botocore.config import Config
+    base = Config(s3={"addressing_style": "path"})
     return boto3.client("s3", endpoint_url=BUCKETS, region_name="us-east-1",
-                        config=Config(s3={"addressing_style": "path"}), **creds)
+                        config=base.merge(config) if config else base, **creds)
 
 
-def s3_root():
-    return s3(aws_access_key_id=env["BUCKETS_ROOT_USER"], aws_secret_access_key=env["BUCKETS_ROOT_PASSWORD"])
+def s3_root(config=None):
+    return s3(config=config, aws_access_key_id=env["BUCKETS_ROOT_USER"], aws_secret_access_key=env["BUCKETS_ROOT_PASSWORD"])
 
 
 def service_token(client_id, secret):
