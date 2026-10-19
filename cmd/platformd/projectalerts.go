@@ -103,6 +103,16 @@ func (s *server) issuesOf(ctx context.Context, p *project.Project) (out []issue,
 				}
 			}
 		}
+		if c, err := s.classificationOf(ctx, p.Metadata.Name); err == nil {
+			for _, pc := range c.Columns {
+				if pc.State == "suggested" {
+					out = append(out, issue{Key: "protect/" + pc.Table + "/" + pc.Column, Kind: "protect",
+						Title:  fmt.Sprintf("%s.%s looks %s: the catalog tagged it, and it's masked", pc.Table, pc.Column, pc.Tag),
+						Detail: "Confirm the tag, or remove it if the column isn't " + pc.Tag + ", on the Data page.",
+						Link:   link + "/data?table=" + pc.Table})
+				}
+			}
+		}
 		for _, f := range t.Freshness {
 			within, ok := project.Within(f.Within)
 			if !ok || s.projectAlerts == nil {

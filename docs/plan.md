@@ -303,7 +303,9 @@ Every container runs without privilege escalation, with the default seccomp prof
 
 **Order and effort:** the tools and the citations, a day; registered assistants, a day; the checks, half a day.
 
-### A new column of personal data, protected by its tag (use case 12.5), how (design, 2026-10-19)
+### A new column of personal data, protected by its tag (use case 12.5), how (design, 2026-10-19; built 2026-10-19)
+
+**Built as designed, with one change:** the detection is catalog-sync's own (column names, and patterns over a sample of each text column's values read as the catalog's Trino account: email addresses, phone numbers, card numbers by Luhn, national IDs, bank accounts), not OpenMetadata's PII processor, which needs presidio and spaCy with a language model (some 600 MB more in the image) for what names and free text need; that stays an option to add when a company wants it. The rest is as below: the `Protection` classification in the catalog, the file in the bucket, the operator's mask policies (Ranger's `public` group masked, the excepted groups first with no mask), the Data page's confirm and remove, the alert. The `classification` suite runs in the suites' own lane.
 
 **The catalog classifies, the platform protects.** OpenMetadata's auto-classification (its profiler's sample data, the `PII` classification's detectors: email addresses, phone numbers, names, card numbers) tags columns as it finds them; catalog-sync runs it for each project's tables each round, as it runs the metadata ingestion. The platform's own classification in the catalog, `Protection`, has the tags that mean something to Ranger: `personal`, `financial`, `health`. catalog-sync maps the catalog's findings to them (`PII.Sensitive` → `personal`, suggested) and tags the columns a project declares (`tables.people`, R6.25) as `personal`, confirmed: so the catalog shows where personal data is, declared and found alike.
 

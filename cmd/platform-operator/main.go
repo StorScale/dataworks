@@ -86,6 +86,11 @@ func main() {
 	}
 	// Projects: in the bucket (Compose), or Project resources with a copy in
 	// the bucket for the services that read them there (Kubernetes).
+	protection, err := project.ParseProtection(os.Getenv("PROTECTION_TAGS"))
+	if err != nil {
+		log.Error("settings", "error", err)
+		os.Exit(1)
+	}
 	st, err := store.Open(os.Getenv("PROJECT_STORE"), storeURL, accessKey, secretKey, env("STORE_BUCKET", "storscale-platform"))
 	if err != nil {
 		log.Error("store", "error", err)
@@ -100,6 +105,8 @@ func main() {
 		Nessie:             &reconcile.Nessie{URL: strings.TrimRight(nessieURL, "/"), Warehouse: env("NESSIE_WAREHOUSE", "warehouse")},
 		Store:              st,
 		PlatformURL:        os.Getenv("PLATFORM_URL"),
+		Protection:         protection,
+		ProtectSuggested:   env("PROTECTION_APPLY_SUGGESTED", "true") != "false",
 		Log:                log,
 		RangerUserPassword: rangerPassword,
 	}

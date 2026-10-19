@@ -549,8 +549,8 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 4. The project's owner sees the new tag, and can confirm it or correct it.
 
 **Requirements**
-- R12.9 Classification of columns in the catalog (personal, financial, health), automatic and confirmed by people.
-- R12.10 Ranger's policies by tag, with the catalog's tags kept in step, so a newly tagged column is protected without a policy of its own.
+- R12.9 Classification of columns in the catalog (personal, financial, health), automatic and confirmed by people. (Built 2026-10-19: catalog-sync's detectors and the project's declarations, confirmed or removed on the Data page or in the catalog.)
+- R12.10 Ranger's policies by tag, with the catalog's tags kept in step, so a newly tagged column is protected without a policy of its own. (Built 2026-10-19: the operator makes a mask policy of each tagged column, by the install's rules per tag.)
 
 ---
 

@@ -346,6 +346,8 @@ services:
       OPERATOR_CLIENT_SECRET: ${OPERATOR_CLIENT_SECRET}
       # Registered assistants' Keycloak clients: their tokens are for the platform's MCP server.
       PLATFORM_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}
+      # What the catalog's Protection tags mean (use case 12.5): the engineers (the example's data-protection approvers) see such columns as they are.
+      PROTECTION_TAGS: '{"personal": {"mask": "MASK_HASH", "except": ["engineers"]}, "financial": {"mask": "MASK", "except": ["engineers"]}, "health": {"mask": "MASK_NULL", "except": ["engineers"]}}'
       RANGER_URL: http://ranger-admin:6080
       RANGER_PASSWORD: ${RANGER_PASSWORD}
       NESSIE_URL: http://nessie:19120

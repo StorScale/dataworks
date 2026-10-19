@@ -404,3 +404,9 @@ export async function uploadFile(name: string, file: File): Promise<{ upload: Up
   if (!res.ok) throw new ApiError(res.status, json.error ?? `HTTP ${res.status}`);
   return json;
 }
+
+// --- Classification: where personal data is (use case 12.5) ---------------------------
+export type ProtectedColumn = { table: string; column: string; tag: string; state: "suggested" | "confirmed"; declared?: boolean; automated?: boolean };
+export const getClassification = (name: string) => api<{ columns: ProtectedColumn[]; at: number; tags: string[] }>("GET", `/api/projects/${encodeURIComponent(name)}/classification`);
+export const classify = (name: string, table: string, column: string, tag: string, action: "confirm" | "remove") =>
+  api<{ state: string }>("POST", `/api/projects/${encodeURIComponent(name)}/classification`, { table, column, tag, action });

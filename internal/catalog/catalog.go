@@ -91,6 +91,57 @@ func (c *Client) get(ctx context.Context, path string, out any) error {
 
 var errNotFound = fmt.Errorf("not found")
 
+// A TagLabel is a tag on a table or a column, as the catalog keeps it.
+type TagLabel struct {
+	FQN       string `json:"tagFQN"`
+	Source    string `json:"source"`
+	LabelType string `json:"labelType"`
+	State     string `json:"state"`
+}
+
+// A TaggedColumn is a column with its tags.
+type TaggedColumn struct {
+	Name string     `json:"name"`
+	Tags []TagLabel `json:"tags"`
+}
+
+// TableTags are a table's ID and its columns' tags.
+type TableTags struct {
+	ID      string         `json:"id"`
+	Columns []TaggedColumn `json:"columns"`
+}
+
+// TableTags reads a table's columns and their tags.
+func (c *Client) TableTags(ctx context.Context, fqn string) (*TableTags, error) {
+	var t TableTags
+	if err := c.get(ctx, "/tables/name/"+url.PathEscape(fqn)+"?fields=columns,tags", &t); err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+// PatchTable applies a JSON patch to a table (its tags, say), as the bot.
+func (c *Client) PatchTable(ctx context.Context, id string, patch []map[string]any) error {
+	token, err := os.ReadFile(c.TokenFile)
+	if err != nil {
+		return fmt.Errorf("the catalog isn't set up yet (no token): %w", err)
+	}
+	body, _ := json.Marshal(patch)
+	req, _ := http.NewRequestWithContext(ctx, "PATCH", c.URL+"/api/v1/tables/"+url.PathEscape(id), strings.NewReader(string(body)))
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(string(token)))
+	req.Header.Set("Content-Type", "application/json-patch+json")
+	res, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode/100 != 2 {
+		msg, _ := io.ReadAll(io.LimitReader(res.Body, 300))
+		return fmt.Errorf("catalog: PATCH table %s: HTTP %d %s", id, res.StatusCode, msg)
+	}
+	return nil
+}
+
 type omTable struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`

@@ -6,5 +6,5 @@ RUN pip install --no-cache-dir "openmetadata-ingestion[trino,dbt]==2.0.4.0"
 # Kubernetes runs it as an unprivileged user (65532): a home it may write to.
 ENV HOME=/tmp
 WORKDIR /app
-COPY sync.py .
+COPY sync.py classify.py .
 CMD ["python", "-u", "sync.py"]
