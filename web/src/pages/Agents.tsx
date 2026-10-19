@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useState } from "react";
 import { approveAgent, getAgents, getLLM, putAgent, removeAgent, type LLMUse } from "../api";
 import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
@@ -65,7 +66,7 @@ export default function Agents() {
           <div className="small">
             {a.description && <>{a.description} </>}
             Owner <span className="mono">{a.owner}</span>; client <span className="mono">{a.clientId}</span>; tools: <span className="mono">{(a.tools ?? []).join(", ") || "every tool a reader may use"}</span>
-            {a.schedule && <>; runs at <span className="mono">{a.schedule}</span> (UTC)</>}
+            {a.schedule && <>; runs <span className="mono">{a.notebook}</span> at <span className="mono">{a.schedule}</span> (UTC){a.dag ? <> as the pipeline <Link to={`/projects/${encodeURIComponent(name)}/pipelines`} className="mono">{a.dag}</Link></> : ", once approved"}</>}
             {a.budget ? <>; {useOf(a.name)?.key ? `${useOf(a.name)!.spend.toFixed(2)} of` : "a budget of"} {a.budget} USD a month at the gateway</> : null}.
             {a.registeredBy && <> Registered by {a.registeredBy}.</>}
           </div>
@@ -80,6 +81,7 @@ function AgentForm({ project, tools, taken, owner, onDone }: { project: string; 
   const [description, setDescription] = useState("");
   const [picked, setPicked] = useState<string[]>(["list_metrics", "query_metrics"]);
   const [schedule, setSchedule] = useState("");
+  const [notebook, setNotebook] = useState("");
   const [budget, setBudget] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -88,7 +90,7 @@ function AgentForm({ project, tools, taken, owner, onDone }: { project: string; 
     setBusy(true);
     setError(undefined);
     try {
-      await putAgent(project, { name: agentName, description: description || undefined, owner, tools: picked, schedule: schedule || undefined, budget: budget ? Number(budget) : undefined });
+      await putAgent(project, { name: agentName, description: description || undefined, owner, tools: picked, schedule: schedule || undefined, notebook: notebook || undefined, budget: budget ? Number(budget) : undefined });
       onDone();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
@@ -99,10 +101,11 @@ function AgentForm({ project, tools, taken, owner, onDone }: { project: string; 
       <div className="row">
         <label>Name <input className="mono" value={agentName} onChange={(e) => setName(e.target.value)} placeholder="nightly-summary" data-testid="agent-name" /></label>
         <label>What it's for <input value={description} onChange={(e) => setDescription(e.target.value)} style={{ width: 320 }} /></label>
-        <label>Schedule <input className="mono" value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="0 6 * * * (UTC), or none" /></label>
+        <label>Schedule <input className="mono" value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="0 6 * * * (UTC), or none" data-testid="agent-schedule" /></label>
+        <label>Notebook <input className="mono" value={notebook} onChange={(e) => setNotebook(e.target.value)} placeholder="notebooks/nightly.ipynb, in the repo" style={{ width: 240 }} data-testid="agent-notebook" /></label>
         <label>LLM budget (USD a month) <input className="mono" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="none" style={{ width: 90 }} data-testid="agent-budget" /></label>
       </div>
-      <div className="small muted">Tools it may use (of the MCP server's); none picked means every tool a reader may use.</div>
+      <div className="small muted">Tools it may use (of the MCP server's); none picked means every tool a reader may use. With a schedule and a notebook (an .ipynb in the project's repo, under the pipelines' path), the platform runs the notebook as the agent: <span className="mono">buckets_lake.agent()</span> is the MCP server, <span className="mono">buckets_lake.ask()</span> the gateway, on its budget.</div>
       <div className="chips">
         {tools.map((t) => <button key={t} type="button" className={`chip${picked.includes(t) ? " on" : ""}`} aria-pressed={picked.includes(t)}
           onClick={() => setPicked(picked.includes(t) ? picked.filter((x) => x !== t) : [...picked, t])} data-testid={`tool-${t}`}>{t}</button>)}

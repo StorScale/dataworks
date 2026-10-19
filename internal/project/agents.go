@@ -17,10 +17,11 @@ import (
 type Agent struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description,omitempty"`
-	Owner       string   `json:"owner"`           // a person: who answers for it
-	Tools       []string `json:"tools,omitempty"` // of the MCP server's, by name; none: all a reader may use
-	Schedule    string   `json:"schedule,omitempty"`
-	Budget      float64  `json:"budget,omitempty"` // USD a month at the LLM gateway (12.1); 0: no key
+	Owner       string   `json:"owner"`              // a person: who answers for it
+	Tools       []string `json:"tools,omitempty"`    // of the MCP server's, by name; none: all a reader may use
+	Schedule    string   `json:"schedule,omitempty"` // when it runs (cron, UTC), with a notebook
+	Notebook    string   `json:"notebook,omitempty"` // its program: an .ipynb in the project's repo, under the pipelines' path
+	Budget      float64  `json:"budget,omitempty"`   // USD a month at the LLM gateway (12.1); 0: no key
 	// The platform's, kept as they were on each save: who registered it, who
 	// approved it (someone else), and when. Changed tools or owner need
 	// approval again.
@@ -36,6 +37,9 @@ var AgentTools = []string{"list_projects", "list_metrics", "query_metrics", "exp
 
 var agentNameRE = regexp.MustCompile(`^[a-z][a-z0-9-]{0,30}$`)
 
+// notebookPathRE is a notebook's path in the repo: relative, no step up, .ipynb.
+var notebookPathRE = regexp.MustCompile(`^(?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_ .-]+\.ipynb$`)
+
 // AgentClientID is the Keycloak client of a project's agent.
 func AgentClientID(project, agent string) string { return "agent-" + project + "-" + agent }
 
@@ -50,7 +54,16 @@ func (a Agent) Approved() bool { return a.ApprovedBy != "" }
 
 // Fingerprint is what approval covers: a change to it needs approval again.
 func (a Agent) Fingerprint() string {
-	return a.Owner + "|" + strings.Join(sorted(a.Tools), ",") + "|" + a.Schedule + "|" + fmt.Sprint(a.Budget)
+	return a.Owner + "|" + strings.Join(sorted(a.Tools), ",") + "|" + a.Schedule + "|" + a.Notebook + "|" + fmt.Sprint(a.Budget)
+}
+
+// Runs says whether the platform runs the agent itself: approved, with a
+// notebook and a schedule.
+func (a Agent) Runs() bool { return a.Approved() && a.Schedule != "" && a.Notebook != "" }
+
+// DAG is the Airflow DAG that runs the agent on its schedule, in a project.
+func (a Agent) DAG(project string) string {
+	return "agent_" + strings.ReplaceAll(project, "-", "_") + "_" + strings.ReplaceAll(a.Name, "-", "_")
 }
 
 func (p *Project) agentProblems(bad func(string, ...any)) {
@@ -73,6 +86,14 @@ func (p *Project) agentProblems(bad func(string, ...any)) {
 		}
 		if a.Schedule != "" && !cronRE.MatchString(a.Schedule) {
 			bad("agents: %s: schedule %q: five cron fields, as 0 6 * * 1", a.Name, a.Schedule)
+		}
+		switch {
+		case a.Notebook == "" && a.Schedule != "":
+			bad("agents: %s: a schedule needs a notebook to run (notebook: a path in the project's repo)", a.Name)
+		case a.Notebook != "" && (p.Spec.Pipelines == nil || p.Spec.Pipelines.Repo == ""):
+			bad("agents: %s: a notebook runs from the project's repo (pipelines.repo), which the project doesn't have", a.Name)
+		case a.Notebook != "" && !notebookPathRE.MatchString(a.Notebook):
+			bad("agents: %s: notebook %q: a relative path to an .ipynb in the repo, as notebooks/nightly.ipynb", a.Name, a.Notebook)
 		}
 		if a.Budget < 0 || a.Budget > 1_000_000 {
 			bad("agents: %s: budget %v: USD a month, up to a million", a.Name, a.Budget)
@@ -136,6 +157,9 @@ func (a Agent) String() string {
 	tools := "every tool"
 	if len(a.Tools) > 0 {
 		tools = strings.Join(a.Tools, ", ")
+	}
+	if a.Notebook != "" && a.Schedule != "" {
+		return fmt.Sprintf("%s (owner %s; %s; runs %s at %s)", a.Name, a.Owner, tools, a.Notebook, a.Schedule)
 	}
 	return fmt.Sprintf("%s (owner %s; %s)", a.Name, a.Owner, tools)
 }
