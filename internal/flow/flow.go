@@ -660,7 +660,7 @@ from storscale import dbt
 
 
 @dag(dag_id="flow_%s", schedule=%s, start_date=pendulum.datetime(2026, 1, 1, tz="UTC"), catchup=False,
-     tags=["flow"])
+     max_active_runs=1, tags=["flow"])  # one build of the table at a time
 def flow_%s():
     dbt.build(project=%q, path=%q, select="flows.%s")
 

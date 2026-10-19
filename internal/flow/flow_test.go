@@ -348,7 +348,7 @@ func TestPreview(t *testing.T) {
 
 func TestDAG(t *testing.T) {
 	d := DAG("sales", "weekly", "0 6 * * 1", "alice", "dbt")
-	for _, part := range []string{`dag_id="flow_weekly"`, `schedule="0 6 * * 1"`, `dbt.build(project="sales", path="dbt", select="flows.weekly")`, "from airflow.sdk import dag"} {
+	for _, part := range []string{`dag_id="flow_weekly"`, `schedule="0 6 * * 1"`, `dbt.build(project="sales", path="dbt", select="flows.weekly")`, "from airflow.sdk import dag", "max_active_runs=1"} {
 		if !strings.Contains(d, part) {
 			t.Errorf("DAG lacks %q:\n%s", part, d)
 		}
