@@ -152,8 +152,11 @@ export const getFlow = (name: string) => api<Flow>("GET", `/api/projects/${encod
 // --- A project's semantic layer (semanticd, through platformd) ----------------------
 
 export type SemanticMetric = { name: string; description: string; type: string; dimensions: string[] };
-export type SemanticModel = { project: string; yaml: string; metrics: SemanticMetric[]; tables: string[]; error?: string };
+export type SemanticModel = { project: string; yaml: string; metrics: SemanticMetric[]; tables: string[]; tests?: { name: string }[]; error?: string };
 export type MetricQuery = { metrics: string[]; group_by?: string[]; where?: string[]; order_by?: string[]; limit?: number; explain?: boolean };
+export type SemanticTest = { name: string; metrics: string[]; group_by: string[]; passed: boolean; why?: string; columns?: string[]; rows?: unknown[][] };
+export const runSemanticTests = (name: string) =>
+  api<{ tests: SemanticTest[]; passed: number; failed: number }>("POST", `/api/projects/${encodeURIComponent(name)}/semantic/tests`, {});
 export type MetricAnswer = { project: string; sql: string; columns?: string[]; rows?: unknown[][] };
 export const getSemantic = (name: string) => api<SemanticModel>("GET", `/api/projects/${encodeURIComponent(name)}/semantic`);
 export const putSemantic = (name: string, yaml: string) => api<SemanticModel>("PUT", `/api/projects/${encodeURIComponent(name)}/semantic`, { yaml });

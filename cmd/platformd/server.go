@@ -187,6 +187,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/projects/{name}/semantic", s.handleSemantic)
 	mux.HandleFunc("PUT /api/projects/{name}/semantic", s.handleSemantic)
 	mux.HandleFunc("POST /api/projects/{name}/semantic/query", s.handleSemantic)
+	mux.HandleFunc("POST /api/projects/{name}/semantic/tests", s.handleSemantic)
 	mux.HandleFunc("POST /api/projects/{name}/sql", s.handleSemantic)
 	mux.HandleFunc("GET /api/projects/{name}/pipelines", s.handlePipelines)
 	mux.HandleFunc("POST /api/projects/{name}/pipelines/{pipeline}/runs", s.handleStartRun)

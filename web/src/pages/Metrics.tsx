@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { getSemantic, MetricAnswer, putSemantic, queryMetrics } from "../api";
+import { getSemantic, MetricAnswer, putSemantic, queryMetrics, runSemanticTests, type SemanticTest } from "../api";
 import { ErrorBanner, Spinner, usePoll, useProject } from "../lib";
 
 // Metrics is a project's semantic layer: its metrics, defined once, a way to
@@ -17,6 +17,15 @@ export default function Metrics() {
   const [draft, setDraft] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string>();
+  // The model's tests (12.3): run as you, each answer checked against what it expects.
+  const [tests, setTests] = useState<{ tests: SemanticTest[]; passed: number; failed: number }>();
+  const [testing, setTesting] = useState(false);
+  const [testError, setTestError] = useState<string>();
+  const runTests = async () => {
+    setTesting(true);
+    setTestError(undefined);
+    try { setTests(await runSemanticTests(name)); } catch (e) { setTestError((e as Error).message); } finally { setTesting(false); }
+  };
   const [defsOpen, setDefsOpen] = useState(false);
   const editor = view?.role === "editor";
 
@@ -114,6 +123,7 @@ export default function Metrics() {
             <div className="card-head">
               <h2>Definitions</h2>
               <button className="linkish" onClick={() => setDefsOpen(!defsOpen)} aria-expanded={defsOpen} data-testid="definitions-toggle">{defsOpen ? "Hide" : editor ? "Edit" : "Show"}</button>
+              {(m.tests?.length ?? 0) > 0 && <button className="btn small" style={{ marginLeft: 8 }} onClick={runTests} disabled={testing} data-testid="run-tests">{testing ? "Running…" : `Run the ${m.tests!.length} tests`}</button>}
             </div>
             <p className="small muted" style={{ margin: 0 }}>
               MetricFlow's YAML: semantic models over the project's tables, and the metrics made from them.{" "}
@@ -121,6 +131,15 @@ export default function Metrics() {
             </p>
             {defsOpen && (
               <div style={{ marginTop: 12 }}>
+                {testError && <ErrorBanner error={testError} />}
+                {tests && (
+                  <ul className="small" data-testid="test-results" style={{ margin: "0 0 10px", paddingLeft: 18 }}>
+                    {tests.tests.map((t) => (
+                      <li key={t.name}>{t.passed ? "✓" : "✗"} <span className="mono">{t.name}</span>{t.why ? `: ${t.why}` : ""}{t.rows && t.passed ? ` (${t.rows.length} rows)` : ""}</li>
+                    ))}
+                    {tests.tests.length === 0 && <li className="muted">No tests in the model.</li>}
+                  </ul>
+                )}
                 <textarea className="yaml" spellCheck={false} value={draft ?? m.yaml} readOnly={!editor} onChange={(e) => setDraft(e.target.value)} aria-label="Definitions" data-testid="semantic-yaml" />
                 <ErrorBanner error={saveError} />
                 {editor && (

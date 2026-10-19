@@ -182,15 +182,46 @@ def split(text):
         docs = [d for d in yaml.safe_load_all(text or "") if d]
     except yaml.YAMLError as e:
         raise ValueError(f"not YAML: {e}") from e
-    out, terms = [], []
+    out, terms, tests = [], [], []
     for d in docs:
         if not isinstance(d, dict):
-            raise ValueError("each document of a model is a mapping (semantic_model, metric, terms)")
+            raise ValueError("each document of a model is a mapping (semantic_model, metric, terms, tests)")
         if "terms" in d:
             terms += d["terms"] or []
+        elif "tests" in d:
+            tests += d["tests"] or []
         else:
             out.append(d)
-    return out, terms
+    return out, terms, tests
+
+
+def check_tests(tests, metrics):
+    """The tests document (use case 12.3): each test names metrics the model
+    has, and what it expects (rows: how many; values: the rows themselves)."""
+    names = {m["name"] for m in metrics}
+    seen = set()
+    for t in tests:
+        if not isinstance(t, dict) or not t.get("name"):
+            raise ValueError("each test has a name")
+        if t["name"] in seen:
+            raise ValueError(f"two tests named {t['name']}")
+        seen.add(t["name"])
+        ms = t.get("metrics") or []
+        if not ms or not isinstance(ms, list):
+            raise ValueError(f"test {t['name']}: names at least one metric")
+        for m in ms:
+            if m not in names:
+                raise ValueError(f"test {t['name']}: the model has no metric {m}")
+        for k in ("group_by", "where"):
+            if t.get(k) is not None and not isinstance(t[k], list):
+                raise ValueError(f"test {t['name']}: {k} is a list")
+        e = t.get("expect")
+        if not isinstance(e, dict) or not ({"rows", "values"} & set(e)):
+            raise ValueError(f"test {t['name']}: expect has rows (how many) or values (the rows)")
+        if "rows" in e and not isinstance(e["rows"], int):
+            raise ValueError(f"test {t['name']}: expect.rows is a number")
+        if "values" in e and not (isinstance(e["values"], list) and all(isinstance(r, list) for r in e["values"])):
+            raise ValueError(f"test {t['name']}: expect.values is a list of rows")
 
 
 def defined(docs):
@@ -222,7 +253,7 @@ def shared_docs(project, override=None):
         text = override[1] if override and override[0] == sp else model_yaml(sp)
         if not text:
             continue
-        theirs, _ = split(text)
+        theirs, _, _ = split(text)
         for d in theirs:
             if "project_configuration" in d:
                 continue   # each project's own time spine
@@ -254,7 +285,7 @@ _engines = {}  # project -> (hash of its model, engine, summary)
 def compile_model(project, text, override=None):
     """MetricFlow's engine for a project's model (built on the shared ones), and
     what it offers; or ValueError, saying what's wrong."""
-    own, terms = split(text)
+    own, terms, tests = split(text)
     base, owner = shared_docs(project, override)
     clash = sorted(f"{n} (the {kind.replace('_', ' ')} of {owner[(kind, n)]})" for kind, names in defined(own).items()
                    if kind in ("semantic_model", "metric") for n in names if (kind, n) in owner)
@@ -281,7 +312,8 @@ def compile_model(project, text, override=None):
                for m in engine.list_metrics()]
     tables = sorted(f"{sm.node_relation.database}.{sm.node_relation.schema_name}.{sm.node_relation.alias}"
                     for sm in manifest.semantic_models)
-    return engine, {"metrics": metrics, "tables": tables, "terms": terms, "builtOn": sorted(set(owner.values()))}
+    check_tests(tests, metrics)
+    return engine, {"metrics": metrics, "tables": tables, "terms": terms, "tests": tests, "builtOn": sorted(set(owner.values()))}
 
 
 def users_of(shared):
@@ -331,11 +363,13 @@ def engine_for(project):
 
 # --- Queries -------------------------------------------------------------------------------
 
-def compile_query(project, metrics, group_by=(), where=(), order_by=(), limit=None, cap=True):
+def compile_query(project, metrics, group_by=(), where=(), order_by=(), limit=None, cap=True, engine=None):
     """The SQL of a metric query. cap: at most MAX_ROWS (every query that runs
     here); without it, the whole answer (a flow's metric step, which dbt
-    materialises)."""
-    engine, _ = engine_for(project)
+    materialises). engine: another than the project's stored model's (a
+    model under review)."""
+    if engine is None:
+        engine, _ = engine_for(project)
     try:
         req = MetricFlowQueryRequest.create(metric_names=list(metrics), group_by_names=list(group_by) or None,
                                             where_constraints=list(where) or None, order_by_names=list(order_by) or None,
@@ -343,6 +377,56 @@ def compile_query(project, metrics, group_by=(), where=(), order_by=(), limit=No
         return engine.explain(req).sql_statement.sql
     except Exception as e:  # noqa: BLE001 (MetricFlow's query errors vary)
         raise ValueError(f"MetricFlow can't answer that: {e}") from e
+
+
+def run_tests(c: Caller, project, text=None, catalog=None):
+    """The model's tests (use case 12.3), run as the caller: the project's
+    stored model's, or a text's (a merge request's); on the project's tables,
+    or on a catalog in production's place (a data branch). Each test's answer
+    (its rows) is given back with whether it passed, so two runs can be
+    compared, answer by answer."""
+    if text is None:
+        engine, summary = engine_for(project)
+    else:
+        engine, summary = compile_model(project, text)
+    prod_catalog = namespace_of(project)[0]
+    out = []
+    for t in summary.get("tests", []):
+        name, metrics = t["name"], t["metrics"]
+        result = {"name": name, "metrics": metrics, "group_by": t.get("group_by") or [], "passed": False}
+        try:
+            sql = compile_query(project, metrics, t.get("group_by") or [], t.get("where") or [], engine=engine)
+            if catalog and catalog != prod_catalog:
+                sql = re.sub(rf"\b{re.escape(prod_catalog)}\.", f"{catalog}.", sql)
+            answer = run(c, project, sql, metrics)
+            rows = [[v for v in r] for r in answer["rows"]]
+            result["columns"], result["rows"] = answer["columns"], rows
+            e = t["expect"]
+            if "rows" in e and len(rows) != e["rows"]:
+                result["why"] = f"{len(rows)} rows, expected {e['rows']}"
+            elif "values" in e and not same_rows(rows, e["values"]):
+                result["why"] = f"the rows differ from the expected: got {rows[:5]}, expected {e['values'][:5]}"
+            else:
+                result["passed"] = True
+        except trino.exceptions.TrinoUserError as e:
+            result["why"] = e.message
+        except ValueError as e:
+            result["why"] = str(e)
+        out.append(result)
+    return {"project": project, "tests": out, "passed": sum(1 for r in out if r["passed"]), "failed": sum(1 for r in out if not r["passed"])}
+
+
+def same_rows(got, want):
+    """Whether two answers hold the same rows, in any order; numbers compared as numbers."""
+    def norm(r):
+        out = []
+        for v in r:
+            try:
+                out.append(round(float(v), 6))
+            except (TypeError, ValueError):
+                out.append(str(v) if v is not None else None)
+        return tuple(out)
+    return sorted(map(norm, got), key=str) == sorted(map(norm, want), key=str)
 
 
 def namespace_of(project):
@@ -664,7 +748,7 @@ def get_terms(c, project, body, request):
     out = []
     builders = {sp: users_of(sp) for sp in shared_projects()}
     for sp in builders:
-        docs, terms = models.get(sp, ([], []))
+        docs, terms, _ = models.get(sp, ([], [], []))
         have = defined(docs)
         for t in terms:
             if not isinstance(t, dict) or not t.get("name"):
@@ -766,7 +850,7 @@ def cite(project, metrics, group_by=()):
     """What an answer used, for the assistant to name: the metrics' definitions
     (and whose they are), the terms on them, and the products behind the tables read."""
     _, summary = engine_for(project)
-    own, _ = split(model_yaml(project) or "")
+    own, _, _ = split(model_yaml(project) or "")
     base, _ = shared_docs(project)
     docs = base + own
     used_metrics = [{"name": m["name"], "description": m["description"], "definedIn": m.get("from") or project,
@@ -794,6 +878,12 @@ def post_query(c, project, body, request):
                   body.get("order_by", []), body.get("limit"), run_it=not explain, cap=not (explain and body.get("limit") == 0))
 
 
+def post_tests(c, project, body, request):
+    """The model's tests, run as the caller: the stored model's, or the text given (yaml); on the catalog given, if any."""
+    member(c, project)
+    return run_tests(c, project, body.get("yaml") or None, body.get("catalog") or None)
+
+
 def post_sql(c, project, body, request):
     """A SQL statement, run in Trino as the caller (the platform's SQL editor, and table previews)."""
     member(c, project)
@@ -817,6 +907,7 @@ mcp.custom_route("/api/projects/{project}/semantic", methods=["GET"])(api(get_mo
 mcp.custom_route("/api/projects/{project}/semantic", methods=["PUT"])(api(put_model))
 mcp.custom_route("/api/projects/{project}/semantic/check", methods=["POST"])(api(check_model))
 mcp.custom_route("/api/projects/{project}/semantic/query", methods=["POST"])(api(post_query))
+mcp.custom_route("/api/projects/{project}/semantic/tests", methods=["POST"])(api(post_tests))
 
 
 @mcp.custom_route("/healthz", methods=["GET"])

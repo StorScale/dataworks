@@ -29,6 +29,7 @@ from storscale import dbt, git
 PLATFORM = os.environ.get("STORSCALE_PLATFORMD_URL", "http://platformd:8080")
 SEMANTIC = os.environ.get("STORSCALE_SEMANTIC_URL", "http://semanticd:8000")
 STATUS = "storscale/dbt"
+SEMANTIC_STATUS = "storscale/semantic"
 MARK = "<!-- storscale-review -->"   # the platform's note on a merge request: updated, not added again
 
 
@@ -37,8 +38,8 @@ class GitLab:
         self.url = f"{base.rstrip('/')}/api/v4/projects/{requests.utils.quote(project, safe='')}"
         self.h = {"PRIVATE-TOKEN": token}
 
-    def status(self, sha, state, description, target=""):
-        body = {"state": state, "name": STATUS, "description": description[:255]}
+    def status(self, sha, state, description, target="", name=STATUS):
+        body = {"state": state, "name": name, "description": description[:255]}
         if target:
             body["target_url"] = target
         requests.post(f"{self.url}/statuses/{sha}", json=body, headers=self.h, timeout=30).raise_for_status()
@@ -106,6 +107,44 @@ def moved(token, c):
         if value(prod) != value(branch):
             out.append(f"| `{m}` | {value(branch)} | {value(prod)} |")
     return out
+
+
+def semantic_tests(token, c, work):
+    """The semantic model's tests (use case 12.3), when the commit carries the
+    model (storscale/semantic.yaml, 7.4): run on the branch (the commit's
+    model, the branch's catalog) and on production (the stored model, the
+    project's tables), each answer compared. (lines for the note, passed)."""
+    path = os.path.join(work, "repo", "storscale", "semantic.yaml")
+    if not os.path.exists(path):
+        return [], True
+    with open(path) as f:
+        text = f.read()
+    h = {"Authorization": f"Bearer {token}"}
+    url = f"{SEMANTIC}/api/projects/{c['project']}/semantic/tests"
+    r = requests.post(url, json={"yaml": text, "catalog": c["catalog"]}, headers=h, timeout=300)
+    if not r.ok:
+        return [f"- ✗ the semantic model's tests couldn't run on the branch: {r.json().get('error', r.text)[:300]}"], False
+    branch = r.json()
+    prod = {}
+    pr = requests.post(url, json={}, headers=h, timeout=300)
+    if pr.ok:
+        prod = {t["name"]: t for t in pr.json().get("tests", [])}
+    lines = []
+    for t in branch.get("tests", []):
+        before = prod.get(t["name"], {})
+        moved = before.get("rows") is not None and before.get("rows") != t.get("rows")
+        if t["passed"] and not moved:
+            continue
+        mark = "✓" if t["passed"] else "✗"
+        what = f"- {mark} `{t['name']}`"
+        if not t["passed"]:
+            what += f": {t.get('why', '')[:200]}"
+        if moved:
+            what += f" (changed: {t.get('rows')} on the branch, {before.get('rows')} in production)"
+        lines.append(what)
+    if not lines:
+        lines.append(f"- ✓ the semantic model's {branch.get('passed', 0)} tests pass on the branch, their answers as in production")
+    return ["", "**The semantic model's tests**", *lines], branch.get("failed", 0) == 0
 
 
 def broken_contracts(token, c, built):
@@ -180,6 +219,11 @@ def storscale_review():
                 lines += ["", "| metric | on the branch | in production |", "|---|---|---|", *metrics]
             for x in failed:
                 lines.append(f"- ✗ `{x['unique_id']}`: {(x.get('message') or x.get('status'))[:300]}")
+            semantic_lines, semantic_ok = semantic_tests(tok, c, work)
+            lines += semantic_lines
+            gitlab.status(sha, "success" if semantic_ok else "failed",
+                          "the semantic model's tests pass on the branch" if semantic_ok else "a semantic model test fails on the branch",
+                          c.get("url", ""), name=SEMANTIC_STATUS)
             broken = broken_contracts(tok, c, models)
             for b in broken:
                 lines.append(f"- ✗ the product `{b['product']}` ({b['table']}): its contract's columns {', '.join(b['missing'])} would be gone; "

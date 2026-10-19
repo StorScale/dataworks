@@ -150,6 +150,15 @@ def main():
     check("alice (a reader) can't change the metrics", denied == 403, f"HTTP {denied}")
     bad = bob.put(f"{PLATFORM}/api/projects/sales/semantic", json={"yaml": "metric: {name: oops}"}, timeout=60)
     check("a definition that doesn't compile is refused, saying why", bad.status_code == 422, bad.json().get("error", "")[:100])
+    # The model's tests (12.3): run as bob; a change that breaks one refused.
+    ran = bob.post(f"{PLATFORM}/api/projects/sales/semantic/tests", json={}, headers={"X-Platform-Request": "1"}, timeout=120)
+    rj = ran.json() if ran.ok else {}
+    check("the model's tests run from the platform, and pass", ran.ok and rj.get("failed") == 0 and rj.get("passed", 0) >= 2
+          and all(t["passed"] for t in rj.get("tests", [])), (ran.status_code, ran.text[:300]))
+    renamed = original.replace("name: order_count", "name: orders_count")
+    refused = bob.put(f"{PLATFORM}/api/projects/sales/semantic", json={"yaml": renamed}, timeout=60)
+    check("a change that breaks a test (its metric renamed) is refused, saying which", refused.status_code == 422
+          and "one_order_count" in refused.json().get("error", "") and "order_count" in refused.json().get("error", ""), refused.text[:200])
     saved = bob.put(f"{PLATFORM}/api/projects/sales/semantic", json={"yaml": net}, timeout=60)
     check("bob (an editor) changes revenue, in the platform", saved.ok and net != original, f"HTTP {saved.status_code}")
     after, err = alice.call("query_metrics", project="sales", metrics=["revenue"], group_by=["order__region"])
