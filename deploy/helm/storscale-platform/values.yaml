@@ -149,6 +149,11 @@ deliveries:
   # person's ID (use case 9.2): years (7y) or days (400d).
   keepFor: 7y
 
+# Data products (use case 10.3): who certifies them, the governance group
+# (Keycloak groups, comma-separated; empty: the platform's administrators).
+products:
+  certifierGroups: ""
+
 # Projects as code (use case 7.4): which of a project's targets this install
 # is. A plan of the project's repo lays storscale/targets/<target>.yaml over
 # storscale/project.yaml.

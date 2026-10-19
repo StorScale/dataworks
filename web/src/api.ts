@@ -279,6 +279,21 @@ export type Term = {
 };
 export const getTerms = () => api<{ terms: Term[] }>("GET", "/api/terms");
 
+// --- Data products (10.3): tables projects publish, read in place by the projects their producers approve
+export type Product = {
+  project: string; name: string; table: string; description?: string; owner: string; version: string; terms?: string[];
+  contract?: { columns?: string[]; within?: string; checks?: boolean }; consumers?: string[];
+  certification?: { by: string; at: string }; certified: boolean; canApprove: boolean;
+  requests: { consumer: string; by: string; at: string; why?: string }[];
+};
+const prod = (p: Product | { project: string; name: string }) => `/api/products/${encodeURIComponent(p.project)}/${encodeURIComponent(p.name)}`;
+export const getProducts = () => api<{ products: Product[]; canCertify: boolean }>("GET", "/api/products");
+export const askForProduct = (p: Product, consumer: string, why: string) => api<void>("POST", `${prod(p)}/requests`, { consumer, why });
+export const answerRequest = (p: Product, consumer: string, approve: boolean) =>
+  api<void>("POST", `${prod(p)}/requests/${encodeURIComponent(consumer)}/${approve ? "approve" : "decline"}`);
+export const removeConsumer = (p: Product, consumer: string) => api<void>("DELETE", `${prod(p)}/consumers/${encodeURIComponent(consumer)}`);
+export const certify = (p: Product, on: boolean) => api<void>(on ? "POST" : "DELETE", `${prod(p)}/certification`);
+
 // --- A project's connections (7.6): credentials given once, never shown again
 export type ConnectionField = { key: string; label: string; secret?: boolean; required?: boolean; multiline?: boolean };
 export type ConnectionKind = { kind: string; label: string; for: string; fields: ConnectionField[]; oneOf?: string[] };

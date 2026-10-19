@@ -2,8 +2,9 @@
 
 The suite makes two projects: company, whose semantic model is shared (the
 company's: customers and bookings, with terms that say what they mean and who
-owns them), and campaigns, whose model builds on it (semantic.uses) with a
-metric of its own.
+owns them) and whose tables are its data products, and campaigns, whose model
+builds on it (semantic.uses) with a metric of its own. alice is a reader of
+campaigns only: company's tables are hers through its products.
 These check (use case 10.1):
 
   1. the terms are the platform's: Customer and Bookings with their
@@ -18,7 +19,14 @@ These check (use case 10.1):
      tagged with them;
   6. Superset has the company's models as datasets, their metrics defined
      (10.2): alice's chart of bookings by customer segment there agrees with
-     the semantic layer's answer, both under her rules.
+     the semantic layer's answer, both under her rules;
+  7. data products (10.3): company publishes customers and bookings; alice,
+     a reader of campaigns and not of company, reads neither until campaigns
+     asks and company approves, then both in place, under company's rules
+     (its readers' row filter on bookings holds for her: the numbers above
+     are hers); certified, bookings is certified in the catalog too, and a
+     change of its contract takes the certification away; a contracted
+     column gone is company's alert, naming campaigns.
 
 The projects and their tables are removed after.
 """
@@ -93,10 +101,30 @@ CAMPAIGNS_MODEL = """metric:
 """
 
 
-def project(name, extra=None):
+def project(name, extra=None, tables=None, alice=True):
+    members = [{"group": "engineers", "role": "editor"}] + ([{"user": "alice", "role": "reader"}] if alice else [])
     return {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": name},
-            "spec": {"description": f"The business suite's {name}.", "members": [{"group": "engineers", "role": "editor"},
-                     {"user": "alice", "role": "reader"}], "tables": {}, **(extra or {})}}
+            "spec": {"description": f"The business suite's {name}.", "members": members, "tables": tables or {}, **(extra or {})}}
+
+
+PRODUCTS = [{"name": "customers", "table": "customers", "owner": "bob", "version": "1", "terms": ["customer"],
+             "description": "Every customer, one row each.", "contract": {"columns": ["customer_id", "segment"], "within": "30d"}},
+            {"name": "bookings", "table": "bookings", "owner": "bob", "version": "1", "terms": ["bookings_total"],
+             "description": "Every booking, one row each.", "contract": {"columns": ["booking_id", "customer_id", "amount"]}}]
+COMPANY_SPEC = project(COMPANY, {"semantic": {"shared": True}, "products": PRODUCTS},
+                       tables={"readers": {"rowFilters": [{"table": "bookings", "filter": "amount < 2000"}]}}, alice=False)
+
+
+def can_read(user, table):
+    try:
+        return [list(r) for r in sql(user, f"SELECT * FROM {table} ORDER BY 1", "iceberg", COMPANY)]
+    except Exception as e:  # noqa: BLE001
+        return str(e)[:160]
+
+
+def products(s):
+    r = s.get(f"{PLATFORM}/api/products", timeout=30)
+    return {f"{p['project']}/{p['name']}": p for p in (r.json().get("products", []) if r.ok else [])}
 
 
 def put_model(s, name, text):
@@ -108,7 +136,7 @@ def main():
     ready = lambda name: wait(lambda: (lambda x: x if x and (x.get("status") or {}).get("phase") == "Ready" else None)(
         (projects(bob) or {}).get(name)), 600, every=10)
     try:
-        r1 = bob.put(f"{PLATFORM}/api/projects/{COMPANY}", data=json.dumps(project(COMPANY, {"semantic": {"shared": True}})), timeout=30)
+        r1 = bob.put(f"{PLATFORM}/api/projects/{COMPANY}", data=json.dumps(COMPANY_SPEC), timeout=30)
         r2 = bob.put(f"{PLATFORM}/api/projects/{CAMPAIGNS}", data=json.dumps(project(CAMPAIGNS, {"semantic": {"uses": [COMPANY]}})), timeout=30)
         ok = r1.ok and r2.ok and ready(COMPANY) and ready(CAMPAIGNS)
         sql("bob", "CREATE TABLE customers AS SELECT * FROM (VALUES (1, 'enterprise', DATE '2026-01-05'), (2, 'enterprise', DATE '2026-02-01'), "
@@ -118,6 +146,20 @@ def main():
         m1, m2 = put_model(bob, COMPANY, COMPANY_MODEL), put_model(bob, CAMPAIGNS, CAMPAIGNS_MODEL)
         check("bob makes the company's shared model, and campaigns' built on it",
               ok and m1.ok and m2.ok and COMPANY in m2.json().get("builtOn", []), (r1.text[:150], m1.text[:200], m2.text[:200]))
+
+        # The products, read in place (7, first: the rest reads company's tables through them).
+        before = can_read("alice", "bookings")
+        asks = [bob.post(f"{PLATFORM}/api/products/{COMPANY}/{p}/requests", headers=H, timeout=30,
+                         json={"consumer": CAMPAIGNS, "why": "campaign targeting"}) for p in ("customers", "bookings")]
+        waiting = products(bob).get(f"{COMPANY}/bookings", {}).get("requests", [])
+        answers = [bob.post(f"{PLATFORM}/api/products/{COMPANY}/{p}/requests/{CAMPAIGNS}/approve", headers=H, timeout=30)
+                   for p in ("customers", "bookings")]
+        after = wait(lambda: (lambda x: x if isinstance(x, list) else None)(can_read("alice", "bookings")), 240, every=10) or can_read("alice", "bookings")
+        check("alice (campaigns' reader) can't read company's bookings until campaigns asks for the product and company approves",
+              isinstance(before, str) and all(a.ok for a in asks + answers) and [w["consumer"] for w in waiting] == [CAMPAIGNS],
+              (before, [a.status_code for a in asks + answers], waiting))
+        check("... then reads it in place, under company's rules: its readers' row filter holds for her (no 3000)",
+              isinstance(after, list) and [r[0] for r in after] == [10, 12], after)
 
         # 1. The terms.
         r = alice.get(f"{PLATFORM}/api/terms", timeout=60)
@@ -135,7 +177,7 @@ def main():
                        json={"metrics": ["bookings_per_customer"], "group_by": ["customer__segment"], "order_by": ["customer__segment"]})
         rows = r.json().get("rows") if r.ok else r.text[:300]
         check("alice asks campaigns' bookings per customer by the company's segment, and gets it",
-              r.ok and [[x[0], round(float(x[1]))] for x in rows] == [["enterprise", 2000], ["small business", 500]], rows)
+              r.ok and [[x[0], round(float(x[1]))] for x in rows] == [["enterprise", 500], ["small business", 500]], rows)
 
         # 3. Not defined again.
         again = CAMPAIGNS_MODEL + "---\nmetric:\n  name: bookings_total\n  type: simple\n  type_params: {measure: booking_amount}\n"
@@ -171,11 +213,35 @@ def main():
             "datasource": {"id": d["id"], "type": "table"} if d else {}, "result_format": "json", "result_type": "full",
             "queries": [{"metrics": ["bookings_total"], "columns": ["customer__segment"], "orderby": [["customer__segment", True]], "row_limit": 100}]})
         chart = [[x["customer__segment"], round(float(x["bookings_total"]))] for x in r.json()["result"][0]["data"]] if r.ok and d else r.text[:300]
-        sem = alice.post(f"{PLATFORM}/api/projects/{COMPANY}/semantic/query", headers=H, timeout=120,
+        sem = alice.post(f"{PLATFORM}/api/projects/{CAMPAIGNS}/semantic/query", headers=H, timeout=120,
                          json={"metrics": ["bookings_total"], "group_by": ["customer__segment"], "order_by": ["customer__segment"]})
         answer = [[x[0], round(float(x[1]))] for x in sem.json().get("rows", [])] if sem.ok else sem.text[:300]
         check("Superset has the company's bookings as a dataset, and alice's chart there agrees with the semantic layer",
-              d is not None and chart == answer == [["enterprise", 4000], ["small business", 500]], (chart, answer))
+              d is not None and chart == answer == [["enterprise", 1000], ["small business", 500]], (chart, answer))
+
+        # 7. Certified; the catalog; a change takes it away; a broken contract.
+        r = bob.post(f"{PLATFORM}/api/products/{COMPANY}/bookings/certification", headers=H, timeout=30)
+        listed = list(products(alice))
+        check("bob (an administrator) certifies bookings, which lists first", r.ok and products(alice).get(f"{COMPANY}/bookings", {}).get("certified")
+              and listed[0] == f"{COMPANY}/bookings", (r.text[:200], listed))
+
+        def in_catalog():
+            dp = s.get(f"{om.OM}/dataProducts/name/{COMPANY}__bookings", timeout=30)
+            t = s.get(f"{om.OM}/tables/name/trino.iceberg.company.bookings", params={"fields": "certification"}, timeout=30)
+            gold = t.ok and ((t.json().get("certification") or {}).get("tagLabel") or {}).get("tagFQN") == "Certification.Gold"
+            return dp.ok and gold
+        check("the catalog has the data product, its table certified Gold", wait(in_catalog, 900, every=15))
+        v2 = json.loads(json.dumps(COMPANY_SPEC))
+        v2["spec"]["products"][1]["contract"]["columns"] = ["booking_id", "amount"]
+        r = bob.put(f"{PLATFORM}/api/projects/{COMPANY}", data=json.dumps(v2), timeout=30)
+        p2 = products(alice).get(f"{COMPANY}/bookings", {})
+        check("a change of its contract takes the certification away, and keeps its consumers",
+              r.ok and not p2.get("certified") and p2.get("consumers") == [CAMPAIGNS], p2)
+        sql("bob", "ALTER TABLE customers RENAME COLUMN segment TO tier", "iceberg", COMPANY)
+        issue = wait(lambda: next((i for i in bob.get(f"{PLATFORM}/api/projects/{COMPANY}/alerts", timeout=30).json().get("issues", [])
+                                   if i["key"] == "product/customers/columns"), None), 240, every=10)
+        check("a contracted column gone (segment) is company's alert, naming campaigns",
+              issue is not None and "segment" in issue.get("title", "") and CAMPAIGNS in issue.get("detail", ""), issue)
     finally:
         for name, tables in ((COMPANY, ("customers", "bookings")), (CAMPAIGNS, ())):
             for t in tables:

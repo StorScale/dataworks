@@ -192,6 +192,15 @@ func (s *Bucket) PutFile(ctx context.Context, key string, data []byte, contentTy
 	return err
 }
 
+// DeleteFile removes a file of the platform's; one that isn't there is no error.
+func (s *Bucket) DeleteFile(ctx context.Context, key string) error {
+	err := s.c.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{})
+	if err != nil && minio.ToErrorResponse(err).Code == "NoSuchKey" {
+		return nil
+	}
+	return err
+}
+
 // keys reads a JSON object of strings; nil, with no error, when there's none.
 func (s *Bucket) keys(ctx context.Context, key string) (map[string]string, error) {
 	data, err := s.get(ctx, key)

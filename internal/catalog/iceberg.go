@@ -124,6 +124,13 @@ type Stats struct {
 
 type tableMetadata struct {
 	Metadata struct {
+		CurrentSchema int `json:"current-schema-id"`
+		Schemas       []struct {
+			ID     int `json:"schema-id"`
+			Fields []struct {
+				Name string `json:"name"`
+			} `json:"fields"`
+		} `json:"schemas"`
 		Current   *int64 `json:"current-snapshot-id"`
 		Snapshots []struct {
 			ID      int64             `json:"snapshot-id"`
@@ -147,6 +154,24 @@ func (ic *Iceberg) load(ctx context.Context, namespace, table string) (*tableMet
 		return nil, err
 	}
 	return &t, nil
+}
+
+// Columns are a table's columns now: its current schema's fields.
+func (ic *Iceberg) Columns(ctx context.Context, namespace, table string) ([]string, error) {
+	t, err := ic.load(ctx, namespace, table)
+	if err != nil {
+		return nil, err
+	}
+	for _, sc := range t.Metadata.Schemas {
+		if sc.ID == t.Metadata.CurrentSchema {
+			out := make([]string, 0, len(sc.Fields))
+			for _, f := range sc.Fields {
+				out = append(out, f.Name)
+			}
+			return out, nil
+		}
+	}
+	return nil, fmt.Errorf("%s.%s has no current schema", namespace, table)
 }
 
 // Stats are a table's, now.

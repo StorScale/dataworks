@@ -29,6 +29,11 @@ func (k kept) ListFiles(_ context.Context, prefix string) ([]string, error) {
 	return out, nil
 }
 
+func (k kept) DeleteFile(_ context.Context, key string) error {
+	delete(k, key)
+	return nil
+}
+
 func (k kept) GetFile(_ context.Context, key string) ([]byte, error) {
 	if v, ok := k[key]; ok {
 		return []byte(v), nil

@@ -102,6 +102,9 @@ type config struct {
 	// DeliveryKeepFor is how long a personal delivery's read is kept, so the
 	// log can be searched by a person's ID (9.2): 7y, or days as 400d.
 	DeliveryKeepFor string
+	// ProductCertifierGroups certify data products (use case 10.3): the
+	// governance group; default the administrators.
+	ProductCertifierGroups []string
 	// OperatorURL is the platform operator's (a GitLab webhook asks it to
 	// look at a project's merge requests at once).
 	OperatorURL string
@@ -150,6 +153,7 @@ func configFromEnv(get func(string) string) (config, error) {
 		AdminGroups:            list("PLATFORM_ADMIN_GROUPS", "engineers"),
 		DeliveryApproverGroups: list("DELIVERY_APPROVER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers")),
 		DeliveryKeepFor:        or("DELIVERY_KEEP_FOR", "7y"),
+		ProductCertifierGroups: list("PRODUCT_CERTIFIER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers")),
 		OperatorURL:            or("OPERATOR_URL", "http://platform-operator:8081"),
 		InstallTarget:          or("INSTALL_TARGET", "production"),
 		Listen:                 or("PLATFORM_LISTEN", ":8080"),

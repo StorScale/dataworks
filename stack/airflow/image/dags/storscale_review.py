@@ -108,6 +108,22 @@ def moved(token, c):
     return out
 
 
+def broken_contracts(token, c, built):
+    """The project's products (use case 10.3) whose tables, as the branch built
+    them, lack columns their contracts keep: those a merge would break."""
+    out = []
+    for k in c.get("contracts") or []:
+        if k["table"] not in built:
+            continue
+        got = query(token, f"SELECT column_name FROM \"{c['catalog']}\".information_schema.columns "
+                           f"WHERE table_schema = '{c['namespace']}' AND table_name = '{k['table']}'")
+        have = {r[0] for r in got or []}
+        missing = [col for col in k["columns"] if col not in have]
+        if missing:
+            out.append({**k, "missing": missing})
+    return out
+
+
 @dag(dag_id="storscale_review", schedule=None, start_date=pendulum.datetime(2026, 1, 1, tz="UTC"), catchup=False,
      max_active_runs=4, tags=["storscale"], doc_md=__doc__)
 def storscale_review():
@@ -164,7 +180,13 @@ def storscale_review():
                 lines += ["", "| metric | on the branch | in production |", "|---|---|---|", *metrics]
             for x in failed:
                 lines.append(f"- ✗ `{x['unique_id']}`: {(x.get('message') or x.get('status'))[:300]}")
-            ok = built.returncode == 0 and not failed
+            broken = broken_contracts(tok, c, models)
+            for b in broken:
+                lines.append(f"- ✗ the product `{b['product']}` ({b['table']}): its contract's columns {', '.join(b['missing'])} would be gone; "
+                             f"read by {', '.join(b['consumers']) or 'no one yet'}")
+            ok = built.returncode == 0 and not failed and not broken
+            if broken and not failed:
+                failed = [{"unique_id": f"product.{b['product']}"} for b in broken]
             gitlab.note(iid, "\n".join(lines))
             gitlab.status(sha, "success" if ok else "failed",
                           f"{len(models)} models built, their tests passing" if ok else f"{len(failed)} failed: " +

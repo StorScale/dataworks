@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -124,6 +125,7 @@ func (s *server) issuesOf(ctx context.Context, p *project.Project) (out []issue,
 		}
 	}
 	out = append(out, s.copyIssues(ctx, p, link)...)
+	out = append(out, s.productIssues(ctx, p, link, out, &unknown)...)
 	if s.maintainer != nil {
 		for _, run := range s.maintainer.failures(p.Metadata.Name) {
 			out = append(out, issue{Key: "maintenance/" + run.Table, Kind: "maintenance",
@@ -377,6 +379,60 @@ func (s *server) copyIssues(ctx context.Context, p *project.Project, link string
 		out = append(out, issue{Key: "copy/" + src.Name, Kind: "copy",
 			Title:  fmt.Sprintf("the copy of %s isn't running (since %s)", src.Name, since.UTC().Format("15:04 MST")),
 			Detail: part.Message, Link: link})
+	}
+	return out
+}
+
+// productIssues are the project's products whose tables break their
+// contracts (use case 10.3): a contracted column gone, the table older than
+// its window, its checks failing (as the issues found already say). Each
+// names the consumers it lets down.
+func (s *server) productIssues(ctx context.Context, p *project.Project, link string, found []issue, unknown *[]string) []issue {
+	t := p.Spec.Tables
+	if t == nil || s.history == nil {
+		return nil
+	}
+	var out []issue
+	for _, pr := range p.Spec.Products {
+		c := pr.Contract
+		if c == nil {
+			continue
+		}
+		who := "no consumers yet"
+		if len(pr.Consumers) > 0 {
+			who = "its consumers: " + strings.Join(pr.Consumers, ", ")
+		}
+		at := link + "/data?table=" + pr.Table
+		if len(c.Columns) > 0 {
+			cols, err := s.history.iceberg.Columns(ctx, t.Namespace, pr.Table)
+			if err != nil {
+				*unknown = append(*unknown, fmt.Sprintf("the product %s's columns: %v", pr.Name, err))
+			} else {
+				var missing []string
+				for _, col := range c.Columns {
+					if !slices.Contains(cols, col) {
+						missing = append(missing, col)
+					}
+				}
+				if len(missing) > 0 {
+					out = append(out, issue{Key: "product/" + pr.Name + "/columns", Kind: "product", Link: at, Detail: who,
+						Title: fmt.Sprintf("the product %s breaks its contract: %s gone from %s", pr.Name, strings.Join(missing, ", "), pr.Table)})
+				}
+			}
+		}
+		if within, ok := project.Within(c.Within); ok && s.projectAlerts != nil {
+			last, err := catalog.LastChange(ctx, s.projectAlerts.http, s.projectAlerts.nessie, s.projectAlerts.warehous, t.Namespace, pr.Table)
+			if err != nil {
+				*unknown = append(*unknown, fmt.Sprintf("when the product %s last changed: %v", pr.Name, err))
+			} else if last.IsZero() || time.Since(last) > within {
+				out = append(out, issue{Key: "product/" + pr.Name + "/stale", Kind: "product", Link: at, Detail: who,
+					Title: fmt.Sprintf("the product %s breaks its contract: %s not changed within %s", pr.Name, pr.Table, c.Within)})
+			}
+		}
+		if c.Checks && slices.ContainsFunc(found, func(i issue) bool { return strings.HasPrefix(i.Key, "check/"+pr.Table+"/") }) {
+			out = append(out, issue{Key: "product/" + pr.Name + "/checks", Kind: "product", Link: at + "&tab=quality", Detail: who,
+				Title: fmt.Sprintf("the product %s breaks its contract: a check on %s is failing", pr.Name, pr.Table)})
+		}
 	}
 	return out
 }
