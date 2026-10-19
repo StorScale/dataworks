@@ -99,8 +99,15 @@ func main() {
 		Buckets:            &reconcile.Buckets{URL: strings.TrimRight(storeURL, "/"), AccessKey: accessKey, SecretKey: secretKey},
 		Nessie:             &reconcile.Nessie{URL: strings.TrimRight(nessieURL, "/"), Warehouse: env("NESSIE_WAREHOUSE", "warehouse")},
 		Store:              st,
+		PlatformURL:        os.Getenv("PLATFORM_URL"),
 		Log:                log,
 		RangerUserPassword: rangerPassword,
+	}
+	// The registered assistants are files in the platform's bucket (platformd's), whatever the project store is.
+	if storeURL != "" {
+		if b, err := store.New(storeURL, accessKey, secretKey, env("STORE_BUCKET", "storscale-platform")); err == nil {
+			r.Files = b
+		}
 	}
 	if u := os.Getenv("AIRFLOW_URL"); u != "" {
 		r.Airflow = &reconcile.Airflow{API: pipelines.New(u, env("AIRFLOW_USER", "storscale-platform"), os.Getenv("AIRFLOW_PASSWORD")),

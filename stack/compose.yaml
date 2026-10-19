@@ -344,6 +344,8 @@ services:
       BUCKETS_SECRET_KEY: ${BUCKETS_ROOT_PASSWORD}
       KEYCLOAK_DIRECT_URL: http://keycloak:8080/sso
       OPERATOR_CLIENT_SECRET: ${OPERATOR_CLIENT_SECRET}
+      # Registered assistants' Keycloak clients: their tokens are for the platform's MCP server.
+      PLATFORM_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}
       RANGER_URL: http://ranger-admin:6080
       RANGER_PASSWORD: ${RANGER_PASSWORD}
       NESSIE_URL: http://nessie:19120

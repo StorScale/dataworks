@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **Assistants on the business layer** (10.4): the MCP server's tools reach the company's terms (`list_terms`, `describe_term`, `search_terms`, which says plainly when no governed definition covers a question) and the data products (`list_products`, `describe_product`, `query_product`: a product's rows as the person, under the producer's rules), and every metric answer names what it used (the definitions, terms and products, linked), so an assistant cites them. Administrators register the assistants the company approves (Admin, Assistants: a name and redirect URIs); the operator makes each a Keycloak client, `assistant-<name>`, as the built-in `storscale-agent` is, and removing one signs no one in from then on. The `business` suite checks it.
+
 ## [0.17.0] - 2026-10-19
 
 The business layer: the company's terms defined once and built on, Superset's datasets on the same definitions, certified data products read in place across projects; and Salesforce from a connector's form.

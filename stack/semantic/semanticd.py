@@ -52,6 +52,7 @@ env = os.environ
 ISSUER = env["KEYCLOAK_URL"].rstrip("/") + "/realms/" + env.get("KEYCLOAK_REALM", "lakehouse")
 JWKS = env.get("KEYCLOAK_DIRECT_URL", env["KEYCLOAK_URL"]).rstrip("/") + "/realms/" + env.get("KEYCLOAK_REALM", "lakehouse") + "/protocol/openid-connect/certs"
 MCP_URL = env["MCP_URL"]  # this server's MCP endpoint, as agents see it: its tokens' audience
+PLATFORM_URL = env.get("PLATFORM_URL") or MCP_URL.removesuffix("/mcp")  # the platform's pages, for what an answer cites
 TRINO_AUDIENCE = env.get("TRINO_AUDIENCE", "lakehouse")
 STORE_BUCKET = env.get("STORE_BUCKET", "storscale-platform")
 MAX_ROWS = 1000
@@ -403,9 +404,13 @@ def tool(fn):
 
 mcp = MCPServer(
     "StorScale Platform: metrics",
-    instructions="Answers questions with the platform's governed metrics. List the projects you can use, "
-                 "then their metrics and the dimensions to group them by, then query. Every query runs as "
-                 "you, under your access rules: rows you may not see are left out, and masked columns stay masked.",
+    instructions="Answers questions with the platform's governed definitions: the company's business terms, the "
+                 "projects' metrics, and the data products. Start from what the question is about (search_terms), "
+                 "then the projects you can use, their metrics and the dimensions to group them by, then query; "
+                 "a data product's rows come from query_product. Every query runs as you, under your access rules: "
+                 "rows you may not see are left out, and masked columns stay masked. Every answer says what it used "
+                 "(its definitions, terms and products, with links): name them to the person. When no term, metric "
+                 "or product covers a question, say so rather than guessing.",
     token_verifier=KeycloakVerifier(),
     auth=AuthSettings(issuer_url=ISSUER, resource_server_url=MCP_URL, validate_token_resource=False),
 )
@@ -439,7 +444,88 @@ def query_metrics(project: str, metrics: list[str], group_by: list[str] = [], wh
     c = mcp_caller()
     if project not in projects_of(c):
         raise PermissionError(f"you're not a member of {project}")
-    return answer(c, project, metrics, group_by, where, order_by, limit)
+    out = answer(c, project, metrics, group_by, where, order_by, limit)
+    out["used"] = cite(project, metrics, group_by)
+    return out
+
+
+@mcp.tool()
+@tool
+def list_terms() -> dict:
+    """The company's business terms (entities, metrics and dimensions defined once for everyone): each
+    with its definition, owner, synonyms, the tables it comes from, and the projects using it."""
+    mcp_caller()
+    return {"terms": all_terms()}
+
+
+@mcp.tool()
+@tool
+def describe_term(term: str) -> dict:
+    """One business term, by name or synonym: its definition, owner, kind, the metrics on it, and where it's used."""
+    mcp_caller()
+    for t in all_terms():
+        if term.lower() in {t["name"].lower(), t["label"].lower()} | {x.lower() for x in t["synonyms"]}:
+            return t
+    raise LookupError(f"no business term is called {term}; list_terms has them all")
+
+
+@mcp.tool()
+@tool
+def search_terms(question: str) -> dict:
+    """The business terms a question is about, by their names and synonyms. When none match, say so to the
+    person rather than answering from guesses: the platform defines what the business means, and only that
+    is governed."""
+    mcp_caller()
+    found = matching_terms(question)
+    out = {"terms": found}
+    if not found:
+        out["note"] = "No governed definition covers this question. Tell the person so, and which terms exist (list_terms), rather than guessing."
+    return out
+
+
+@mcp.tool()
+@tool
+def list_products() -> dict:
+    """The data products: tables a project publishes under a contract, certified first. Each with its producer,
+    owner, version, terms, contract (columns kept, freshness, checks), consumers, and whether it's certified."""
+    mcp_caller()
+    return {"products": all_products()}
+
+
+@mcp.tool()
+@tool
+def describe_product(project: str, product: str) -> dict:
+    """One data product, by its producing project and name."""
+    mcp_caller()
+    for pr in all_products():
+        if pr["project"] == project and pr["name"] == product:
+            return pr
+    raise LookupError(f"{project} has no product called {product}; list_products has them all")
+
+
+@mcp.tool()
+@tool
+def query_product(project: str, product: str, columns: list[str] = [], where: str = "", limit: int = 100) -> dict:  # noqa: B006
+    """Rows of a data product's table, as you: a reader of the producing project, or of a project it was shared
+    with, under the producer's rules (its row filters and masks). Anyone else is refused: the person's project
+    can ask for the product on the platform's Products page. columns: a subset (default all); where: a SQL
+    condition on them."""
+    c = mcp_caller()
+    pr = describe_product(project, product)
+    cols = ", ".join('"' + x.replace('"', '""') + '"' for x in columns) or "*"
+    table = ".".join('"' + x + '"' for x in pr["table"].split("."))
+    sql = f"SELECT {cols} FROM {table}" + (f" WHERE {where}" if where.strip() else "") + f" LIMIT {min(int(limit or 100), MAX_ROWS)}"
+    try:
+        out = run(c, project, sql, [f"product:{product}"], limit=min(int(limit or 100), MAX_ROWS))
+    except trino.exceptions.TrinoUserError as e:
+        if e.error_name == "PERMISSION_DENIED":
+            raise PermissionError(f"{e.message}. {c.username} isn't a reader of {project} or of a project {product} was shared with; "
+                                  f"their project can ask for it at {pr['link']}") from e
+        raise ValueError(e.message) from e
+    out["sql"] = sql
+    out["used"] = {"products": [{k: pr[k] for k in ("project", "name", "certified", "owner", "version", "link")}], "terms": [
+        {k: t[k] for k in ("name", "label", "kind", "definition", "owner", "link")} for t in all_terms() if t["name"] in pr["terms"]]}
+    return out
 
 
 @mcp.tool()
@@ -587,6 +673,112 @@ def get_terms(c, project, body, request):
                         "definition": t.get("definition", ""), "owner": t.get("owner", ""), "synonyms": t.get("synonyms") or [],
                         "project": sp, "tables": tables_of({**t, "kind": kind}, docs), "metrics": on, "usedBy": used})
     return {"terms": sorted(out, key=lambda x: x["label"].lower())}
+
+
+# --- The business layer, for assistants (use case 10.4) --------------------------------------
+
+def all_specs():
+    out = []
+    for page in store.get_paginator("list_objects_v2").paginate(Bucket=STORE_BUCKET, Prefix="projects/"):
+        for o in page.get("Contents", []):
+            p = get_json(o["Key"]) or {}
+            if p.get("metadata", {}).get("name"):
+                out.append(p)
+    return out
+
+
+def product_hash(pr):
+    """A product's promise, as platformd hashes it to certify (its table, version and contract)."""
+    b = json.dumps({"Table": pr.get("table", ""), "Version": pr.get("version", ""), "Contract": pr.get("contract")},
+                   separators=(",", ":")).encode()
+    return hashlib.sha256(b).hexdigest()[:16]
+
+
+def all_products():
+    """Every project's data products, certified first: what they are is no
+    secret (the Products page shows them to anyone signed in); reading them is."""
+    out = []
+    for p in all_specs():
+        name = p["metadata"]["name"]
+        catalog, ns = (p.get("spec") or {}).get("tables", {}).get("catalog") or "iceberg", (p.get("spec") or {}).get("tables", {}).get("namespace") or name.replace("-", "_")
+        for pr in (p.get("spec") or {}).get("products") or []:
+            cert = pr.get("certification") or {}
+            certified = bool(cert) and cert.get("hash") == product_hash(pr)
+            out.append({"project": name, "name": pr["name"], "table": f"{catalog}.{ns}.{pr.get('table', '')}",
+                        "description": pr.get("description", ""), "owner": pr.get("owner", ""), "version": pr.get("version", ""),
+                        "terms": pr.get("terms") or [], "contract": pr.get("contract") or {}, "consumers": pr.get("consumers") or [],
+                        "certified": certified, "certifiedBy": cert.get("by", "") if certified else "",
+                        "certifiedAt": cert.get("at", "") if certified else "",
+                        "link": f"{PLATFORM_URL}/products?product={name}/{pr['name']}"})
+    return sorted(out, key=lambda x: (not x["certified"], x["project"], x["name"]))
+
+
+def term_view(t):
+    return {**t, "link": f"{PLATFORM_URL}/terms/{t['name']}"}
+
+
+def all_terms():
+    return [term_view(t) for t in get_terms(None, "", {}, None)["terms"]]
+
+
+def words_of(text):
+    """A text's words, singular (clients and client are one word)."""
+    out = set()
+    for w in re.split(r"[^a-z0-9]+", (text or "").lower()):
+        if len(w) > 2:
+            out.add(w[:-2] if w.endswith("ies") and len(w) > 4 else w[:-1] if w.endswith("s") and len(w) > 3 else w)
+    return out
+
+
+def matching_terms(question):
+    """The terms a question's words name (their names, labels and synonyms), best first."""
+    asked = words_of(question)
+    scored = []
+    for t in all_terms():
+        names = words_of(t["name"]) | words_of(t["label"]) | set().union(*(words_of(x) for x in t["synonyms"]), set())
+        hits = len(asked & names)
+        if hits:
+            scored.append((-hits, t["label"].lower(), t))
+    return [t for _, _, t in sorted(scored, key=lambda x: x[:2])]
+
+
+def parts_of(metric, docs):
+    """A metric and the metrics it's made of (a ratio's, a derived one's)."""
+    metrics = {d["metric"]["name"]: d["metric"] for d in docs if "metric" in d}
+    out, todo = set(), [metric]
+    while todo:
+        m = todo.pop()
+        if m in out or m not in metrics:
+            continue
+        out.add(m)
+        tp = metrics[m].get("type_params") or {}
+        for ref in [tp.get("numerator"), tp.get("denominator")] + list(tp.get("metrics") or []):
+            if ref:
+                todo.append(ref.get("name") if isinstance(ref, dict) else ref)
+    return out
+
+
+def cite(project, metrics, group_by=()):
+    """What an answer used, for the assistant to name: the metrics' definitions
+    (and whose they are), the terms on them, and the products behind the tables read."""
+    _, summary = engine_for(project)
+    own, _ = split(model_yaml(project) or "")
+    base, _ = shared_docs(project)
+    docs = base + own
+    used_metrics = [{"name": m["name"], "description": m["description"], "definedIn": m.get("from") or project,
+                     "link": f"{PLATFORM_URL}/projects/{m.get('from') or project}/metrics"}
+                    for m in summary["metrics"] if m["name"] in metrics]
+    tables, made_of = set(), set()
+    for m in metrics:
+        tables.update(tables_of({"name": m, "kind": "metric"}, docs))
+        made_of.update(parts_of(m, docs))
+    entities = {g.split("__", 1)[0] for g in group_by if "__" in g}
+    terms = [t for t in all_terms() if t["name"] in made_of or t["name"] in entities
+             or (t["kind"] == "entity" and set(t["tables"]) & tables)]
+    products = [{k: pr[k] for k in ("project", "name", "certified", "owner", "version", "link")}
+                for pr in all_products() if pr["table"] in tables]
+    return {"metrics": used_metrics, "terms": [{k: t[k] for k in ("name", "label", "kind", "definition", "owner", "link")} for t in terms],
+            "products": products}
 
 
 def post_query(c, project, body, request):
