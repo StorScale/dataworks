@@ -165,7 +165,7 @@ def run(browser, switch=True, start_run=True):
           catalog.endswith("/_storscale/launch.html") and page.get_attribute("[data-testid=nav-catalog]", "target") == "_blank", catalog)
 
     # 3. The sales project, as alice (a reader), in the platform's own pages.
-    page.goto(f"{PLATFORM}/p/sales")
+    page.goto(f"{PLATFORM}/p/sales", timeout=60_000)  # WebKit, after the whole stack has run every suite, can take over 30s here
     page.wait_for_selector("[data-testid=grants]", timeout=60_000)
     tabs = [t.inner_text() for t in page.query_selector_all(".tabs a")]
     check("alice opens sales: its tabs", all(t in tabs for t in ("Overview", "Data", "Metrics", "SQL", "Pipelines", "Access")), ", ".join(tabs))
