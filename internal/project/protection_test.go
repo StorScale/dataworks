@@ -33,13 +33,13 @@ func TestProtectionPolicies(t *testing.T) {
 	email := pols[1]
 	if email.PolicyType != 1 || len(email.DataMaskPolicyItems) != 2 ||
 		email.DataMaskPolicyItems[0].Groups[0] != "data-protection" || email.DataMaskPolicyItems[0].DataMaskInfo.DataMaskType != "MASK_NONE" ||
-		email.DataMaskPolicyItems[1].Groups[0] != "public" || email.DataMaskPolicyItems[1].DataMaskInfo.DataMaskType != "MASK_HASH" {
+		email.DataMaskPolicyItems[1].Groups[0] != "public" || email.DataMaskPolicyItems[1].DataMaskInfo.DataMaskType != "CUSTOM" || !strings.Contains(email.DataMaskPolicyItems[1].DataMaskInfo.ValueExpr, "sha256") {
 		t.Errorf("email's policy: %+v", email)
 	}
 	if tb := email.Resources["table"].Values; len(tb) != 3 || tb[0] != "customers" || email.Resources["column"].Values[0] != "email" {
 		t.Errorf("email's resources: %+v", email.Resources)
 	}
-	if pay := pols[2]; pay.DataMaskPolicyItems[len(pay.DataMaskPolicyItems)-1].DataMaskInfo.DataMaskType != "MASK_HASH" { // personal outranks a tag the install added
+	if pay := pols[2]; pay.DataMaskPolicyItems[len(pay.DataMaskPolicyItems)-1].DataMaskInfo.DataMaskType != "CUSTOM" { // personal outranks a tag the install added
 		t.Errorf("pay's policy: %+v", pay.DataMaskPolicyItems)
 	}
 	// Suggested tags left out when the install says so.

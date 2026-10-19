@@ -143,20 +143,29 @@ func (s *server) handleClassify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The file follows at catalog-sync's next round; the project's view now.
-	if c, err := s.classificationOf(r.Context(), p.Metadata.Name); err == nil && s.files != nil {
-		kept := c.Columns[:0]
-		for _, pc := range c.Columns {
-			if pc.Table == body.Table && pc.Column == body.Column && pc.Tag == body.Tag {
-				continue
+	// Only its columns change: the rest (what catalog-sync suggested before,
+	// what was dismissed) is catalog-sync's memory, kept as it is.
+	if s.files != nil {
+		if raw, err := s.files.GetFile(r.Context(), "classification/"+p.Metadata.Name+".json"); err == nil && raw != nil {
+			var doc map[string]json.RawMessage
+			var cols []project.ProtectedColumn
+			if json.Unmarshal(raw, &doc) == nil {
+				json.Unmarshal(doc["columns"], &cols)
+				kept := []project.ProtectedColumn{}
+				for _, pc := range cols {
+					if pc.Table == body.Table && pc.Column == body.Column && pc.Tag == body.Tag {
+						continue
+					}
+					kept = append(kept, pc)
+				}
+				if body.Action == "confirm" {
+					kept = append(kept, project.ProtectedColumn{Table: body.Table, Column: body.Column, Tag: body.Tag, State: "confirmed"})
+				}
+				doc["columns"], _ = json.Marshal(kept)
+				if b, err := json.Marshal(doc); err == nil {
+					s.files.PutFile(r.Context(), "classification/"+p.Metadata.Name+".json", b, "application/json")
+				}
 			}
-			kept = append(kept, pc)
-		}
-		if body.Action == "confirm" {
-			kept = append(kept, project.ProtectedColumn{Table: body.Table, Column: body.Column, Tag: body.Tag, State: "confirmed"})
-		}
-		c.Columns = kept
-		if b, err := json.Marshal(c); err == nil {
-			s.files.PutFile(r.Context(), "classification/"+p.Metadata.Name+".json", b, "application/json")
 		}
 	}
 	s.record(r, who, "classification."+strings.TrimSuffix(body.Action, "e")+"ed", "project:"+p.Metadata.Name, body.Table+"."+body.Column+" "+body.Tag)

@@ -122,7 +122,7 @@ def projects_of(c: Caller):
     for page in store.get_paginator("list_objects_v2").paginate(Bucket=STORE_BUCKET, Prefix="status/"):
         for o in page.get("Contents", []):
             st = get_json(o["Key"]) or {}
-            for m in st.get("members", []):
+            for m in st.get("members") or []:  # none yet, the first seconds of a project
                 if m["username"] == c.username:
                     out[st["name"]] = m["role"]
     return out
