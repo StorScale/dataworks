@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir trino==0.340.0 apache-airflow-providers-git==1.0.
 USER root
 RUN python -m venv /opt/dlt && chown -R airflow:0 /opt/dlt
 USER airflow
-RUN /opt/dlt/bin/pip install --no-cache-dir "dlt[filesystem,pyiceberg,sql-database]==1.30.0" pyiceberg==0.12.0 \
+RUN /opt/dlt/bin/pip install --no-cache-dir "dlt[filesystem,pyiceberg,sql-database]==1.30.0" pyiceberg==0.12.0 openpyxl==3.1.5 \
       psycopg2-binary==2.9.10 pymysql==1.2.3 simple-salesforce==1.12.10
 # The platform's connectors (use case 8.4): dlt's verified sources, copied
 # (sources/README.md), and the module that makes an import's resources of them.

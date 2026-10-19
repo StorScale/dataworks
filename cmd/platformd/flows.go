@@ -112,7 +112,7 @@ func (s *server) flowProject(w http.ResponseWriter, r *http.Request, who string)
 // flowEnv is what the compiler knows of the project: its namespace, and the
 // columns of the tables a flow may read (its own, and the products it
 // consumes: a table it can't read isn't described either).
-func (s *server) flowEnv(ctx context.Context, p *project.Project) flow.Env {
+func (s *server) flowEnv(ctx context.Context, token string, p *project.Project) flow.Env {
 	cat, ns := "iceberg", strings.ReplaceAll(p.Metadata.Name, "-", "_")
 	if t := p.Spec.Tables; t != nil {
 		if t.Catalog != "" {
@@ -122,7 +122,7 @@ func (s *server) flowEnv(ctx context.Context, p *project.Project) flow.Env {
 			ns = t.Namespace
 		}
 	}
-	return flow.Env{Catalog: cat, Namespace: ns, Columns: func(catalog, namespace, table string) ([]flow.Column, error) {
+	return flow.Env{Catalog: cat, Namespace: ns, MetricSQL: s.metricSQL(ctx, token, p.Metadata.Name), Columns: func(catalog, namespace, table string) ([]flow.Column, error) {
 		if catalog != cat {
 			return nil, fmt.Errorf("an input is a table of the lakehouse (%s), not of %s", cat, catalog)
 		}
@@ -196,21 +196,21 @@ func (s *server) flowSampler(ctx context.Context) flow.Sampler {
 	}
 }
 
-// runSQL runs a statement in Trino as the person, through semanticd.
-func (s *server) runSQL(ctx context.Context, token, projectName, sql string, limit int) (*flowSQL, int, error) {
+// semanticJSON calls semanticd as the person, with their token.
+func (s *server) semanticJSON(ctx context.Context, token, path string, in any, out any) (int, error) {
 	if s.cfg.SemanticURL == "" {
-		return nil, http.StatusServiceUnavailable, errors.New("the semantic layer isn't set up (no SEMANTIC_URL), which runs the previews")
+		return http.StatusServiceUnavailable, errors.New("the semantic layer isn't set up (no SEMANTIC_URL), which runs the previews")
 	}
 	if token == "" {
-		return nil, http.StatusUnauthorized, errors.New("no token to run it as you: sign in again")
+		return http.StatusUnauthorized, errors.New("no token to run it as you: sign in again")
 	}
-	body, _ := json.Marshal(map[string]any{"sql": sql, "limit": limit})
-	req, _ := http.NewRequestWithContext(ctx, "POST", s.cfg.SemanticURL+"/api/projects/"+projectName+"/sql", bytes.NewReader(body))
+	body, _ := json.Marshal(in)
+	req, _ := http.NewRequestWithContext(ctx, "POST", s.cfg.SemanticURL+path, bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	res, err := semanticClient.Do(req)
 	if err != nil {
-		return nil, http.StatusBadGateway, errors.New("the semantic layer isn't answering")
+		return http.StatusBadGateway, errors.New("the semantic layer isn't answering")
 	}
 	defer res.Body.Close()
 	data, _ := io.ReadAll(io.LimitReader(res.Body, 8<<20))
@@ -222,20 +222,67 @@ func (s *server) runSQL(ctx context.Context, token, projectName, sql string, lim
 		if e.Error == "" {
 			e.Error = fmt.Sprintf("HTTP %d", res.StatusCode)
 		}
-		return nil, res.StatusCode, errors.New(e.Error)
+		return res.StatusCode, errors.New(e.Error)
 	}
+	if err := json.Unmarshal(data, out); err != nil {
+		return http.StatusBadGateway, err
+	}
+	return 200, nil
+}
+
+// runSQL runs a statement in Trino as the person, through semanticd.
+func (s *server) runSQL(ctx context.Context, token, projectName, sql string, limit int) (*flowSQL, int, error) {
 	var out flowSQL
-	if err := json.Unmarshal(data, &out); err != nil {
-		return nil, http.StatusBadGateway, err
+	code, err := s.semanticJSON(ctx, token, "/api/projects/"+projectName+"/sql", map[string]any{"sql": sql, "limit": limit}, &out)
+	if err != nil {
+		return nil, code, err
 	}
 	return &out, 200, nil
+}
+
+// metricSQL gives a metric step its SQL: the semantic layer's for the
+// query, as the person (its whole answer, uncapped: dbt materialises it),
+// and its columns as Trino describes them. Without a token it can't be
+// told yet.
+func (s *server) metricSQL(ctx context.Context, token, projectName string) func(metrics, groupBy []string, where string) (string, []flow.Column, error) {
+	return func(metrics, groupBy []string, where string) (string, []flow.Column, error) {
+		if token == "" {
+			return "", nil, nil
+		}
+		in := map[string]any{"metrics": metrics, "group_by": groupBy, "explain": true, "limit": 0}
+		if strings.TrimSpace(where) != "" {
+			in["where"] = []string{where}
+		}
+		var out struct {
+			SQL string `json:"sql"`
+		}
+		if _, err := s.semanticJSON(ctx, token, "/api/projects/"+projectName+"/semantic/query", in, &out); err != nil {
+			return "", nil, fmt.Errorf("the semantic layer: %v", err)
+		}
+		sql := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(out.SQL), ";"))
+		if sql == "" {
+			return "", nil, errors.New("the semantic layer gave no SQL")
+		}
+		ans, _, err := s.runSQL(ctx, token, projectName, "select * from (\n"+sql+"\n) as metric_step where false", 0)
+		if err != nil {
+			return "", nil, fmt.Errorf("Trino: %v", err)
+		}
+		cols := make([]flow.Column, len(ans.Columns))
+		for i, name := range ans.Columns {
+			cols[i] = flow.Column{Name: name}
+			if i < len(ans.Types) {
+				cols[i].Type = ans.Types[i]
+			}
+		}
+		return sql, cols, nil
+	}
 }
 
 // compileFlow compiles a flow for a project, asking Trino (as the person,
 // when a token is given) what each code step returns, so the steps after
 // it know their columns.
 func (s *server) compileFlow(ctx context.Context, token string, p *project.Project, f *flow.Flow) (*flow.Compiled, error) {
-	env := s.flowEnv(ctx, p)
+	env := s.flowEnv(ctx, token, p)
 	c, err := flow.Compile(f, env)
 	if err != nil || token == "" {
 		return c, err

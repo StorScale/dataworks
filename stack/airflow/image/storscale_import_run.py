@@ -83,7 +83,49 @@ def salesforce():
     return storscale_connectors.salesforce(im, secret, name)
 
 
-sources = {"rest_api": rest_api, "sql_database": sql_database, "salesforce": salesforce}[im["source"]]()
+def files():
+    """Files of the project's landing area (landing/uploads/ in its bucket),
+    each a table: read as the project's pipelines (their Keycloak client's
+    token, exchanged with Buckets' STS, so the bucket's own policy decides).
+    CSV, Excel (every sheet, stacked), JSON lines and Parquet, by extension;
+    a file read again replaces its table, or merges on its primary key."""
+    import boto3
+    import requests
+    from dlt.sources.filesystem import filesystem, read_csv, read_jsonl, read_parquet
+
+    identity = json.loads(os.environ["STORSCALE_IMPORT_IDENTITY"])
+    r = requests.post(identity["token_url"], timeout=30, data={"grant_type": "client_credentials", "client_id": identity["client_id"],
+                                                               "client_secret": identity["client_secret"]})
+    r.raise_for_status()
+    endpoint = os.environ.get("BUCKETS_ENDPOINT", "http://buckets:9000")
+    sts = boto3.client("sts", endpoint_url=endpoint, region_name="us-east-1", aws_access_key_id="unused", aws_secret_access_key="unused")
+    c = sts.assume_role_with_web_identity(RoleArn="arn:minio:iam:::role/pipelines", RoleSessionName=f"import-{project}",
+                                          WebIdentityToken=r.json()["access_token"], DurationSeconds=3600)["Credentials"]
+    creds = {"aws_access_key_id": c["AccessKeyId"], "aws_secret_access_key": c["SecretAccessKey"], "aws_session_token": c["SessionToken"],
+             "endpoint_url": endpoint, "region_name": "us-east-1"}
+
+    @dlt.transformer(standalone=True)
+    def read_excel(items):
+        import pandas as pd
+        for item in items:
+            with item.open() as f:
+                for sheet, frame in pd.read_excel(f, sheet_name=None).items():
+                    for row in frame.to_dict(orient="records"):
+                        yield row
+
+    out = []
+    for t in im["files"]["tables"]:
+        fmt = t["file"].rsplit(".", 1)[-1].lower()
+        reader = {"csv": read_csv, "jsonl": read_jsonl, "parquet": read_parquet, "xlsx": read_excel, "xls": read_excel}[fmt]
+        listing = filesystem(bucket_url=f"s3://{project}/landing/uploads/", file_glob=t["file"], credentials=creds)
+        res = listing | reader()
+        res.apply_hints(table_name=f"{name}_{t['name']}", primary_key=t.get("primaryKey") or None,
+                        write_disposition=disposition(t.get("primaryKey")) if t.get("primaryKey") else "replace")
+        out.append(res)
+    return out
+
+
+sources = {"rest_api": rest_api, "sql_database": sql_database, "salesforce": salesforce, "files": files}[im["source"]]()
 destination = filesystem(bucket_url="s3://warehouse", credentials={
     "aws_access_key_id": access, "aws_secret_access_key": key, "endpoint_url": "http://buckets:9000", "region_name": "us-east-1"})
 pipeline = dlt.pipeline(pipeline_name=f"import_{project.replace('-', '_')}_{name}", destination=destination,

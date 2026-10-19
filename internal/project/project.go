@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
@@ -176,11 +177,44 @@ type Import struct {
 	API        *ImportAPI        `json:"api,omitempty"`
 	Database   *ImportDatabase   `json:"database,omitempty"`
 	Salesforce *ImportSalesforce `json:"salesforce,omitempty"`
+	Files      *ImportFiles      `json:"files,omitempty"`
 }
 
-// ImportSources are dlt's sources an import may be: two general ones, and
-// the platform's connectors (use case 8.4).
-var ImportSources = []string{"rest_api", "sql_database", "salesforce"}
+// ImportSources are dlt's sources an import may be: two general ones, the
+// platform's connectors (use case 8.4), and files uploaded to the project's
+// landing area (11.1's uploads).
+var ImportSources = []string{"rest_api", "sql_database", "salesforce", "files"}
+
+// ImportFiles are files of the project's landing area (landing/uploads/ in
+// its bucket, where the canvas's uploads go), each read into a table: CSV,
+// Excel, JSON lines or Parquet, by its extension. The import needs no
+// connection: it reads the bucket as the project's pipelines. A file read
+// again replaces the table (there's no cursor in a file), unless it has a
+// primary key, when its rows are merged.
+type ImportFiles struct {
+	Tables []ImportFile `json:"tables"`
+}
+
+type ImportFile struct {
+	Name       string `json:"name"`                 // the table: <import>_<name>
+	File       string `json:"file"`                 // under landing/uploads/: suppliers.csv, or a glob (prices-*.csv)
+	PrimaryKey string `json:"primaryKey,omitempty"` // merged on it, when given
+}
+
+// FileFormats are the kinds of file an import reads, by extension.
+var FileFormats = []string{"csv", "xlsx", "jsonl", "parquet"}
+
+// FileFormat is a file's format by its extension, or "".
+func FileFormat(file string) string {
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(file), "."))
+	if ext == "xls" {
+		ext = "xlsx"
+	}
+	if slices.Contains(FileFormats, ext) {
+		return ext
+	}
+	return ""
+}
 
 // ImportSalesforce is Salesforce's objects to copy (dlt's verified Salesforce
 // source: its connection a kind of its own), and how far back the objects
@@ -770,6 +804,24 @@ func (p *Project) Validate() error {
 			}
 			if _, err := time.Parse("2006-01-02", sf.Since); sf.Since != "" && err != nil {
 				bad("imports: %s: since %q: a date, as 2024-01-01", im.Name, sf.Since)
+			}
+		case "files":
+			f := im.Files
+			if f == nil || len(f.Tables) == 0 {
+				bad("imports: %s: a files import names its tables (files.tables), each a file of the landing area", im.Name)
+				break
+			}
+			if im.Connection != "" {
+				bad("imports: %s: a files import needs no connection: it reads the project's landing area as its pipelines", im.Name)
+			}
+			for _, t := range f.Tables {
+				if !identifierRE.MatchString(t.Name) || t.PrimaryKey != "" && !identifierRE.MatchString(t.PrimaryKey) {
+					bad("imports: %s: a table has a name (an identifier), and a primary key that is one: %q", im.Name, t.Name)
+				}
+				if t.File == "" || strings.Contains(t.File, "/") || strings.Contains(t.File, "..") || FileFormat(t.File) == "" {
+					bad("imports: %s: %s: a file of landing/uploads/ (no folders), ending in one of %s: %q", im.Name, t.Name, strings.Join(FileFormats, ", "), t.File)
+				}
+				landing(t.Name)
 			}
 		case "sql_database":
 			d := im.Database

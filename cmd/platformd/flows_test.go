@@ -29,8 +29,14 @@ func TestAFlowIsReadPreviewedAndSavedAsAMergeRequest(t *testing.T) {
 	sem := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
 		json.NewDecoder(r.Body).Decode(&body)
-		ran = append(ran, body["sql"].(string))
-		ranAs = append(ranAs, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		if sql, ok := body["sql"].(string); ok {
+			ran = append(ran, sql)
+			ranAs = append(ranAs, strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		}
+		if r.URL.Path == "/api/projects/sales/semantic/query" {
+			json.NewEncoder(w).Encode(map[string]any{"sql": fmt.Sprintf("SELECT region AS order__region, SUM(amount) AS revenue FROM iceberg.sales.orders GROUP BY 1 -- %v %v %v", body["metrics"], body["explain"], body["limit"])})
+			return
+		}
 		if r.URL.Path != "/api/projects/sales/sql" {
 			w.WriteHeader(404)
 			return
@@ -112,6 +118,26 @@ func TestAFlowIsReadPreviewedAndSavedAsAMergeRequest(t *testing.T) {
 	bad.Steps[2] = flow.Step{ID: "by_region", Kind: flow.Group, Inputs: []string{"real"}, By: []string{"week"}, Aggregates: []flow.Aggregate{{Function: "sum", Column: "amount"}}}
 	if code, out := call("alice", "POST", "/api/projects/sales/flows/compile", body(bad, "")); code != 200 || !strings.Contains(mustJSON(out["errors"]), "group by: no column week") {
 		t.Errorf("a bad step: %d %v", code, out)
+	}
+
+	// A metric step: its SQL the semantic layer's (asked as the person, uncapped), its columns Trino's.
+	metric := flow.Flow{Name: "rev", Steps: []flow.Step{
+		{ID: "revenue", Kind: flow.Metric, Metrics: []string{"revenue"}, By: []string{"order__region"}},
+		{ID: "out", Kind: flow.Output, Inputs: []string{"revenue"}, Table: "revenue_by_region"}}}
+	code, out = call("dana", "POST", "/api/projects/sales/flows/compile", body(metric, ""))
+	if code != 200 || len(out["errors"].([]any)) != 0 {
+		t.Fatalf("a metric step: %d %v", code, out)
+	}
+	rev := out["steps"].(map[string]any)["revenue"].(map[string]any)
+	if !strings.HasPrefix(rev["sql"].(string), "SELECT region AS order__region, SUM(amount) AS revenue FROM iceberg.sales.orders GROUP BY 1 -- [revenue] true 0") || mustJSON(rev["columns"]) != `[{"name":"order_id","type":"bigint"},{"name":"amount","type":"decimal(10,2)"}]` {
+		t.Errorf("the metric step: %v", rev)
+	}
+	if len(ran) != 1 || !strings.HasPrefix(ran[0], "select * from (\nSELECT region AS order__region") || !strings.HasSuffix(ran[0], ") as metric_step where false") || ranAs[0] != "dana" {
+		t.Errorf("Trino asked about the metric step: %v as %v", ran, ranAs)
+	}
+	ran, ranAs = nil, nil
+	if code, out := call("alice", "POST", "/api/projects/sales/flows/compile", body(metric, "")); code != 200 || out["steps"].(map[string]any)["revenue"].(map[string]any)["unknown"] != true {
+		t.Errorf("a metric step without a token: %d %v", code, out)
 	}
 
 	// Previewed, as the person: the steps up to it as CTEs, rows back.
