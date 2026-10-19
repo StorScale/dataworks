@@ -89,7 +89,8 @@ def files():
     token, exchanged with Buckets' STS, so the bucket's own policy decides).
     CSV, Excel (every sheet, stacked), JSON lines and Parquet, by extension;
     a file read again replaces its table, or merges on its primary key."""
-    import boto3
+    import xml.etree.ElementTree as ET
+
     import requests
     from dlt.sources.filesystem import filesystem, read_csv, read_jsonl, read_parquet
 
@@ -97,12 +98,16 @@ def files():
     r = requests.post(identity["token_url"], timeout=30, data={"grant_type": "client_credentials", "client_id": identity["client_id"],
                                                                "client_secret": identity["client_secret"]})
     r.raise_for_status()
+    # Buckets' STS (AssumeRoleWithWebIdentity), called directly: the dlt virtualenv has no boto3.
     endpoint = os.environ.get("BUCKETS_ENDPOINT", "http://buckets:9000")
-    sts = boto3.client("sts", endpoint_url=endpoint, region_name="us-east-1", aws_access_key_id="unused", aws_secret_access_key="unused")
-    c = sts.assume_role_with_web_identity(RoleArn="arn:minio:iam:::role/pipelines", RoleSessionName=f"import-{project}",
-                                          WebIdentityToken=r.json()["access_token"], DurationSeconds=3600)["Credentials"]
-    creds = {"aws_access_key_id": c["AccessKeyId"], "aws_secret_access_key": c["SecretAccessKey"], "aws_session_token": c["SessionToken"],
-             "endpoint_url": endpoint, "region_name": "us-east-1"}
+    sts = requests.post(endpoint, timeout=30, data={"Action": "AssumeRoleWithWebIdentity", "Version": "2011-06-15", "DurationSeconds": "3600",
+                                                    "RoleSessionName": f"import-{project}", "WebIdentityToken": r.json()["access_token"]})
+    if not sts.ok:
+        raise RuntimeError(f"Buckets' STS refused the pipelines' token: HTTP {sts.status_code} {sts.text[:300]}")
+    ns = {"s": "https://sts.amazonaws.com/doc/2011-06-15/"}
+    c = ET.fromstring(sts.text).find(".//s:Credentials", ns)
+    creds = {"aws_access_key_id": c.find("s:AccessKeyId", ns).text, "aws_secret_access_key": c.find("s:SecretAccessKey", ns).text,
+             "aws_session_token": c.find("s:SessionToken", ns).text, "endpoint_url": endpoint, "region_name": "us-east-1"}
 
     @dlt.transformer(standalone=True)
     def read_excel(items):

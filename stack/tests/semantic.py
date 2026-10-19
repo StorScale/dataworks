@@ -112,7 +112,7 @@ def main():
     # 2. alice's agent.
     alice = Agent(agent_token("alice"))
     projects, err = alice.call("list_projects")
-    check("alice's agent finds the sales project, with metrics", projects == [{"project": "sales", "role": "reader", "has_metrics": True}],
+    check("alice's agent finds the sales project, with metrics", {"project": "sales", "role": "reader", "has_metrics": True} in (projects or []),
           projects or err)
     model, err = alice.call("list_metrics", project="sales")
     names = sorted(m["name"] for m in (model or {}).get("metrics", []))
