@@ -67,7 +67,8 @@ export type Spec = {
     maintenance?: { paused?: boolean };
   };
   files?: { bucket?: string };
-  pipelines?: { serviceAccount: string; repo?: string; path?: string; ref?: string; credentials?: { secretRef: string }; memory?: string };
+  pipelines?: { serviceAccount: string; repo?: string; path?: string; ref?: string; credentials?: { secretRef: string }; memory?: string;
+    reviews?: { gitlab?: string; project?: string; dbt?: string } };
   limits?: { queries?: number; queued?: number; queryMemory?: string; storage?: string };
   notify?: { teams?: string; email?: string[] };
   sources?: Source[];

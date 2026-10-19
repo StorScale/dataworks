@@ -161,11 +161,44 @@ export default function ProjectEditor() {
           <h2 style={{ marginTop: 20 }}>
             <label className="row" style={{ flexDirection: "row", gap: 8 }}><input type="checkbox" checked={!!spec.pipelines} onChange={(e) => set({ pipelines: e.target.checked ? { serviceAccount: "" } : undefined })} /> Pipelines</label>
           </h2>
-          {spec.pipelines && (
-            <label>Keycloak client whose service account runs them
-              <input value={spec.pipelines.serviceAccount} placeholder="airflow-pipelines" onChange={(e) => set({ pipelines: { ...spec.pipelines!, serviceAccount: e.target.value } })} />
-            </label>
-          )}
+          {spec.pipelines && (() => {
+            const pl = spec.pipelines!;
+            const setPl = (patch: Partial<NonNullable<Spec["pipelines"]>>) => set({ pipelines: { ...pl, ...patch } });
+            const setReviews = (patch: Partial<NonNullable<NonNullable<Spec["pipelines"]>["reviews"]>>) => {
+              const rv = { ...(pl.reviews ?? {}), ...patch };
+              Object.keys(rv).forEach((k) => { if (!rv[k as keyof typeof rv]) delete rv[k as keyof typeof rv]; });
+              setPl({ reviews: Object.keys(rv).length ? rv : undefined });
+            };
+            return (
+              <div className="stack" style={{ gap: 4 }} data-testid="pipelines-form">
+                <label>Keycloak client whose service account runs them
+                  <input value={pl.serviceAccount} placeholder="airflow-pipelines" onChange={(e) => setPl({ serviceAccount: e.target.value })} />
+                </label>
+                <p className="muted small" style={{ margin: "8px 0 4px" }}>
+                  Their git repo (use case 7.1): the DAGs come from it, and on Kubernetes the project gets an Airflow of its own. A private repo signs in with
+                  one of the project's connections (a git token or an SSH key, given on its Connections tab). The canvas saves its flows there.
+                </p>
+                <label>Repo (https or ssh address, no credentials in it)
+                  <input className="mono" value={pl.repo ?? ""} placeholder="https://gitlab.example.com/data/sales-pipelines.git" onChange={(e) => setPl({ repo: e.target.value || undefined })} data-testid="pipelines-repo" />
+                </label>
+                <div className="row">
+                  <label>Folder of the DAGs <input className="mono" value={pl.path ?? ""} placeholder="dags" onChange={(e) => setPl({ path: e.target.value || undefined })} /></label>
+                  <label>Branch (or tag) <input className="mono" value={pl.ref ?? ""} placeholder="main" onChange={(e) => setPl({ ref: e.target.value || undefined })} /></label>
+                  <label>Connection with its token or key
+                    <input className="mono" value={pl.credentials?.secretRef ?? ""} placeholder={`${p.metadata.name}-git`} onChange={(e) => setPl({ credentials: e.target.value ? { secretRef: e.target.value } : undefined })} data-testid="pipelines-credentials" />
+                  </label>
+                </div>
+                <p className="muted small" style={{ margin: "8px 0 4px" }}>
+                  Merge-request reviews (7.3), for a GitLab repo: each open merge request's dbt change is built on a data branch of its own, and the merge request told.
+                </p>
+                <div className="row">
+                  <label>GitLab address <input className="mono" value={pl.reviews?.gitlab ?? ""} placeholder="https://gitlab.example.com" onChange={(e) => setReviews({ gitlab: e.target.value })} /></label>
+                  <label>Project path <input className="mono" value={pl.reviews?.project ?? ""} placeholder="data/sales-pipelines" onChange={(e) => setReviews({ project: e.target.value })} /></label>
+                  <label>dbt folder <input className="mono" value={pl.reviews?.dbt ?? ""} placeholder="dags/dbt" onChange={(e) => setReviews({ dbt: e.target.value })} /></label>
+                </div>
+              </div>
+            );
+          })()}
 
           <h2 style={{ marginTop: 20 }}>Alerts</h2>
           <p className="muted small" style={{ margin: "4px 0 8px" }}>
