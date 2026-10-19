@@ -26,18 +26,28 @@ These check (use case 10.1):
      (its readers' row filter on bookings holds for her: the numbers above
      are hers); certified, bookings is certified in the catalog too, and a
      change of its contract takes the certification away; a contracted
-     column gone is company's alert, naming campaigns.
+     column gone is company's alert, naming campaigns;
+  8. an assistant (10.4): over MCP, alice's finds the terms a question is
+     about (by a synonym), is told when none covers one, finds bookings
+     certified, and its answers cite the metric, terms and product used;
+     it reads the product in place under company's rules; carol's sees the
+     product and is refused its rows; bob registers an assistant (a Keycloak
+     client, made by the operator), a person signs in through it, and
+     removed, it signs no one in.
 
 The projects and their tables are removed after.
 """
 import json
 import os
 
+import requests
+
 from lakekit import check, finish, sql
 
 import catalog as om
 import superset as ss
 from projects import platform, projects, wait
+from semantic import TOKENS, Agent, agent_token
 
 PLATFORM = os.environ["PLATFORM_URL"]
 H = {"X-Platform-Request": "1"}
@@ -120,6 +130,13 @@ def can_read(user, table):
         return [list(r) for r in sql(user, f"SELECT * FROM {table} ORDER BY 1", "iceberg", COMPANY)]
     except Exception as e:  # noqa: BLE001
         return str(e)[:160]
+
+
+def token_or_none(user, client):
+    """A token from a client, or None when Keycloak won't give one (the client's gone)."""
+    r = requests.post(TOKENS, timeout=10, data={"grant_type": "password", "client_id": client, "username": user,
+                                                 "password": os.environ["LAKEHOUSE_USER_PASSWORD"]})
+    return r.json().get("access_token") if r.ok else None
 
 
 def products(s):
@@ -225,6 +242,38 @@ def main():
         listed = list(products(alice))
         check("bob (an administrator) certifies bookings, which lists first", r.ok and products(alice).get(f"{COMPANY}/bookings", {}).get("certified")
               and listed[0] == f"{COMPANY}/bookings", (r.text[:200], listed))
+
+        # 10.4: an assistant on the business layer, through the MCP server.
+        ag = Agent(agent_token("alice"))
+        found, _ = ag.call("search_terms", question="Which clients' bookings fell most this quarter?")
+        names = {t["name"] for t in (found or {}).get("terms", [])}
+        check("alice's assistant finds Customer (by a synonym) and Bookings among the company's terms", names == {"customer", "bookings_total"}, found)
+        none, _ = ag.call("search_terms", question="What was the weather in Paris?")
+        check("... and is told plainly when no governed definition covers a question",
+              none is not None and none.get("terms") == [] and "No governed definition" in none.get("note", ""), none)
+        pr, _ = ag.call("describe_product", project=COMPANY, product="bookings")
+        res, e = ag.call("query_metrics", project=CAMPAIGNS, metrics=["bookings_per_customer"], group_by=["customer__segment"], order_by=["customer__segment"])
+        used = (res or {}).get("used", {})
+        check("it finds bookings certified, and its answer cites the metric, the terms and the product it used",
+              (pr or {}).get("certified") is True and e is None and [[x[0], round(float(x[1]))] for x in res["rows"]] == [["enterprise", 500], ["small business", 500]]
+              and [m["name"] for m in used.get("metrics", [])] == ["bookings_per_customer"] and {t["name"] for t in used.get("terms", [])} >= {"customer", "bookings_total"}
+              and any(p["name"] == "bookings" and p["certified"] for p in used.get("products", [])), (pr, e, used))
+        rows, e = ag.call("query_product", project=COMPANY, product="bookings", columns=["booking_id", "amount"])
+        check("alice's assistant reads the product in place, under company's rules (no 3000)", e is None and [r[0] for r in rows["rows"]] == [10, 12], (rows, e))
+        carol = Agent(agent_token("carol"))
+        listed, _ = carol.call("list_products")
+        _, refused = carol.call("query_product", project=COMPANY, product="bookings")
+        check("carol's assistant sees the product exists, and is refused its rows, told where her project would ask",
+              bool(listed) and any(p["name"] == "bookings" for p in listed["products"]) and bool(refused) and "ask for it" in refused, (listed, refused))
+        r = bob.put(f"{PLATFORM}/api/assistants/devassist", headers=H, timeout=30,
+                    json={"description": "the company's assistant", "redirectUris": ["http://localhost:*"]})
+        tok = wait(lambda: token_or_none("alice", "assistant-devassist"), 240, every=10)
+        got, e = Agent(tok).call("list_terms") if tok else (None, "no token")
+        check("bob registers an assistant: it gets a Keycloak client, and a person signed in through it reaches the MCP server",
+              r.ok and r.json().get("clientId") == "assistant-devassist" and bool(tok) and e is None and bool(got), (r.text[:200], e))
+        r = bob.delete(f"{PLATFORM}/api/assistants/devassist", headers=H, timeout=30)
+        gone = wait(lambda: token_or_none("alice", "assistant-devassist") is None or None, 240, every=10)
+        check("... and removed, it signs no one in any more", r.status_code == 204 and bool(gone), r.status_code)
 
         def in_catalog():
             dp = s.get(f"{om.OM}/dataProducts/name/{COMPANY}__bookings", timeout=30)

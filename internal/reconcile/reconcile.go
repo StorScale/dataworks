@@ -48,6 +48,13 @@ type Reconciler struct {
 	ProjectAirflows *ProjectAirflows
 	Store           store.Store
 	Log             *slog.Logger
+	// Files reads the store's files, for the assistants platformd registers
+	// (use case 10.4); nil: no assistants' clients. PlatformURL is the
+	// platform's address, their tokens' MCP audience.
+	Files            fileReader
+	PlatformURL      string
+	assistantsDigest string
+	assistantsAt     time.Time
 	// RangerUserPassword starts the password of people the operator adds to
 	// Ranger (who never sign in to Ranger: Trino's plugin needs them listed).
 	RangerUserPassword string
@@ -390,6 +397,7 @@ func (r *Reconciler) Run(ctx context.Context, every, resync, retry time.Duration
 }
 
 func (r *Reconciler) pass(ctx context.Context, last map[string]time.Time, resync, retry time.Duration) {
+	r.applyAssistants(ctx, resync)
 	specs, err := r.Store.Projects(ctx)
 	if err != nil {
 		r.Log.Error("reading projects", "error", err)

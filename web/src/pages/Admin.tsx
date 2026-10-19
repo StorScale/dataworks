@@ -12,12 +12,13 @@ export default function Admin() {
     <>
       <div className="phead">
         <div className="inner">
-          <div className="title"><h1>Administration</h1><span className="muted">Projects, access, the audit log and the platform's health</span></div>
+          <div className="title"><h1>Administration</h1><span className="muted">Projects, access, the audit log, assistants and the platform's health</span></div>
           <nav className="tabs" aria-label="Administration">
             <NavLink to="/admin/health" data-testid="admin-health">Health</NavLink>
             <NavLink to="/admin/projects" data-testid="admin-projects">Projects</NavLink>
             <NavLink to="/admin/access" data-testid="admin-access">Access</NavLink>
             <NavLink to="/admin/audit" data-testid="admin-audit">Audit</NavLink>
+            <NavLink to="/admin/assistants" data-testid="admin-assistants">Assistants</NavLink>
             {tools.some((t) => t.id === "monitoring") && <NavLink to="/admin/monitoring" data-testid="admin-monitoring">Monitoring</NavLink>}
             {external.map((t) => (
               <a key={t.id} href={t.url} target="_blank" rel="noreferrer">{t.name} ↗</a>

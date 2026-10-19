@@ -132,6 +132,11 @@ export const getProject = (name: string) => api<ProjectView>("GET", `/api/projec
 export const putProject = (p: Project) => api<ProjectView>("PUT", `/api/projects/${encodeURIComponent(p.metadata.name)}`, p);
 export const deleteProject = (name: string) => api<void>("DELETE", `/api/projects/${encodeURIComponent(name)}`);
 export type AccessPerson = { username: string; roles: Record<string, string>; via: Record<string, string> };
+export type Assistant = { name: string; description?: string; redirectUris: string[]; addedBy?: string; addedAt?: string; clientId: string; mcpUrl: string };
+export const getAssistants = () => api<{ assistants: Assistant[]; available: boolean }>("GET", "/api/assistants");
+export const putAssistant = (a: { name: string; description?: string; redirectUris: string[] }) =>
+  api<Assistant>("PUT", `/api/assistants/${encodeURIComponent(a.name)}`, a);
+export const removeAssistant = (name: string) => api<void>("DELETE", `/api/assistants/${encodeURIComponent(name)}`);
 export const getAccess = () => api<{ projects: string[]; people: AccessPerson[] }>("GET", "/api/access");
 
 // --- A project's flow (from the catalog) --------------------------------------------
