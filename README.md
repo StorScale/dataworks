@@ -21,6 +21,9 @@ People sign in once to one place. They work in **projects**: a project brings to
 
 ## Try it
 
+New here? [The lab guide](docs/guide.md) walks through the platform with a small company's data, lab by lab, saying what the business gets from each.
+
+
 You need Docker with Compose 2.24 or later, about 10 GB of memory for Docker (the stack uses about 8 GB), and Go 1.26 or later to build the command.
 
 ```bash
