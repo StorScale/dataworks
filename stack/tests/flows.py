@@ -166,6 +166,10 @@ def run(bob, dag, project=NAME):
     if not wait(lambda: any(p["id"] == dag for p in pipelines()), 600, every=10):
         errors = (bob.get(f"{PLATFORM}/api/projects/{project}/pipelines", timeout=60).json() or {}).get("importErrors") or []
         return None, f"not loaded: {json.dumps(errors)[:400]}"
+    # A DAG with a schedule gets a run for the latest past interval as soon as Airflow has it:
+    # let it finish, so the manual run is the only one building the table.
+    busy = lambda: any(x["state"] in ("running", "queued") for p in pipelines() if p["id"] == dag for x in p.get("runs", []))
+    wait(lambda: None if busy() else True, 600, every=10)
     r = bob.post(f"{PLATFORM}/api/projects/{project}/pipelines/{dag}/runs", headers=H, timeout=60)
     run_id = r.json().get("run") if r.ok else None
     if not run_id:

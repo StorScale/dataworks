@@ -136,7 +136,8 @@ def main():
     check("an administrator deletes a project, and it's undone", rm == 204 and gone(bob, "sales"), f"HTTP {rm}")
     lost = wait(lambda: not isinstance(sales_regions("alice"), set), 120)
     check("... alice loses its tables", lost, f"alice: {sales_regions('alice')}")
-    no_insert = denied("bob", "INSERT INTO orders VALUES (99, 'Zed', '4000', 'EU', 1, DATE '2026-09-30')", catalog="iceberg", schema="sales")
+    # The editors' policy goes with the readers', but Trino refreshes its policies every half minute: wait for it as for alice's.
+    no_insert = wait(lambda: denied("bob", "INSERT INTO orders VALUES (99, 'Zed', '4000', 'EU', 1, DATE '2026-09-30')", catalog="iceberg", schema="sales"), 120)
     check("... bob can't change them", no_insert, no_insert)
     files = code(lambda: s3_as("alice").get_object(Bucket="sales", Key="datasets/orders.parquet"))
     check("... nor read its files", files == "AccessDenied", f"alice: {files}")
