@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useMatch, useNavigate, useParams } from "react-router-dom";
-import { ApiError, getFlow, getPipelines, getProject, getSemantic, getTerms, listProjects, ProjectView, signOut, type Term } from "./api";
+import { ApiError, getFlow, getPipelines, getProject, getSemantic, getProducts, getTerms, listProjects, ProjectView, signOut, type Product, type Term } from "./api";
 import { initials, lastProject, Phase, ProjectContext, rememberProject, RolePill, Spinner, usePlatform, usePoll } from "./lib";
 
 // useMenu is a menu that closes when someone clicks elsewhere or presses Escape.
@@ -32,6 +32,7 @@ export function TopBar() {
       <Search project={project} />
       <span className="grow" />
       {semantic && <Link to="/terms" className="bar-button" data-testid="nav-terms">Business terms</Link>}
+      <Link to="/products" className="bar-button" data-testid="nav-products">Data products</Link>
       <ToolsMenu />
       <div className="account" ref={account.ref}>
         <button onClick={() => account.setOpen(!account.open)} aria-expanded={account.open} aria-haspopup="menu" data-testid="whoami">
@@ -116,6 +117,9 @@ type Hit = { kind: string; label: string; sub?: string; to: string };
 
 // Search finds a project's tables, columns, metrics and pipelines; outside a
 // project, the projects.
+// What search shows first: the business's words, then products (certified first), then the rest.
+const rank = (kind: string) => (kind === "Term" ? 0 : kind === "Product ✓" ? 1 : kind === "Product" ? 2 : 3);
+
 function Search({ project }: { project?: string }) {
   const navigate = useNavigate();
   const { flow, semantic, pipelines } = usePlatform();
@@ -148,6 +152,12 @@ function Search({ project }: { project?: string }) {
         hits.push({ kind: "Term", label: term.label, sub: [term.definition, ...term.synonyms].filter(Boolean).join(" · "), to: `/terms/${encodeURIComponent(term.name)}` });
       }
     }
+    // Then the data products, certified ones first.
+    const ps = await getProducts().catch(() => ({ products: [] as Product[] }));
+    for (const pr of ps.products) {
+      hits.push({ kind: pr.certified ? "Product ✓" : "Product", label: `${pr.name} (${pr.project})`, sub: pr.description || pr.table,
+        to: `/products?product=${encodeURIComponent(pr.project + "/" + pr.name)}` });
+    }
     if (!project) {
       const r = await listProjects().catch(() => ({ projects: [] as ProjectView[] }));
       for (const p of r.projects) hits.push({ kind: "Project", label: p.name, sub: p.spec?.spec.description, to: `/p/${p.name}` });
@@ -171,7 +181,7 @@ function Search({ project }: { project?: string }) {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const hits = !words.length || index?.for !== key ? [] : index.hits
     .filter((h) => words.every((w) => `${h.label} ${h.sub ?? ""}`.toLowerCase().includes(w)))
-    .sort((a, b) => Number(a.kind !== "Term") - Number(b.kind !== "Term")
+    .sort((a, b) => rank(a.kind) - rank(b.kind)
       || Number(!a.label.toLowerCase().startsWith(words[0])) - Number(!b.label.toLowerCase().startsWith(words[0])))
     .slice(0, 12);
   const go = (h: Hit) => { setOpen(false); setQ(""); input.current?.blur(); navigate(h.to); };

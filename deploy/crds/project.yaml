@@ -181,6 +181,33 @@ spec:
                   properties:
                     teams: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
                     email: {type: array, items: {type: string}}
+                products:
+                  description: "Tables the project publishes for others (data products): owner, version, contract, the business terms they hold; consumers and certification are the platform's."
+                  type: array
+                  items:
+                    type: object
+                    required: [name, table, owner, version]
+                    properties:
+                      name: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                      table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                      description: {type: string}
+                      owner: {type: string}
+                      version: {type: string, maxLength: 20}
+                      terms: {type: array, items: {type: string}}
+                      contract:
+                        type: object
+                        properties:
+                          columns: {type: array, items: {type: string}}
+                          within: {type: string}
+                          checks: {type: boolean}
+                      consumers: {type: array, items: {type: string}, description: "The platform's: the projects approved to read it in place."}
+                      certification:
+                        type: object
+                        description: "The platform's: who certified it, when, and what (its table, version and contract, hashed)."
+                        properties:
+                          by: {type: string}
+                          at: {type: string}
+                          hash: {type: string}
                 semantic:
                   description: "How the project's semantic model stands among the others': shared, it's the company's (Customer, Revenue), for projects to build on; uses, the shared models this one builds on (and may not define again)."
                   type: object

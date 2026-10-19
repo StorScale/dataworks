@@ -52,6 +52,7 @@ type Spec struct {
 	Imports     []Import   `json:"imports,omitempty"`
 	Deliveries  []Delivery `json:"deliveries,omitempty"`
 	Semantic    *Semantic  `json:"semantic,omitempty"`
+	Products    []Product  `json:"products,omitempty"`
 }
 
 // Semantic is how the project's semantic model stands among the others'
@@ -599,6 +600,7 @@ func (p *Project) Validate() error {
 			bad("pipelines: %s", e)
 		}
 	}
+	p.productProblems(bad)
 	if sm := p.Spec.Semantic; sm != nil {
 		for _, u := range sm.Uses {
 			switch {
@@ -1125,7 +1127,7 @@ func allow(group string, accesses ...string) RangerItem {
 // RangerPolicies are the Ranger policies for the project's tables: one per
 // resource (Ranger allows no more), named with RangerPrefix.
 func (p *Project) RangerPolicies() []RangerPolicy {
-	return append(p.tablePolicies(), p.sourcePolicies()...)
+	return append(append(p.tablePolicies(), p.sourcePolicies()...), p.ProductPolicies()...)
 }
 
 // sourcePolicies let the project read its sources (editors and pipelines,

@@ -135,7 +135,7 @@ func (r *Reconciler) applyReviews(ctx context.Context, p *project.Project, mrs [
 		started, err := api.Trigger(ctx, ReviewDAG, runID, map[string]any{
 			"project": p.Metadata.Name, "iid": mr.IID, "sha": mr.SHA, "branch": branch, "catalog": cat,
 			"prodCatalog": p.Spec.Tables.Catalog, "namespace": p.Spec.Tables.Namespace, "dbt": pl.Reviews.Dbt,
-			"gitlab": pl.Reviews.GitLab, "gitlabProject": path, "url": mr.WebURL})
+			"gitlab": pl.Reviews.GitLab, "gitlabProject": path, "url": mr.WebURL, "contracts": contracts(p)})
 		if err != nil {
 			errs = append(errs, fmt.Errorf("merge request %d: its review: %w", mr.IID, err))
 			continue
@@ -158,4 +158,17 @@ func (r *Reconciler) projectAirflowAPI(ctx context.Context, p *project.Project) 
 		return nil, errors.New("no Airflow here")
 	}
 	return r.Airflow.API, nil
+}
+
+// contracts are the project's products' contracted columns, for a merge
+// request's review to hold its branch to (use case 10.3).
+func contracts(p *project.Project) []map[string]any {
+	out := []map[string]any{}
+	for _, pr := range p.Spec.Products {
+		if pr.Contract == nil || len(pr.Contract.Columns) == 0 {
+			continue
+		}
+		out = append(out, map[string]any{"product": pr.Name, "table": pr.Table, "columns": pr.Contract.Columns, "consumers": pr.Consumers})
+	}
+	return out
 }

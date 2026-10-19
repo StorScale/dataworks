@@ -360,6 +360,7 @@ func (s *server) handleApplyPlan(w http.ResponseWriter, r *http.Request) {
 	}
 	spec := p.Spec
 	keepDeliveryApprovals(v.Spec, spec, p.By)
+	project.KeepProductState(v.Spec, spec)
 	if err := s.saveSpec(r.Context(), spec); err != nil {
 		writeJSON(w, http.StatusUnprocessableEntity, map[string]string{"error": err.Error()})
 		return

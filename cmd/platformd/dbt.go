@@ -17,6 +17,7 @@ type fileStore interface {
 	PutFile(ctx context.Context, key string, data []byte, contentType string) error
 	GetFile(ctx context.Context, key string) ([]byte, error) // nil when there's none
 	ListFiles(ctx context.Context, prefix string) ([]string, error)
+	DeleteFile(ctx context.Context, key string) error // none there is no error
 }
 
 // dbtArtifacts are the files of a dbt run that the catalog reads (use case

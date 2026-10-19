@@ -272,6 +272,71 @@ def sync_glossary():
                 log.warning("glossary: tagging %s.%s with %s: %s", schema, table, name, pr.text[:200])
 
 
+DOMAIN = "StorScale"
+
+
+def product_hash(pr):
+    """A product's promise, as platformd hashes it to certify (its table, version and contract)."""
+    import hashlib
+    b = json.dumps({"Table": pr.get("table", ""), "Version": pr.get("version", ""), "Contract": pr.get("contract")},
+                   separators=(",", ":")).encode()
+    return hashlib.sha256(b).hexdigest()[:16]
+
+
+def sync_products():
+    """OpenMetadata's data products as the projects' (use case 10.3): in the
+    domain StorScale, one per product, its table its asset and its owner the
+    product's; a certified product's table marked Certification.Gold (and
+    unmarked when it isn't any more); products gone, removed."""
+    h = admin_headers()
+    wanted = {}
+    for p in projects():
+        spec, name = p.get("spec") or {}, p["metadata"]["name"]
+        ns = (spec.get("tables") or {}).get("namespace") or name.replace("-", "_")
+        for pr in spec.get("products") or []:
+            wanted[f"{name}__{pr['name']}"] = (name, ns, pr)
+    if not wanted and requests.get(f"{OM}/v1/domains/name/{DOMAIN}", headers=h, timeout=10).status_code == 404:
+        return
+    requests.put(f"{OM}/v1/domains", headers=h, timeout=10, json={
+        "name": DOMAIN, "displayName": "StorScale Platform", "domainType": "Aggregate",
+        "description": "The data products the platform's projects publish: kept by the platform."}).raise_for_status()
+    have = requests.get(f"{OM}/v1/dataProducts", headers=h, timeout=10, params={"domain": DOMAIN, "limit": 1000}).json().get("data", [])
+    for d in have:
+        if d["name"] not in wanted:
+            requests.delete(f"{OM}/v1/dataProducts/{d['id']}", headers=h, timeout=10, params={"hardDelete": "true"})
+    for key, (project, ns, pr) in wanted.items():
+        t = requests.get(f"{OM}/v1/tables/name/{SERVICE}.iceberg.{ns}.{pr['table']}", headers=h, timeout=10, params={"fields": "certification"})
+        body = {"name": key, "displayName": f"{pr['name']} ({project})", "domains": [DOMAIN],
+                "description": (pr.get("description") or f"{pr['table']} of {project}") + f" Version {pr.get('version', '')}."}
+        if t.ok:
+            body["assets"] = [{"id": t.json()["id"], "type": "table"}]
+        if pr.get("owner"):
+            u = requests.get(f"{OM}/v1/users/name/{pr['owner']}", headers=h, timeout=10)
+            if u.ok:
+                body["owners"] = [{"id": u.json()["id"], "type": "user"}]
+        r = requests.put(f"{OM}/v1/dataProducts", headers=h, timeout=10, json=body)
+        if not r.ok:
+            log.warning("data product %s: %s", key, r.text[:200])
+        if not t.ok:
+            continue   # not described yet: the next round
+        cert = pr.get("certification") or {}
+        certified = cert.get("hash") == product_hash(pr)
+        now = (t.json().get("certification") or {}).get("tagLabel", {}).get("tagFQN")
+        patch = None
+        if certified and now != "Certification.Gold":
+            ms = int(time.time() * 1000)
+            patch = [{"op": "add", "path": "/certification", "value": {
+                "tagLabel": {"tagFQN": "Certification.Gold", "source": "Classification", "labelType": "Manual", "state": "Confirmed"},
+                "appliedDate": ms, "expiryDate": ms + 365 * 24 * 3600 * 1000}}]
+        elif not certified and now == "Certification.Gold":
+            patch = [{"op": "remove", "path": "/certification"}]
+        if patch:
+            pr_ = requests.patch(f"{OM}/v1/tables/{t.json()['id']}", headers={**h, "Content-Type": "application/json-patch+json"},
+                                 timeout=10, data=json.dumps(patch))
+            if not pr_.ok:
+                log.warning("certification of %s: %s", key, pr_.text[:200])
+
+
 def copy_lineage():
     """Each copied source table, upstream of its copy (both described by now,
     the copy once its first commit is in): an edge, its columns matched by
@@ -444,6 +509,10 @@ def main():
                     sync_glossary()
                 except Exception as e:  # noqa: BLE001 (the next round tries again)
                     log.warning("glossary: %s", e)
+                try:
+                    sync_products()
+                except Exception as e:  # noqa: BLE001 (the next round tries again)
+                    log.warning("data products: %s", e)
                 last_metadata = time.time()
                 log.info("metadata: ingested trino")
             run_checks(token)

@@ -11,6 +11,7 @@ import Connections from "./pages/Connections";
 import Imports from "./pages/Imports";
 import Deliveries from "./pages/Deliveries";
 import Releases from "./pages/Releases";
+import Products from "./pages/Products";
 import Terms from "./pages/Terms";
 import Data from "./pages/Data";
 import Home from "./pages/Home";
@@ -60,6 +61,7 @@ function Shell() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/terms" element={<Terms />} />
+        <Route path="/products" element={<Products />} />
         <Route path="/terms/:term" element={<Terms />} />
         <Route path="/p/:project" element={<ProjectFrame />}>
           <Route index element={<Overview />} />
