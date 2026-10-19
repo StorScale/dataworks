@@ -202,6 +202,7 @@ def classify_project(om, h, service, p, trino, before):
         for col in cols:
             for tag, (state, label) in column_tags(col).items():
                 now.append({"table": name, "column": col["name"], "tag": tag, "state": state.lower(),
+                            "type": (col.get("dataType") or "").lower(),   # the mask must give the column's type back
                             "declared": (name, col["name"]) in declared, "automated": label == "Automated"})
     return now, suggested
 

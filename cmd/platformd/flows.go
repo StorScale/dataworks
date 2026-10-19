@@ -581,6 +581,10 @@ func (s *server) handleSaveFlow(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusUnprocessableEntity, "a schedule as cron's five fields (UTC): 0 6 * * 1, or none")
 		return
 	}
+	if f.OutputStep() == nil {
+		s.fail(w, r, http.StatusUnprocessableEntity, "a flow is saved with an output step: the table it makes")
+		return
+	}
 	ctx := r.Context()
 	c, err := s.compileFlow(ctx, token, p, f)
 	if err != nil {

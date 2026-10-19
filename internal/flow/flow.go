@@ -227,7 +227,7 @@ func (f *Flow) Check() error {
 			}
 		}
 	}
-	if outputs != 1 {
+	if outputs > 1 {
 		return fmt.Errorf("a flow has one output step; this one has %d", outputs)
 	}
 	if _, err := f.order(); err != nil {
