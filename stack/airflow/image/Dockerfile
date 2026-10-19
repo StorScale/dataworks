@@ -12,7 +12,10 @@ USER root
 RUN python -m venv /opt/dlt && chown -R airflow:0 /opt/dlt
 USER airflow
 RUN /opt/dlt/bin/pip install --no-cache-dir "dlt[filesystem,pyiceberg,sql-database]==1.30.0" pyiceberg==0.12.0 \
-      psycopg2-binary==2.9.10 pymysql==1.2.3
+      psycopg2-binary==2.9.10 pymysql==1.2.3 simple-salesforce==1.12.10
+# The platform's connectors (use case 8.4): dlt's verified sources, copied
+# (sources/README.md), and the module that makes an import's resources of them.
+COPY sources /opt/dlt/sources
 # An import's run (the DAG file storscale_imports.py starts it here).
 COPY storscale_import_run.py /opt/dlt/storscale_import_run.py
 # Deliveries (use case 9.1): the files written (pyarrow), encrypted (gpg) and

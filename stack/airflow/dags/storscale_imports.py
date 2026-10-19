@@ -48,8 +48,9 @@ def make(pi):
                 env["STORSCALE_IMPORT_RESET"] = "1"
             if pi.get("connId"):
                 c = BaseHook.get_connection(pi["connId"])
-                env["STORSCALE_IMPORT_SECRET"] = json.dumps({"host": c.host, "port": c.port, "database": c.schema,
-                                                             "username": c.login, "password": c.password})
+                secret = {"host": c.host, "port": c.port, "database": c.schema, "username": c.login, "password": c.password}
+                secret.update(c.extra_dejson or {})   # a connector's sign-in (8.4: Salesforce's keys)
+                env["STORSCALE_IMPORT_SECRET"] = json.dumps(secret)
             subprocess.run([PYTHON, RUNNER], env=env, check=True)
         copy()
     return dag_id, the_import()

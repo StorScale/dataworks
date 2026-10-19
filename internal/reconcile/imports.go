@@ -2,6 +2,7 @@ package reconcile
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -60,6 +61,20 @@ func importConnection(p *project.Project, im project.Import, secret map[string]s
 			return c, errors.New("its connection has no token")
 		}
 		c.Type, c.Password = "http", secret["token"]
+	case "salesforce":
+		// The runner takes Salesforce's sign-in from the connection's Extra:
+		// its keys as the connection has them (7.6's salesforce kind).
+		if (secret["username"] == "" || secret["password"] == "") && (secret["instanceUrl"] == "" || secret["sessionId"] == "") {
+			return c, errors.New("its connection needs a user's name and password (and security token, or a connected app's key and secret), or an instance's address and a session")
+		}
+		extra := map[string]string{}
+		for _, k := range []string{"username", "password", "securityToken", "consumerKey", "consumerSecret", "organizationId", "domain", "instanceUrl", "sessionId", "caCertificate"} {
+			if secret[k] != "" {
+				extra[k] = secret[k]
+			}
+		}
+		b, _ := json.Marshal(extra)
+		c.Type, c.Extra = "generic", string(b)
 	case "sql_database":
 		if secret["host"] == "" || secret["username"] == "" || secret["password"] == "" {
 			return c, errors.New("its connection needs a host, username and password")

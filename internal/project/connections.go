@@ -40,6 +40,15 @@ var ConnectionKinds = []ConnectionKind{
 		{Key: "username", Label: "User", Required: true}, {Key: "password", Label: "Password", Secret: true, Required: true},
 		{Key: "url", Label: "JDBC URL (in place of host, port and database)"}, {Key: "sslmode", Label: "sslmode (PostgreSQL)"},
 		{Key: "trustServerCertificate", Label: "trustServerCertificate (SQL Server: true)"}}, OneOf: []string{"host", "url"}},
+	{Kind: "salesforce", Label: "A Salesforce org", For: "Salesforce imports (8.4)", Fields: []ConnectionField{
+		{Key: "username", Label: "User"}, {Key: "password", Label: "Password", Secret: true},
+		{Key: "securityToken", Label: "Security token", Secret: true},
+		{Key: "consumerKey", Label: "Connected app's consumer key", Secret: true}, {Key: "consumerSecret", Label: "Connected app's consumer secret", Secret: true},
+		{Key: "organizationId", Label: "Organization ID (sign-in from trusted IP ranges)"},
+		{Key: "domain", Label: "Domain: login (production) or test (a sandbox)"},
+		{Key: "instanceUrl", Label: "Instance address (with a session, in place of a user)"}, {Key: "sessionId", Label: "Session", Secret: true},
+		{Key: "caCertificate", Label: "A CA's certificate to trust as well (a proxy that inspects TLS)", Multi: true}},
+		OneOf: []string{"password", "sessionId"}},
 	{Kind: "api", Label: "An API token", For: "rest_api imports", Fields: []ConnectionField{
 		{Key: "token", Label: "Token", Secret: true, Required: true}}},
 	{Kind: "sftp", Label: "An SFTP server", For: "deliveries' targets", Fields: []ConnectionField{

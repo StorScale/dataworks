@@ -77,10 +77,17 @@ export type Spec = {
 // An application's data (or a database's, by a cursor), copied into the project's tables on a schedule (dlt).
 export type APIResource = { name: string; path: string; dataSelector?: string; primaryKey?: string; cursor?: string; cursorParam?: string; cursorStart?: string };
 export type Import = {
-  name: string; source: "rest_api" | "sql_database"; connection?: string; schedule?: string;
+  name: string; source: "rest_api" | "sql_database" | "salesforce"; connection?: string; schedule?: string;
   api?: { baseUrl: string; resources: APIResource[] };
   database?: { kind: "postgresql" | "mysql"; tables: { table: string; cursor?: string; primaryKey?: string }[] };
+  salesforce?: { objects: string[]; since?: string };
 };
+// The platform's connectors (8.4), and a project's editors' imports.
+export type Connector = { source: "salesforce"; label: string; connection: string; objects: string[]; incremental: string[] };
+export const getConnectors = () => api<{ connectors: Connector[] }>("GET", "/api/connectors");
+export const putImport = (name: string, im: Import) =>
+  api<Import>("PUT", `/api/projects/${encodeURIComponent(name)}/imports/${encodeURIComponent(im.name)}`, { ...im, name: undefined });
+export const removeImport = (name: string, im: string) => api<void>("DELETE", `/api/projects/${encodeURIComponent(name)}/imports/${encodeURIComponent(im)}`);
 // A company database the project queries where it is: a read-only Trino catalog <project>_<name>.
 export type Source = {
   name: string; kind: "postgresql" | "mysql" | "sqlserver" | "oracle"; connection: string; readers?: boolean; schemas?: string[];

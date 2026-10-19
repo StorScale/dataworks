@@ -3,7 +3,7 @@
 
 STORSCALE_IMPORT is the import, as the platform operator lists it (its
 project, namespace and spec); STORSCALE_IMPORT_SECRET its credentials, from
-its Airflow connection. Each resource lands in iceberg.<namespace> as
+its Airflow connection (a connector's, such as Salesforce's, in its Extra). Each resource lands in iceberg.<namespace> as
 <import>_<resource>: merged on its primary key, or appended to; past its
 cursor alone, where it has one (dlt keeps the cursor in the namespace's
 _dlt_pipeline_state, so a run in a fresh pod goes on from the last).
@@ -76,7 +76,14 @@ def sql_database():
     return out
 
 
-sources = {"rest_api": rest_api, "sql_database": sql_database}[im["source"]]()
+def salesforce():
+    import sys
+    sys.path.insert(0, "/opt/dlt/sources")   # dlt's verified sources, and the platform's connectors (8.4)
+    import storscale_connectors
+    return storscale_connectors.salesforce(im, secret, name)
+
+
+sources = {"rest_api": rest_api, "sql_database": sql_database, "salesforce": salesforce}[im["source"]]()
 destination = filesystem(bucket_url="s3://warehouse", credentials={
     "aws_access_key_id": access, "aws_secret_access_key": key, "endpoint_url": "http://buckets:9000", "region_name": "us-east-1"})
 pipeline = dlt.pipeline(pipeline_name=f"import_{project.replace('-', '_')}_{name}", destination=destination,
