@@ -135,6 +135,21 @@ func (c *Client) HasBranch(ctx context.Context, branch string) (bool, error) {
 	return err == nil, err
 }
 
+// Branches are the repo's branches whose names contain a text.
+func (c *Client) Branches(ctx context.Context, search string) ([]string, error) {
+	var bs []struct {
+		Name string `json:"name"`
+	}
+	if err := c.call(ctx, "GET", "/repository/branches?per_page=100&search="+url.QueryEscape(search), nil, &bs); err != nil {
+		return nil, err
+	}
+	out := make([]string, len(bs))
+	for i, b := range bs {
+		out[i] = b.Name
+	}
+	return out, nil
+}
+
 // HasFile says whether a file is in the repo at a ref.
 func (c *Client) HasFile(ctx context.Context, path, ref string) (bool, error) {
 	err := c.call(ctx, "HEAD", "/repository/files/"+url.PathEscape(path)+"?ref="+url.QueryEscape(ref), nil, nil)
@@ -144,9 +159,60 @@ func (c *Client) HasFile(ctx context.Context, path, ref string) (bool, error) {
 	return err == nil, err
 }
 
+// A TreeEntry is a file or folder of the repo at a ref.
+type TreeEntry struct {
+	Path string `json:"path"`
+	Type string `json:"type"` // blob, tree
+}
+
+// Tree lists what's under a path at a ref, recursively (the first thousand
+// entries). An absent path is an empty tree.
+func (c *Client) Tree(ctx context.Context, path, ref string) ([]TreeEntry, error) {
+	q := url.Values{"path": {path}, "ref": {ref}, "recursive": {"true"}, "per_page": {"100"}}
+	var out []TreeEntry
+	for page := 1; page <= 10; page++ {
+		q.Set("page", fmt.Sprint(page))
+		var entries []TreeEntry
+		err := c.call(ctx, "GET", "/repository/tree?"+q.Encode(), nil, &entries)
+		if notFound(err) {
+			return out, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, entries...)
+		if len(entries) < 100 {
+			break
+		}
+	}
+	return out, nil
+}
+
+// File is a file's content at a ref.
+func (c *Client) File(ctx context.Context, path, ref string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", c.Base+"/api/v4/projects/"+url.PathEscape(c.Project)+"/repository/files/"+url.PathEscape(path)+"/raw?ref="+url.QueryEscape(ref), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("PRIVATE-TOKEN", c.Token)
+	res, err := c.HTTP.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(res.Body, 4<<20))
+	if err != nil {
+		return "", err
+	}
+	if res.StatusCode != 200 {
+		return "", &Error{Code: res.StatusCode, Message: fmt.Sprintf("GitLab: %s at %s: HTTP %d", path, ref, res.StatusCode)}
+	}
+	return string(data), nil
+}
+
 // A FileChange is one file of a commit: created or updated, with its content.
 type FileChange struct {
-	Action   string `json:"action"` // create, update
+	Action   string `json:"action"` // create, update, delete
 	FilePath string `json:"file_path"`
 	Content  string `json:"content"`
 }

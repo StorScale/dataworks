@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { session, Session, signIn, signOut, User } from "./api";
 import { ProjectFrame, TopBar } from "./components";
@@ -19,6 +19,7 @@ import Home from "./pages/Home";
 import Metrics from "./pages/Metrics";
 import Overview from "./pages/Overview";
 import Pipelines from "./pages/Pipelines";
+const Flows = lazy(() => import("./pages/Flows")); // React Flow is loaded only when the canvas is
 import ProjectAccess from "./pages/ProjectAccess";
 import ProjectEditor from "./pages/ProjectEditor";
 import SQL from "./pages/SQL";
@@ -70,6 +71,7 @@ function Shell() {
           <Route path="metrics" element={<Metrics />} />
           <Route path="sql" element={<SQL />} />
           <Route path="pipelines" element={<Pipelines />} />
+          <Route path="flows" element={<Suspense fallback={<Spinner />}><Flows /></Suspense>} />
           <Route path="notebooks" element={null} />
           <Route path="dashboards" element={null} />
           <Route path="access" element={<ProjectAccess />} />

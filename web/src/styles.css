@@ -255,3 +255,20 @@ input, select, textarea { font: inherit; color: var(--ink); background: var(--pa
 ul.plain { list-style: none; padding: 0; margin: 0; }
 ul.plain li { padding: 8px 0; border-bottom: 1px solid var(--line); }
 ul.plain li:last-child { border-bottom: 0; }
+
+/* The canvas (Flows): React Flow's nodes in the platform's style. */
+.canvas { height: 460px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); overflow: hidden; }
+.canvas .react-flow__node { font: inherit; }
+.canvas .react-flow__attribution { display: none; }
+.stepnode { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; min-width: 150px; background: var(--panel); font-size: 13px; }
+.stepnode.selected { border: 2px solid var(--accent); }
+.stepnode.alert { border-color: var(--bad-line); background: var(--bad-soft, #fff5f5); }
+.stepnode .kind { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.stepnode .name { font-family: var(--mono); margin-top: 2px; }
+.stepnode .cols { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.flowside { flex: 1 1 300px; max-width: 360px; }
+.flowside label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 13px; }
+.flowside input, .flowside select, .flowside textarea { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); }
+.flowside .rows { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.flowside .rows .row { gap: 6px; }
+.flowside .rows input, .flowside .rows select { min-width: 0; flex: 1 1 80px; }

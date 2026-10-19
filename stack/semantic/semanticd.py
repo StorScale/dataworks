@@ -365,10 +365,12 @@ def run(c: Caller, project, sql, metrics, limit=MAX_ROWS):
         cur.execute(note + sql)
         rows = cur.fetchmany(limit)
         cols = [d[0] for d in cur.description]
+        types = [d[1] for d in cur.description]
     finally:
         with suppress(Exception):
             conn.close()
-    return {"columns": cols, "rows": [[v if isinstance(v, (int, float, str, type(None))) else str(v) for v in r] for r in rows]}
+    return {"columns": cols, "types": types,
+            "rows": [[v if isinstance(v, (int, float, str, type(None))) else str(v) for v in r] for r in rows]}
 
 
 def answer(c: Caller, project, metrics, group_by=(), where=(), order_by=(), limit=None, run_it=True):

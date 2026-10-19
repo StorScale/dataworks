@@ -345,3 +345,41 @@ export function atCommit(sql: string, tables: string[], commit: string): string 
     (whole, kw: string, sp: string, prefix: string, t: string) =>
       tables.includes(t.toLowerCase()) ? `${kw}${sp}${prefix}${commit ? `"${t.toLowerCase()}#${commit}"` : t.toLowerCase()}` : whole);
 }
+
+// --- Flows: pipelines built on the canvas (use cases 11.1 and 11.2) ------------------
+// A flow's steps are dbt models in the project's repo; the canvas reads and
+// writes them through platformd, which compiles each step's columns and
+// SQL, runs previews as the person, and saves as a merge request.
+
+export type StepColumn = { name: string; type?: string };
+export type FlowColumnSetting = { name: string; as?: string; type?: string; expression?: string };
+export type FlowStep = {
+  id: string; kind: string; description?: string; inputs?: string[];
+  table?: string; catalog?: string; namespace?: string;
+  columns?: FlowColumnSetting[]; where?: string;
+  join?: string; on?: { left: string; right: string }[]; distinct?: boolean;
+  by?: string[]; order?: { column: string; desc?: boolean }[]; partition?: string[];
+  aggregates?: { function: string; column?: string; as?: string }[];
+  column?: string; values?: string[]; value?: string; function?: string;
+  unpivot?: string[]; name?: string;
+  windows?: { function: string; column?: string; as: string; offset?: number }[];
+  checks?: { column: string; test: string; values?: string[] }[];
+  sql?: string; x: number; y: number;
+};
+export type CanvasFlow = { name: string; schedule?: string; steps: FlowStep[] };
+export type FlowStepResult = { model: string; columns: StepColumn[] | null; sql: string; error?: string; unknown?: boolean };
+export type FlowView = {
+  flow: CanvasFlow; order: string[]; steps: Record<string, FlowStepResult>; errors: string[];
+  branch?: string; mergeRequest?: string; dbtPath?: string;
+};
+export type FlowItem = { name: string; branch?: string; mergeRequest?: string };
+export type FlowPreview = SQLAnswer & { sql: string; types?: string[]; sampled?: string[] };
+export type FlowSaved = { branch: string; mergeRequest: string; new: boolean; files: string[]; dag: string };
+
+const flowsPath = (name: string) => `/api/projects/${encodeURIComponent(name)}/flows`;
+export const getFlows = (name: string) => api<{ flows: FlowItem[]; why?: string; dbtPath?: string }>("GET", flowsPath(name));
+export const getFlowView = (name: string, flow: string) => api<FlowView>("GET", `${flowsPath(name)}/${encodeURIComponent(flow)}`);
+export const compileFlow = (name: string, flow: CanvasFlow) => api<FlowView>("POST", `${flowsPath(name)}/compile`, { flow });
+export const previewFlow = (name: string, flow: CanvasFlow, step: string, limit = 100) =>
+  api<FlowPreview>("POST", `${flowsPath(name)}/preview`, { flow, step, limit });
+export const saveFlow = (name: string, flow: CanvasFlow) => api<FlowSaved>("PUT", `${flowsPath(name)}/${encodeURIComponent(flow.name)}`, { flow });
