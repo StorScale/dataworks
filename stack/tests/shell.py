@@ -244,6 +244,25 @@ def run(browser, switch=True, start_run=True):
         pass
     check("... and its metrics, whose definitions bob can change", "revenue" in metrics and "order_count" in metrics
           and page.get_attribute("[data-testid=semantic-yaml]", "readonly") is None, " ".join(metrics.split())[:80])
+    # The canvas (11.1): a flow built from steps, each step's columns known before anything runs.
+    page.goto(f"{PLATFORM}/p/sales/flows")
+    page.wait_for_selector("[data-testid=flows]", timeout=60_000)
+    page.fill("[data-testid=new-flow-name]", "weekly")
+    press(page, "[data-testid=new-flow]")
+    page.wait_for_selector("[data-testid=canvas]", timeout=60_000)
+    page.select_option("[data-testid=add-step]", "input")
+    page.fill("[data-testid=input-table]", "orders")
+    page.wait_for_selector("[data-testid=step-columns]", timeout=60_000)
+    input_cols = page.inner_text("[data-testid=step-columns]")
+    page.select_option("[data-testid=add-step]", "filter")
+    page.fill("[data-testid=where]", "region = 'EU'")
+    page.wait_for_function("document.querySelector('[data-testid=step-columns]')?.innerText.includes('amount')", timeout=60_000)
+    filter_cols = page.inner_text("[data-testid=step-columns]")
+    check("... Flows: a canvas where bob adds orders and a filter on it, each step's columns known before anything runs",
+          "amount" in input_cols and "region" in filter_cols and page.query_selector("[data-testid=step-filter]") is not None,
+          (input_cols[:80], filter_cols[:80]))
+    check("... which saves only with a pipelines repo (sales has none: the button says so)",
+          page.get_attribute("[data-testid=save-flow]", "disabled") is not None, page.get_attribute("[data-testid=save-flow]", "title"))
     page.goto(f"{PLATFORM}/p/sales/pipelines")
     page.wait_for_selector("[data-testid=pipeline-sales_ingest]", timeout=60_000)
     check("... and can start its pipelines", page.query_selector("[data-testid=run-now]") is not None, "")

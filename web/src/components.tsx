@@ -242,7 +242,7 @@ export function ProjectFrame() {
     ["sql", "SQL", !!spec?.tables && semantic],
     ["notebooks", "Notebooks", has("notebooks")],
     ["pipelines", "Pipelines", !!spec?.pipelines && pipelines],
-    ["flows", "Flows", !!spec?.pipelines?.repo && !!spec?.tables],
+    ["flows", "Flows", !!spec?.tables && semantic],
     ["agents", "Agents", !!spec?.tables && semantic],
     ["dashboards", "Dashboards", has("dashboards")],
     ["tags", "Tags", !!spec?.tables],
