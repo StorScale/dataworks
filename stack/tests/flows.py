@@ -19,12 +19,13 @@ project whose repo it is. These check (use cases 11.1 and 11.2):
      columns Trino's, and the rest as steps;
   5. a metric step (in sales, whose metrics are defined) gets the semantic
      layer's SQL, so a flow's revenue is the company's;
-  6. an upload (R11.3, in sales, whose imports run where its Pipelines tab
-     looks): bob puts a CSV in the landing area as himself (alice, a reader,
-     can't), previewed with its types; imported, it's a table of the
-     project's, which a flow takes as an input.
+  6. an upload (R11.3), in a project of its own without a repo (so its
+     imports run where its Pipelines tab looks): bob puts a CSV in the landing
+     area as himself (alice, a reader, can't), previewed with its types;
+     imported, it's a table of the project's, which a flow takes as an input.
 
-The project and its connection are removed after, and sales put back.
+Both projects (and the first's connection) are removed after; nothing of
+sales is changed (its metrics are read for the metric step).
 
 """
 import json
@@ -38,14 +39,14 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 import requests
 
-from lakekit import check, env, finish, sql
-
 import pipelines_git as pg
+from lakekit import check, env, finish, sql
 from projects import platform, projects, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
 OM = "http://openmetadata:8585/api/v1"
 NAME, PORT, CONNECTION = "flowed", 8427, "flowed-git"
+UPLOADED = "uploaded"  # the uploads' project: no repo, so its imports show where its Pipelines tab looks
 H = {"X-Platform-Request": "1"}
 FLOWS = f"{PLATFORM}/api/projects/{NAME}/flows"
 
@@ -254,26 +255,32 @@ def main():
               m.ok and mj.get("errors") == [] and "iceberg.sales.orders" in rev.get("sql", "") and "revenue" in names and "order__region" in names
               and " LIMIT " not in rev.get("sql", "").upper(), (m.status_code, m.text[:400]))
 
-        # 6. An upload (in sales, whose imports run in the platform's Airflow, where its Pipelines tab looks):
-        # into the landing area as the person, previewed, imported, an input.
-        SU = f"{PLATFORM}/api/projects/sales/uploads"
+        # 6. An upload, in a project of its own (one without a repo, whose imports run in
+        # the platform's Airflow, where its Pipelines tab looks): into the landing area as
+        # the person, previewed, imported, an input.
+        up_spec = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": UPLOADED},
+                   "spec": {"description": "Uploads: the flows suite's.", "members": [{"group": "engineers", "role": "editor"}, {"user": "alice", "role": "reader"}],
+                            "tables": {}, "files": {}, "pipelines": {"serviceAccount": "airflow-pipelines"}}}
+        made = bob.put(f"{PLATFORM}/api/projects/{UPLOADED}", data=json.dumps(up_spec), timeout=30)
+        uploaded = made.ok
+        wait(lambda: (lambda x: x if x and (x.get("status") or {}).get("phase") == "Ready" else None)((projects(bob) or {}).get(UPLOADED)), 900, every=10)
+        SU = f"{PLATFORM}/api/projects/{UPLOADED}/uploads"
         csv = "Supplier ID,Name,Rating\n1,Acme,4.5\n2,Globex,3\n"
         hers = alice.post(SU, headers=H, files={"file": ("suppliers.csv", csv, "text/csv")}, timeout=60)
         his = bob.post(SU, headers=H, files={"file": ("suppliers.csv", csv, "text/csv")}, timeout=60)
         uj = his.json() if his.ok else {}
         types = [(c["name"], c["type"]) for c in uj.get("preview", {}).get("columns", [])]
         listed = (alice.get(SU, timeout=30).json() or {}).get("uploads", [])
-        check("bob uploads a CSV to the project's landing area as himself (alice, a reader, can't): previewed with its types, listed",
-              hers.status_code == 403 and his.ok and types == [("supplier_id", "bigint"), ("name", "varchar"), ("rating", "double")]
+        check("bob uploads a CSV to a project's landing area as himself (alice, a reader, can't): previewed with its types, listed",
+              made.ok and hers.status_code == 403 and his.ok and types == [("supplier_id", "bigint"), ("name", "varchar"), ("rating", "double")]
               and uj.get("table") == "suppliers" and any(u["name"] == "suppliers.csv" for u in listed), (hers.status_code, hers.text[:200], his.status_code, his.text[:300]))
-        imp = bob.put(f"{PLATFORM}/api/projects/sales/imports/uploads", headers=H, timeout=30,
+        imp = bob.put(f"{PLATFORM}/api/projects/{UPLOADED}/imports/uploads", headers=H, timeout=30,
                       json={"source": "files", "schedule": "0 0 1 1 *", "files": {"tables": [{"name": "suppliers", "file": "suppliers.csv"}]}})
-        uploaded = True
-        wait(lambda: (lambda x: x if x and (x.get("status") or {}).get("phase") == "Ready" else None)((projects(bob) or {}).get("sales")), 600, every=10)
-        run_id, state = run(bob, "import_sales_uploads", project="sales")
-        got = sorted(tuple(r) for r in sql("bob", "SELECT supplier_id, name, rating FROM uploads_suppliers", "iceberg", "sales")) if state == "success" else state
+        wait(lambda: (lambda x: x if x and (x.get("status") or {}).get("phase") == "Ready" else None)((projects(bob) or {}).get(UPLOADED)), 600, every=10)
+        run_id, state = run(bob, f"import_{UPLOADED}_uploads", project=UPLOADED)
+        got = sorted(tuple(r) for r in sql("bob", "SELECT supplier_id, name, rating FROM uploads_suppliers", "iceberg", UPLOADED)) if state == "success" else state
         check("imported (the files import, run as the project's pipelines), it's a table of the project's", imp.ok and got == [(1, "Acme", 4.5), (2, "Globex", 3.0)], (imp.status_code, imp.text[:200], run_id, got))
-        as_input = alice.post(f"{PLATFORM}/api/projects/sales/flows/compile", headers=H, timeout=60, json={"flow": {"name": "sup", "steps": [
+        as_input = alice.post(f"{PLATFORM}/api/projects/{UPLOADED}/flows/compile", headers=H, timeout=60, json={"flow": {"name": "sup", "steps": [
             {"id": "sup", "kind": "input", "table": "uploads_suppliers", "x": 0, "y": 0}, {"id": "out", "kind": "output", "inputs": ["sup"], "table": "sup", "x": 200, "y": 0}]}})
         in_cols = [c["name"] for c in ((as_input.json() if as_input.ok else {}).get("steps", {}).get("sup", {}).get("columns") or [])]
         check("... which a flow takes as an input, its columns known", as_input.ok and "supplier_id" in in_cols and "rating" in in_cols, (as_input.status_code, as_input.text[:300]))
@@ -327,13 +334,9 @@ def main():
               and steps.get("real", {}).get("inputs") == ["orders"] and real_cols == ["order_id", "region", "amount", "test"]
               and steps.get("by_region", {}).get("kind") == "group" and vj.get("errors") == [], (v.status_code, v.text[:400]))
     finally:
-        if uploaded:  # sales put back: the import, its table and the upload
-            bob.delete(f"{PLATFORM}/api/projects/sales/imports/uploads", headers=H, timeout=30)
-            bob.delete(f"{PLATFORM}/api/projects/sales/uploads/suppliers.csv", headers=H, timeout=30)
-            try:
-                sql("bob", "DROP TABLE IF EXISTS uploads_suppliers", "iceberg", "sales")
-            except Exception:  # noqa: BLE001 (nothing to drop, or no rights: the next run's import replaces it)
-                pass
+        if uploaded:
+            bob.delete(f"{PLATFORM}/api/projects/{UPLOADED}/uploads/suppliers.csv", headers=H, timeout=30)
+            bob.delete(f"{PLATFORM}/api/projects/{UPLOADED}", headers=H, timeout=30)
         unnamed = {**spec, "spec": {**spec["spec"], "pipelines": {k: v for k, v in spec["spec"]["pipelines"].items() if k != "credentials"}}}
         bob.put(f"{PLATFORM}/api/projects/{NAME}", data=json.dumps(unnamed), timeout=30)
         bob.delete(f"{PLATFORM}/api/projects/{NAME}/connections/{CONNECTION}", timeout=30)
