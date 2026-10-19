@@ -79,9 +79,14 @@ jobs:
       - name: The last release
         id: last
         run: |
-          # The newest release that isn't this commit (a release's own tag is).
+          # The newest release that isn't this commit (a release's own tag is)
+          # and whose chart is published: a tag pushed with this commit may
+          # still be building its images and chart.
           git fetch --tags --quiet
-          v=$(git tag --list 'v*' --sort=-v:refname | grep -vxF -f <(git tag --points-at HEAD; echo none) | head -1)
+          for t in $(git tag --list 'v*' --sort=-v:refname | grep -vxF -f <(git tag --points-at HEAD; echo none)); do
+            if helm show chart oci://ghcr.io/storscale/charts/storscale-platform --version "${t#v}" >/dev/null 2>&1; then v=$t; break; fi
+            echo "$t isn't published yet"
+          done
           echo "the last release: $v"
           echo "version=${v#v}" >> "$GITHUB_OUTPUT"
       - run: bin/storscale up --k8s --version ${{ steps.last.outputs.version }}
