@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ago, getPipelines, startRun, took, when, type ImportError, type PipelinesRepo } from "../api";
+import { ago, getPipelines, getRunLog, startRun, took, when, type ImportError, type PipelinesRepo } from "../api";
 import { ErrorBanner, Spinner, StateDot, usePoll, useProject } from "../lib";
 
 // Pipelines is a project's Airflow DAGs: those in its pipelines repo, and the
@@ -47,6 +47,13 @@ export default function Pipelines() {
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string>();
   const [started, setStarted] = useState<string>();
+  // A failed run's log, shown on request: why, in the words of what ran.
+  const [log, setLog] = useState<{ pipeline: string; run: string; text?: string; error?: string }>();
+  const showLog = (pipeline: string, run: string) => {
+    setLog({ pipeline, run });
+    getRunLog(name, pipeline, run).then((r) => setLog({ pipeline, run, text: r.log || "(nothing logged)" }))
+      .catch((e) => setLog({ pipeline, run, error: (e as Error).message }));
+  };
 
   if (error && !data) return <div className="page"><ErrorBanner error={error} /></div>;
   if (!data) return <div className="page"><Spinner /></div>;
@@ -162,6 +169,9 @@ export default function Pipelines() {
                 {p.runs.map((r) => (
                   <tr key={r.id}>
                     <td><span className="row" style={{ gap: 8 }}><StateDot state={r.state} /><span className="mono small">{r.id}</span>
+                      {(r.state === "failed" || r.state === "success") && (
+                        <button className="linkish small" onClick={() => showLog(p.id, r.id)} data-testid={`log-${r.id}`}>{r.state === "failed" ? "why it failed" : "log"}</button>
+                      )}
                       {p.id.startsWith("notebook_") && r.state !== "running" && r.state !== "queued" && (
                         <a className="small" target="_blank" rel="noopener" data-testid={`notebook-${r.id}`}
                           href={`/api/projects/${encodeURIComponent(name)}/notebooks/runs/${encodeURIComponent(p.id)}/${encodeURIComponent(r.id)}`}>notebook</a>
@@ -175,6 +185,14 @@ export default function Pipelines() {
               </tbody>
             </table>
           </div>
+          {log && log.pipeline === p.id && (
+            <div className="card" data-testid="run-log">
+              <div className="card-head"><h2>Run {log.run}</h2><button className="btn small" onClick={() => setLog(undefined)}>Close</button></div>
+              {log.error && <ErrorBanner error={log.error} />}
+              {!log.text && !log.error && <Spinner />}
+              {log.text && <pre className="small" style={{ whiteSpace: "pre-wrap", margin: 0, maxHeight: 480, overflow: "auto" }}>{log.text}</pre>}
+            </div>
+          )}
         </section>
       </div>
     </div>

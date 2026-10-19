@@ -25,9 +25,14 @@ the target cluster. Read this, then [plan.md](plan.md) and the
   from phase 10, the business layer: the company's terms defined once in a shared semantic
   model that projects build on (10.1), Superset's datasets on those definitions (10.2), and
   certified data products with contracts, read in place across projects (10.3); and from
-  phase 8, Salesforce from a connector's form (8.4).
+  phase 8, Salesforce from a connector's form (8.4). On `main` since, for the next release: phase 11's
+  canvas (11.1, 11.2: a flow built from steps, compiled and previewed before it runs, saved as dbt
+  models in a merge request, the company's metrics as a step, uploads as inputs; plan, "A pipeline
+  on a canvas"), and a consolidation pass (plan, "Consolidation"): one error helper with request IDs
+  in platformd, a validator per area of the spec, the Python checked in CI, the suites in two lanes.
 - **CI passes on every way of running it:**
-  - **`platform`** runs the Compose stack and every suite.
+  - **`platform`** runs the Compose stack and every suite (`stack/tests/run.py`: the suites that
+    share `sales` in a chain, those with projects of their own alongside).
   - **`kubernetes`** installs the chart on kind with `storscale up --k8s`, then runs every
     suite with `helm test`, the browser suite included.
   - **`kubernetes-https`** does the same behind HTTPS with a private CA, as on a real cluster
@@ -208,13 +213,16 @@ Items 1 and 2 work on one; 3 to 6 are still to do.
 - `stack/`: the Compose stack, the setup steps (`stack/tools/setup`), and the tests
   (`stack/tests`).
 - `cmd/platformd`, `cmd/platform-operator`, `internal/store` (`Bucket` for Compose, `Kube`
-  and `Mirror` for Kubernetes), and `web/`.
+  and `Mirror` for Kubernetes), `internal/flow` (the canvas's compiler), and `web/`.
 
 ## Working conventions
 
 - **Commits:** author `Russell Myers <russell.myers@outlook.com>`, ending with a
   `Co-Authored-By:` line for the agent. Ask before pushing.
 - **Changelog:** keep `CHANGELOG.md`'s `[Unreleased]` current (Keep a Changelog).
+- **Checks before a push:** `gofmt`, `go vet`, `go test ./...`, `npm run build` in `web/`, and
+  `ruff check stack` with a compile of the Python (`ruff.toml`), as CI's `cli` job runs them;
+  then the suites in CI. Push bundles of related commits, not single ones.
 - **License:** AGPL-3.0-or-later.
 - **Naming:** Buckets' product name is plural (`BucketsCluster`, `buckets-*`); the singular
   is only for one S3 bucket.
