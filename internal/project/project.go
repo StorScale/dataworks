@@ -842,14 +842,21 @@ type RangerMask struct {
 // the catalog names it; "" when unknown, taken as text). MASK_HASH is written
 // as a custom expression on Trino's own sha256: the plugin's built-in
 // transformer for it names a function Trino doesn't have. A mask must give
-// the column's type back, and a hash is text, so on a column that isn't
-// text (a number, a date) a hash becomes a null.
+// the column's type back, and the redacting transformers (MASK, the
+// show-first/last ones, a hash) are text, so on a column that isn't text (a
+// number, a date) they become a null: Trino refuses the query otherwise
+// ("Invalid column mask"), for every reader.
 func maskInfo(maskType, colType string) *RangerMask {
-	if maskType == "MASK_HASH" {
+	switch maskType {
+	case "MASK_HASH":
 		if !textType(colType) {
 			return &RangerMask{DataMaskType: "MASK_NULL"}
 		}
 		return &RangerMask{DataMaskType: "CUSTOM", ValueExpr: "cast(to_hex(sha256(to_utf8({col}))) as varchar)"}
+	case "MASK", "MASK_SHOW_LAST_4", "MASK_SHOW_FIRST_4":
+		if !textType(colType) {
+			return &RangerMask{DataMaskType: "MASK_NULL"}
+		}
 	}
 	return &RangerMask{DataMaskType: maskType}
 }
