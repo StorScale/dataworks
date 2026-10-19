@@ -290,7 +290,7 @@ def users_of(shared):
     for page in store.get_paginator("list_objects_v2").paginate(Bucket=STORE_BUCKET, Prefix="projects/"):
         for o in page.get("Contents", []):
             p = get_json(o["Key"]) or {}
-            if shared in ((p.get("spec") or {}).get("semantic") or {}).get("uses") or []:
+            if shared in (((p.get("spec") or {}).get("semantic") or {}).get("uses") or []):
                 out.append(p["metadata"]["name"])
     return sorted(out)
 

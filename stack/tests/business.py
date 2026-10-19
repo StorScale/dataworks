@@ -85,7 +85,7 @@ CAMPAIGNS_MODEL = """metric:
   name: bookings_per_customer
   description: What each customer booked, on average.
   type: ratio
-  type_params: {numerator: bookings_total, denominator: customer_count}
+  type_params: {numerator: {name: bookings_total}, denominator: {name: customer_count}}
 """
 
 
