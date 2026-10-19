@@ -1,0 +1,97 @@
+import { useState } from "react";
+import { approveAgent, getAgents, putAgent, removeAgent } from "../api";
+import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
+
+// Agents are programs of the project's own (use case 12.2): each with an
+// identity of its own, the tools it may use, an owner, approved by an editor
+// other than the one who registered it, and revoked at once.
+export default function Agents() {
+  const { name, view } = useProject();
+  const { admin, user } = usePlatform();
+  const list = usePoll(() => getAgents(name), [name], 15_000);
+  const [error, setError] = useState<string>();
+  const [adding, setAdding] = useState(false);
+  const [secret, setSecret] = useState<{ agent: string; clientId: string; secret: string; mcpUrl: string }>();
+  const canEdit = view?.role === "editor" || admin;
+  if (list.error && !list.data) return <div className="page"><ErrorBanner error={list.error} /></div>;
+  if (!list.data) return <div className="page"><Spinner /></div>;
+  const act = async (f: () => Promise<unknown>) => { setError(undefined); try { await f(); list.reload(); } catch (e) { setError((e as Error).message); } };
+  return (
+    <div className="page stack" data-testid="agents">
+      <p className="lead" style={{ margin: 0 }}>
+        Programs of the project's own that read its data through the MCP server, each with an identity of its own and only the tools it was given.
+        An agent is approved by an editor other than the one who registered it, and revoked at once.
+      </p>
+      <ErrorBanner error={error} />
+      {secret && (
+        <div className="banner info" data-testid="agent-secret">
+          <strong>{secret.agent} is approved.</strong> Its client is <span className="mono">{secret.clientId}</span>, its secret <span className="mono">{secret.secret}</span>
+          {" "}(shown once: give it to the agent now), and it talks to <span className="mono">{secret.mcpUrl}</span> with a token from Keycloak (client credentials).
+          <div><button className="btn small" onClick={() => setSecret(undefined)}>Done</button></div>
+        </div>
+      )}
+      {canEdit && !adding && <div className="row"><button className="btn primary" onClick={() => setAdding(true)} data-testid="add-agent">Register an agent</button></div>}
+      {adding && <AgentForm project={name} tools={list.data.tools} taken={list.data.agents.map((a) => a.name)} owner={user.username} onDone={() => { setAdding(false); list.reload(); }} />}
+      {list.data.agents.length === 0 && <p className="muted">No agents yet.</p>}
+      {list.data.agents.map((a) => (
+        <div key={a.name} className="card stack" style={{ gap: 6 }} data-testid={`agent-${a.name}`}>
+          <div className="row">
+            <h3 style={{ margin: 0 }} className="mono">{a.name}</h3>
+            <span className={"pill " + (a.approved ? "green" : "amber")}>{a.approved ? `approved by ${a.approvedBy}` : "awaiting approval"}</span>
+            <span className="grow" />
+            {canEdit && !a.approved && a.registeredBy !== user.username && (
+              <button className="btn small primary" data-testid={`approve-${a.name}`}
+                onClick={() => act(async () => { const r = await approveAgent(name, a.name); if (r.secret) setSecret({ agent: a.name, clientId: r.clientId, secret: r.secret, mcpUrl: r.mcpUrl }); })}>Approve</button>
+            )}
+            {canEdit && <button className="btn small" onClick={() => { if (confirm(`Revoke ${a.name}? It signs in no more.`)) act(() => removeAgent(name, a.name)); }} data-testid={`revoke-${a.name}`}>Revoke</button>}
+          </div>
+          <div className="small">
+            {a.description && <>{a.description} </>}
+            Owner <span className="mono">{a.owner}</span>; client <span className="mono">{a.clientId}</span>; tools: <span className="mono">{(a.tools ?? []).join(", ") || "every tool a reader may use"}</span>
+            {a.schedule && <>; runs at <span className="mono">{a.schedule}</span> (UTC)</>}.
+            {a.registeredBy && <> Registered by {a.registeredBy}.</>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AgentForm({ project, tools, taken, owner, onDone }: { project: string; tools: string[]; taken: string[]; owner: string; onDone: () => void }) {
+  const [agentName, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [picked, setPicked] = useState<string[]>(["list_metrics", "query_metrics"]);
+  const [schedule, setSchedule] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const ok = /^[a-z][a-z0-9-]{0,30}$/.test(agentName) && !taken.includes(agentName);
+  const save = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await putAgent(project, { name: agentName, description: description || undefined, owner, tools: picked, schedule: schedule || undefined });
+      onDone();
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  };
+  return (
+    <form className="card stack" style={{ gap: 10 }} onSubmit={(e) => { e.preventDefault(); save(); }} data-testid="agent-form">
+      <strong>A new agent</strong>
+      <ErrorBanner error={error} />
+      <div className="row">
+        <label>Name <input className="mono" value={agentName} onChange={(e) => setName(e.target.value)} placeholder="nightly-summary" data-testid="agent-name" /></label>
+        <label>What it's for <input value={description} onChange={(e) => setDescription(e.target.value)} style={{ width: 320 }} /></label>
+        <label>Schedule <input className="mono" value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="0 6 * * * (UTC), or none" /></label>
+      </div>
+      <div className="small muted">Tools it may use (of the MCP server's); none picked means every tool a reader may use.</div>
+      <div className="chips">
+        {tools.map((t) => <button key={t} type="button" className={`chip${picked.includes(t) ? " on" : ""}`} aria-pressed={picked.includes(t)}
+          onClick={() => setPicked(picked.includes(t) ? picked.filter((x) => x !== t) : [...picked, t])} data-testid={`tool-${t}`}>{t}</button>)}
+      </div>
+      <div className="row">
+        <button className="btn primary" type="submit" disabled={!ok || busy} data-testid="register-agent">{busy ? "Saving…" : "Register"}</button>
+        <button className="btn" type="button" onClick={onDone}>Cancel</button>
+        <span className="small muted">Owner: {owner}. Another editor approves it before it may sign in.</span>
+      </div>
+    </form>
+  );
+}

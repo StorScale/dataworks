@@ -477,13 +477,37 @@ def answer(c: Caller, project, metrics, group_by=(), where=(), order_by=(), limi
 
 # --- The MCP server -----------------------------------------------------------------------
 
+def agent_tools(client_id):
+    """The tools a project's own agent (12.2: its client agent-<project>-<name>)
+    may use: those its registration names (all, when none), none until it's
+    approved; None for a client that isn't a project's agent."""
+    if not client_id.startswith("agent-"):
+        return None
+    for spec in all_specs():
+        name = spec.get("metadata", {}).get("name", "")
+        for a in spec.get("spec", {}).get("agents") or []:
+            if f"agent-{name}-{a['name']}" == client_id:
+                if not a.get("approvedBy"):
+                    return []
+                return list(a.get("tools") or ALL_TOOLS)
+    return []
+
+
+ALL_TOOLS = ["list_projects", "list_metrics", "query_metrics", "explain_query", "list_terms", "describe_term", "search_terms",
+             "list_products", "describe_product", "query_product"]
+
+
 def tool(fn):
-    """An MCP tool whose refusals and mistakes reach the agent, saying what's wrong."""
+    """An MCP tool whose refusals and mistakes reach the agent, saying what's
+    wrong; a project's own agent gets only the tools it was given."""
     import functools
 
     @functools.wraps(fn)
     def wrapped(*a, **k):
         try:
+            allowed = agent_tools(mcp_caller().agent)
+            if allowed is not None and fn.__name__ not in allowed:
+                raise PermissionError(f"the agent may use: {', '.join(allowed) or 'nothing yet (not approved)'}")
             return fn(*a, **k)
         except (PermissionError, LookupError, ValueError) as e:
             raise ToolError(str(e)) from e

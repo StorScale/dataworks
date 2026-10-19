@@ -413,3 +413,16 @@ export type ProtectedColumn = { table: string; column: string; tag: string; stat
 export const getClassification = (name: string) => api<{ columns: ProtectedColumn[]; at: number; tags: string[] }>("GET", `/api/projects/${encodeURIComponent(name)}/classification`);
 export const classify = (name: string, table: string, column: string, tag: string, action: "confirm" | "remove") =>
   api<{ state: string }>("POST", `/api/projects/${encodeURIComponent(name)}/classification`, { table, column, tag, action });
+
+// --- Agents of the project's own (use case 12.2) -------------------------------------
+export type AgentView = {
+  name: string; description?: string; owner: string; tools?: string[]; schedule?: string;
+  registeredBy?: string; registeredAt?: string; approvedBy?: string; approvedAt?: string;
+  clientId: string; connection: string; approved: boolean; mcpUrl: string;
+};
+export const getAgents = (name: string) => api<{ agents: AgentView[]; tools: string[]; canEdit: boolean }>("GET", `/api/projects/${encodeURIComponent(name)}/agents`);
+export const putAgent = (name: string, a: { name: string; description?: string; owner: string; tools?: string[]; schedule?: string }) =>
+  api<AgentView[]>("PUT", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(a.name)}`, { description: a.description, owner: a.owner, tools: a.tools, schedule: a.schedule });
+export const approveAgent = (name: string, agent: string) =>
+  api<{ approved: boolean; by: string; clientId: string; secret?: string; mcpUrl: string }>("POST", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(agent)}/approve`, {});
+export const removeAgent = (name: string, agent: string) => api<void>("DELETE", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(agent)}`);

@@ -54,6 +54,7 @@ type Spec struct {
 	Deliveries  []Delivery `json:"deliveries,omitempty"`
 	Semantic    *Semantic  `json:"semantic,omitempty"`
 	Products    []Product  `json:"products,omitempty"`
+	Agents      []Agent    `json:"agents,omitempty"` // programs of the project's own (12.2)
 }
 
 // Semantic is how the project's semantic model stands among the others'

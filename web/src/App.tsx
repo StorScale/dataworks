@@ -19,7 +19,8 @@ import Home from "./pages/Home";
 import Metrics from "./pages/Metrics";
 import Overview from "./pages/Overview";
 import Pipelines from "./pages/Pipelines";
-const Flows = lazy(() => import("./pages/Flows")); // React Flow is loaded only when the canvas is
+const Flows = lazy(() => import("./pages/Flows"));
+import Agents from "./pages/Agents"; // React Flow is loaded only when the canvas is
 import ProjectAccess from "./pages/ProjectAccess";
 import ProjectEditor from "./pages/ProjectEditor";
 import SQL from "./pages/SQL";
@@ -72,6 +73,7 @@ function Shell() {
           <Route path="sql" element={<SQL />} />
           <Route path="pipelines" element={<Pipelines />} />
           <Route path="flows" element={<Suspense fallback={<Spinner />}><Flows /></Suspense>} />
+          <Route path="agents" element={<Agents />} />
           <Route path="notebooks" element={null} />
           <Route path="dashboards" element={null} />
           <Route path="access" element={<ProjectAccess />} />

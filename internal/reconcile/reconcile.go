@@ -299,6 +299,36 @@ func (r *Reconciler) members(ctx context.Context, p *project.Project) (people, e
 	} else if err := r.Keycloak.deleteGroup(ctx, p.Group("pipelines")); err != nil {
 		return out, err
 	}
+	// Agents of the project's own (12.2): an approved one, whose secret the
+	// platform kept at its approval, gets its client, and its service
+	// account reads as the project's readers do; the rest have no client.
+	agents := map[string]bool{}
+	for _, a := range p.Spec.Agents {
+		if !a.Approved() || r.Store == nil {
+			continue
+		}
+		sec, err := r.Store.Connection(ctx, p.Metadata.Name, a.ConnectionName(p.Metadata.Name))
+		if err != nil || sec == nil || sec["secret"] == "" {
+			continue // approved, its secret not kept yet (or gone): no client
+		}
+		clientID := a.ClientID(p.Metadata.Name)
+		if err := r.Keycloak.ensureAgentClient(ctx, clientID, a.Name+", an agent of "+p.Metadata.Name, sec["secret"], r.PlatformURL); err != nil {
+			return out, err
+		}
+		sa, err := r.Keycloak.serviceAccount(ctx, clientID)
+		if err != nil {
+			return out, err
+		}
+		if sa == nil {
+			continue
+		}
+		wanted[p.Group(project.Reader)][sa.ID] = *sa
+		out.list = append(out.list, project.Person{Username: sa.Username, Role: "agent"})
+		agents[clientID] = true
+	}
+	if err := r.Keycloak.deleteClientsExcept(ctx, "agent-"+p.Metadata.Name+"-", agents); err != nil {
+		return out, err
+	}
 	for name, want := range wanted {
 		g, err := r.Keycloak.ensureGroup(ctx, name)
 		if err != nil {

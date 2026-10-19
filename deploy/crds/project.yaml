@@ -323,6 +323,22 @@ spec:
                                 table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}\.[a-z_][a-z0-9_]{0,62}$'}
                                 cursor: {type: string}
                                 primaryKey: {type: string}
+                agents:
+                  description: "Programs of the project's own (12.2): each an identity of its own, allowed the tools named, approved by an editor other than its registrant; who registered and approved are the platform's."
+                  type: array
+                  items:
+                    type: object
+                    required: [name, owner]
+                    properties:
+                      name: {type: string, pattern: '^[a-z][a-z0-9-]{0,30}$'}
+                      description: {type: string}
+                      owner: {type: string}
+                      tools: {type: array, items: {type: string, enum: [list_projects, list_metrics, query_metrics, explain_query, list_terms, describe_term, search_terms, list_products, describe_product, query_product]}}
+                      schedule: {type: string}
+                      registeredBy: {type: string}
+                      registeredAt: {type: string}
+                      approvedBy: {type: string}
+                      approvedAt: {type: string}
                 sources:
                   type: array
                   description: >-
