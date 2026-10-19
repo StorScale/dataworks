@@ -165,9 +165,10 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R6.27 Retention per table (rows older than a set age deleted), applied by the maintenance of 6.5.
 - R6.28 The erasure's record lists the deliveries that carried the person's data (R9.6).
 
+**Decided (2026-10-19):** the CCPA, as amended by the CPRA: a deletion request answered within 45 days (one 45-day extension with notice), verified first, its record kept at least 24 months, the deliveries that carried the person's data named so recipients can be told (see plan.md, "Decisions").
+
 **Open questions**
-- Which laws and deadlines apply (CCPA/CPRA's 45 days, other states', GLBA)?
-- How long until erased data ages out of backups, and is that acceptable to the privacy team?
+- How long until erased data ages out of backups, and is that acceptable to the privacy team (the CPRA allows deleting from backups when they're next used)?
 - Who may ask for an erasure: the privacy team's tool only, or administrators too?
 
 ### 6.10 The data as it was

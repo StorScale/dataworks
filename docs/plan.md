@@ -188,6 +188,8 @@ Each phase ends with a gate: an end-to-end test like the examples' `test.py`, ru
 
 **Decided (2026-10-19):** the LLM provider is Microsoft Foundry, serving Anthropic's models (phase 12's gateway).
 
+**Decided (2026-10-19):** erasure (6.9) follows the CCPA (as amended by the CPRA), as the company's counsel reads it. What that sets for the design: a request to delete is answered within 45 days of receipt (one extension of 45 more, with notice to the person), so the erasure itself and its record must land well inside that; the request is verified before anything is deleted (the privacy tool's, or an administrator's, word: the platform records who asked and who verified, never the person's data); the erasure's record names the deliveries that carried the person's data (R6.28), so the recipients can be told, and the platform keeps the records of requests for at least 24 months; and data in backups is deleted when the backup is next restored or expires, which the record says. Other laws' deadlines are a setting, not a rewrite.
+
 **To decide, with the first teams:** saved and shared queries, and query history, on the SQL page; streaming (Kafka, with Flink or Spark, into Iceberg) if something needs data in minutes; Python environments per project and GPUs for data science; a CLI, Terraform provider and published API for managing projects as code; disaster recovery to a second site (Buckets' site replication, a standby catalog).
 
 ## Phase 5: Kubernetes, how
