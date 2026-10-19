@@ -4,6 +4,17 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-10-18
+
+The catalog's logo fitted to its sidebar and its colours the platform's; a deleted project's deliveries' connections removed.
+
+**Upgrading from 0.16.0:** `storscale upgrade --context <cluster> --version 0.16.1`, after a `--dry-run`. Nothing to set.
+
+### Fixed
+- **The catalog's logo fits its sidebar:** OpenMetadata draws it 40 pixels high and as wide as its proportions make it, so a wide logo with no size of its own (an SVG with only a viewBox) overflowed the sidebar. It now gets platformd's `/brand/catalog-logo`, the logo fitted into 150 by 40.
+- **The catalog's colours are the platform's:** its buttons and links take the top bar's near-black (`#10151c`), not the platform's link blue; hover and info greys from the bar too.
+- **A deleted project's deliveries' connections go:** the operator removed a project's imports', sources' and git connections from the shared Airflow, but not its deliveries' (each holding its target's credentials). A project with its own Airflow lost them with it.
+
 ## [0.16.0] - 2026-10-18
 
 Phase 7 completed: a project's spec and metrics released from its repo (planned, then applied by another), its credentials given on a Connections tab, and a notebook scheduled from JupyterLab as a merge request; what was sent about a person, found again from the tables as they were; and the catalog in the platform's look.
