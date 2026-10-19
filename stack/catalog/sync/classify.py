@@ -229,3 +229,13 @@ def run(om, h, service, projects, trino, s3, bucket):
         doc = {"project": name, "at": int(time.time()), "columns": now,
                "suggested": list(remembered.values()), "dismissed": dismissed}
         s3.put_object(Bucket=bucket, Key=key, Body=json.dumps(doc).encode(), ContentType="application/json")
+    # A project gone takes its memory with it: a new project of the same name
+    # starts with nothing dismissed.
+    names = {p["metadata"]["name"] for p in projects}
+    try:
+        for o in s3.list_objects_v2(Bucket=bucket, Prefix="classification/").get("Contents") or []:
+            k = o["Key"]
+            if k.endswith(".json") and k[len("classification/"):-len(".json")] not in names:
+                s3.delete_object(Bucket=bucket, Key=k)
+    except Exception as e:  # noqa: BLE001 (next round)
+        print("classify: leftover files:", e, flush=True)
