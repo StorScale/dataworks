@@ -530,7 +530,7 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 3. The pull request shows which answers changed. After merge, sam's next question gets the new definition.
 
 **Requirements**
-- R12.7 Tests for the semantic layer: expected values, and expected metric calls for plain-language questions.
+- R12.7 Tests for the semantic layer: expected values, and expected metric calls for plain-language questions. (Built 2026-10-19: the expected values, run from the Metrics page and in a merge request's review; the plain-language questions wait for the gateway, 12.1.)
 
 ### 12.4 alice writes SQL with help
 

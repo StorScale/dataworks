@@ -75,7 +75,13 @@ func (s *server) issuesOf(ctx context.Context, p *project.Project) (out []issue,
 	link := s.cfg.PlatformURL + "/p/" + p.Metadata.Name
 	if s.airflow != nil && p.Spec.Pipelines != nil {
 		if af, _, err := s.pipelinesOf(ctx, &projectView{Name: p.Metadata.Name, Spec: p}); err == nil {
-			if ps, err := af.Of(ctx, p.Metadata.Name, 1); err == nil {
+			ps, err := af.Of(ctx, p.Metadata.Name, 1)
+			if err == nil && af != s.airflow { // its imports, in the platform's Airflow
+				if shared, err := s.airflow.Of(ctx, p.Metadata.Name, 1); err == nil {
+					ps = append(ps, shared...)
+				}
+			}
+			if err == nil {
 				for _, pl := range ps {
 					if len(pl.Runs) > 0 && pl.Runs[0].State == "failed" {
 						out = append(out, issue{Key: "pipeline/" + pl.ID + "/" + pl.Runs[0].ID, Kind: "pipeline",

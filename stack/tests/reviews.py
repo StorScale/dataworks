@@ -54,6 +54,14 @@ metric:
   type: simple
   type_params: {measure: regions_n}
 """
+TESTS = """
+---
+tests:
+  - name: regions_counted
+    metrics: [region_count]
+    expect: {rows: 1}
+"""
+
 DBT_DAG = '''"""Production's dbt models."""
 import pendulum
 
@@ -104,7 +112,7 @@ class GitLab(BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
         path = unquote(self.path)
         if "/statuses/" in path:
-            GitLab.statuses.append((path.rsplit("/", 1)[1], body.get("state"), body.get("description", "")))
+            GitLab.statuses.append((path.rsplit("/", 1)[1], body.get("state"), body.get("description", ""), body.get("name", "")))
             return self.answer(201, {})
         if path.endswith("/notes"):
             k = len(GitLab.notes) + 1
@@ -155,7 +163,9 @@ def main():
                                         "models:\n  reviewed:\n    +materialized: table\n",
                  "dbt/models/schema.yml": "version: 2\nmodels:\n  - name: regions\n    columns:\n      - name: id\n        tests: [unique, not_null]\n"}
     pg.push(work, {"dags/reviewed_dbt.py": DBT_DAG, **{f"dags/{k}": v for k, v in dbt_files.items()},
-                   "dags/dbt/models/regions.sql": MODEL.format(rows="(1, 'EU'), (2, 'US')")}, "production's model")
+                   "dags/dbt/models/regions.sql": MODEL.format(rows="(1, 'EU'), (2, 'US')"),
+                   # The project as code (7.4): its semantic model with a test (12.3), reviewed with the change.
+                   "storscale/semantic.yaml": SEMANTIC + TESTS}, "production's model")
     here = socket.gethostbyname(socket.gethostname())
     git_server = ThreadingHTTPServer(("0.0.0.0", PORT), pg.Git)
     api_server = ThreadingHTTPServer(("0.0.0.0", API_PORT), GitLab)
@@ -198,13 +208,17 @@ def main():
         sha = pg.git("rev-parse", "HEAD", cwd=work)
         GitLab.mrs = [{"iid": 1, "title": "APAC too", "sha": sha, "source_branch": "more-regions", "target_branch": "main",
                        "web_url": f"http://{here}:{API_PORT}/{NAME}/dags/-/merge_requests/1"}]
-        done = wait(lambda: next((s for s in GitLab.statuses if s[0] == sha and s[1] in ("success", "failed")), None), 900, every=10)
+        done = wait(lambda: next((s for s in GitLab.statuses if s[0] == sha and s[1] in ("success", "failed") and s[3] == "storscale/dbt"), None), 900, every=10)
         check("the merge request's change is built on its data branch, and GitLab told: success", done and done[1] == "success",
               done or GitLab.statuses[-3:])
         note = next((b for i, b in GitLab.notes.values() if i == 1), "")
         check("... with a note of the model's rows: 3 on the branch, 2 in production, and the row that differs",
               "| `regions` | 3 | 2 |" in note and "APAC" in note, note[:400])
         check("... and the metric that moved: region_count, 3 on the branch, 2 in production", "| `region_count` | 3 | 2 |" in note, note[-300:])
+        semantic_status = next((s for s in GitLab.statuses if s[0] == sha and len(s) > 3 and s[3] == "storscale/semantic"), None)
+        check("the model's test ran on the branch (12.3): its status success, the note saying the answer is as in production",
+              semantic_status is not None and semantic_status[1] == "success" and "the semantic model's 1 tests pass on the branch" in note,
+              (semantic_status, note[-400:]))
         check("... signed in to GitLab with the repo's token, each call", GitLab.signed and all(GitLab.signed), f"{sum(GitLab.signed)} of {len(GitLab.signed)}")
         check("production's table is as it was", rows("iceberg") == [[1, "EU"], [2, "US"]], rows("iceberg"))
 
@@ -215,7 +229,7 @@ def main():
         pg.git("push", "-q", "origin", "more-regions", cwd=work)
         sha2 = pg.git("rev-parse", "HEAD", cwd=work)
         GitLab.mrs = [{**GitLab.mrs[0], "sha": sha2}]
-        again = wait(lambda: next((s for s in GitLab.statuses if s[0] == sha2 and s[1] in ("success", "failed")), None), 900, every=10)
+        again = wait(lambda: next((s for s in GitLab.statuses if s[0] == sha2 and s[1] in ("success", "failed") and s[3] == "storscale/dbt"), None), 900, every=10)
         mine = [b for i, b in GitLab.notes.values() if i == 1]
         check("a new commit is built too, and its note updated, not another added",
               again and again[1] == "success" and len(mine) == 1 and "| `regions` | 4 | 2 |" in mine[0], (again, len(mine), (mine or [""])[0][:200]))

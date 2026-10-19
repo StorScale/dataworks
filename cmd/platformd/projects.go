@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/StorScale/storscale-platform/internal/pipelines"
 	"github.com/StorScale/storscale-platform/internal/project"
@@ -355,6 +356,15 @@ func (s *server) handlePipelines(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
+	// A project with an Airflow of its own: its imports (8.2) run in the
+	// platform's, tagged for it; listed here beside its own.
+	if af != s.airflow {
+		shared, err := s.airflow.Of(r.Context(), v.Name, 12)
+		if err != nil {
+			s.log.Error("pipelines (the platform's Airflow)", "project", v.Name, "error", err)
+		}
+		ps = append(ps, shared...)
+	}
 	out := map[string]any{"pipelines": ps, "canRun": v.Role == project.Editor || s.isAdmin(sess.User)}
 	if ui != "" {
 		out["airflowPath"] = ui // the project's own Airflow's UI
@@ -369,6 +379,17 @@ func (s *server) handlePipelines(w http.ResponseWriter, r *http.Request) {
 		out["importErrors"] = errs
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// airflowFor is the Airflow a pipeline of the project's runs in: the
+// platform's for an import (8.2: they run there, whatever Airflow the
+// project has), else the project's own or the shared one.
+func (s *server) airflowFor(ctx context.Context, v *projectView, dag string) (*pipelines.Client, error) {
+	if strings.HasPrefix(dag, "import_") {
+		return s.airflow, nil
+	}
+	af, _, err := s.pipelinesOf(ctx, v)
+	return af, err
 }
 
 // handleStartRun starts a run of one of the project's pipelines, for its
@@ -389,7 +410,7 @@ func (s *server) handleRunLog(w http.ResponseWriter, r *http.Request) {
 	if v == nil {
 		return
 	}
-	af, _, err := s.pipelinesOf(r.Context(), v)
+	af, err := s.airflowFor(r.Context(), v, r.PathValue("pipeline"))
 	if err != nil {
 		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
@@ -423,7 +444,7 @@ func (s *server) handleStartRun(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusForbidden, "only the project's editors run its pipelines")
 		return
 	}
-	af, _, err := s.pipelinesOf(r.Context(), v)
+	af, err := s.airflowFor(r.Context(), v, r.PathValue("pipeline"))
 	if err != nil {
 		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return

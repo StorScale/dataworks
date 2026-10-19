@@ -317,7 +317,9 @@ Every container runs without privilege escalation, with the default seccomp prof
 
 **Order and effort:** the auto-classification workflow and the `Protection` classification in catalog-sync, a day; the operator's policies from `classification/`, a day; the Data page and its actions, half a day; the suite, half a day. **Open:** which groups are excepted at this install (the data-protection approvers of 9.1, by default); whether financial and health detectors find enough without rules of the company's own (the catalog takes custom detectors).
 
-### A metric change, tested (use case 12.3), how (design, 2026-10-19)
+### A metric change, tested (use case 12.3), how (design, 2026-10-19; built 2026-10-19)
+
+**Built as designed** (the known-answer tests; the plain-language ones wait for 12.1): `tests:` in the model, checked with it, run from the Metrics page and in the review on the data branch, the note saying which answers changed. The 8.2 gap went in with it: a project with its own Airflow lists, starts and reads the logs of its imports from the platform's Airflow.
 
 **Tests beside the model.** A project's semantic model gains a `tests:` document (as `terms:` was added, taken out before MetricFlow reads it): known answers for known questions, each a metric query (metrics, group by, where) and the rows it must give, or a property of them (`rows: 3`, `revenue: {min: 0}`, `matches: {metrics: [order_count], group_by: [order__region]}`: the same as another query's answer). semanticd checks the document with the model (every test names metrics and dimensions the model has) and runs the tests on request: `POST /api/projects/{p}/semantic/tests`, as the caller, answering which passed and which didn't, with the rows that differed.
 

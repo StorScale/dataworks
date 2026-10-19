@@ -41,3 +41,15 @@ metric:
   description: Revenue per order.
   type: ratio
   type_params: {numerator: {name: revenue}, denominator: {name: order_count}}
+---
+# The model's tests (use case 12.3): known answers for known questions, run
+# as the person from the Metrics page, and in a merge request's review on
+# its data branch against production's answers.
+tests:
+  - name: revenue_by_region
+    metrics: [revenue]
+    group_by: [order__region]
+    expect: {rows: 2}          # EU and US
+  - name: one_order_count
+    metrics: [order_count]
+    expect: {rows: 1}
