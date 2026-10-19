@@ -53,7 +53,7 @@ export default function Flows() {
   const list = usePoll(() => getFlows(name), [name]);
   const [newName, setNewName] = useState("");
   const canEdit = view?.role === "editor" || admin;
-  if (current) return <Canvas project={name} flowName={current} canEdit={canEdit} onClose={() => { setParams({}); list.reload(); }} />;
+  if (current) return <Canvas project={name} flowName={current} canEdit={canEdit} noRepo={list.data?.why} onClose={() => { setParams({}); list.reload(); }} />;
   if (list.error && !list.data) return <div className="page"><ErrorBanner error={list.error} /></div>;
   if (!list.data) return <div className="page"><Spinner /></div>;
   const flows = list.data.flows;
@@ -62,8 +62,8 @@ export default function Flows() {
       <p className="lead" style={{ margin: 0 }}>
         Pipelines built on a canvas: each step a dbt model in the project's repo, previewed on a sample as you, saved as a merge request.
       </p>
-      {list.data.why && <div className="banner" data-testid="flows-why">{list.data.why}</div>}
-      {canEdit && !list.data.why && (
+      {list.data.why && <div className="banner" data-testid="flows-why">Flows can be built and previewed here; saving one needs the project's pipelines repo ({list.data.why}).</div>}
+      {canEdit && (
         <form className="row" onSubmit={(e) => { e.preventDefault(); if (/^[a-z][a-z0-9_]{0,40}$/.test(newName)) setParams({ flow: newName, new: "1" }); }}>
           <input placeholder="a new flow's name (weekly_revenue)" value={newName} onChange={(e) => setNewName(e.target.value)} data-testid="new-flow-name" />
           <button className="btn primary" type="submit" disabled={!/^[a-z][a-z0-9_]{0,40}$/.test(newName)} data-testid="new-flow">New flow</button>
@@ -153,7 +153,7 @@ function freeId(kind: string, steps: FlowStep[]) {
   return i === 1 ? base : `${base}_${i}`;
 }
 
-function Canvas({ project, flowName, canEdit, onClose }: { project: string; flowName: string; canEdit: boolean; onClose: () => void }) {
+function Canvas({ project, flowName, canEdit, noRepo, onClose }: { project: string; flowName: string; canEdit: boolean; noRepo?: string; onClose: () => void }) {
   const [params] = useSearchParams();
   const [flow, setFlow] = useState<CanvasFlow>();
   const [compiled, setCompiled] = useState<FlowView>();
@@ -170,7 +170,7 @@ function Canvas({ project, flowName, canEdit, onClose }: { project: string; flow
   const timer = useRef<number>();
 
   useEffect(() => {
-    if (params.get("new")) {
+    if (params.get("new") || noRepo) {
       setFlow({ name: flowName, steps: [] });
       setCompiled(undefined);
       return;
@@ -305,7 +305,8 @@ function Canvas({ project, flowName, canEdit, onClose }: { project: string; flow
             <input value={flow.schedule ?? ""} placeholder="0 6 * * 1 (UTC), or none" style={{ width: 170 }} onChange={(e) => change({ ...flow, schedule: e.target.value })} data-testid="schedule" />
           </label>
         )}
-        {canEdit && <button className="btn primary" onClick={save} disabled={saving || errors.length > 0 || steps.length === 0} data-testid="save-flow">{saving ? "Saving…" : "Save as merge request"}</button>}
+        {canEdit && <button className="btn primary" onClick={save} disabled={saving || errors.length > 0 || steps.length === 0 || !!noRepo} data-testid="save-flow"
+          title={noRepo ? `Saving needs the project's pipelines repo: ${noRepo}` : undefined}>{saving ? "Saving…" : "Save as merge request"}</button>}
       </div>
       <ErrorBanner error={saveError} />
       {errors.length > 0 && <div className="banner error" data-testid="flow-errors">{errors.map((e) => <div key={e}>{e}</div>)}</div>}
