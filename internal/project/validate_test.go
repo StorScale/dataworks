@@ -23,6 +23,7 @@ func TestValidators(t *testing.T) {
 		{"history", `,"tables":{"people":[{"table":"t","column":"c"},{"table":"t","column":"d"}]}`, "people: t twice"},
 		{"history", `,"tables":{"tags":[{"name":"v1","commit":"zz","keepUntil":"2033-10-03"}]}`, "isn't a Nessie commit"},
 		{"notify", `,"notify":{"email":["nobody"]}`, "isn't an email address"},
+		{"retention", `,"tables":{"retention":[{"table":"t","column":"c","keep":"forever"}]}`, "as 730d or 2y"},
 		{"sources", `,"sources":[{"name":"crm","kind":"access","connection":"c"}]`, `kind "access"`},
 		{"sources", `,"sources":[{"name":"crm","kind":"postgresql","connection":"c","masks":[{"table":"s.t","column":"c","type":"hash"}]}]`, "readers: true"},
 		{"imports", `,"imports":[{"name":"crm","source":"ftp"}]`, `source "ftp"`},

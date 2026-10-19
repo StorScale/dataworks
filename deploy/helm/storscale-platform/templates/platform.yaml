@@ -59,6 +59,7 @@ spec:
             {{- with .Values.products.certifierGroups }}
             - {name: PRODUCT_CERTIFIER_GROUPS, value: {{ . | quote }}}   # who certifies data products
             {{- end }}
+            - {name: ERASURE_DEADLINE_DAYS, value: {{ .Values.erasure.deadlineDays | quote }}}   # the CCPA's 45 (6.9)
             - {name: INSTALL_TARGET, value: {{ .Values.install.target | quote }}}   # a project's repo's storscale/targets/<target>.yaml
             - {name: MAINTENANCE_KEEP_HISTORY, value: {{ .Values.maintenance.history.keep | quote }}}
             # The audit log, beside Ranger's in its Solr (audit.*).

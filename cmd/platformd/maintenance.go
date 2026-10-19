@@ -190,9 +190,14 @@ func (m *maintainer) keepProject(ctx context.Context, s *server, p *project.Proj
 		run := tableRun{Table: name, Started: time.Now().UTC(), Done: []string{}}
 		run.Before, _ = m.iceberg.Stats(ctx, t.Namespace, name)
 		table := strings.Join([]string{trino.Quote(t.Catalog), trino.Quote(t.Namespace), trino.Quote(name)}, ".")
-		steps := []struct{ name, sql string }{
-			{"optimize", "ALTER TABLE " + table + " EXECUTE optimize"},
+		steps := []struct{ name, sql string }{}
+		for _, rt := range t.Retention { // rows past their keep go first, then the files are compacted
+			if rt.Table == name {
+				steps = append(steps, struct{ name, sql string }{"retention",
+					fmt.Sprintf("DELETE FROM %s WHERE %s < CAST(current_timestamp - INTERVAL '%d' DAY AS %s)", table, trino.Quote(rt.Column), project.KeepDays(rt.Keep), "timestamp(6)")})
+			}
 		}
+		steps = append(steps, struct{ name, sql string }{"optimize", "ALTER TABLE " + table + " EXECUTE optimize"})
 		for _, step := range steps {
 			sctx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 			_, err := m.trino.Exec(sctx, step.sql)

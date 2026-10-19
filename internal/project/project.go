@@ -378,6 +378,35 @@ type Tables struct {
 	// them sends is personal, and a search of the delivery log by a
 	// person's ID (use case 9.2) and an erasure (6.9) look there.
 	People []PersonKey `json:"people,omitempty"`
+	// Retention: rows older than a table's keep (by a date or time column)
+	// are deleted by the nightly maintenance (R6.27): 25 months of campaign
+	// responses, say.
+	Retention []Retention `json:"retention,omitempty"`
+}
+
+// A Retention is how long a table's rows are kept, by the column that dates them.
+type Retention struct {
+	Table  string `json:"table"`
+	Column string `json:"column"` // a date or timestamp column
+	Keep   string `json:"keep"`   // 730d, 2y
+}
+
+var keepRE = regexp.MustCompile(`^([1-9][0-9]{0,4})(d|y)$`)
+
+// KeepOK says whether a keep is one (days or years: 90d, 7y).
+func KeepOK(keep string) bool { return keepRE.MatchString(keep) }
+
+// KeepDays is a keep in days (a year as 365).
+func KeepDays(keep string) int {
+	m := keepRE.FindStringSubmatch(keep)
+	if m == nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(m[1])
+	if m[2] == "y" {
+		return n * 365
+	}
+	return n
 }
 
 // A PersonKey is a table of people's data, and its column identifying a person.

@@ -65,7 +65,7 @@ POLICIES = [{**p, "policyItems": p["policyItems"] + ([allow(["execute"], groups=
     {"name": "catalog: every namespace", "resources": res(catalog=ICEBERG, schema="*"),
      "policyItems": [allow(["use", "show"], users=[CATALOG_USER, MAINTENANCE_USER])]},
     {"name": "catalog: every table", "resources": res(catalog=ICEBERG, schema="*", table="*", column="*"),
-     "policyItems": [allow(["select", "show"], users=[CATALOG_USER]), allow(["select", "alter"], users=[MAINTENANCE_USER])]},
+     "policyItems": [allow(["select", "show"], users=[CATALOG_USER]), allow(["select", "alter", "delete"], users=[MAINTENANCE_USER])]},
     # The catalog's information_schema, which tools read to list tables and
     # columns (Superset does, to check a dataset; dbt does, as a project's
     # pipelines). Trino filters it down to what each one may see, so everyone
