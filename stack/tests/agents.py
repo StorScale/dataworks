@@ -62,6 +62,7 @@ def main():
         r = bob.put(f"{PLATFORM}/api/projects/{NAME}", data=json.dumps(SPEC), timeout=30)
         ready = wait(lambda: (lambda x: x if x and (x.get("status") or {}).get("phase") == "Ready" else None)(
             (projects(bob) or {}).get(NAME)), 900, every=10)
+        sql("bob", "DROP TABLE IF EXISTS orders", "iceberg", NAME)  # a run before, on a cluster that keeps a deleted project's tables
         sql("bob", "CREATE TABLE orders AS SELECT * FROM (VALUES (1, 'EU', 10.0, DATE '2026-10-01'), (2, 'US', 7.5, DATE '2026-10-02')) "
                    "AS t (id, region, amount, ordered_on)", "iceberg", NAME)
         m = bob.put(f"{PLATFORM}/api/projects/{NAME}/semantic", json={"yaml": MODEL}, headers=H, timeout=120)
