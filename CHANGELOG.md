@@ -2,11 +2,11 @@
 
 All notable changes to StorScale Platform are recorded here, in the [Keep a Changelog](https://keepachangelog.com/) format. The project uses [semantic versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.18.0] - 2026-10-19
 
 The pipeline canvas: a flow built from steps, previewed on a sample as the person, saved as dbt models in a merge request, with the company's metrics as a step and uploads as inputs; and a consolidation pass on the code.
 
-**Upgrading from 0.17.0:** `storscale upgrade --context <cluster> --version <this release>`, after a `--dry-run`. The Project CRD gains the `files` import source (`imports[].files`; the upgrade applies it). The Airflow image is rebuilt (Excel in the files import). Nothing to set: the Flows tab appears on projects with a repo and tables. Every error answer from platformd now carries a `request` ID beside its `error`, and the `X-Request-ID` header; anything parsing the error body by exact match should allow the new key.
+**Upgrading from 0.17.0:** `storscale upgrade --context <cluster> --version 0.18.0`, after a `--dry-run`. The Project CRD gains the `files` import source (`imports[].files`; the upgrade applies it). The Airflow image is rebuilt (Excel in the files import). Nothing to set: the Flows tab appears on projects with a repo and tables. Every error answer from platformd now carries a `request` ID beside its `error`, and the `X-Request-ID` header; anything parsing the error body by exact match should allow the new key.
 
 ### Changed
 - **A failed run says why on the Pipelines tab**: each task's last try's log (`GET /api/projects/{name}/pipelines/{pipeline}/runs/{run}/log`, members only), shown on request beside the run.
