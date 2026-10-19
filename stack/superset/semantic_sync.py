@@ -174,6 +174,17 @@ def apply(wanted):
     db.session.commit()
 
 
+HEARTBEAT = "/tmp/superset-sync.beat"   # touched each round: its health check reads its age
+
+
+def healthy(within=300):
+    """Whether a round has run lately (the container's health check)."""
+    try:
+        return time.time() - os.path.getmtime(HEARTBEAT) < within
+    except OSError:
+        return False
+
+
 def main():
     from superset.app import create_app
     app = create_app()
@@ -189,8 +200,13 @@ def main():
         except Exception as e:  # noqa: BLE001 (Superset or the bucket starting: the next round)
             log.warning("round: %s", e)
             last = None
+        with open(HEARTBEAT, "w") as f:
+            f.write(str(time.time()))
         time.sleep(int(os.environ.get("SYNC_EVERY", "60")))
 
 
 if __name__ == "__main__":
+    import sys
+    if sys.argv[1:] == ["healthy"]:
+        sys.exit(0 if healthy() else 1)
     main()
