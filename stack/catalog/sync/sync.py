@@ -238,10 +238,12 @@ def sync_glossary():
     terms = glossary_terms()
     if not terms and requests.get(f"{OM}/v1/glossaries/name/{GLOSSARY}", headers=h, timeout=10).status_code == 404:
         return
-    requests.put(f"{OM}/v1/glossaries", headers=h, timeout=10, json={
+    g = requests.put(f"{OM}/v1/glossaries", headers=h, timeout=10, json={
         "name": GLOSSARY, "displayName": "Business terms",
-        "description": "The company's words for its data, from the platform's shared semantic model: kept by the platform."}).raise_for_status()
-    have = requests.get(f"{OM}/v1/glossaryTerms", headers=h, timeout=10, params={"glossary": GLOSSARY, "limit": 1000}).json().get("data", [])
+        "description": "The company's words for its data, from the platform's shared semantic model: kept by the platform."})
+    g.raise_for_status()
+    # Terms are listed by their glossary's id (its name finds none).
+    have = requests.get(f"{OM}/v1/glossaryTerms", headers=h, timeout=10, params={"glossary": g.json()["id"], "limit": 1000}).json().get("data", [])
     for t in have:
         if t["name"] not in terms:
             requests.delete(f"{OM}/v1/glossaryTerms/{t['id']}", headers=h, timeout=10, params={"hardDelete": "true", "recursive": "true"})
