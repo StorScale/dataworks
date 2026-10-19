@@ -29,9 +29,8 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 import requests
 
-from lakekit import check, finish, s3_root, token
+from lakekit import check, finish, token
 
-import k8s
 import pipelines_git as pg
 from projects import platform, projects, wait
 
@@ -163,8 +162,10 @@ def main():
                      "pipelines": {"serviceAccount": "airflow-pipelines", "repo": repo, "path": "dags", "credentials": {"secretRef": CONNECTION}}}}
     try:
         r = bob.put(f"{PLATFORM}/api/projects/{NAME}", data=json.dumps(spec), timeout=30)
-        c = bob.post(f"{PLATFORM}/api/projects/{NAME}/connections", timeout=30,
-                     json={"name": CONNECTION, "kind": "git", "values": {"username": pg.USER, "password": pg.TOKEN}})
+        values = {"username": pg.USER, "password": pg.TOKEN}
+        c = bob.post(f"{PLATFORM}/api/projects/{NAME}/connections", timeout=30, json={"name": CONNECTION, "kind": "git", "values": values})
+        if c.status_code == 409:   # one a run before left: this run's token in it
+            c = bob.put(f"{PLATFORM}/api/projects/{NAME}/connections/{CONNECTION}", timeout=30, json={"values": values})
         ready = wait(lambda: (lambda x: x if x and (x.get("status") or {}).get("phase") == "Ready" else None)(
             (projects(bob) or {}).get(NAME)), 900, every=10)
         check("bob makes a project with a repo, its token given on its Connections tab", r.ok and c.ok and ready is not None, (r.text[:200], c.text[:200]))
@@ -202,14 +203,14 @@ def main():
         check("a notebook whose cell fails: its run fails, and its kept notebook shows why",
               state == "failed" and "no rows today" in page, (state, page[:300]))
     finally:
+        # The connection, through the platform (the test pod may delete only
+        # Secrets of its own names): the repo's credentials taken from the
+        # spec first, as a connection the spec names can't go.
+        unnamed = {**spec, "spec": {**spec["spec"], "pipelines": {k: v for k, v in spec["spec"]["pipelines"].items() if k != "credentials"}}}
+        bob.put(f"{PLATFORM}/api/projects/{NAME}", data=json.dumps(unnamed), timeout=30)
+        bob.delete(f"{PLATFORM}/api/projects/{NAME}/connections/{CONNECTION}", timeout=30)
         bob.delete(f"{PLATFORM}/api/projects/{NAME}", headers=H, timeout=30)
         wait(lambda: NAME not in (projects(bob) or {}), 300)
-        # The project gone, its connection (the tab's, kept as any connection is).
-        if k8s.in_cluster():
-            k8s._api("DELETE", f"secrets/{CONNECTION}")
-        else:
-            for key in (f"connections/{NAME}/{CONNECTION}.json", f"connection-meta/{NAME}/{CONNECTION}.json"):
-                s3_root().delete_object(Bucket="storscale-platform", Key=key)
         server.shutdown()
     finish()
 
