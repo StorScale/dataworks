@@ -197,7 +197,8 @@ def main():
             t = s.get(f"{om.OM}/tables/name/trino.iceberg.company.customers", params={"fields": "tags"}, timeout=30)
             return t.ok and any(x.get("tagFQN") == "BusinessTerms.customer" for x in t.json().get("tags", []))
         found = wait(tagged, 900, every=15)
-        gt = s.get(f"{om.OM}/glossaryTerms", params={"glossary": "BusinessTerms", "limit": 100}, timeout=30)
+        glossary = s.get(f"{om.OM}/glossaries/name/BusinessTerms", timeout=30)
+        gt = s.get(f"{om.OM}/glossaryTerms", params={"glossary": glossary.json().get("id") if glossary.ok else "", "limit": 100}, timeout=30)
         names = sorted(t["name"] for t in (gt.json().get("data", []) if gt.ok else []))
         check("the catalog's glossary has the terms, and the company's customers table is tagged Customer",
               {"customer", "bookings_total"} <= set(names) and found, (names, found))
