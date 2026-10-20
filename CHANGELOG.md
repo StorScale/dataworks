@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **The gateway's guardrail** (12.1): a question carrying what may not leave the platform is refused before it reaches the model, by LiteLLM (a pre-call guardrail of the platform's, `stack/tools/llm_guard.py`, in the chart's config) and by the stand-in alike: what looks like a value the platform masks (a card number, Luhn-checked; a national ID; a bank account number; an email address; a phone number: the shapes catalog-sync tags a column personal by), or a secret of the platform's (a gateway key, a GitLab or GitHub token, an AWS key, a signed or bearer token, a private key, or a secret's name with a value beside it). The refusal (HTTP 400) names what was found, never the value, costs nothing against the budget, and `buckets_lake.ask()` raises it in those words. `llm.guardrails: false` in the chart (`LLM_GUARDRAILS=false` on Compose) turns it off. The `gateway` suite checks it.
+
 ## [0.19.1] - 2026-10-20
 
 An agent reads its project's runs and alerts, the stateful pods placed by node, a bigger canvas whose settings pick from dropdowns, and fixes: a new source's catalog made on the pass that added it, a GitLab refusal that says why, and the shared Airflow's scheduler running on when a project's repo comes or goes.

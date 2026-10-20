@@ -7,7 +7,9 @@ key that it enforces.
   GET  /key/info?key=  -> {info: {key_alias, max_budget, spend, metadata}} (the master key, or the key itself)
   GET  /key/list       -> {keys: [{key, key_alias, max_budget, spend}]}  (the master key)
   POST /chat/completions, /v1/chat/completions  (a key): an answer that repeats the question; each call
-                       costs 0.01 per 100 characters, and a key past its budget gets HTTP 400 as LiteLLM gives it
+                       costs 0.01 per 100 characters, and a key past its budget gets HTTP 400 as LiteLLM gives it;
+                       a question carrying what may not leave (llm_guard: a masked value's shape, a secret)
+                       is refused first, HTTP 400, as the guardrail refuses it at LiteLLM (LLM_GUARDRAILS=false turns it off)
   GET  /health/liveliness, /healthz
 
 Keys and spend are kept in LLM_STUB_STATE (a JSON file; default in memory).
@@ -21,10 +23,13 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
+import llm_guard
+
 MASTER = os.environ.get("LLM_MASTER_KEY", "sk-master")
 STATE = os.environ.get("LLM_STUB_STATE", "")
 PORT = int(os.environ.get("LLM_STUB_PORT", "4000"))
 COST_PER_100_CHARS = 0.01
+GUARDRAILS = os.environ.get("LLM_GUARDRAILS", "true").lower() not in ("false", "0", "no", "off")
 
 lock = threading.Lock()
 keys = {}   # key -> {key_alias, max_budget, spend, metadata, created}
@@ -113,6 +118,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not info:
                     return self.answer(401, {"error": {"message": "Authentication Error: invalid key"}})
                 b = self.body()
+                kinds = llm_guard.found(b.get("messages")) if GUARDRAILS else []
+                if kinds:
+                    print(f"llm-stub: refused for {info.get('key_alias')}: {', '.join(kinds)}", flush=True)
+                    return self.answer(400, {"error": {"message": llm_guard.refusal(kinds), "type": "guardrail", "code": "400"}})
                 text = " ".join(str(m.get("content", "")) for m in b.get("messages", []))
                 cost = COST_PER_100_CHARS * max(1, len(text) / 100)
                 if info.get("max_budget") is not None and info["spend"] + cost > float(info["max_budget"]):
