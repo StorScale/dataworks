@@ -644,7 +644,7 @@ func (pl *Pipelines) problems() []string {
 			out = append(out, fmt.Sprintf("reviews: dbt %q: the dbt project's folder in the repo", r.Dbt))
 		case r.Project != "" && !gitPathRE.MatchString(r.Project):
 			out = append(out, fmt.Sprintf("reviews: project %q: the repo's path in GitLab, as group/repo", r.Project))
-		case r.Project != "" && sameHost(r.GitLab, pl.Repo) && !strings.EqualFold(r.Project, repoPath(pl.Repo)):
+		case r.Project != "" && sameHost(r.GitLab, pl.Repo) && !strings.EqualFold(strings.TrimSuffix(r.Project, ".git"), repoPath(pl.Repo)):
 			out = append(out, fmt.Sprintf("reviews: project %q isn't the repo's path, %q: leave it empty for the repo's own", r.Project, repoPath(pl.Repo)))
 		}
 	}

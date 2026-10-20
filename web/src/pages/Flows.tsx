@@ -67,6 +67,7 @@ export default function Flows() {
         <form className="row" onSubmit={(e) => { e.preventDefault(); if (/^[a-z][a-z0-9_]{0,40}$/.test(newName)) setParams({ flow: newName, new: "1" }); }}>
           <input placeholder="a new flow's name (weekly_revenue)" value={newName} onChange={(e) => setNewName(e.target.value)} data-testid="new-flow-name" />
           <button className="btn primary" type="submit" disabled={!/^[a-z][a-z0-9_]{0,40}$/.test(newName)} data-testid="new-flow">New flow</button>
+          <span className="small muted">{newName && !/^[a-z][a-z0-9_]{0,40}$/.test(newName) ? "A flow's name is a dbt model's: lowercase letters, digits and underscores, starting with a letter (weekly_revenue)." : "The name becomes the dbt model, and the table it makes."}</span>
         </form>
       )}
       {flows.length === 0 && <p className="muted">No flows yet.</p>}
