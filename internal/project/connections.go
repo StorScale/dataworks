@@ -30,7 +30,7 @@ type ConnectionKind struct {
 
 var ConnectionKinds = []ConnectionKind{
 	{Kind: "git", Label: "A git token", For: "the pipelines' repo (https)", Fields: []ConnectionField{
-		{Key: "username", Label: "User"}, {Key: "password", Label: "Token", Secret: true, Required: true},
+		{Key: "username", Label: "User (the token's name)"}, {Key: "password", Label: "Token (GitLab: the api scope, the Developer role)", Secret: true, Required: true},
 		{Key: "webhookToken", Label: "GitLab webhook's token", Secret: true}}},
 	{Kind: "ssh", Label: "An SSH key", For: "the pipelines' repo (ssh)", Fields: []ConnectionField{
 		{Key: "sshPrivateKey", Label: "Private key", Secret: true, Required: true, Multi: true},

@@ -176,7 +176,7 @@ export default function ProjectEditor() {
                 </label>
                 <p className="muted small" style={{ margin: "8px 0 4px" }}>
                   Their git repo (use case 7.1): the DAGs come from it, and on Kubernetes the project gets an Airflow of its own. A private repo signs in with
-                  one of the project's connections (a git token or an SSH key, given on its Connections tab). The canvas saves its flows there.
+                  one of the project's connections (a git token or an SSH key, given on its Connections tab; a GitLab token needs the api scope and the Developer role). The canvas saves its flows there.
                 </p>
                 <label>Repo (https or ssh address, no credentials in it)
                   <input className="mono" value={pl.repo ?? ""} placeholder="https://gitlab.example.com/data/sales-pipelines.git" onChange={(e) => setPl({ repo: e.target.value || undefined })} data-testid="pipelines-repo" />
