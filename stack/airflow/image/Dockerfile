@@ -43,6 +43,8 @@ RUN python -m venv /opt/dbt && chown -R airflow:0 /opt/dbt
 COPY storscale /opt/storscale/storscale
 # The platform's own DAGs for every Airflow (a merge request's review): the bundle "storscale".
 COPY dags /opt/storscale/dags
+# The DAG bundles from the wrapper's file (stack/tools/airflow_bundles.py), read as each process starts.
+COPY airflow_local_settings.py /opt/airflow/config/airflow_local_settings.py
 RUN echo /opt/storscale > "$(python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')/storscale.pth"
 USER airflow
 RUN /opt/dbt/bin/pip install --no-cache-dir dbt-core==1.12.5 dbt-trino==1.10.5
