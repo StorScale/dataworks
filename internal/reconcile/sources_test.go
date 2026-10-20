@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/StorScale/storscale-platform/internal/project"
 	"github.com/StorScale/storscale-platform/internal/trino"
@@ -22,6 +23,7 @@ type fakeTrino struct {
 	catalogs map[string]bool
 	stmts    []string
 	refuse   bool
+	refuseN  int // refuse this many CREATEs, then accept (Trino seeing the file at last)
 }
 
 var (
@@ -45,8 +47,9 @@ func (f *fakeTrino) server(t *testing.T) *trino.Client {
 			}
 			out["data"] = rows
 		case createRE.MatchString(sql):
-			if f.refuse {
-				out["error"] = map[string]string{"errorName": "GENERIC_INTERNAL_ERROR", "message": "no such file"}
+			if f.refuse || f.refuseN > 0 {
+				f.refuseN = max(f.refuseN-1, 0)
+				out["error"] = map[string]string{"errorName": "GENERIC_INTERNAL_ERROR", "message": "Configuration errors: Invalid configuration property connection-credential-file: file does not exist: /etc/trino/sources/x.properties"}
 			} else {
 				f.catalogs[createRE.FindStringSubmatch(sql)[1]] = true
 			}
@@ -218,5 +221,38 @@ func TestCopyProperties(t *testing.T) {
 	}
 	if got := identifier("storscale_" + strings.Repeat("x", 70)); len(got) != 63 {
 		t.Errorf("identifier: %d characters", len(got))
+	}
+}
+
+func TestACatalogWaitsForTrinoToSeeItsFile(t *testing.T) {
+	ctx := context.Background()
+	ft := &fakeTrino{catalogs: map[string]bool{"iceberg": true}, refuseN: 2}
+	files := &DirFiles{Dir: t.TempDir()}
+	s := &TrinoSources{Trino: ft.server(t), Files: files, Dir: "/etc/trino/sources", FileWait: 3 * time.Second}
+	conns := func(name string) (map[string]string, error) {
+		return map[string]string{"host": "db.example.com", "port": "5432", "database": "finance", "username": "ro", "password": "pw"}, nil
+	}
+	p, err := project.Parse([]byte(`{"metadata": {"name": "sales"}, "spec": {"members": [{"user": "bob", "role": "editor"}],
+		"sources": [{"name": "finance", "kind": "postgresql", "connection": "finance-db"}]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Apply(ctx, p, conns); err != nil {
+		t.Fatalf("waited, then made: %v", err)
+	}
+	creates := 0
+	for _, st := range ft.stmts {
+		if createRE.MatchString(st) {
+			creates++
+		}
+	}
+	if !ft.catalogs["sales_finance"] || creates != 3 {
+		t.Fatalf("catalogs %v after %d CREATEs", ft.catalogs, creates)
+	}
+	// No wait: the refusal is the pass's answer, as before.
+	ft2 := &fakeTrino{catalogs: map[string]bool{"iceberg": true}, refuse: true}
+	s2 := &TrinoSources{Trino: ft2.server(t), Files: &DirFiles{Dir: t.TempDir()}, Dir: "/etc/trino/sources"}
+	if err := s2.Apply(ctx, p, conns); err == nil || !strings.Contains(err.Error(), "the next pass tries again") {
+		t.Fatalf("refused without a wait: %v", err)
 	}
 }

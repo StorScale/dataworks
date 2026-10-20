@@ -9,6 +9,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 - **Where the stateful pods run** (`placement`): a node selector per workload with a volume (`openmetadata-search`, `jupyterhub`, `postgres`, `ranger-db`, `ranger-solr`, `nessie`), for a cluster whose storage driver mounts a volume cleanly only on some nodes; an upgrade then keeps each where its volume mounts instead of letting the scheduler move it onto a node with a stale device. Empty by default: nothing changes for an install that doesn't set it.
 
 ### Fixed
+- **A new source catalog waits for Trino to see its connection file**: on Kubernetes the file is a Secret mounted into Trino's pods, which appears after the kubelet's sync period (about a minute), and the operator made the catalog at once, reported Trino's refusal as the project's error for a pass, and made it on the next. It now waits, up to two minutes, so a project with a new source is Ready on the pass that added it.
 - **A GitLab refusal says why**: GitLab's own words come through (a token short of the `api` scope answered as "HTTP 403 <nil>"), and a 403 names what the token needs (the `api` scope, the Developer role). The reviews' GitLab address may be the repo's own (taken as the server's), and a project path that isn't the repo's on the same server is refused with the right one named; the editor prefills both from the repo. The Flows page says what a flow's name may be.
 
 ## [0.19.0] - 2026-10-19
