@@ -348,7 +348,7 @@ spec:
                       name: {type: string, pattern: '^[a-z][a-z0-9-]{0,30}$'}
                       description: {type: string}
                       owner: {type: string}
-                      tools: {type: array, items: {type: string, enum: [list_projects, list_metrics, query_metrics, explain_query, list_terms, describe_term, search_terms, list_products, describe_product, query_product]}}
+                      tools: {type: array, items: {type: string, enum: [list_projects, list_metrics, query_metrics, explain_query, list_terms, describe_term, search_terms, list_products, describe_product, query_product, list_runs, list_alerts]}}
                       schedule: {type: string, description: "When the platform runs it (cron, UTC), with a notebook."}
                       notebook: {type: string, description: "Its program: an .ipynb in the project's repo, under the pipelines' path, run as the agent on its schedule."}
                       budget: {type: number, description: "USD a month at the LLM gateway (12.1); none: no key."}

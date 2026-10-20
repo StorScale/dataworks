@@ -7,7 +7,8 @@ what the other registered). These check (use case 12.2):
      in yet (no client until it's approved), and bob can't approve his own;
   2. alice approves it: its secret is shown once, the operator makes its
      client, and it signs in with client credentials and asks for a metric
-     (Ranger's audit names it); a tool it wasn't given is refused, naming
+     (Ranger's audit names it) and for the project's alerts (platformd, by
+     the agent's own token); a tool it wasn't given is refused, naming
      what it may use;
   3. a change to its tools takes the approval away;
   4. revoked, it signs in no more.
@@ -70,7 +71,7 @@ def main():
 
         # 1. Registered, not yet approved.
         reg = bob.put(f"{PLATFORM}/api/projects/{NAME}/agents/nightly", headers=H, timeout=30,
-                      json={"description": "sums the day", "tools": ["list_metrics", "query_metrics"]})
+                      json={"description": "sums the day", "tools": ["list_metrics", "query_metrics", "list_alerts"]})
         own = bob.post(f"{PLATFORM}/api/projects/{NAME}/agents/nightly/approve", headers=H, timeout=30)
         listed = (bob.get(f"{PLATFORM}/api/projects/{NAME}/agents", timeout=30).json() or {}).get("agents", [])
         mine = next((a for a in listed if a["name"] == "nightly"), {})
@@ -89,6 +90,8 @@ def main():
         agent = Agent(tok) if tok else None
         answer, err = agent.call("query_metrics", project=NAME, metrics=["revenue"]) if agent else (None, "no token")
         check("... it asks for the project's revenue as itself", answer is not None and answer.get("rows") and float(answer["rows"][0][0]) == 17.5, (answer, err))
+        alerts, aerr = agent.call("list_alerts", project=NAME) if agent else (None, "no token")
+        check("... and reads the project's alerts as itself (none yet)", alerts is not None and isinstance(alerts.get("issues"), list), (alerts, aerr))
         _, refused = agent.call("list_products") if agent else (None, "no token")
         check("... and a tool it wasn't given is refused, naming what it may use",
               refused is not None and "list_metrics" in refused and "query_metrics" in refused, refused)

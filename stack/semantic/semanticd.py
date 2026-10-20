@@ -26,6 +26,7 @@ from dataclasses import dataclass
 
 import boto3
 import jwt
+import requests
 import trino
 import yaml
 from botocore.exceptions import ClientError
@@ -52,6 +53,7 @@ ISSUER = env["KEYCLOAK_URL"].rstrip("/") + "/realms/" + env.get("KEYCLOAK_REALM"
 JWKS = env.get("KEYCLOAK_DIRECT_URL", env["KEYCLOAK_URL"]).rstrip("/") + "/realms/" + env.get("KEYCLOAK_REALM", "lakehouse") + "/protocol/openid-connect/certs"
 MCP_URL = env["MCP_URL"]  # this server's MCP endpoint, as agents see it: its tokens' audience
 PLATFORM_URL = env.get("PLATFORM_URL") or MCP_URL.removesuffix("/mcp")  # the platform's pages, for what an answer cites
+PLATFORMD_URL = env.get("PLATFORMD_URL", "http://platformd:8080")  # platformd itself, for what an agent reads of its project
 TRINO_AUDIENCE = env.get("TRINO_AUDIENCE", "lakehouse")
 STORE_BUCKET = env.get("STORE_BUCKET", "storscale-platform")
 MAX_ROWS = 1000
@@ -494,7 +496,7 @@ def agent_tools(client_id):
 
 
 ALL_TOOLS = ["list_projects", "list_metrics", "query_metrics", "explain_query", "list_terms", "describe_term", "search_terms",
-             "list_products", "describe_product", "query_product"]
+             "list_products", "describe_product", "query_product", "list_runs", "list_alerts"]
 
 
 def tool(fn):
@@ -593,6 +595,40 @@ def search_terms(question: str) -> dict:
     if not found:
         out["note"] = "No governed definition covers this question. Tell the person so, and which terms exist (list_terms), rather than guessing."
     return out
+
+
+def platform_read(c: Caller, path: str, params=None) -> dict:
+    """What platformd lets this caller read of a project, by the caller's own token."""
+    r = requests.get(f"{PLATFORMD_URL}/api/agent{path}", params=params, timeout=60, headers={"Authorization": f"Bearer {c.token}"})
+    if r.status_code in (401, 403, 404):
+        raise PermissionError((r.json().get("error") if r.headers.get("content-type", "").startswith("application/json") else r.text[:200]) or f"HTTP {r.status_code}")
+    if not r.ok:
+        raise ValueError(f"the platform couldn't answer: HTTP {r.status_code} {r.text[:200]}")
+    return r.json()
+
+
+@mcp.tool()
+@tool
+def list_runs(project: str, limit: int = 20) -> dict:
+    """A project's pipelines and their latest runs, newest first: what ran, when, and how it ended
+    (success, failed, running); and the repo's files Airflow couldn't load, if any. Read-only."""
+    c = mcp_caller()
+    if project not in projects_of(c):
+        raise PermissionError(f"you're not a member of {project}")
+    out = platform_read(c, f"/projects/{project}/runs", {"limit": max(1, min(int(limit), 200))})
+    return {**out, "link": f"{PLATFORM_URL}/projects/{project}/pipelines"}
+
+
+@mcp.tool()
+@tool
+def list_alerts(project: str) -> dict:
+    """A project's open alerts now: failed runs and checks, stale tables, products off their contracts,
+    LLM budgets near or at their limit. Each with a key, a kind, a title and a link. Read-only."""
+    c = mcp_caller()
+    if project not in projects_of(c):
+        raise PermissionError(f"you're not a member of {project}")
+    out = platform_read(c, f"/projects/{project}/alerts")
+    return {**out, "link": f"{PLATFORM_URL}/projects/{project}"}
 
 
 @mcp.tool()
