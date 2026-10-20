@@ -4,6 +4,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-10-20
+
+An agent reads its project's runs and alerts, the stateful pods placed by node, a bigger canvas whose settings pick from dropdowns, and fixes: a new source's catalog made on the pass that added it, a GitLab refusal that says why, and the shared Airflow's scheduler running on when a project's repo comes or goes.
+
+**Upgrading from 0.19.0:** `storscale upgrade --context <cluster> --version 0.19.1`, after a `--dry-run`. The Project CRD's `agents[].tools` gains `list_runs` and `list_alerts` (the upgrade applies it). A new setting, empty by default: `placement` (a node selector per stateful workload). The semanticd image (the agent's new tools) and the Airflow image (its settings file) are rebuilt. Nothing else to set.
+
 ### Added
 - **An agent reads its project's runs and alerts** (12.2): two read-only MCP tools, `list_runs` (the project's pipelines and their latest runs, newest first, with the repo's files Airflow couldn't load) and `list_alerts` (the project's open alerts: failed runs and checks, stale tables, products off their contracts, budgets), answered by platformd to the agent's own token (`/api/agent/projects/{name}/runs`, `/alerts`: a member's token, read-only). Given to an agent like the other tools; a nightly summary can now say what ran and what failed.
 - **Where the stateful pods run** (`placement`): a node selector per workload with a volume (`openmetadata-search`, `jupyterhub`, `postgres`, `ranger-db`, `ranger-solr`, `nessie`), for a cluster whose storage driver mounts a volume cleanly only on some nodes; an upgrade then keeps each where its volume mounts instead of letting the scheduler move it onto a node with a stale device. Empty by default: nothing changes for an install that doesn't set it.
