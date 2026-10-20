@@ -137,7 +137,14 @@ def run(bob, dag):
     def state():
         ps = (bob.get(f"{PLATFORM}/api/projects/{NAME}/pipelines", timeout=60).json() or {}).get("pipelines", [])
         return next((x["state"] for p in ps if p["id"] == dag for x in p.get("runs", []) if x["id"] == run_id and x["state"] in ("success", "failed")), None)
-    return run_id, wait(state, 600, every=10) or "still running"
+    final = wait(state, 600, every=10) or "still running"
+    if final != "success":   # its log, for the check's detail: Airflow's own words on what went wrong
+        r = bob.get(f"{PLATFORM}/api/projects/{NAME}/pipelines/{dag}/runs/{requests.utils.quote(run_id, safe='')}/log", timeout=60)
+        LOGS[run_id] = (r.json().get("log", "") if r.ok else f"no log: HTTP {r.status_code}")[-1200:]
+    return run_id, final
+
+
+LOGS = {}   # a failed run's log tail, by run
 
 
 def kept(user, dag, run_id):
@@ -194,7 +201,7 @@ def main():
         merge(work, "storscale/schedule-daily-check")
         run_id, state = run(bob, "notebook_daily_check")
         page = kept(alice, "notebook_daily_check", run_id) if run_id else ""
-        check("merged, the project's Airflow runs it as the project's pipelines", state == "success", state)
+        check("merged, the project's Airflow runs it as the project's pipelines", state == "success", (state, LOGS.get(run_id)))
         check("... and alice reads the run's notebook, its outputs in it", "42" in page and "runs as service-account-" in page, page[:300])
 
         # 4. A cell that fails.
@@ -227,7 +234,7 @@ def main():
                                    if e.get("action") == "agent.ran"), None), 60, every=5)
         check("... its run executes the notebook as the agent: it asks the MCP server as itself, with its tools only, and the run is its record",
               state == "success" and f"runs as service-account-agent-{NAME}-summariser" in page and "sees the project: True" in page and "runs: " in page and "refused:" in page and audit is not None,
-              (state, page[:600] if "runs as" not in page else [ln for ln in page.splitlines() if "runs as" in ln or "refused" in ln or "sees the" in ln][:4], audit))
+              (state, LOGS.get(run_id), page[:600] if "runs as" not in page else [ln for ln in page.splitlines() if "runs as" in ln or "refused" in ln or "sees the" in ln][:4], audit))
     finally:
         # The connection, through the platform (the test pod may delete only
         # Secrets of its own names): the repo's credentials taken from the
