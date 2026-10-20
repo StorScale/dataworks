@@ -72,10 +72,19 @@ func (c *Client) call(ctx context.Context, method, path string, in, out any) err
 	data, _ := io.ReadAll(io.LimitReader(res.Body, 8<<20))
 	if res.StatusCode/100 != 2 {
 		var e struct {
-			Message any `json:"message"`
+			Message     any    `json:"message"`           // most answers
+			Err         string `json:"error"`             // a token's scope: {"error": "insufficient_scope", ...}
+			Description string `json:"error_description"` //
 		}
 		json.Unmarshal(data, &e)
-		return &Error{Code: res.StatusCode, Message: fmt.Sprintf("gitlab: %s %s: HTTP %d %v", method, path, res.StatusCode, e.Message)} // never the token
+		why := fmt.Sprint(e.Message)
+		if e.Message == nil {
+			why = strings.TrimSpace(e.Err + " " + e.Description)
+		}
+		if res.StatusCode == http.StatusForbidden {
+			why += " (the connection's token needs GitLab's api scope, and its user the Developer role on the project)"
+		}
+		return &Error{Code: res.StatusCode, Message: fmt.Sprintf("gitlab: %s %s: HTTP %d %s", method, path, res.StatusCode, strings.TrimSpace(why))} // never the token
 	}
 	if out != nil {
 		return json.Unmarshal(data, out)
