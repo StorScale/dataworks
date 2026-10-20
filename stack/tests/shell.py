@@ -251,7 +251,7 @@ def run(browser, switch=True, start_run=True):
     press(page, "[data-testid=new-flow]")
     page.wait_for_selector("[data-testid=canvas]", timeout=60_000)
     page.select_option("[data-testid=add-step]", "input")
-    page.fill("[data-testid=input-table]", "orders")
+    page.select_option("[data-testid=input-table]", "orders")   # the project's tables, a dropdown
     page.wait_for_selector("[data-testid=step-columns]", timeout=60_000)
     input_cols = page.inner_text("[data-testid=step-columns]")
     page.select_option("[data-testid=add-step]", "filter")
