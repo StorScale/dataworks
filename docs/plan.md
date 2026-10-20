@@ -120,25 +120,25 @@ The examples already prove every mapping in this list by hand.
 | Flow (visual DAG) | A read-only Flow view drawn from OpenLineage and dbt lineage, with links into each job | MVP (view); an editable Flow is a later gap to build |
 | Code recipes (SQL, Python, PySpark) | Trino, Jupyter, Spark, and dbt models | MVP (Spark later) |
 | Join, group, window and pivot recipes | dbt models, or Trino SQL from a template | Phase 7 (dbt) |
-| Prepare recipe (point-and-click), visual Flow | A canvas of steps (as Domo's Magic ETL) that writes dbt models into the project's repo, reviewed like code | Phase 11 |
+| Prepare recipe (point-and-click), visual Flow | A canvas of steps (as Domo's Magic ETL) that writes dbt models into the project's repo, reviewed like code | Built (0.18.0, 0.19.x); a prepare step and an LLM step proposed |
 | Datasets and connections, Iceberg REST | Trino catalogs, Nessie's Iceberg REST endpoint | MVP |
 | Connectors that bring data in (databases, applications) | dlt imports and change capture from databases (Debezium), into the project's Iceberg tables; a gallery of one-click connectors (Salesforce, Gong, HighSpot, SAP) | Phase 8 (built: 8.1–8.3; the gallery, 8.4) |
 | Semantic Models, AI SQL, agent tools (MCP) | The semantic layer: MetricFlow models, an editor in the shell, and an MCP server that queries as the person or agent asking; a company-wide model (Customer, Revenue, Campaign, Booking) that projects build on | Phase 4; company-wide, phase 10 |
 | Data catalog, column lineage, search | OpenMetadata + OpenLineage, shown in the shell; a glossary from the semantic model, certified data products, a Collibra sync if Collibra is the catalog of record | MVP; glossary and products, phase 10 |
-| Data quality rules | Soda checks as Airflow tasks, results in the catalog | MVP |
+| Data quality rules | The project's checks (unique, notNull, rowCount), freshness targets, dbt tests, the semantic tests, the contracts' checks; Soda was never needed | Built; more check kinds proposed (the capability map, 2026-10-20) |
 | Scenarios, triggers, reporters | Airflow (data-aware scheduling); alerts on failures, failed checks and stale tables | MVP; the alerts in phase 6 |
 | Dashboards, charts | Superset; on the semantic layer's definitions, with Power BI beside it | MVP; on the semantic layer, phase 10 |
 | Audit trail | Ranger, Keycloak, Trino and Buckets audit logs sent to Loki, with one Audit page | Phase 6 |
 | Code environments, compute on Kubernetes | JupyterHub profiles, images built per project, quotas | MVP |
 | Project version control (git) | Each project's pipelines (and later its whole spec) in its own git repo, readable as code | Phase 7 (DAGs first) |
 | Bundles and Deployer (dev to prod) | Git CI plus a Nessie branch per change, checked, then merged; promotion between installs, with rollback | Phase 7 |
-| LLM Mesh (gateway, cost caps, guardrails) | LiteLLM in front of the models, with a budget per project, and every call audited | Phase 12 |
+| LLM Mesh (gateway, cost caps, guardrails) | LiteLLM in front of the models, with a budget per project and per agent, the guardrail, and every call audited | Built (0.19.x); Langfuse and knowledge banks proposed |
 | Agents, prompt studio, Knowledge Banks | The MCP server (phase 4), reaching the governed data products and company model (DevAssist among its clients), agent identity and audit, Langfuse, pgvector | Phase 10 (data products for agents), phase 12 (the rest) |
 | Govern (approvals, registry, standards) | Approvals and a registry for models and agents, in the project | Phase 12 (agents), phase 14 (models) |
 | Usage and cost per project | Trino, Spark and storage use attributed to projects, with budgets, in Grafana | Phase 13 |
-| AutoML, experiment tracking, model registry, drift | MLflow, FLAML, Evidently + Grafana | Phase 14 |
+| AutoML, experiment tracking, model registry, drift | MLflow, FLAML as a library, Evidently + Grafana; a model served as an API; no visual AutoML | Phase 15 (proposed split of 14) |
 | Webapps and Dataiku Apps | Simple data apps per project | Phase 14 |
-| Answers, Stories | Not planned yet | Not included |
+| Answers, Stories | Not planned | Not included; nor a plugin model, R, image and video processing, visual statistics, or third-party model monitoring (the capability map, 2026-10-20) |
 
 ## What buyers value (research, 2026-10-15)
 
@@ -159,6 +159,158 @@ A survey of Dataiku and the platforms it's compared with (Databricks, Snowflake,
   - **To watch:** consolidation. SAP is buying Dremio, Nessie's owner, and Fivetran has merged with dbt Labs and bought SQLMesh's maker. Keep an Iceberg REST alternative to Nessie in view (Apache Polaris, Lakekeeper).
 
 Sources: Dataiku's version 14 and 15 release notes (https://www.dataiku.com/product/product-updates/version-14) and its version control docs (https://doc.dataiku.com/dss/latest/collaboration/version-control.html); Forrester's Wave for data lakehouses, Q3 2026 (https://www.forrester.com/blogs/takeaways-from-the-forrester-wave-data-lakehouses-q3-2026/); Gartner on semantics and agents (https://gcom.pdo.aws.gartner.com/en/newsroom/press-releases/2026-05-11-gartner-says-lack-of-semantics-causes-inaccurate-artificial-intelligence-agents-and-wasted-spending); dbt Labs' 2026 report (https://www.getdbt.com/blog/new-dbt-labs-report-finds-ai-driven-acceleration-is-outpacing-trust-and-governance); Databricks' and Snowflake's CI/CD docs (https://docs.databricks.com/aws/en/dev-tools/ci-cd, https://docs.snowflake.com/developer-guide/builders/devops); Palantir's Foundry Branching (https://palantir.com/docs/foundry/foundry-branching/overview).
+
+## Dataiku's capability map, checked (2026-10-20)
+
+Dataiku's product, as its own material lays it out in ten areas, checked item by item against what's built and what the phases plan. Each item gets one of three answers: **built** (in a release, or on main), **planned** (the phase that has it), or **gap**, with how to fill it, and whether to. The check is a map, not a commitment: the additions it proposes are gathered at the end, with where they'd go, for a decision.
+
+### 1. Data access and preparation
+
+| Capability | Today | Roadmap | Gap, and how to fill it |
+|---|---|---|---|
+| Connect to existing data platforms | Built: databases queried where they are (8.3), copied by change capture (8.1), applications imported with dlt (8.2), Salesforce from a form (8.4), uploads (11.1) | Gong, HighSpot, SAP (8.4) | None |
+| Visual data preparation | Built: the canvas (11.1, 11.2), previewed on a sample, saved as dbt models | Spark for what Trino can't do in one query (R11.6) | None |
+| 100+ built-in transformations | Partial: 13 step kinds, and a formula step for the rest (any Trino expression) | — | **Gap.** Dataiku's hundred are mostly one-column processors (trim, case, split, parse a date, fill nulls, extract by regex, standardize, round, bucket, geocode). Fill: a *prepare* step on the canvas, a list of named processors on columns, each compiled to Trino SQL (the formula step's machinery), with the common forty first. A day or two. |
+| Cleansing, joins, filtering, enrichment, feature preparation | Built: join, union, filter, dedupe, group, pivot, window, formula; enrichment by join on uploads and products | — | The prepare step above covers cleansing; feature preparation is the window and formula steps, and notebooks |
+| Visual recipes plus Python, R, SQL, Spark | Built: canvas (visual), SQL (Trino, dbt), Python (notebooks, scheduled; code steps as dbt models) | Spark (R11.6; the Spark Operator is in the chart, unused) | **R: gap, and not to fill** unless a team asks: an R kernel in the notebook image is an afternoon (IRkernel), but nothing else of the platform speaks R. A Python step on the canvas (a model written in Python, run by Airflow) is the Spark step's cousin: place it with R11.6. |
+| Schema and data-type handling | Built: typed steps (the retype step, types from the catalog), schema changes followed by copies (R8.2) and imports | — | None |
+| Dataset profiling and exploration | Partial: previews and column types on the Data page, the sample catalog-sync reads for classification | — | **Gap.** Fill: OpenMetadata's own profiler (row counts, nulls, distinct, min, max, histograms) run by catalog-sync's round or the nightly maintenance, shown on the Data page per column, and feeding the checks (a column's null share, say). A day. |
+| Data quality rules and validation checks | Built: the project's checks (unique, notNull, rowCount), freshness targets, dbt tests, the semantic tests (12.3), the contracts' checks (10.3), checks before a delivery (9.1); failed checks are alerts | — | **Partial gap:** more kinds of check (accepted values, a range, a regex, a referential check, a custom SQL assertion). Fill: extend `tables.checks` with those five; a day. Soda, named in the MVP table, was never added: dbt tests and the project's checks took its place. Say so in the table. |
+| Dataset certification | Built: certified data products (10.3) | — | None |
+| Data lineage and transformation lineage | Built: OpenLineage from Airflow and dbt, column-level, in the catalog; the canvas's flows with their lineage | — | None |
+
+### 2. Analytics
+
+| Capability | Today | Roadmap | Gap, and how to fill it |
+|---|---|---|---|
+| Interactive statistics | Nothing visual; notebooks with pandas | — | **Gap; not to fill as a visual tool.** Fill the code path: scikit-learn, statsmodels and scipy in the notebook image (an hour), and a *Describe* card on the Data page from the profiler above. |
+| Charts and visualizations, dashboards | Built: Superset, on the semantic layer's definitions (10.2) | Power BI (R10.5) | None |
+| Reusable analytical workflows | Built: pipelines in git, flows on the canvas, dbt models, scheduled notebooks | Templates (U.2) | None |
+| Visual and code-based analysis | Built: Superset and the canvas; SQL and notebooks | — | None |
+| Time-series processing | Partial: MetricFlow's time dimensions and grains; Trino's date functions; the window step | — | Fill with the prepare step (resample, lag, rolling: window-step presets) and statsmodels in the image. Small. |
+| Geographic data | Nothing | — | **Gap.** Fill: Trino's geospatial functions are already there (ST_* on the canvas's formula step); geopandas in the notebook image; Superset's deck.gl map charts (a plugin to enable). A day. |
+| Graph analysis | Nothing | — | **Gap; code path only:** networkx in the image. An hour. A graph database isn't the platform's. |
+| Text and NLP | Nothing | 12.4's assistant, 12's agents | **Gap.** Fill: an *LLM step* on the canvas (classify, extract, summarize a column through the gateway, on the project's key and budget, under the guardrail) covers what most teams mean by NLP today; spaCy in the image for the rest. The step, two days. |
+| Image, audio, video processing | Nothing | — | **Gap; not to fill.** The lakehouse holds the files (buckets); processing them is notebook code, or the LLM step on a model that reads images. Say so. |
+| Semantic models | Built: MetricFlow per project and company-wide (4, 10.1), the MCP server, terms | The Open Semantic Interchange (12) | None |
+
+### 3. Machine learning and AutoML
+
+| Capability | Today | Roadmap | Gap, and how to fill it |
+|---|---|---|---|
+| Visual AutoML | Nothing | — | **Gap; a decision.** Dataiku's visual ML workbench is years of work. Fill the code path instead: FLAML or AutoGluon in the notebook image, with a notebook template that trains, evaluates and logs to MLflow (14.2). If a team later wants it visual, a *train* step on the canvas over FLAML is the shape. |
+| Code-first ML | Partial: notebooks with pandas and pyarrow; no ML libraries in the image | MLflow (14.2) | Fill: scikit-learn, lightgbm, xgboost, FLAML, mlflow in the image. An hour. |
+| Prediction, classification, regression, clustering, time-series forecasting, causal ML, computer vision | Nothing | 14.2 | All code-path on the libraries above (causal: dowhy or econml; vision: torch, optional, large); none as visual recipes |
+| Model comparison and evaluation, feature engineering, hyperparameter optimisation, explainability | Nothing | 14.2 (MLflow) | MLflow's experiments compare runs; FLAML tunes; shap explains. Libraries and a notebook template; no UI of the platform's beyond MLflow's. |
+| Templates for common modelling use cases | Nothing | U.2 (project templates) | Fill: notebook templates in the template repo (churn, forecast, propensity), with U.2. |
+
+### 4. Generative AI
+
+| Capability | Today | Roadmap | Gap, and how to fill it |
+|---|---|---|---|
+| LLM Mesh: provider abstraction, routing | Built: LiteLLM in front of the models (12.1), a model list per install; LiteLLM routes, falls back and load-balances by its own settings | — | None in the software; the install's model list decides. Expose LiteLLM's fallbacks and routing in the chart's values when a second provider arrives. |
+| Quotas and usage controls | Built: budgets per project and per agent, keys, spend shown, alerts at 80% and at the budget | Per-person spend (12.1) | None |
+| LLM monitoring | Partial: spend by key; refusals in the gateway's log | Langfuse (12) | **Gap.** Fill: Langfuse in the chart (traces, latency, tokens, cost per project and agent, prompts, scores), fed by LiteLLM's callback; its sign-in through Keycloak. Two days. |
+| Cost and risk controls | Built: budgets, the guardrail, approvals of agents | — | None |
+| Prompt engineering (prompt studio) | Nothing | — | **Gap.** Fill: Langfuse's prompt management (versions, labels, playground) is the studio; the platform's `buckets_lake.ask()` fetches a prompt by name. With Langfuse above. |
+| RAG, semantic search, knowledge-base integration | Nothing | pgvector (named in the stack, no phase) | **Gap.** Fill as 12.6, *knowledge banks*: a project declares document sources (a bucket prefix, a product's text column); the platform embeds them through the gateway into pgvector in its Postgres, under the project's access; a `search_documents` MCP tool and a `knowledge` step on the canvas; the assistant and agents cite the passages. Three to four days. |
+| Text analysis and enrichment | Nothing | — | The LLM step (area 2) |
+| Custom Q&A and chatbot applications | Nothing | 12.4's SQL assistant; 14.1's data apps | Fill: a Q&A app as a kind of data app (14.1) over the knowledge bank and the semantic layer, as the person. With 14.1. |
+| PII detection | Built: classification in the catalog (12.5), the guardrail (12.1) | — | None |
+| Toxicity detection | Nothing | — | **Gap.** Fill: a second guardrail, a moderation model through the gateway itself (LiteLLM's `during_call` hook, the provider's moderation endpoint or a small classifier), on by a chart value. A day, once a provider is there. |
+| Forbidden-term controls | Nothing | — | **Gap, small.** Fill: `llm.guardrails.terms`, the install's list of words and patterns the guardrail refuses (a codename, a client's name). An hour. |
+| AI-assisted data preparation and SQL generation | Nothing | 12.4 (an assistant in the SQL page and for pipeline code) | Planned; add the canvas: "describe the step" fills a formula or filter. With 12.4. |
+
+### 5. AI agents
+
+| Capability | Today | Roadmap | Gap, and how to fill it |
+|---|---|---|---|
+| Visual agents | Nothing: an agent is a registration and a notebook | — | **Gap.** Fill as 12.7, *agents without a notebook*: a registered agent carries a prompt, its tools and a schedule, and the platform's runner (semanticd's loop over the gateway and the MCP server, as the agent) runs it; the Agents tab's form is the whole of it. Two days. |
+| Code agents | Built: a notebook in the repo, run on a schedule as the agent (12.2) | — | None |
+| Multi-step agent workflows | Partial: a notebook may loop over tools | — | The runner above is a multi-step loop; a pipeline may chain agents as tasks (Airflow). |
+| Agent tools and API integration | Built: the MCP server's tools (metrics, terms, products, runs, alerts), granted per agent | — | **Partial gap:** a project's own tools (a REST API of the company's, with a connection's credentials). Fill: `spec.agents[].tools` may name a *connector tool* defined in the project (an OpenAPI operation and the connection to sign in with), served by the MCP server as the agent. Two days. |
+| Agent Hub | Partial: the Agents tab per project | — | Fill: a platform-wide Agents page (every project's, their owners, approval, spend, last run), an afternoon, with the governance page in area 8. |
+| Multi-agent orchestration | Nothing | — | Fill with 12.7: an approved agent is itself a tool another agent may be given (`agent:<project>/<name>`), audited as both. A day on top of the runner. |
+| Centralized lifecycle management | Built: register, approve by another editor, change (approval again), revoke at once; the client and keys made and removed by the operator | — | None |
+| Agent monitoring | Built: runs and their notebooks, alerts, spend, the audit log naming the agent | Langfuse traces | None beyond Langfuse |
+| Cost, performance and risk tracking | Built: cost (budgets); risk: the guardrail, read-only tools, approval | Performance (Langfuse: latency, tokens, scores) | With Langfuse |
+| Coordination of agents, models, data, business logic and human decisions | Built in part: agents under the project's rules and semantic layer, approvals by people | — | None to add as a feature; this is what the project is for |
+| Cobuild (a natural-language interface to build things) | Nothing | 12.4 | **Gap; later.** 12.4's assistant, given the platform's own API as tools (make a flow, a check, a delivery), is Cobuild's shape. After 12.4. |
+
+### 6. MLOps
+
+| Capability | Today | Roadmap | Gap, and how to fill it |
+|---|---|---|---|
+| Model registry, versioning | Nothing | 14.2 (MLflow per project, a registry with approval) | Planned |
+| Model deployment: batch scoring | Nothing | 14.2 (a pipeline) | Planned |
+| Real-time / API deployment | Nothing | — | **Gap.** Fill: a registered, approved model served as an API in the project's namespace (MLflow's own serving image, behind the gateway, signed in through Keycloak, under the project's limits), with the audit naming the caller. Three days. |
+| Deployment automation, dev/test/prod lifecycle | Built for projects: plan and apply with a target per install (7.4), data branches (7.3) | Models follow: a model's version in the project's spec, promoted by apply | With 14.2 |
+| Approval workflows | Built for agents, deliveries, products, project applies | 14.2 for models | Planned |
+| Model lineage | Nothing | R14.2: runs tied to the data's commit | Planned; add the model's inputs (tables, at their snapshots) to the catalog's lineage, so a model is a node like a table. With 14.2. |
+| Model performance monitoring, drift | Nothing | R14.4 (Evidently, Grafana) | Planned |
+| Regulatory / model documentation | Nothing | — | **Gap.** Fill: a model card per registered model (purpose, data, metrics, owner, approvals, limits), kept with the registry and shown with the product-like page; a day with 14.2. |
+| Monitoring of models on third-party ML platforms | Nothing | — | Not to fill. |
+
+### 7. Pipeline and workflow automation
+
+| Capability | Today | Roadmap | Gap, and how to fill it |
+|---|---|---|---|
+| Automated scenarios, scheduled execution, dataset refresh | Built: Airflow per project, schedules, data-aware runs; imports and copies on schedules | — | None |
+| Data-quality checks, metrics and checks | Built (area 1) | — | The extra check kinds (area 1) |
+| Alerting | Built: the project's alerts page and the administrators' (6.4, 6.7) | — | None |
+| Microsoft Teams and Slack notifications | Nothing: alerts are shown, not sent | R6.19 (6.7) | **Gap, overdue.** Fill: `notifications` per project (a Teams or Slack incoming webhook, an email address) and per install, sent by platformd when an alert opens and closes, muted for a while on request (R6.21). A day. |
+| Production bundles | Built: projects as code, plan then apply, a target per install (7.4) | — | None |
+| API deployment | Nothing | — | The model API above (area 6); data apps (14.1) |
+| Workflow orchestration | Built: Airflow | — | None |
+
+### 8. Governance
+
+| Capability | Today | Roadmap | Gap, and how to fill it |
+|---|---|---|---|
+| AI governance | Built: agents' identity, approval, tools, budgets, audit; the guardrail; assistants registered | — | None |
+| Model governance, model registry | Nothing | 14.2 | Planned |
+| Data lineage | Built | — | None |
+| Model lineage | Nothing | 14.2 | Planned (area 6) |
+| Approval workflows | Built: agents, deliveries, products' access, project applies; access requests (R6.4) | — | None |
+| Documentation | Built: terms with owners and definitions, products' contracts, a project's description | Model cards (area 6) | None beyond model cards |
+| Dataset certification | Built (10.3) | — | None |
+| Risk oversight | Partial: alerts per project; the audit page | — | **Gap.** Fill: a *Governance* page for the administrators and the governance group: everything awaiting approval across projects (agents, deliveries, products, applies), the policies in force (masks by tag, who's excepted), the agents and their spend, the models and their state, the erasures due, in one place. Two days; it reads what exists. |
+| Monitoring | Built | — | None |
+| Governance across agents, models, analytics and pipelines | Built for agents, data and pipelines; models with 14.2 | — | The Governance page is where it shows |
+
+### 9. Collaboration and application development
+
+| Capability | Today | Roadmap | Gap, and how to fill it |
+|---|---|---|---|
+| Collaborative projects | Built | — | None |
+| Dashboards | Built (Superset) | — | None |
+| Workspaces (a business user's portal of dashboards and apps) | Partial: Home shows the person's projects | — | Fill with 14.1: a project's *Home for readers* lists its dashboards, products, apps and metrics, as the person. Small. |
+| Stories | Nothing | Not included | Not to fill. |
+| Dataiku Applications, web apps, business applications | Nothing | 14.1 (data apps) | Planned |
+| Code notebooks | Built | — | None |
+| Code Studios (an IDE in the browser) | Nothing | — | **Gap, small.** Fill: code-server (VS Code) as a JupyterHub profile beside JupyterLab, the project's repo cloned into it, signed in as the person. Half a day. |
+| APIs: REST | Built: platformd's API, used by the web app and the suites; documented in the guide's labs as used | — | **Gap: no reference.** Fill: an OpenAPI document generated from platformd's routes, served at `/api/openapi.json` and as a page. A day. |
+| Python API | Partial: `buckets_lake` in notebooks (S3, the MCP client, the gateway) | — | Fill: a `storscale` Python package (the platform's API as methods, signed in as the person or a service account; `buckets_lake` folded in), published with the release. Two days. |
+| R API | Nothing | — | Not to fill (area 1). |
+| Plugins and extensions | Nothing | 8.4's connectors are the platform's own | **Decision:** no plugin model. The extension points are the ones the platform already has: a project's repo (pipelines, dbt, notebooks), connectors kept by the platform, the MCP tools, the data apps. Say so. |
+
+### 10. Enterprise deployment
+
+Covered by phases 5 and 6, and by running on the company's cluster: the Helm chart, an upgrade command with its CRD and rollback, Keycloak brokering the company's identity, Ranger's policies everywhere, the audit log, backups and restore, high availability, network policies and Pod Security, limits per project, images scanned with SBOMs, a private CA. Left from 6: Buckets' encryption at rest (R6.18), disaster recovery to a second site (to decide).
+
+### What the check changes (proposed, 2026-10-20)
+
+Where the map found gaps worth filling, placed; the rest are decisions not to build (visual AutoML and statistics, image and video processing, R, Stories, a plugin model, third-party model monitoring), which the Matching Dataiku table now says.
+
+- **Into phase 6 (overdue):** notifications to Teams, Slack and email per project and per install (R6.19, R6.21): a day.
+- **Into phase 1 and 3 (the foundation, small):** profiling in the catalog with OpenMetadata's profiler, shown on the Data page (a day); five more check kinds (accepted values, range, regex, referential, SQL assertion; a day); the notebook image with the analysis and ML libraries (scikit-learn, statsmodels, scipy, lightgbm, xgboost, FLAML, mlflow, geopandas, networkx; an hour) and a code-server profile (half a day); Superset's map charts (an hour).
+- **Into phase 11:** a prepare step (named processors on columns, the common forty; two days) and an LLM step (classify, extract, summarize through the gateway; two days); a Python step with R11.6's Spark step.
+- **Into phase 12, as new use cases:** 12.6 knowledge banks (pgvector, embeddings through the gateway, `search_documents`, a canvas step; four days); 12.7 agents without a notebook, and agents as tools of agents (three days); 12.8 Langfuse (traces, prompts, scores, its sign-in through Keycloak; two days); the guardrail's forbidden terms (an hour) and a moderation guardrail (a day, with a provider); a project's own connector tools for agents (two days); a platform-wide Agents page (an afternoon).
+- **Into phase 8 (governance):** a Governance page across projects (two days).
+- **Phase 14, split in two:** 14 stays data apps, with a readers' Home per project and a Q&A app over the knowledge bank; **a new phase 15, ML and MLOps**, takes 14.2 and grows: MLflow per project, the registry with approval, batch scoring, drift, a model served as an API, model cards, models in the catalog's lineage. Three weeks.
+- **Cross-cutting, with the first teams:** the OpenAPI reference (a day) and the `storscale` Python package (two days); Cobuild's shape after 12.4.
+
+In all, some six weeks of additions, none of them a new system except Langfuse and pgvector (both in the stack's table since the start). What they'd give that Dataiku's map asks for and the roadmap didn't: text in the lakehouse (knowledge banks, the LLM step), agents a business user can set up, a model in production as an API, and the operators' view across projects.
 
 ## Phases
 
