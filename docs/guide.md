@@ -91,13 +91,13 @@ What a tag means is set once per install: `personal` is hashed, `financial` mask
 
 **Value:** an analyst builds a transformation from steps, sees each step's result on a sample before anything runs, and what she builds is code (dbt models) that engineers review and release like any other change. No parallel world of visual pipelines nobody can version.
 
-As **alice** (an editor of `retail`), open **Flows**, type `weekly_revenue` and press **New flow**.
+As **alice** (an editor of `retail`), open **Flows**, type `weekly_revenue` and press **New flow**. The canvas fills the window; every column, table, step and metric a step needs is picked from a dropdown, so what you can choose is what exists.
 
-1. **Add a step → Input**, table `uploads_orders`. The node shows 8 columns: the canvas asked the catalog.
+1. **Add a step → Input**, pick the table `uploads_orders` from the dropdown (the project's tables, and the products it reads). The node shows 8 columns: the canvas asked the catalog.
 2. With it selected, **Add a step → Filter**, condition `not test and not refunded`. Its node shows the same columns; press **Preview** to see the rows, read on a sample as alice (so EU rows only, under her rule).
-3. **Add a step → Input**, table `uploads_customers`; then select the filter node and **Add a step → Join**: inputs `filter, input_2`, kind `left`, on `customer_id` = `customer_id`. The node shows the joined columns; a clashing column from the right gets `_right`.
+3. **Add a step → Input**, table `uploads_customers`; then select the filter node and **Add a step → Join**: inputs `filter` (left) and `input_2` (right) from the dropdowns, kind `left`, on `customer_id` = `customer_id`. The node shows the joined columns; a clashing column from the right gets `_right`.
 4. **Add a step → Formula**: column `week`, expression `date_trunc('week', ordered_on)`, type `date`.
-5. **Add a step → Group by**: by `region, week, segment`; aggregates `sum amount as revenue`, `count as orders`, `count_distinct customer_id as customers`.
+5. **Add a step → Group by**: add the columns `region`, `week` and `segment` (a dropdown each); aggregates `sum amount as revenue`, `count as orders`, `count_distinct customer_id as customers`.
 6. **Add a step → Output**, table `weekly_revenue`, with two checks: `region` not null, `week` not null.
 7. Press **Preview** on the output: the weekly revenue by region and segment, from a sample. Press **SQL** to read the model the platform wrote for it.
 
