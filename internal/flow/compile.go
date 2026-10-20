@@ -600,6 +600,9 @@ func compileStep(s *Step, inputs [][]Column, env Env, r refs) ([]Column, string,
 		}
 		return out, "select " + strings.Join(parts, ", ") + "\nfrom " + from(0), nil
 
+	case Prepare:
+		return compilePrepare(s, in, from(0))
+
 	case Formula:
 		if len(s.Columns) == 0 {
 			return nil, "", fmt.Errorf("a formula step computes at least one column")

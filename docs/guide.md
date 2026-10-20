@@ -96,10 +96,11 @@ As **alice** (an editor of `retail`), open **Flows**, type `weekly_revenue` and 
 1. **Add a step → Input**, pick the table `uploads_orders` from the dropdown (the project's tables, and the products it reads). The node shows 8 columns: the canvas asked the catalog.
 2. With it selected, **Add a step → Filter**, condition `not test and not refunded`. Its node shows the same columns; press **Preview** to see the rows, read on a sample as alice (so EU rows only, under her rule).
 3. **Add a step → Input**, table `uploads_customers`; then select the filter node and **Add a step → Join**: inputs `filter` (left) and `input_2` (right) from the dropdowns, kind `left`, on `customer_id` = `customer_id`. The node shows the joined columns; a clashing column from the right gets `_right`.
-4. **Add a step → Formula**: column `week`, expression `date_trunc('week', ordered_on)`, type `date`.
-5. **Add a step → Group by**: add the columns `region`, `week` and `segment` (a dropdown each); aggregates `sum amount as revenue`, `count as orders`, `count_distinct customer_id as customers`.
-6. **Add a step → Output**, table `weekly_revenue`, with two checks: `region` not null, `week` not null.
-7. Press **Preview** on the output: the weekly revenue by region and segment, from a sample. Press **SQL** to read the model the platform wrote for it.
+4. **Add a step → Prepare**: three processors on `region`, in order: **Trim spaces**, **Upper case**, and **Standardize values** with `EUROPE=EU, USA=US`; then **Length** on `region` as `region_len`. A processor changes its column, or makes a new one when "as" is set; the node's columns show `region_len bigint`. Each argument is a value, never SQL: what a processor can't say is the next step's.
+5. **Add a step → Formula**: column `week`, expression `date_trunc('week', ordered_on)`, type `date`.
+6. **Add a step → Group by**: add the columns `region`, `week` and `segment` (a dropdown each); aggregates `sum amount as revenue`, `count as orders`, `count_distinct customer_id as customers`.
+7. **Add a step → Output**, table `weekly_revenue`, with two checks: `region` not null, `week` not null.
+8. Press **Preview** on the output: the weekly revenue by region and segment, from a sample. Press **SQL** to read the model the platform wrote for it.
 
 Try breaking it: change the join to `customer_id` = `email`. The canvas refuses before anything runs: "their types differ; retype one first". Put it back.
 

@@ -32,12 +32,13 @@ const (
 	Unpivot = "unpivot"
 	Window  = "window"
 	Formula = "formula"
+	Prepare = "prepare" // named processors on columns (R11.7; prepare.go)
 	Output  = "output"
 	Metric  = "metric" // a metric query on the semantic layer's definitions (11.2's step 3)
 	Code    = "code"   // a model written or changed by hand (11.2)
 )
 
-var Kinds = []string{Input, Select, Retype, Filter, Join, Union, Dedupe, Group, Pivot, Unpivot, Window, Formula, Output, Metric, Code}
+var Kinds = []string{Input, Select, Retype, Filter, Join, Union, Dedupe, Group, Pivot, Unpivot, Window, Formula, Prepare, Output, Metric, Code}
 
 // A Column is one of a step's result, with its Trino type ("" when the
 // platform can't tell: a formula without a type, a code step not yet run).
@@ -127,6 +128,8 @@ type Step struct {
 	Name    string   `json:"name,omitempty" yaml:"name,omitempty"`
 	// window
 	Windows []WindowFunction `json:"windows,omitempty" yaml:"windows,omitempty"`
+	// prepare: processors on columns, in order
+	Processors []Processor `json:"processors,omitempty" yaml:"processors,omitempty"`
 	// output: the table it makes (Table), and its checks
 	Checks []Check `json:"checks,omitempty" yaml:"checks,omitempty"`
 	// metric: a metric query (its metrics, grouped by By, filtered by Where),

@@ -361,6 +361,8 @@ export function atCommit(sql: string, tables: string[], commit: string): string 
 
 export type StepColumn = { name: string; type?: string };
 export type FlowColumnSetting = { name: string; as?: string; type?: string; expression?: string };
+export type FlowProcessor = { column: string; do: string; args?: string[]; as?: string };
+export type FlowProcessorDef = { name: string; label: string; group: string; args: { name: string; kind: string; optional?: boolean }[]; type?: string };
 export type FlowStep = {
   id: string; kind: string; description?: string; inputs?: string[];
   table?: string; catalog?: string; namespace?: string;
@@ -371,6 +373,7 @@ export type FlowStep = {
   column?: string; values?: string[]; value?: string; function?: string;
   unpivot?: string[]; name?: string;
   windows?: { function: string; column?: string; as: string; offset?: number }[];
+  processors?: FlowProcessor[];
   checks?: { column: string; test: string; values?: string[] }[];
   metrics?: string[]; sql?: string; x: number; y: number;
 };
@@ -379,6 +382,7 @@ export type FlowStepResult = { model: string; columns: StepColumn[] | null; sql:
 export type FlowView = {
   flow: CanvasFlow; order: string[]; steps: Record<string, FlowStepResult>; errors: string[];
   branch?: string; mergeRequest?: string; dbtPath?: string;
+  processors?: FlowProcessorDef[]; // what a prepare step offers
 };
 export type FlowItem = { name: string; branch?: string; mergeRequest?: string };
 export type FlowPreview = SQLAnswer & { sql: string; types?: string[]; sampled?: string[] };
