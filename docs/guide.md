@@ -251,10 +251,12 @@ Sign in when the browser opens, as **alice**. Then ask, in Claude Code: *"What w
    import buckets_lake
    a = buckets_lake.agent()                                   # the MCP server, as the agent
    revenue = a.call("query_metrics", project="retail", metrics=["revenue"], group_by=["order__region"])
-   print(buckets_lake.ask(f"Two sentences for the team's chat on yesterday's revenue by region: {revenue}"))
+   night = a.call("list_runs", project="retail", limit=10)          # what ran overnight, and how it ended
+   alerts = a.call("list_alerts", project="retail")                 # failed checks, stale tables, budgets
+   print(buckets_lake.ask(f"Two sentences for the team's chat: revenue by region {revenue}; runs {night['runs']}; alerts {alerts['issues']}"))
    ```
 
-   Register the agent again with the same tools, a **schedule** of `0 6 * * *` and the **notebook** `notebooks/nightly_summary.ipynb`, and have alice approve it. Within a minute or two the Agents tab names its pipeline, `agent_retail_nightly_summary`, on the Pipelines tab: run it now. The run checks the repo out and executes the notebook as the agent: `buckets_lake.username()` says `service-account-agent-retail-nightly-summary`, the audit names it, a tool it wasn't given raises in the notebook naming what it may use, and `ask()` spends against the agent's own budget (Lab 21). The executed notebook, outputs and all, is linked from the run, and the Audit tab has `agent.ran`.
+   Register the agent again with the tools `query_metrics`, `list_runs` and `list_alerts` (the last two are read-only views of the Pipelines tab and the project's alerts, for an agent that reports), a **schedule** of `0 6 * * *` and the **notebook** `notebooks/nightly_summary.ipynb`, and have alice approve it. Within a minute or two the Agents tab names its pipeline, `agent_retail_nightly_summary`, on the Pipelines tab: run it now. The run checks the repo out and executes the notebook as the agent: `buckets_lake.username()` says `service-account-agent-retail-nightly-summary`, the audit names it, a tool it wasn't given raises in the notebook naming what it may use, and `ask()` spends against the agent's own budget (Lab 21). The executed notebook, outputs and all, is linked from the run, and the Audit tab has `agent.ran`.
 
 **Check:** on the Audit tab, `agent.registered`, `agent.approved`, `agent.ran` and `agent.revoked`, each with who did it; the agent's run notebook shows the agent's own name as who ran it.
 

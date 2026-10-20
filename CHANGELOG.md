@@ -5,6 +5,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 ## [Unreleased]
 
 ### Added
+- **An agent reads its project's runs and alerts** (12.2): two read-only MCP tools, `list_runs` (the project's pipelines and their latest runs, newest first, with the repo's files Airflow couldn't load) and `list_alerts` (the project's open alerts: failed runs and checks, stale tables, products off their contracts, budgets), answered by platformd to the agent's own token (`/api/agent/projects/{name}/runs`, `/alerts`: a member's token, read-only). Given to an agent like the other tools; a nightly summary can now say what ran and what failed.
 - **Where the stateful pods run** (`placement`): a node selector per workload with a volume (`openmetadata-search`, `jupyterhub`, `postgres`, `ranger-db`, `ranger-solr`, `nessie`), for a cluster whose storage driver mounts a volume cleanly only on some nodes; an upgrade then keeps each where its volume mounts instead of letting the scheduler move it onto a node with a stale device. Empty by default: nothing changes for an install that doesn't set it.
 
 ### Fixed

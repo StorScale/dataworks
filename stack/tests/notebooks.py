@@ -212,10 +212,10 @@ def main():
         wait(lambda: (alice.get(f"{PLATFORM}/api/projects/{NAME}/agents", timeout=30).json() or {}).get("canEdit") or None, 300, every=10)
         pg.push(work, {"dags/notebooks/summariser.ipynb": json.dumps(notebook(
             "import buckets_lake\nprint('runs as', buckets_lake.username())",
-            "import json\na = buckets_lake.agent()\nprint('tools', a.tools())\nprint('sees the project:', '" + NAME + "' in json.dumps(a.call('list_projects')))",
+            "import json\na = buckets_lake.agent()\nprint('tools', a.tools())\nprint('sees the project:', '" + NAME + "' in json.dumps(a.call('list_projects')))\nprint('runs:', len(a.call('list_runs', project='" + NAME + "')['runs']))",
             "try:\n    a.call('list_metrics', project='" + NAME + "')\nexcept PermissionError as e:\n    print('refused:', e)"))}, "the agent's notebook")
         reg = bob.put(f"{PLATFORM}/api/projects/{NAME}/agents/summariser", headers=H, timeout=30,
-                      json={"description": "sums the day for the team", "tools": ["list_projects"], "schedule": "0 6 * * *", "notebook": "notebooks/summariser.ipynb"})
+                      json={"description": "sums the day for the team", "tools": ["list_projects", "list_runs"], "schedule": "0 6 * * *", "notebook": "notebooks/summariser.ipynb"})
         ap = alice.post(f"{PLATFORM}/api/projects/{NAME}/agents/summariser/approve", headers=H, timeout=30)
         listed = (bob.get(f"{PLATFORM}/api/projects/{NAME}/agents", timeout=30).json() or {}).get("agents", [])
         mine = next((x for x in listed if x["name"] == "summariser"), {})
@@ -226,7 +226,7 @@ def main():
         audit = wait(lambda: next((e for e in (bob.get(f"{PLATFORM}/api/projects/{NAME}/audit", timeout=30).json() or {}).get("events", [])
                                    if e.get("action") == "agent.ran"), None), 60, every=5)
         check("... its run executes the notebook as the agent: it asks the MCP server as itself, with its tools only, and the run is its record",
-              state == "success" and f"runs as service-account-agent-{NAME}-summariser" in page and "sees the project: True" in page and "refused:" in page and audit is not None,
+              state == "success" and f"runs as service-account-agent-{NAME}-summariser" in page and "sees the project: True" in page and "runs: " in page and "refused:" in page and audit is not None,
               (state, page[:600] if "runs as" not in page else [ln for ln in page.splitlines() if "runs as" in ln or "refused" in ln or "sees the" in ln][:4], audit))
     finally:
         # The connection, through the platform (the test pod may delete only
