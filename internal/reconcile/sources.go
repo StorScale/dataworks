@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf16"
 
 	"github.com/StorScale/storscale-platform/internal/project"
@@ -37,6 +38,11 @@ type TrinoSources struct {
 	Trino *trino.Client
 	Files SourceFiles
 	Dir   string // where Trino reads the files: /etc/trino/sources
+	// FileWait is how long a pass waits for Trino to see a connection file
+	// just written (a Secret mounted into its pods appears after the
+	// kubelet's sync period, about a minute) before leaving the catalog to
+	// the next pass; 0: no wait.
+	FileWait time.Duration
 }
 
 // SourceFiles hold the sources' connections, a file each, and what the
@@ -207,7 +213,7 @@ func (s *TrinoSources) sync(ctx context.Context, proj string, want map[string]so
 				continue
 			}
 		}
-		if _, err := s.Trino.Exec(ctx, s.createCatalog(cat, c, h)); err != nil {
+		if err := s.create(ctx, cat, c, h); err != nil {
 			errs = append(errs, fmt.Errorf("source catalog %s: %w (Trino may not see its connection yet: the next pass tries again)", cat, err))
 			continue
 		}
@@ -219,6 +225,36 @@ func (s *TrinoSources) sync(ctx context.Context, proj string, want map[string]so
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// create makes a catalog, waiting (up to FileWait) while Trino can't see
+// the connection file yet: the file was just written, and reaches Trino's
+// pods a little later.
+func (s *TrinoSources) create(ctx context.Context, cat string, c sourceConn, hash string) error {
+	start := time.Now()
+	every := min(max(s.FileWait/10, 200*time.Millisecond), 5*time.Second)
+	for {
+		_, err := s.Trino.Exec(ctx, s.createCatalog(cat, c, hash))
+		if err == nil {
+			return nil
+		}
+		if !fileNotSeen(err) || time.Since(start)+every > s.FileWait {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(every):
+		}
+	}
+}
+
+// fileNotSeen says whether Trino refused a catalog for want of its
+// connection file: "Invalid configuration property connection-credential-file:
+// file does not exist", the file not yet in its pods.
+func fileNotSeen(err error) bool {
+	m := err.Error()
+	return strings.Contains(m, "connection-credential-file") && strings.Contains(m, "does not exist") || strings.Contains(m, "no such file")
 }
 
 // createCatalog is the statement making a catalog: its URL, and its user

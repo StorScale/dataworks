@@ -182,7 +182,12 @@ func main() {
 		} else {
 			files = &reconcile.DirFiles{Dir: env("SOURCES_PATH", "/sources")}
 		}
-		r.Sources = &reconcile.TrinoSources{Trino: tc, Files: files, Dir: env("TRINO_SOURCES_DIR", "/etc/trino/sources")}
+		// A connection file in a Secret reaches Trino's pods after the kubelet's sync period: a new catalog waits for it.
+		wait := 10 * time.Second
+		if _, inSecret := files.(*reconcile.SecretFiles); inSecret {
+			wait = 2 * time.Minute
+		}
+		r.Sources = &reconcile.TrinoSources{Trino: tc, Files: files, Dir: env("TRINO_SOURCES_DIR", "/etc/trino/sources"), FileWait: wait}
 		// Projects' merge requests' data branches, their catalogs made as the same account.
 		r.Reviewer = &reconcile.Reviewer{Trino: tc, Nessie: r.Nessie}
 	}
