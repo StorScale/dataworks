@@ -14,6 +14,7 @@ spec:
       labels: {{- include "storscale.selector" (list .Release.Name "ranger-db") | nindent 8 }}
     spec:
       enableServiceLinks: false
+      {{- include "storscale.placement" (list . "ranger-db") | nindent 6 }}
       securityContext: {fsGroup: 999}   # postgres': its data (999's already) stays its own
       containers:
         - name: postgres
@@ -68,6 +69,7 @@ spec:
       labels: {{- include "storscale.selector" (list .Release.Name "ranger-solr") | nindent 8 }}
     spec:
       enableServiceLinks: false
+      {{- include "storscale.placement" (list . "ranger-solr") | nindent 6 }}
       securityContext: {fsGroup: 8983}   # Solr's user: its volume is its own
       containers:
         - name: solr

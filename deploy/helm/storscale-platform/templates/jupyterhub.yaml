@@ -62,6 +62,7 @@ spec:
         checksum/config: {{ include "storscale.filesConfigMap" (list . "jupyterhub" "jupyterhub") | sha256sum }}
     spec:
       enableServiceLinks: false
+      {{- include "storscale.placement" (list . "jupyterhub") | nindent 6 }}
       serviceAccountName: jupyterhub
       securityContext: {fsGroup: 65532}   # the hub's: its database and cookie secret
       initContainers:

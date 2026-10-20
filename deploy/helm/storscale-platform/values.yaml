@@ -128,6 +128,18 @@ storage:
   jupyterhub: 1Gi
   opensearch: 4Gi
 
+# Where the stateful pods run (their volumes follow them): a node selector
+# per workload, by name, for a cluster whose storage driver mounts a volume
+# cleanly only on some nodes (a stale device elsewhere stops the pod, every
+# upgrade). Empty: the scheduler's choice.
+placement:
+  openmetadata-search: {}   # e.g. {kubernetes.io/hostname: node-5}
+  jupyterhub: {}
+  postgres: {}
+  ranger-db: {}
+  ranger-solr: {}
+  nessie: {}
+
 # Projects' pipelines repos (their Airflow DAGs, from git). Each project with
 # a repo gets an Airflow of its own, at the platform's /airflow/<project>/.
 pipelines:
