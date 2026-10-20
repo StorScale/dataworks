@@ -469,6 +469,11 @@ func TestReviews(t *testing.T) {
 	if err := withPipelines(t, ok); err != nil {
 		t.Errorf("reviews: %v", err)
 	}
+	// The repo's path as the project, with or without .git, and the repo's address as GitLab's: fine.
+	if err := withPipelines(t, `{"serviceAccount": "airflow-pipelines", "repo": "https://gitlab.example.com/sales/dags.git", "credentials": {"secretRef": "sales-git"},
+		"reviews": {"gitlab": "https://gitlab.example.com/sales/dags.git", "dbt": "dbt", "project": "sales/dags.git"}}`); err != nil {
+		t.Errorf("reviews, the repo's own words: %v", err)
+	}
 	for _, bad := range []string{
 		`{"serviceAccount": "airflow-pipelines", "reviews": {"gitlab": "https://gitlab.example.com", "dbt": "dbt"}}`,
 		`{"serviceAccount": "airflow-pipelines", "repo": "https://gitlab.example.com/sales/dags.git", "reviews": {"gitlab": "https://gitlab.example.com", "dbt": "dbt"}}`,
