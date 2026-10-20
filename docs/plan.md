@@ -120,24 +120,24 @@ The examples already prove every mapping in this list by hand.
 | Flow (visual DAG) | A read-only Flow view drawn from OpenLineage and dbt lineage, with links into each job | MVP (view); an editable Flow is a later gap to build |
 | Code recipes (SQL, Python, PySpark) | Trino, Jupyter, Spark, and dbt models | MVP (Spark later) |
 | Join, group, window and pivot recipes | dbt models, or Trino SQL from a template | Phase 7 (dbt) |
-| Prepare recipe (point-and-click), visual Flow | A canvas of steps (as Domo's Magic ETL) that writes dbt models into the project's repo, reviewed like code | Built (0.18.0, 0.19.x); a prepare step and an LLM step proposed |
+| Prepare recipe (point-and-click), visual Flow | A canvas of steps (as Domo's Magic ETL) that writes dbt models into the project's repo, reviewed like code | Built (0.18.0, 0.19.x); a prepare step and an LLM step in 11.3 |
 | Datasets and connections, Iceberg REST | Trino catalogs, Nessie's Iceberg REST endpoint | MVP |
 | Connectors that bring data in (databases, applications) | dlt imports and change capture from databases (Debezium), into the project's Iceberg tables; a gallery of one-click connectors (Salesforce, Gong, HighSpot, SAP) | Phase 8 (built: 8.1–8.3; the gallery, 8.4) |
 | Semantic Models, AI SQL, agent tools (MCP) | The semantic layer: MetricFlow models, an editor in the shell, and an MCP server that queries as the person or agent asking; a company-wide model (Customer, Revenue, Campaign, Booking) that projects build on | Phase 4; company-wide, phase 10 |
 | Data catalog, column lineage, search | OpenMetadata + OpenLineage, shown in the shell; a glossary from the semantic model, certified data products, a Collibra sync if Collibra is the catalog of record | MVP; glossary and products, phase 10 |
-| Data quality rules | The project's checks (unique, notNull, rowCount), freshness targets, dbt tests, the semantic tests, the contracts' checks; Soda was never needed | Built; more check kinds proposed (the capability map, 2026-10-20) |
+| Data quality rules | The project's checks (unique, notNull, rowCount), freshness targets, dbt tests, the semantic tests, the contracts' checks; Soda was never needed | Built; more check kinds in 6.11 |
 | Scenarios, triggers, reporters | Airflow (data-aware scheduling); alerts on failures, failed checks and stale tables | MVP; the alerts in phase 6 |
 | Dashboards, charts | Superset; on the semantic layer's definitions, with Power BI beside it | MVP; on the semantic layer, phase 10 |
 | Audit trail | Ranger, Keycloak, Trino and Buckets audit logs sent to Loki, with one Audit page | Phase 6 |
 | Code environments, compute on Kubernetes | JupyterHub profiles, images built per project, quotas | MVP |
 | Project version control (git) | Each project's pipelines (and later its whole spec) in its own git repo, readable as code | Phase 7 (DAGs first) |
 | Bundles and Deployer (dev to prod) | Git CI plus a Nessie branch per change, checked, then merged; promotion between installs, with rollback | Phase 7 |
-| LLM Mesh (gateway, cost caps, guardrails) | LiteLLM in front of the models, with a budget per project and per agent, the guardrail, and every call audited | Built (0.19.x); Langfuse and knowledge banks proposed |
+| LLM Mesh (gateway, cost caps, guardrails) | LiteLLM in front of the models, with a budget per project and per agent, the guardrail, and every call audited | Built (0.19.x); Langfuse (12.8) and knowledge banks (12.6) to come |
 | Agents, prompt studio, Knowledge Banks | The MCP server (phase 4), reaching the governed data products and company model (DevAssist among its clients), agent identity and audit, Langfuse, pgvector | Phase 10 (data products for agents), phase 12 (the rest) |
-| Govern (approvals, registry, standards) | Approvals and a registry for models and agents, in the project | Phase 12 (agents), phase 14 (models) |
+| Govern (approvals, registry, standards) | Approvals and a registry for models and agents, in the project; a Governance page across projects | Phase 12 (agents, built; the page 12.9), phase 15 (models) |
 | Usage and cost per project | Trino, Spark and storage use attributed to projects, with budgets, in Grafana | Phase 13 |
-| AutoML, experiment tracking, model registry, drift | MLflow, FLAML as a library, Evidently + Grafana; a model served as an API; no visual AutoML | Phase 15 (proposed split of 14) |
-| Webapps and Dataiku Apps | Simple data apps per project | Phase 14 |
+| AutoML, experiment tracking, model registry, drift | MLflow, FLAML as a library, Evidently + Grafana; a model served as an API; no visual AutoML | Phase 15 |
+| Webapps and Dataiku Apps | Simple data apps per project, a Q&A app, a readers' Home; the API and its Python package | Phase 14 |
 | Answers, Stories | Not planned | Not included; nor a plugin model, R, image and video processing, visual statistics, or third-party model monitoring (the capability map, 2026-10-20) |
 
 ## What buyers value (research, 2026-10-15)
@@ -162,7 +162,7 @@ Sources: Dataiku's version 14 and 15 release notes (https://www.dataiku.com/prod
 
 ## Dataiku's capability map, checked (2026-10-20)
 
-Dataiku's product, as its own material lays it out in ten areas, checked item by item against what's built and what the phases plan. Each item gets one of three answers: **built** (in a release, or on main), **planned** (the phase that has it), or **gap**, with how to fill it, and whether to. The check is a map, not a commitment: the additions it proposes are gathered at the end, with where they'd go, for a decision.
+Dataiku's product, as its own material lays it out in ten areas, checked item by item against what's built and what the phases plan. Each item gets one of three answers: **built** (in a release, or on main), **planned** (the phase that has it), or **gap**, with how to fill it, and whether to. The additions it found are gathered at the end, with where they go; they were accepted the same day (user, 2026-10-20) and are in the phases below and in [use-cases.md](use-cases.md).
 
 ### 1. Data access and preparation
 
@@ -198,10 +198,10 @@ Dataiku's product, as its own material lays it out in ten areas, checked item by
 
 | Capability | Today | Roadmap | Gap, and how to fill it |
 |---|---|---|---|
-| Visual AutoML | Nothing | — | **Gap; a decision.** Dataiku's visual ML workbench is years of work. Fill the code path instead: FLAML or AutoGluon in the notebook image, with a notebook template that trains, evaluates and logs to MLflow (14.2). If a team later wants it visual, a *train* step on the canvas over FLAML is the shape. |
-| Code-first ML | Partial: notebooks with pandas and pyarrow; no ML libraries in the image | MLflow (14.2) | Fill: scikit-learn, lightgbm, xgboost, FLAML, mlflow in the image. An hour. |
-| Prediction, classification, regression, clustering, time-series forecasting, causal ML, computer vision | Nothing | 14.2 | All code-path on the libraries above (causal: dowhy or econml; vision: torch, optional, large); none as visual recipes |
-| Model comparison and evaluation, feature engineering, hyperparameter optimisation, explainability | Nothing | 14.2 (MLflow) | MLflow's experiments compare runs; FLAML tunes; shap explains. Libraries and a notebook template; no UI of the platform's beyond MLflow's. |
+| Visual AutoML | Nothing | — | **Decided: not visual.** Dataiku's visual ML workbench is years of work. The code path instead: FLAML in the notebook image, with a notebook template that trains, evaluates and logs to MLflow (15.1). If a team later wants it visual, a *train* step on the canvas over FLAML is the shape. |
+| Code-first ML | Partial: notebooks with pandas and pyarrow; no ML libraries in the image | MLflow (15.1); the libraries (R7.24) | None once the image has them |
+| Prediction, classification, regression, clustering, time-series forecasting, causal ML, computer vision | Nothing | 15.1 | All code-path on the libraries above (causal: dowhy or econml; vision: torch, optional, large); none as visual recipes |
+| Model comparison and evaluation, feature engineering, hyperparameter optimisation, explainability | Nothing | 15.1 (MLflow) | MLflow's experiments compare runs; FLAML tunes; shap explains. Libraries and a notebook template; no UI of the platform's beyond MLflow's. |
 | Templates for common modelling use cases | Nothing | U.2 (project templates) | Fill: notebook templates in the template repo (churn, forecast, propensity), with U.2. |
 
 ### 4. Generative AI
@@ -241,14 +241,14 @@ Dataiku's product, as its own material lays it out in ten areas, checked item by
 
 | Capability | Today | Roadmap | Gap, and how to fill it |
 |---|---|---|---|
-| Model registry, versioning | Nothing | 14.2 (MLflow per project, a registry with approval) | Planned |
-| Model deployment: batch scoring | Nothing | 14.2 (a pipeline) | Planned |
+| Model registry, versioning | Nothing | 15.1 (MLflow per project, a registry with approval; was 14.2) | Planned |
+| Model deployment: batch scoring | Nothing | 15.1 (a pipeline) | Planned |
 | Real-time / API deployment | Nothing | — | **Gap.** Fill: a registered, approved model served as an API in the project's namespace (MLflow's own serving image, behind the gateway, signed in through Keycloak, under the project's limits), with the audit naming the caller. Three days. |
-| Deployment automation, dev/test/prod lifecycle | Built for projects: plan and apply with a target per install (7.4), data branches (7.3) | Models follow: a model's version in the project's spec, promoted by apply | With 14.2 |
-| Approval workflows | Built for agents, deliveries, products, project applies | 14.2 for models | Planned |
-| Model lineage | Nothing | R14.2: runs tied to the data's commit | Planned; add the model's inputs (tables, at their snapshots) to the catalog's lineage, so a model is a node like a table. With 14.2. |
-| Model performance monitoring, drift | Nothing | R14.4 (Evidently, Grafana) | Planned |
-| Regulatory / model documentation | Nothing | — | **Gap.** Fill: a model card per registered model (purpose, data, metrics, owner, approvals, limits), kept with the registry and shown with the product-like page; a day with 14.2. |
+| Deployment automation, dev/test/prod lifecycle | Built for projects: plan and apply with a target per install (7.4), data branches (7.3) | Models follow: a model's version in the project's spec, promoted by apply | With 15.1 |
+| Approval workflows | Built for agents, deliveries, products, project applies | 15.1 for models | Planned |
+| Model lineage | Nothing | R15.1: runs tied to the data's commit | Planned (R15.6): the model's inputs (tables, at their snapshots) in the catalog's lineage, so a model is a node like a table. |
+| Model performance monitoring, drift | Nothing | R15.3 (Evidently, Grafana) | Planned |
+| Regulatory / model documentation | Nothing | — | **Gap.** Fill: a model card per registered model (purpose, data, metrics, owner, approvals, limits), kept with the registry and shown with the product-like page (R15.5). |
 | Monitoring of models on third-party ML platforms | Nothing | — | Not to fill. |
 
 ### 7. Pipeline and workflow automation
@@ -258,7 +258,7 @@ Dataiku's product, as its own material lays it out in ten areas, checked item by
 | Automated scenarios, scheduled execution, dataset refresh | Built: Airflow per project, schedules, data-aware runs; imports and copies on schedules | — | None |
 | Data-quality checks, metrics and checks | Built (area 1) | — | The extra check kinds (area 1) |
 | Alerting | Built: the project's alerts page and the administrators' (6.4, 6.7) | — | None |
-| Microsoft Teams and Slack notifications | Nothing: alerts are shown, not sent | R6.19 (6.7) | **Gap, overdue.** Fill: `notifications` per project (a Teams or Slack incoming webhook, an email address) and per install, sent by platformd when an alert opens and closes, muted for a while on request (R6.21). A day. |
+| Microsoft Teams and Slack notifications | Built (6.7, 2026-10-16): Teams through a channel's Workflows webhook, email through the install's mail server, when an issue starts and when it ends; mutes | Slack (6.7's "not yet") | **Small gap:** Slack's incoming webhook, the same shape as Teams'. An hour, in 6.7. |
 | Production bundles | Built: projects as code, plan then apply, a target per install (7.4) | — | None |
 | API deployment | Nothing | — | The model API above (area 6); data apps (14.1) |
 | Workflow orchestration | Built: Airflow | — | None |
@@ -268,15 +268,15 @@ Dataiku's product, as its own material lays it out in ten areas, checked item by
 | Capability | Today | Roadmap | Gap, and how to fill it |
 |---|---|---|---|
 | AI governance | Built: agents' identity, approval, tools, budgets, audit; the guardrail; assistants registered | — | None |
-| Model governance, model registry | Nothing | 14.2 | Planned |
+| Model governance, model registry | Nothing | 15.1 | Planned |
 | Data lineage | Built | — | None |
-| Model lineage | Nothing | 14.2 | Planned (area 6) |
+| Model lineage | Nothing | 15.1 | Planned (area 6) |
 | Approval workflows | Built: agents, deliveries, products' access, project applies; access requests (R6.4) | — | None |
 | Documentation | Built: terms with owners and definitions, products' contracts, a project's description | Model cards (area 6) | None beyond model cards |
 | Dataset certification | Built (10.3) | — | None |
 | Risk oversight | Partial: alerts per project; the audit page | — | **Gap.** Fill: a *Governance* page for the administrators and the governance group: everything awaiting approval across projects (agents, deliveries, products, applies), the policies in force (masks by tag, who's excepted), the agents and their spend, the models and their state, the erasures due, in one place. Two days; it reads what exists. |
 | Monitoring | Built | — | None |
-| Governance across agents, models, analytics and pipelines | Built for agents, data and pipelines; models with 14.2 | — | The Governance page is where it shows |
+| Governance across agents, models, analytics and pipelines | Built for agents, data and pipelines; models with 15.1 | — | The Governance page (12.9) is where it shows |
 
 ### 9. Collaboration and application development
 
@@ -298,19 +298,19 @@ Dataiku's product, as its own material lays it out in ten areas, checked item by
 
 Covered by phases 5 and 6, and by running on the company's cluster: the Helm chart, an upgrade command with its CRD and rollback, Keycloak brokering the company's identity, Ranger's policies everywhere, the audit log, backups and restore, high availability, network policies and Pod Security, limits per project, images scanned with SBOMs, a private CA. Left from 6: Buckets' encryption at rest (R6.18), disaster recovery to a second site (to decide).
 
-### What the check changes (proposed, 2026-10-20)
+### What the check changes (accepted, 2026-10-20)
 
-Where the map found gaps worth filling, placed; the rest are decisions not to build (visual AutoML and statistics, image and video processing, R, Stories, a plugin model, third-party model monitoring), which the Matching Dataiku table now says.
+Where the map found gaps worth filling, placed in the phases and written as use cases with their requirements; the rest are decisions not to build (visual AutoML and statistics, image and video processing, R, Stories, a plugin model, third-party model monitoring), which the Matching Dataiku table says.
 
-- **Into phase 6 (overdue):** notifications to Teams, Slack and email per project and per install (R6.19, R6.21): a day.
-- **Into phase 1 and 3 (the foundation, small):** profiling in the catalog with OpenMetadata's profiler, shown on the Data page (a day); five more check kinds (accepted values, range, regex, referential, SQL assertion; a day); the notebook image with the analysis and ML libraries (scikit-learn, statsmodels, scipy, lightgbm, xgboost, FLAML, mlflow, geopandas, networkx; an hour) and a code-server profile (half a day); Superset's map charts (an hour).
-- **Into phase 11:** a prepare step (named processors on columns, the common forty; two days) and an LLM step (classify, extract, summarize through the gateway; two days); a Python step with R11.6's Spark step.
-- **Into phase 12, as new use cases:** 12.6 knowledge banks (pgvector, embeddings through the gateway, `search_documents`, a canvas step; four days); 12.7 agents without a notebook, and agents as tools of agents (three days); 12.8 Langfuse (traces, prompts, scores, its sign-in through Keycloak; two days); the guardrail's forbidden terms (an hour) and a moderation guardrail (a day, with a provider); a project's own connector tools for agents (two days); a platform-wide Agents page (an afternoon).
-- **Into phase 8 (governance):** a Governance page across projects (two days).
-- **Phase 14, split in two:** 14 stays data apps, with a readers' Home per project and a Q&A app over the knowledge bank; **a new phase 15, ML and MLOps**, takes 14.2 and grows: MLflow per project, the registry with approval, batch scoring, drift, a model served as an API, model cards, models in the catalog's lineage. Three weeks.
-- **Cross-cutting, with the first teams:** the OpenAPI reference (a day) and the `storscale` Python package (two days); Cobuild's shape after 12.4.
+- **Phase 6:** Slack beside Teams (6.7); 6.11, what a table holds: profiling in the catalog with OpenMetadata's profiler, shown on the Data page, and five more check kinds (accepted values, range, regex, referential, a SQL assertion). Two days.
+- **Phase 7:** 7.8, dana works in VS Code: code-server as a JupyterHub profile with the project's repo, and the notebook image with the analysis and ML libraries (scikit-learn, statsmodels, scipy, lightgbm, xgboost, FLAML, mlflow, geopandas, networkx) and Superset's map charts. A day.
+- **Phase 11:** 11.3, a column cleaned, and a model asked about another: a prepare step (named processors on columns, the common forty), an LLM step (classify, extract, summarize through the gateway on the project's key, under the guardrail), and a Python step beside R11.6's Spark. Five days.
+- **Phase 12:** the guardrail's forbidden terms and a moderation guardrail (12.1); 12.6 knowledge banks (pgvector in the platform's Postgres, embeddings through the gateway, `search_documents`, a canvas step); 12.7 agents without a notebook (a prompt, tools and a schedule, run by the platform's runner), agents as tools of agents, and a project's own connector tools; 12.8 LLM monitoring and prompts (Langfuse, its sign-in through Keycloak); 12.9 the Governance page across projects, and the platform-wide Agents page. Twelve days.
+- **Phase 14, data apps and the API:** 14.1 gains a readers' Home per project and a Q&A app over the knowledge bank; 14.3, a developer uses the API: the OpenAPI reference and the `storscale` Python package. Four days beyond 14.1.
+- **Phase 15, ML and MLOps (new):** 15.1 takes dana's model (was 14.2) and grows: MLflow per project, the registry with approval, batch scoring, drift, a model served as an API, model cards, models in the catalog's lineage, notebook templates for the common cases. Three weeks.
+- **Later:** Cobuild's shape, 12.4's assistant given the platform's own API as tools.
 
-In all, some six weeks of additions, none of them a new system except Langfuse and pgvector (both in the stack's table since the start). What they'd give that Dataiku's map asks for and the roadmap didn't: text in the lakehouse (knowledge banks, the LLM step), agents a business user can set up, a model in production as an API, and the operators' view across projects.
+In all, some six weeks of additions, none of them a new system except Langfuse and pgvector (both in the stack's table since the start). What they give that Dataiku's map asks for and the roadmap didn't: text in the lakehouse (knowledge banks, the LLM step), agents a business user can set up, a model in production as an API, and the operators' view across projects.
 
 ## Phases
 
@@ -324,15 +324,16 @@ Each phase ends with a gate: an end-to-end test like the examples' `test.py`, ru
 | 3 | Catalog and lineage: OpenMetadata, OpenLineage from Airflow, Spark and Trino, a Flow view, Soda checks | A pipeline run appears in the lineage graph, column-level; a failing check shows on the dataset |
 | 4 | The semantic layer and agent access (below): MetricFlow models per project, the Semantic layer pages, the MCP server | An agent signed in as alice asks for revenue by region and gets EU only, masked as in Trino; carol's agent gets nothing; bob's metric change shows up in the next answer; Ranger's audit names both the agent and alice |
 | 5 | Kubernetes: the Helm umbrella chart, the Buckets operator, Spark Operator, KubeSpawner | `helm install` on kind gives a healthy install; the phase 1–4 tests pass on it |
-| 6 | Production-ready: Keycloak on a real database, in production mode, and who owns the realm decided; the example users switchable off; one-command upgrades and a tested version matrix; Audit and Health pages (Loki, Grafana); backup and upgrade notes; Iceberg table maintenance (compaction, snapshot expiry, orphan files); high availability and hardening (replicas, network policies, Pod Security, encryption at rest, image scanning and SBOMs); alerts on failed pipelines, failed checks and stale tables; limits per project (Trino's resource groups, quotas for notebooks, Spark and buckets, Airflow's memory), so one project can't slow the others; retention per table and erasure of a person's data everywhere (consumer data); a table's history, and its data as of a date, a month-end close or a delivery (Iceberg's time travel, made visible, with tags kept for closes); docs on storscale.io/platform | A full upgrade between two releases on a real cluster, with no lost projects, people or settings |
-| 7 | Git-native projects: Airflow DAGs from a git repo per project, first (below), then each project's DAG code kept apart from the others' and from the platform's secrets (below); dbt projects in the same repo, run by Airflow, with their tests and lineage in the catalog; then the project spec in git, with a target per environment; a Nessie branch per change, its pipelines and checks run there before it merges (write, audit, publish); promotion between installs, with rollback; a Connections tab, where editors give the platform credentials once, kept as the project's Secrets; scheduling a notebook as a pipeline | A push to a project's repo runs on its own data branch, passes the checks, and merges to production; a bad change is refused and production is untouched |
+| 6 | Production-ready: Keycloak on a real database, in production mode, and who owns the realm decided; the example users switchable off; one-command upgrades and a tested version matrix; Audit and Health pages (Loki, Grafana); backup and upgrade notes; Iceberg table maintenance (compaction, snapshot expiry, orphan files); high availability and hardening (replicas, network policies, Pod Security, encryption at rest, image scanning and SBOMs); alerts on failed pipelines, failed checks and stale tables; limits per project (Trino's resource groups, quotas for notebooks, Spark and buckets, Airflow's memory), so one project can't slow the others; retention per table and erasure of a person's data everywhere (consumer data); a table's history, and its data as of a date, a month-end close or a delivery (Iceberg's time travel, made visible, with tags kept for closes); docs on storscale.io/platform; Slack beside Teams; profiling in the catalog and more kinds of check (6.11, added 2026-10-20) | A full upgrade between two releases on a real cluster, with no lost projects, people or settings |
+| 7 | Git-native projects: Airflow DAGs from a git repo per project, first (below), then each project's DAG code kept apart from the others' and from the platform's secrets (below); dbt projects in the same repo, run by Airflow, with their tests and lineage in the catalog; then the project spec in git, with a target per environment; a Nessie branch per change, its pipelines and checks run there before it merges (write, audit, publish); promotion between installs, with rollback; a Connections tab, where editors give the platform credentials once, kept as the project's Secrets; scheduling a notebook as a pipeline; VS Code in the browser and the notebook image's analysis and ML libraries (7.8, added 2026-10-20) | A push to a project's repo runs on its own data branch, passes the checks, and merges to production; a bad change is refused and production is untouched |
 | 8 | Getting data in: databases queried where they are (Trino catalogs per project, under its rules), first; connectors (dlt or Airbyte) for applications and files, and change capture from databases (Debezium) into a project's Iceberg tables, set up per project, with their credentials from its connections; then one-click connectors from a gallery (Salesforce, then Gong and HighSpot, then SAP S/4HANA by OData and SAP HANA or BW as databases) | A database table's inserts, updates and deletes reach its Iceberg table within minutes, with lineage, and only the project's people can read it |
 | 9 | Getting data out: scheduled file deliveries to clients and partners (SFTP, other companies' buckets), with formats, PGP encryption and manifests; checks before sending; approval of what's sent, with personal columns named; a delivery log that finds what was sent about a person; read-only, expiring shares for partners who read in place | A delivery reaches a client's SFTP server, encrypted, with its manifest; a failing check sends nothing; the log answers what was sent about a person |
 | 10 | The business layer: the company's entities and metrics (Customer, Revenue, Campaign, Booking) defined once in a shared semantic model that projects build on; the platform and the catalog's glossary showing them before tables; Superset's datasets and Power BI on those definitions; certified data products with contracts, found in the catalog and read in place across projects (a Collibra sync if it's the catalog of record); the MCP server reaching them, with DevAssist as a client | Revenue the same to the cent in Superset, Power BI, SQL and an assistant, each under the person's rules; a certified product read in place by another project, and a breaking change refused |
-| 11 | Visual transformation: a canvas of steps (join, filter, group, pivot, formula, deduplicate), each previewed, as in Domo's Magic ETL, that writes dbt models into the project's repo as a merge request, reviewed on a data branch and released like code; uploads (CSV, Excel) as inputs; Spark later | A pipeline built on the canvas runs on a schedule with its lineage in the catalog, and is a reviewed change in the repo |
-| 12 | Governed AI: agents' identity and audit; an LLM gateway (LiteLLM) with a budget per project; approvals for agents; tests for the semantic layer; the Open Semantic Interchange; classification of columns (personal, financial) in the catalog, with Ranger's policies by tag; an AI assistant for SQL and pipeline code | An agent's answers stay within the caller's policies and the project's budget, and every call is audited; a column newly tagged personal is masked everywhere without a policy written for it |
+| 11 | Visual transformation: a canvas of steps (join, filter, group, pivot, formula, deduplicate), each previewed, as in Domo's Magic ETL, that writes dbt models into the project's repo as a merge request, reviewed on a data branch and released like code; uploads (CSV, Excel) as inputs; Spark later; a prepare step of named column processors, an LLM step through the gateway, a Python step (11.3, added 2026-10-20) | A pipeline built on the canvas runs on a schedule with its lineage in the catalog, and is a reviewed change in the repo |
+| 12 | Governed AI: agents' identity and audit; an LLM gateway (LiteLLM) with a budget per project; approvals for agents; tests for the semantic layer; the Open Semantic Interchange; classification of columns (personal, financial) in the catalog, with Ranger's policies by tag; an AI assistant for SQL and pipeline code; forbidden terms and a moderation guardrail; knowledge banks on pgvector for search and RAG (12.6); agents without a notebook, agents as tools, a project's own connector tools (12.7); LLM monitoring and prompts with Langfuse (12.8); a Governance page across projects (12.9) (added 2026-10-20) | An agent's answers stay within the caller's policies and the project's budget, and every call is audited; a column newly tagged personal is masked everywhere without a policy written for it |
 | 13 | Usage and cost per project: Trino, Spark and storage use attributed to projects, with budgets and alerts in Grafana | A project's usage and cost show, and crossing its budget alerts |
-| 14 | Data apps and ML: simple data apps; MLflow, with a model registry and approvals | A model approved before a pipeline uses it, its drift watched; an app shared with sam that shows what he may see |
+| 14 | Data apps and the API: simple data apps, a readers' Home per project, a Q&A app over the knowledge bank; the OpenAPI reference and the `storscale` Python package (14.3) | An app shared with sam that shows what he may see; a developer makes a project's flow from the package alone |
+| 15 | ML and MLOps (added 2026-10-20, from 14's second half): MLflow per project, a registry with approvals, batch scoring, drift, a model served as an API under the person's sign-in, model cards, models in the catalog's lineage | A model approved before a pipeline uses it, its drift watched; the same model answers as an API, audited, and refused to someone outside the project |
 
 **Not yet placed:**
 - **Templates and reuse:** project templates, shared libraries and recipes.

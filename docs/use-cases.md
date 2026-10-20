@@ -192,6 +192,15 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - How long are closes kept (finance records often seven years), and at what storage cost?
 - Tags across the whole catalog (Nessie: one tag for every table at the close), or per table (Iceberg)?
 
+### 6.11 What a table holds (added 2026-10-20)
+
+1. alice opens `orders` on the Data page: each column's share of nulls, distinct values, min and max, a histogram; the table's row count and its growth. The catalog profiled it last night.
+2. She adds a check: `status` takes only `open`, `shipped` or `cancelled`; `amount` is between 0 and 100000. The next run of the pipeline fails on a row outside them, and the project is alerted.
+
+**Requirements**
+- R6.33 Profiling per table (OpenMetadata's profiler), run by the catalog's round or the nightly maintenance, shown on the Data page and in the catalog.
+- R6.34 More kinds of check in `tables.checks`: accepted values, a range, a regex, a referential check (a column's values exist in another table's), and a SQL assertion (a query that must return no rows).
+
 ---
 
 ## Phase 7: git-native projects
@@ -293,6 +302,15 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 
 **Open questions**
 - The notebook's Python packages: the image's, or an environment per project (see "To decide")? The image's for now (built 2026-10-18): the scheduled run has the notebook image's packages.
+
+### 7.8 dana works in VS Code (added 2026-10-20)
+
+1. dana picks **VS Code** instead of JupyterLab when her notebook server starts. It opens on the project's repo, cloned, signed in as her; a commit there is a merge request like any other.
+2. Her notebook imports scikit-learn, statsmodels and geopandas; they're in the image, with the libraries the common analyses and models need.
+
+**Requirements**
+- R7.23 code-server (VS Code in the browser) as a JupyterHub profile beside JupyterLab, the project's repo cloned into it with its connection, as the person.
+- R7.24 The notebook image carries the analysis and ML libraries (scikit-learn, statsmodels, scipy, lightgbm, xgboost, FLAML, mlflow, geopandas, networkx), and Superset its map charts.
 
 ---
 
@@ -495,6 +513,17 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 - R11.5 The canvas and the code are the same thing: a canvas opens from the repo's models, and a step changed by hand stays code.
 - R11.6 Large data later: the same canvas on Spark, for what Trino can't do in one query.
 
+### 11.3 alice cleans a column, and asks a model about another (added 2026-10-20)
+
+1. alice adds a **prepare** step: trim `customer_name`, title-case it, parse `ordered_on` as a date, fill `region` with `unknown`. Each is a named processor on a column, compiled to SQL like the formula step; the preview shows the result.
+2. She adds an **LLM** step on `complaint_text`: classify each row as `billing`, `delivery` or `product`. It runs through the gateway on the project's key, within its budget and under the guardrail; the preview shows a sample's labels and what it cost.
+3. bob writes a step in Python for what SQL can't say; it runs in the project's Airflow.
+
+**Requirements**
+- R11.7 A prepare step: named processors on columns (trim, case, split, parse a date or number, fill nulls, extract by regex, replace, round, bucket, standardize), the common forty first, each compiled to Trino SQL.
+- R11.8 An LLM step: classify, extract or summarize a column through the gateway (12.1), on the project's key and budget, under the guardrail, with the prompt kept in the model's file; the preview says what a sample cost.
+- R11.9 A Python step beside R11.6's Spark: a model written in Python, run by the project's Airflow, its columns declared.
+
 ---
 
 ## Phase 12: governed AI
@@ -511,6 +540,7 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 - R12.1 Every answer from the semantic layer, run as the person, with its definitions cited.
 - R12.2 An LLM gateway (LiteLLM) in front of the models: per project and per person budgets, cost recorded, and guardrails (no secrets or masked values sent out). (Built 2026-10-19: the gateway, keys and budgets per project and per agent, spend shown; 2026-10-20: the guardrail, refusing masked values' shapes and the platform's secrets. Per-person budgets left.)
 - R12.3 Agents' calls audited with the person behind them (R6.11).
+- R12.11 Forbidden terms (the install's words and patterns the guardrail refuses: a codename, a client's name), and a moderation guardrail through the gateway itself (toxicity, by a model), each on by a setting. (Added 2026-10-20.)
 
 ### 12.2 An agent of the project's own
 
@@ -553,6 +583,46 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 - R12.9 Classification of columns in the catalog (personal, financial, health), automatic and confirmed by people. (Built 2026-10-19: catalog-sync's detectors and the project's declarations, confirmed or removed on the Data page or in the catalog.)
 - R12.10 Ranger's policies by tag, with the catalog's tags kept in step, so a newly tagged column is protected without a policy of its own. (Built 2026-10-19: the operator makes a mask policy of each tagged column, by the install's rules per tag.)
 
+### 12.6 A knowledge bank (added 2026-10-20)
+
+1. bob declares a knowledge bank for `sales`: the contracts in `landing/contracts/` (PDF and text) and the `notes` column of `tickets`.
+2. The platform embeds them through the gateway, into pgvector in its own Postgres, under the project's access, and keeps them in step as files and rows change.
+3. sam's assistant asks `search_documents` for "early termination terms"; the answer cites the passages, from documents sam may read. A canvas step enriches each ticket with the nearest contract clause.
+
+**Requirements**
+- R12.12 Knowledge banks per project (`spec.knowledge`): bucket prefixes and table columns, embedded through the gateway on the project's key, kept in pgvector in the platform's Postgres, refreshed as the sources change.
+- R12.13 A `search_documents` MCP tool and a canvas step (nearest passages for a column), as the person or agent, under the project's access; answers cite the passages.
+- R12.14 A Q&A app over a knowledge bank and the semantic layer (14.1's apps), as the person.
+
+### 12.7 An agent without a notebook (added 2026-10-20)
+
+1. On the Agents tab, bob registers `triage`: a prompt ("each morning, read the open alerts and the failed runs, and write a summary for the team"), the tools `list_alerts` and `list_runs`, a schedule, a budget. No notebook.
+2. alice approves it. The platform's runner loops the model over the tools as the agent, within its budget; each run is kept as its record, as a notebook's would be.
+3. bob gives `triage` as a tool to a second agent, `weekly`, which asks it for the week's summaries; both are audited as themselves. He also gives `weekly` the company's ticketing API, declared in the project with the connection to sign in with.
+
+**Requirements**
+- R12.15 An agent run by the platform's runner from its prompt, tools and schedule (semanticd's loop over the gateway and the MCP server, as the agent), its run kept as its record; the Agents tab's form is all of it.
+- R12.16 An approved agent as a tool of another (`agent:<project>/<name>`), audited as both.
+- R12.17 A project's own connector tools: an OpenAPI operation and the connection it signs in with, declared in the project, served by the MCP server to the agents given it.
+
+### 12.8 What the models are doing (added 2026-10-20)
+
+1. frank opens the gateway's monitoring (Langfuse, signed in through Keycloak): every call by project and agent, its latency, tokens and cost, the prompt and answer where the project allows it, and scores from the semantic tests.
+2. bob edits `triage`'s prompt there, labels a version `production`, and the runner uses it on the next run.
+
+**Requirements**
+- R12.18 Langfuse in the chart, fed by the gateway: traces, latency, tokens and cost per project and agent, scores; its sign-in through Keycloak, each project's people seeing their own.
+- R12.19 Prompts managed there (versions, labels), fetched by name by the runner and `buckets_lake.ask()`.
+
+### 12.9 The governance group's view (added 2026-10-20)
+
+1. The governance group opens **Governance**: everything awaiting approval across projects (agents, deliveries, products' access, project applies), the policies in force (masks by tag and who's excepted), the agents and their spend, the models and their state (15), the erasures due.
+2. An administrator opens **Agents** (platform-wide): every project's agents, their owners, approval, tools, spend and last run.
+
+**Requirements**
+- R12.20 A Governance page for administrators and the governance group, reading what exists: approvals pending, policies, agents, models, erasures.
+- R12.21 A platform-wide Agents page.
+
 ---
 
 ## Phase 13: usage and cost per project
@@ -570,26 +640,46 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 
 ---
 
-## Phase 14: data apps and ML
+## Phase 14: data apps and the API
 
 ### 14.1 An app for sam
 
 1. alice makes a small app from the `revenue` metric: a region filter, a table and a chart.
 2. She shares it with sam, who opens it from Home; it shows what sam may see.
+3. sam's Home for `sales` lists its dashboards, products, apps and metrics, and the Q&A app over its knowledge bank (12.6).
 
 **Requirements**
 - R14.1 Simple data apps per project, built from metrics and tables, run as the person viewing them.
+- R14.5 A readers' Home per project: its dashboards, products, apps and metrics, as the person. (Added 2026-10-20.)
+- R14.6 A Q&A app over a knowledge bank and the semantic layer, one of the apps. (Added 2026-10-20.)
 
-### 14.2 dana puts a model into use
+### 14.3 A developer uses the API (added 2026-10-20)
 
-1. dana trains a churn model in a notebook. Each run is tracked (MLflow): parameters, metrics, the data's Nessie commit.
-2. She registers the best one and asks for approval. The project's owner sees its evaluation and approves.
-3. It's used by a pipeline that scores customers nightly, and its drift is monitored.
+1. A developer reads the platform's API reference (OpenAPI, from platformd's routes) and, with the `storscale` Python package, makes a project's flow, starts a run and reads its log, signed in as herself or as a service account.
 
 **Requirements**
-- R14.2 MLflow per project, its runs tied to the data's commit.
-- R14.3 A model registry with approval before use.
-- R14.4 Batch scoring as a pipeline; drift monitored in Grafana.
+- R14.7 An OpenAPI document generated from platformd's routes, served at `/api/openapi.json` and as a page.
+- R14.8 A `storscale` Python package (the API as methods; `buckets_lake` folded in), published with each release.
+
+---
+
+## Phase 15: ML and MLOps (added 2026-10-20; was 14.2)
+
+### 15.1 dana puts a model into use
+
+1. dana trains a churn model in a notebook, from a template for the case. Each run is tracked (MLflow): parameters, metrics, the data's Nessie commit.
+2. She registers the best one, writes its card (purpose, data, metrics, limits), and asks for approval. The project's owner sees its evaluation and approves.
+3. It's used by a pipeline that scores customers nightly, and its drift is monitored. The catalog shows the model with the tables it was trained on, at their snapshots.
+4. The web team calls it as an API, signed in; carol, outside the project, is refused. Each call is audited.
+
+**Requirements**
+- R15.1 MLflow per project, its runs tied to the data's commit.
+- R15.2 A model registry with approval before use.
+- R15.3 Batch scoring as a pipeline; drift monitored in Grafana.
+- R15.4 A registered, approved model served as an API in the project's namespace (MLflow's serving image behind the gateway), signed in through Keycloak, under the project's limits, audited.
+- R15.5 A model card per registered model, kept with the registry.
+- R15.6 Models in the catalog's lineage, with their inputs at their snapshots.
+- R15.7 The code path for the common cases: FLAML and the libraries of R7.24, and notebook templates (churn, forecast, propensity) with U.2's project template.
 
 ---
 
@@ -609,7 +699,7 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 - **The SQL page:** saved and shared queries, and each person's query history.
 - **Streaming:** does anything need data in minutes, not hours? Then Kafka (already needed for 8.1 perhaps), with Flink or Spark streaming into Iceberg.
 - **Data science:** Python environments per project, and GPUs?
-- **Managing as code:** a CLI for projects, a Terraform provider, a published API?
+- **Managing as code:** a CLI for projects, a Terraform provider? (The API's reference and Python package are 14.3.)
 - **Disaster recovery:** a second site, with Buckets' site replication and a standby catalog?
 
 ---
@@ -618,14 +708,15 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 
 | Phase | Storyboards | Its gate tests |
 |---|---|---|
-| 6 | 6.1–6.10 | 6.2 on the real cluster: an upgrade with no lost projects, people or settings; 6.8: a project at its limits leaves another's queries at their usual speed; 6.9: an erasure carried through snapshots and files, and recorded; 6.10: a delivery's files made again exactly from the data as it was sent |
-| 7 | 7.1–7.7 | 7.3: a pull request runs on its own data branch, a good one merges, a bad one is refused; 7.6: a private repo connected without access to the cluster |
+| 6 | 6.1–6.11 | 6.2 on the real cluster: an upgrade with no lost projects, people or settings; 6.8: a project at its limits leaves another's queries at their usual speed; 6.9: an erasure carried through snapshots and files, and recorded; 6.10: a delivery's files made again exactly from the data as it was sent |
+| 7 | 7.1–7.8 | 7.3: a pull request runs on its own data branch, a good one merges, a bad one is refused; 7.6: a private repo connected without access to the cluster |
 | 8 | 8.1–8.4 | 8.1: a database table's changes reach its Iceberg table in minutes, under the project's rules; 8.3: a database queried in place, under the project's rules; 8.4: Salesforce's objects in a project's tables from a form, with no code |
 | 9 | 9.1–9.3 | 9.1: a delivery reaches an SFTP server, encrypted, with its manifest, and a failing check sends nothing; 9.2: the log finds what was sent about a person |
 | 10 | 10.1–10.4 | 10.1: Customer and Revenue defined once, used by two projects; 10.2: a Superset chart, a Power BI report and the semantic layer agree on Revenue, each under the person's rules; 10.3: a certified product read in place by another project, and a breaking change refused; 10.4: an assistant over MCP answers from the governed definitions, as the person |
-| 11 | 11.1–11.2 | 11.1: a pipeline built on the canvas becomes dbt models in a merge request, runs, and shows its lineage; 11.2: one step changed by hand stays code |
-| 12 | 12.1–12.5 | 12.1 and 12.2: within the person's or agent's rules and budget, every call audited; 12.5: a new personal column masked everywhere |
+| 11 | 11.1–11.3 | 11.1: a pipeline built on the canvas becomes dbt models in a merge request, runs, and shows its lineage; 11.2: one step changed by hand stays code; 11.3: a prepare step and an LLM step run and are previewed, the LLM step's cost counted against the budget |
+| 12 | 12.1–12.9 | 12.1 and 12.2: within the person's or agent's rules and budget, every call audited; 12.5: a new personal column masked everywhere; 12.6: a search answers from documents the person may read, citing them; 12.7: an agent with no notebook runs on its schedule and is a tool of another, both audited; 12.9: the Governance page shows every approval pending |
 | 13 | 13.1 | 13.1: usage and cost show per project, and a budget alerts |
-| 14 | 14.1–14.2 | 14.2: a model approved before a pipeline uses it, its drift watched |
+| 14 | 14.1, 14.3 | 14.1: an app shared with sam shows what he may see; 14.3: a developer makes a project's flow from the package alone |
+| 15 | 15.1 | 15.1: a model approved before a pipeline uses it, its drift watched; the same model answers as an API, audited, and refuses someone outside the project |
 
 Each storyboard becomes an end-to-end suite, as the phases before did: the people and agents above, against a real install, in CI.
