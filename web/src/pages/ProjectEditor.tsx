@@ -192,8 +192,8 @@ export default function ProjectEditor() {
                   Merge-request reviews (7.3), for a GitLab repo: each open merge request's dbt change is built on a data branch of its own, and the merge request told.
                 </p>
                 <div className="row">
-                  <label>GitLab address <input className="mono" value={pl.reviews?.gitlab ?? ""} placeholder="https://gitlab.example.com" onChange={(e) => setReviews({ gitlab: e.target.value })} /></label>
-                  <label>Project path <input className="mono" value={pl.reviews?.project ?? ""} placeholder="data/sales-pipelines" onChange={(e) => setReviews({ project: e.target.value })} /></label>
+                  <label>GitLab address (the server's) <input className="mono" value={pl.reviews?.gitlab ?? ""} placeholder={(() => { try { const u = new URL(pl.repo ?? ""); return `${u.protocol}//${u.host}`; } catch { return "https://gitlab.example.com"; } })()} onChange={(e) => setReviews({ gitlab: e.target.value })} /></label>
+                  <label>Project path (empty: the repo's own) <input className="mono" value={pl.reviews?.project ?? ""} placeholder={(() => { try { return new URL(pl.repo ?? "").pathname.replace(/^\/|\.git$/g, "") || "group/repo"; } catch { return "group/repo"; } })()} onChange={(e) => setReviews({ project: e.target.value || undefined })} /></label>
                   <label>dbt folder <input className="mono" value={pl.reviews?.dbt ?? ""} placeholder="dags/dbt" onChange={(e) => setReviews({ dbt: e.target.value })} /></label>
                 </div>
               </div>

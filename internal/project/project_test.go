@@ -473,6 +473,7 @@ func TestReviews(t *testing.T) {
 		`{"serviceAccount": "airflow-pipelines", "reviews": {"gitlab": "https://gitlab.example.com", "dbt": "dbt"}}`,
 		`{"serviceAccount": "airflow-pipelines", "repo": "https://gitlab.example.com/sales/dags.git", "reviews": {"gitlab": "https://gitlab.example.com", "dbt": "dbt"}}`,
 		`{"serviceAccount": "airflow-pipelines", "repo": "https://gitlab.example.com/sales/dags.git", "credentials": {"secretRef": "sales-git"}, "reviews": {"gitlab": "gitlab.example.com", "dbt": "dbt"}}`,
+		`{"serviceAccount": "airflow-pipelines", "repo": "https://gitlab.example.com/sales/dags.git", "credentials": {"secretRef": "sales-git"}, "reviews": {"gitlab": "https://gitlab.example.com", "dbt": "dbt", "project": "data/sales-pipelines"}}`,
 		`{"serviceAccount": "airflow-pipelines", "repo": "https://gitlab.example.com/sales/dags.git", "credentials": {"secretRef": "sales-git"}, "reviews": {"gitlab": "https://gitlab.example.com", "dbt": "../dbt"}}`,
 	} {
 		if withPipelines(t, bad) == nil {

@@ -25,7 +25,18 @@ type Client struct {
 }
 
 func New(base, token, project string) *Client {
-	return &Client{Base: strings.TrimRight(base, "/"), Token: token, Project: project, HTTP: &http.Client{Timeout: 30 * time.Second}}
+	return &Client{Base: BaseOf(base), Token: token, Project: project, HTTP: &http.Client{Timeout: 30 * time.Second}}
+}
+
+// BaseOf is GitLab's address from what a project names: the server's (with
+// a relative root, if any), or the repo's own address pasted there, whose
+// path (ending in .git) isn't the API's.
+func BaseOf(addr string) string {
+	addr = strings.TrimRight(addr, "/")
+	if u, err := url.Parse(addr); err == nil && u.Host != "" && strings.HasSuffix(u.Path, ".git") {
+		return u.Scheme + "://" + u.Host
+	}
+	return addr
 }
 
 // A MergeRequest is an open one, as GitLab lists it.
