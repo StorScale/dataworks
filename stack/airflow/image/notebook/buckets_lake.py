@@ -115,5 +115,12 @@ def ask(prompt, model="default", system=None):
                       json={"model": model, "messages": messages, "user": username()})
     if r.status_code == 400 and "udget" in r.text:
         raise RuntimeError("the agent is at its LLM budget: the gateway answers it no more this month")
+    if r.status_code == 400 and "guardrail" in r.text:   # what may not leave the platform: the gateway names it, never the value
+        try:
+            why = r.json()["error"]
+            why = why.get("message") if isinstance(why, dict) else why
+        except (ValueError, KeyError, AttributeError):
+            why = r.text[:300]
+        raise RuntimeError(f"the gateway refused the question: {why}")
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"]

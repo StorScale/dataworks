@@ -6,7 +6,9 @@ repeat the question, a cent per hundred characters):
 
   1. the operator makes the project a key at the gateway, kept as the
      connection gated-llm; the Agents tab's page shows it with no spend; the
-     key answers a completion;
+     key answers a completion; a question carrying a card number and an email
+     address, or one of the platform's secrets, is refused by the guardrail
+     (HTTP 400, naming what was found and never the value), and costs nothing;
   2. a long question takes the spend past 80%: the page shows it, and the
      project is alerted; one past the budget is refused as LiteLLM refuses it
      (HTTP 400, budget exceeded);
@@ -71,6 +73,16 @@ def main():
         a = ask(gateway, key, "How many orders came in yesterday?")
         content = (a.json() if a.ok else {}).get("choices", [{}])[0].get("message", {}).get("content", "")
         check("the key answers a completion", a.ok and "orders" in content, (a.status_code, a.text[:200]))
+        spent = lambda: keys(gateway).get(f"storscale/{NAME}", {}).get("spend")
+        before = spent()
+        masked = ask(gateway, key, "Write to jane.doe@example.com that card 4111 1111 1111 1111 was declined")
+        secret = ask(gateway, key, "My config has LLM_MASTER_KEY=sk-0123456789abcdef0123456789abcdef, is that right?")
+        check("a question carrying a card number and an email address is refused by the guardrail, naming what was found and never the value",
+              masked.status_code == 400 and "a card number" in masked.text and "an email address" in masked.text
+              and "4111" not in masked.text and "jane" not in masked.text, (masked.status_code, masked.text[:300]))
+        check("... one carrying a secret of the platform's too, and neither costs anything",
+              secret.status_code == 400 and "a gateway key" in secret.text and "sk-0123" not in secret.text and spent() == before,
+              (secret.status_code, secret.text[:300], before, spent()))
 
         # 2. Near the budget, then past it.
         near = ask(gateway, key, "x" * 9000)   # 90 cents, with the stand-in

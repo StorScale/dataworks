@@ -173,6 +173,11 @@ products:
 # A project with llm.budget, and an approved agent with a budget, get a key each with that monthly budget (USD), kept as the project's connections.
 llm:
   gateway: stub
+  # The guardrail (stack/tools/llm_guard.py), on either gateway: a question carrying what looks like a value
+  # the platform masks (a card number, a national ID, a bank account, an email address, a phone number) or a
+  # secret of the platform's (a key by its shape, a secret's name with a value) is refused before it reaches
+  # the model, naming what was found. false: everything goes through.
+  guardrails: true
   litellm:
     image: ghcr.io/berriai/litellm:main-v1.77.3
     # The models, as LiteLLM names them (model_list): Anthropic's on Microsoft Foundry, say.
