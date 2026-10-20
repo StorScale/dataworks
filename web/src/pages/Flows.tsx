@@ -6,7 +6,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import {
   compileFlow, getFlow, getFlowView, getFlows, getSemantic, getUploadPreview, getUploads, previewFlow, putImport, removeUpload, saveFlow, uploadFile,
-  type CanvasFlow, type StepColumn, type FlowItem, type FlowPreview, type FlowStep, type FlowTable, type FlowView, type SemanticMetric, type Upload, type UploadPreview,
+  type CanvasFlow, type StepColumn, type FlowItem, type FlowPreview, type FlowProcessorDef, type FlowStep, type FlowTable, type FlowView, type SemanticMetric, type Upload, type UploadPreview,
 } from "../api";
 import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
 import { Results } from "./Data";
@@ -20,11 +20,13 @@ import { Results } from "./Data";
 
 const KINDS: [string, string][] = [
   ["input", "Input"], ["select", "Select and rename"], ["retype", "Retype"], ["filter", "Filter"], ["join", "Join"], ["union", "Union"],
-  ["dedupe", "Deduplicate"], ["group", "Group by"], ["pivot", "Pivot"], ["unpivot", "Unpivot"], ["window", "Window"], ["formula", "Formula"], ["metric", "Metric"], ["output", "Output"],
+  ["dedupe", "Deduplicate"], ["group", "Group by"], ["pivot", "Pivot"], ["unpivot", "Unpivot"], ["window", "Window"], ["prepare", "Prepare"], ["formula", "Formula"], ["metric", "Metric"], ["output", "Output"],
 ];
 const label = (kind: string) => KINDS.find((k) => k[0] === kind)?.[1] ?? (kind === "code" ? "Code" : kind);
 const AGGREGATES = ["sum", "count", "min", "max", "avg", "count_distinct"];
 const WINDOWS = ["rank", "dense_rank", "row_number", "running_sum", "sum", "avg", "min", "max", "count", "lag", "lead"];
+const UNITS = ["year", "quarter", "month", "week", "day", "hour"];
+const GROUPS: [string, string][] = [["text", "Text"], ["nulls", "Nulls"], ["numbers", "Numbers"], ["dates", "Dates"], ["flags", "Flags and values"]];
 const TESTS = ["not_null", "unique", "accepted_values"];
 const TYPES = ["varchar", "bigint", "integer", "double", "decimal(10,2)", "boolean", "date", "timestamp", "timestamp(6)"];
 const inputsOf = (kind: string) => (kind === "input" || kind === "metric" ? 0 : kind === "join" ? 2 : kind === "union" || kind === "code" ? 99 : 1);
@@ -171,6 +173,7 @@ function Canvas({ project, flowName, canEdit, noRepo, onClose }: { project: stri
   const [tab, setTab] = useState<"preview" | "sql">("preview");
   const [tables, setTables] = useState<FlowTable[]>();
   const [metrics, setMetrics] = useState<SemanticMetric[]>();
+  const [processors, setProcessors] = useState<FlowProcessorDef[]>();
   const timer = useRef<number>();
 
   useEffect(() => { // for the step settings' dropdowns: the project's tables (and the products it reads), and its metrics
@@ -182,11 +185,13 @@ function Canvas({ project, flowName, canEdit, noRepo, onClose }: { project: stri
     if (params.get("new") || noRepo) {
       setFlow({ name: flowName, steps: [] });
       setCompiled(undefined);
+      compileFlow(project, { name: flowName, steps: [] }).then((v) => setProcessors(v.processors ?? [])).catch(() => setProcessors([]));
       return;
     }
     getFlowView(project, flowName).then((v) => {
       setFlow(v.flow);
       setCompiled(v);
+      setProcessors(v.processors ?? []);
       if (v.branch) setSaved({ branch: v.branch, mergeRequest: v.mergeRequest ?? "" });
     }).catch((e) => setLoadError((e as Error).message));
   }, [project, flowName]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -331,7 +336,7 @@ function Canvas({ project, flowName, canEdit, noRepo, onClose }: { project: stri
         <div className="flowside card" data-testid="step-settings">
           {!step && <p className="muted small" style={{ margin: 0 }}>{steps.length === 0 ? "Add an input to start." : "Pick a step to see its settings."}</p>}
           {step && (
-            <Settings key={step.id} step={step} steps={steps} inputs={inputColumns(step)} columns={result?.columns ?? undefined} canEdit={canEdit} update={update}
+            <Settings key={step.id} step={step} steps={steps} inputs={inputColumns(step)} columns={result?.columns ?? undefined} canEdit={canEdit} update={update} processors={processors}
               tables={tables} metrics={metrics} remove={() => { remove(step.id); setSelected(undefined); }} />
           )}
           {step && result?.error && <div className="banner error small" data-testid="step-error">{result.error}</div>}
@@ -364,7 +369,7 @@ function Canvas({ project, flowName, canEdit, noRepo, onClose }: { project: stri
 
 type SettingsProps = {
   step: FlowStep; steps: FlowStep[]; inputs: StepColumn[][]; columns?: StepColumn[]; canEdit: boolean; update: (s: FlowStep) => void; remove: () => void;
-  tables?: FlowTable[]; metrics?: SemanticMetric[];
+  tables?: FlowTable[]; metrics?: SemanticMetric[]; processors?: FlowProcessorDef[];
 };
 
 const list = (v?: string[]) => (v ?? []).join(", ");
@@ -373,7 +378,7 @@ const split = (v: string) => v.split(",").map((x) => x.trim()).filter(Boolean);
 const tableKey = (t: { table?: string; namespace?: string } | FlowTable) =>
   "fqn" in t ? (t.external ? `${t.fqn.split(".")[1]}.${t.name}` : t.name) : t.namespace ? `${t.namespace}.${t.table ?? ""}` : t.table ?? "";
 
-function Settings({ step, steps, inputs, canEdit, update, remove, tables, metrics }: SettingsProps) {
+function Settings({ step, steps, inputs, canEdit, update, remove, tables, metrics, processors }: SettingsProps) {
   const set = (patch: Partial<FlowStep>) => update({ ...step, ...patch });
   const ro = !canEdit;
   const cols = inputs[0] ?? [];
@@ -516,6 +521,25 @@ function Settings({ step, steps, inputs, canEdit, update, remove, tables, metric
             {!["rank", "dense_rank", "row_number"].includes(w.function) && <ColumnPick value={w.column} onChange={(column) => s({ ...w, column })} />}
             <input value={w.as} readOnly={ro} placeholder="as" onChange={(e) => s({ ...w, as: e.target.value })} />
           </>} />
+      </>}
+      {step.kind === "prepare" && <>
+        <span className="small muted">Processors on columns, in order: each changes its column, or makes a new one when "as" is set. What they can't say is a formula.</span>
+        <Rows items={step.processors ?? []} blank={{ column: "", do: "trim" }} onChange={(ps) => set({ processors: ps })} add="Add a processor"
+          render={(p, s) => {
+            const def = (processors ?? []).find((d) => d.name === p.do);
+            const made = (step.processors ?? []).map((x) => x.as).filter((x): x is string => !!x);
+            const setArg = (i: number, v: string) => { const args = [...(p.args ?? [])]; while (args.length <= i) args.push(""); args[i] = v; s({ ...p, args }); };
+            return <>
+              <ColumnPick value={p.column} allow={[...names, ...made.filter((m) => !names.includes(m))]} onChange={(column) => s({ ...p, column })} />
+              <select value={p.do} disabled={ro} onChange={(e) => s({ ...p, do: e.target.value, args: [] })} data-testid="processor">
+                {GROUPS.map(([g, gl]) => <optgroup key={g} label={gl}>{(processors ?? []).filter((d) => d.group === g).map((d) => <option key={d.name} value={d.name}>{d.label}</option>)}</optgroup>)}
+              </select>
+              {(def?.args ?? []).map((a, i) => a.kind === "unit"
+                ? <select key={i} value={p.args?.[i] ?? ""} disabled={ro} onChange={(e) => setArg(i, e.target.value)}><option value="">{a.name}…</option>{UNITS.map((u) => <option key={u}>{u}</option>)}</select>
+                : <input key={i} value={p.args?.[i] ?? ""} readOnly={ro} placeholder={a.name + (a.optional ? " (optional)" : "")} onChange={(e) => setArg(i, e.target.value)} style={{ flex: a.kind === "number" ? "0 1 90px" : "1 1 120px" }} />)}
+              <input value={p.as ?? ""} readOnly={ro} placeholder="as (a new column)" onChange={(e) => s({ ...p, as: e.target.value || undefined })} style={{ flex: "0 1 130px" }} />
+            </>;
+          }} />
       </>}
       {step.kind === "formula" && <>
         <span className="small muted">Each a Trino expression; a type makes the column's type known to the steps after.</span>

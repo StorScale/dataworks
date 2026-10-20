@@ -53,10 +53,13 @@ FLOWS = f"{PLATFORM}/api/projects/{NAME}/flows"
 FLOW = {"name": "weekly", "schedule": "0 6 * * 1", "steps": [
     {"id": "orders", "kind": "input", "table": "orders", "x": 0, "y": 0},
     {"id": "real", "kind": "filter", "inputs": ["orders"], "where": "not test", "description": "No test rows", "x": 220, "y": 0},
-    {"id": "by_region", "kind": "group", "inputs": ["real"], "by": ["region"],
-     "aggregates": [{"function": "sum", "column": "amount", "as": "revenue"}, {"function": "count", "as": "orders"}], "x": 440, "y": 0},
+    {"id": "clean", "kind": "prepare", "inputs": ["real"], "description": "Regions as written", "x": 440, "y": 0,
+     "processors": [{"column": "region", "do": "trim"}, {"column": "region", "do": "upper"}, {"column": "region", "do": "standardize", "args": ["EUROPE=EU, USA=US"]},
+                    {"column": "region", "do": "length", "as": "region_len"}]},
+    {"id": "by_region", "kind": "group", "inputs": ["clean"], "by": ["region"],
+     "aggregates": [{"function": "sum", "column": "amount", "as": "revenue"}, {"function": "count", "as": "orders"}], "x": 660, "y": 0},
     {"id": "out", "kind": "output", "inputs": ["by_region"], "table": "revenue_by_region",
-     "checks": [{"column": "region", "test": "not_null"}, {"column": "region", "test": "unique"}], "x": 660, "y": 0},
+     "checks": [{"column": "region", "test": "not_null"}, {"column": "region", "test": "unique"}], "x": 880, "y": 0},
 ]}
 
 
@@ -240,6 +243,11 @@ def main():
         check("alice's flow compiles: each step's columns and SQL, before anything runs",
               compiled.ok and cj.get("errors") == [] and cols == [("region", "varchar"), ("revenue", "double"), ("orders", "bigint")]
               and "group by \"region\"" in cj.get("steps", {}).get("by_region", {}).get("sql", ""), (compiled.status_code, compiled.text[:400]))
+        clean = cj.get("steps", {}).get("clean", {})
+        check("... the prepare step's processors, in order, typed: trim and upper case in place, a length as a new column",
+              [(c["name"], c["type"]) for c in (clean.get("columns") or [])][-2:] == [("test", "boolean"), ("region_len", "bigint")]
+              and 'upper(trim("region"))' in clean.get("sql", "") and "when upper(trim(\"region\")) = 'EUROPE' then 'EU'" in clean.get("sql", "")
+              and any(d["name"] == "standardize" for d in cj.get("processors") or []), (clean.get("columns"), clean.get("sql", "")[:300], len(cj.get("processors") or [])))
         bad = {**FLOW, "steps": FLOW["steps"][:2] + [
             {"id": "suppliers", "kind": "input", "table": "suppliers", "x": 0, "y": 100},
             {"id": "joined", "kind": "join", "inputs": ["real", "suppliers"], "join": "left", "on": [{"left": "order_id", "right": "id"}], "x": 440, "y": 50},

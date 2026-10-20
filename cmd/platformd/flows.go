@@ -272,6 +272,7 @@ type flowView struct {
 	Branch       string                      `json:"branch,omitempty"`       // the flow's own, while a save awaits review
 	MergeRequest string                      `json:"mergeRequest,omitempty"` // its merge request
 	DbtPath      string                      `json:"dbtPath,omitempty"`
+	Processors   []flow.ProcessorDef         `json:"processors,omitempty"` // what a prepare step offers (the canvas's list)
 }
 
 func viewOf(c *flow.Compiled) flowView {
@@ -435,11 +436,11 @@ func (s *server) handleFlowView(w http.ResponseWriter, r *http.Request) {
 	}
 	c, err := s.compileFlow(ctx, token, p, f)
 	if err != nil {
-		writeJSON(w, http.StatusOK, flowView{Flow: f, Steps: map[string]*flow.StepResult{}, Errors: []string{err.Error()}, Branch: branch, DbtPath: dbtDir(p)})
+		writeJSON(w, http.StatusOK, flowView{Flow: f, Steps: map[string]*flow.StepResult{}, Errors: []string{err.Error()}, Branch: branch, DbtPath: dbtDir(p), Processors: flow.Processors()})
 		return
 	}
 	v := viewOf(c)
-	v.Branch, v.DbtPath = branch, dbtDir(p)
+	v.Branch, v.DbtPath, v.Processors = branch, dbtDir(p), flow.Processors()
 	if branch != "" {
 		if mrs, err := gl.OpenMergeRequests(ctx, target); err == nil {
 			for _, mr := range mrs {

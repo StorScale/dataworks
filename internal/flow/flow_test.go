@@ -400,3 +400,80 @@ func TestMetricStep(t *testing.T) {
 		t.Errorf("no metrics: %+v", r)
 	}
 }
+
+// A prepare step: processors in order on a column, in place or as a new
+// one, typed as each leaves it; and what it refuses.
+func TestPrepareStep(t *testing.T) {
+	f := &Flow{Name: "clean", Steps: []Step{
+		{ID: "orders", Kind: Input, Table: "orders"},
+		{ID: "clean", Kind: Prepare, Inputs: []string{"orders"}, Processors: []Processor{
+			{Column: "region", Do: "trim"},
+			{Column: "region", Do: "upper"},
+			{Column: "region", Do: "standardize", Args: []string{"EUROPE=EU, USA=US"}},
+			{Column: "region", Do: "length", As: "region_len"},
+			{Column: "amount", Do: "fill", Args: []string{"0"}},
+			{Column: "amount", Do: "bucket", Args: []string{"0", "1000", "10"}, As: "size"},
+			{Column: "ordered_on", Do: "truncate_date", Args: []string{"month"}, As: "month"},
+			{Column: "ordered_on", Do: "date_part", Args: []string{"year"}, As: "year"},
+			{Column: "ordered_on", Do: "fill", Args: []string{"2026-01-01"}, As: "ordered_or"},
+			{Column: "ordered_on", Do: "format_date", Args: []string{"%Y-%m"}},
+			{Column: "customer_id", Do: "to_text"},
+			{Column: "customer_id", Do: "pad_left", Args: []string{"8", "0"}},
+			{Column: "test", Do: "not_null_flag", As: "has_test"},
+		}},
+		{ID: "out", Kind: Output, Inputs: []string{"clean"}, Table: "orders_clean"},
+	}}
+	c, err := Compile(f, env())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if errs := c.Errors(); len(errs) > 0 {
+		t.Fatalf("errors: %v", errs)
+	}
+	r := c.Steps["clean"]
+	got := describe(r.Columns)
+	want := "order_id bigint, customer_id varchar, region varchar, amount decimal(10,2), ordered_on varchar, test boolean, region_len bigint, size bigint, month date, year bigint, ordered_or date, has_test boolean"
+	if got != want {
+		t.Errorf("columns:\n got %s\nwant %s", got, want)
+	}
+	for _, frag := range []string{
+		`case when upper(trim("region")) = 'EUROPE' then 'EU' when upper(trim("region")) = 'USA' then 'US' else upper(trim("region")) end as "region"`,
+		`length(case when upper(trim("region"))`, `as "region_len"`,
+		`coalesce("amount", 0) as "amount"`,
+		`width_bucket(coalesce("amount", 0), 0, 1000, 10) as "size"`,
+		`date_trunc('month', "ordered_on") as "month"`, `year("ordered_on") as "year"`,
+		`date_format("ordered_on", '%Y-%m') as "ordered_on"`,
+		`lpad(cast("customer_id" as varchar), 8, '0') as "customer_id"`,
+		`("test" is not null) as "has_test"`,
+		`coalesce("ordered_on", date '2026-01-01') as "ordered_or"`,
+	} {
+		if !strings.Contains(r.SQL, frag) {
+			t.Errorf("SQL lacks %s:\n%s", frag, r.SQL)
+		}
+	}
+	for _, bad := range []struct {
+		p   Processor
+		why string
+	}{
+		{Processor{Column: "region", Do: "shout"}, `no processor "shout"`},
+		{Processor{Column: "nope", Do: "trim"}, "no column nope"},
+		{Processor{Column: "region", Do: "left"}, "needs how many"},
+		{Processor{Column: "region", Do: "left", Args: []string{"many"}}, "is a number"},
+		{Processor{Column: "ordered_on", Do: "date_part", Args: []string{"fortnight"}}, "is one of year, quarter"},
+		{Processor{Column: "region", Do: "standardize", Args: []string{"EU"}}, "from=to"},
+		{Processor{Column: "region", Do: "trim", As: "Bad Name"}, "lowercase letters"},
+		{Processor{Column: "region", Do: "trim", Args: []string{"x"}}, "takes 0 argument(s)"},
+	} {
+		f.Steps[1].Processors = []Processor{bad.p}
+		c, _ := Compile(f, env())
+		if errs := c.Errors(); len(errs) == 0 || !strings.Contains(errs[0], bad.why) {
+			t.Errorf("%v: wanted a refusal with %q, got %v", bad.p, bad.why, errs)
+		}
+	}
+	// An argument that could be more than a value is a literal, never SQL.
+	f.Steps[1].Processors = []Processor{{Column: "region", Do: "replace", Args: []string{"'; drop table x; --", "y"}}}
+	c, _ = Compile(f, env())
+	if errs := c.Errors(); len(errs) != 0 || !strings.Contains(c.Steps["clean"].SQL, `replace("region", '''; drop table x; --', 'y')`) {
+		t.Errorf("a literal argument: %v\n%s", errs, c.Steps["clean"].SQL)
+	}
+}
