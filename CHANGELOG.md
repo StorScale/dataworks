@@ -4,6 +4,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **Where the stateful pods run** (`placement`): a node selector per workload with a volume (`openmetadata-search`, `jupyterhub`, `postgres`, `ranger-db`, `ranger-solr`, `nessie`), for a cluster whose storage driver mounts a volume cleanly only on some nodes; an upgrade then keeps each where its volume mounts instead of letting the scheduler move it onto a node with a stale device. Empty by default: nothing changes for an install that doesn't set it.
+
+### Fixed
+- **A GitLab refusal says why**: GitLab's own words come through (a token short of the `api` scope answered as "HTTP 403 <nil>"), and a 403 names what the token needs (the `api` scope, the Developer role). The reviews' GitLab address may be the repo's own (taken as the server's), and a project path that isn't the repo's on the same server is refused with the right one named; the editor prefills both from the repo. The Flows page says what a flow's name may be.
+
 ## [0.19.0] - 2026-10-19
 
 Governance, and the gateway: a new column of personal data protected by its tag, a metric change tested, agents of the project's own (run on a schedule from a notebook in the repo), a customer erased under the CCPA with retention per table, and the LLM gateway with a budget per project and per agent.

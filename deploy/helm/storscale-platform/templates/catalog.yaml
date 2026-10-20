@@ -55,6 +55,7 @@ spec:
       labels: {{- include "storscale.selector" (list .Release.Name "openmetadata-search") | nindent 8 }}
     spec:
       enableServiceLinks: false
+      {{- include "storscale.placement" (list . "openmetadata-search") | nindent 6 }}
       securityContext: {fsGroup: 1000}
       containers:
         - name: opensearch

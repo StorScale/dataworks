@@ -30,6 +30,7 @@ spec:
     spec:
       {{- include "storscale.spread" (list . "nessie") | nindent 6 }}
       enableServiceLinks: false
+      {{- include "storscale.placement" (list . "nessie") | nindent 6 }}
       serviceAccountName: storscale
       securityContext: {fsGroup: 185}
       initContainers:

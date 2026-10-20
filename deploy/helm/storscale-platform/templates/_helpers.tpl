@@ -235,3 +235,13 @@ topologySpreadConstraints:
       matchLabels: {{- include "storscale.selector" (list $root.Release.Name $name) | nindent 8 }}
 {{- end }}
 {{- end }}
+
+{{/* Where a stateful pod runs (its volume follows it): the node selector
+     named for it in .Values.placement, by the workload's name; none: the
+     scheduler's choice. */}}
+{{- define "storscale.placement" -}}
+{{- $root := index . 0 }}
+{{- with index ($root.Values.placement | default dict) (index . 1) }}
+nodeSelector:{{ toYaml . | nindent 2 }}
+{{- end }}
+{{- end }}
