@@ -644,6 +644,8 @@ func (pl *Pipelines) problems() []string {
 			out = append(out, fmt.Sprintf("reviews: dbt %q: the dbt project's folder in the repo", r.Dbt))
 		case r.Project != "" && !gitPathRE.MatchString(r.Project):
 			out = append(out, fmt.Sprintf("reviews: project %q: the repo's path in GitLab, as group/repo", r.Project))
+		case r.Project != "" && sameHost(r.GitLab, pl.Repo) && !strings.EqualFold(r.Project, repoPath(pl.Repo)):
+			out = append(out, fmt.Sprintf("reviews: project %q isn't the repo's path, %q: leave it empty for the repo's own", r.Project, repoPath(pl.Repo)))
 		}
 	}
 	if pl.Memory != "" {
@@ -894,6 +896,22 @@ func allow(group string, accesses ...string) RangerItem {
 		it.Accesses = append(it.Accesses, RangerAccess{Type: a, IsAllowed: true})
 	}
 	return it
+}
+
+// repoPath is a repo's path in its GitLab, from its address: group/repo.
+func repoPath(repo string) string {
+	u, err := url.Parse(repo)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSuffix(strings.Trim(u.Path, "/"), ".git")
+}
+
+// sameHost says whether two addresses name the same server.
+func sameHost(a, b string) bool {
+	ua, err1 := url.Parse(a)
+	ub, err2 := url.Parse(b)
+	return err1 == nil && err2 == nil && ua.Host != "" && strings.EqualFold(ua.Host, ub.Host)
 }
 
 // RangerPolicies are the Ranger policies for the project's tables: one per

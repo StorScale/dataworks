@@ -56,3 +56,20 @@ func TestTheAPI(t *testing.T) {
 		t.Errorf("ProjectPath: %s", got)
 	}
 }
+
+func TestBaseOf(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://gitlab.com":                                  "https://gitlab.com",
+		"https://gitlab.example.com/":                         "https://gitlab.example.com",
+		"https://gitlab.example.com/gitlab":                   "https://gitlab.example.com/gitlab", // a relative root
+		"https://gitlab.com/vericast/group/sales-data.git":    "https://gitlab.com",                // the repo's address, pasted
+		"http://gitlab.example.com/data/sales-pipelines.git/": "http://gitlab.example.com",
+	} {
+		if got := BaseOf(in); got != want {
+			t.Errorf("%s: %s, want %s", in, got, want)
+		}
+	}
+	if ProjectPath("https://gitlab.com/vericast/group/sales-data.git") != "vericast/group/sales-data" {
+		t.Error(ProjectPath("https://gitlab.com/vericast/group/sales-data.git"))
+	}
+}
