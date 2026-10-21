@@ -193,6 +193,13 @@ llm:
           model: anthropic/claude-opus-5
           api_base: ""          # https://<resource>.openai.azure.com/anthropic
           api_key: os.environ/LLM_PROVIDER_KEY
+      # An embedding model, for the knowledge banks (12.6): on Foundry, an Azure OpenAI deployment on the same key.
+      # - model_name: embedding
+      #   litellm_params:
+      #     model: azure/text-embedding-3-small
+      #     api_base: https://<resource>.cognitiveservices.azure.com
+      #     api_version: "2023-05-15"
+      #     api_key: os.environ/LLM_PROVIDER_KEY
 
 # Dashboards: a Mapbox API key gives Superset's map charts (deck.gl) a base
 # map; without one the layers draw on nothing, which is still a map of points.

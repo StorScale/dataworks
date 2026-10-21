@@ -16,6 +16,9 @@ spec:
   template:
     metadata:
       labels: {{- include "storscale.selector" (list .Release.Name "llm") | nindent 8 }}
+      annotations:
+        # The gateway reads its models and guardrail settings as it starts: a change to them starts it again.
+        checksum/config: {{ list .Values.llm.litellm.models .Values.llm.guardrails .Values.llm.forbiddenTerms | toJson | sha256sum }}
     spec:
       enableServiceLinks: false
       serviceAccountName: storscale
@@ -67,6 +70,8 @@ spec:
         - name: llm
           image: {{ .Values.llm.litellm.image }}
           imagePullPolicy: {{ .Values.images.pullPolicy }}
+          # The provider's key trimmed first: a key pasted with a trailing newline breaks the OpenAI and Azure clients' headers.
+          command: ["sh", "-c", 'export LLM_PROVIDER_KEY="$(printf %s "$LLM_PROVIDER_KEY" | tr -d "\r\n ")"; exec docker/prod_entrypoint.sh "$@"', "--"]
           args: ["--config", "/config/config.yaml", "--port", "4000"]
           env:
             - {name: LITELLM_MASTER_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: LLM_MASTER_KEY}}}
