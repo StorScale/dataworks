@@ -17,8 +17,8 @@ spec:
     metadata:
       labels: {{- include "storscale.selector" (list .Release.Name "llm") | nindent 8 }}
       annotations:
-        # The gateway reads its models and guardrail settings as it starts: a change to them starts it again.
-        checksum/config: {{ list .Values.llm.litellm.models .Values.llm.guardrails .Values.llm.forbiddenTerms | toJson | sha256sum }}
+        # The gateway reads its models, its guardrail settings and the guardrail's code as it starts: a change to any starts it again.
+        checksum/config: {{ list .Values.llm.litellm.models .Values.llm.guardrails .Values.llm.forbiddenTerms (.Files.Get "files/tools/llm_guard.py") (.Files.Get "files/tools/llm_stub.py") | toJson | sha256sum }}
     spec:
       enableServiceLinks: false
       serviceAccountName: storscale
