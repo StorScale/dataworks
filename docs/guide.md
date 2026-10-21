@@ -630,6 +630,7 @@ storscale/
 3. Filter by **Source**: Trino's reads (Ranger's log), the platform's own actions (projects saved, tags made, agents approved, classifications confirmed, uploads, deliveries approved, the erasure, the model asked), the assistants' questions (Lab 8: the agent and the person both named).
 4. Administration → **Audit** is the same log for every project, for the platform's administrators.
 5. Nothing in the log can be edited from the platform; it's written as things happen and read by whoever may.
+6. **Every project at once.** The log says what happened; Administration → **Governance** says where things stand now, across every project. It's for the administrators, and for the products' certifiers and the data-protection approvers, who reach it from the account menu. **Awaiting approval** lists the agents, deliveries and requests for a data product that wait on someone, and whom. **Agents** lists every project's agents with their owner, tools, schedule, last run and spend against their budget (`nightly-summary`, `triage` and `weekly` from Lab 17). **What readers see** shows what each tag means across the platform (the mask, and who sees through it), then each project's readers with their tables, row filters, masks and tagged columns (`retail`'s readers' rules from Lab 13, the email addresses from Lab 4). **Data products** shows each product and whether it's certified (Lab 12). **Erasures** shows each one with its deadline (Lab 15). The page changes nothing; each row links to where the decision is made.
 
 **Check:** the quarter is there in order: the uploads, the import's runs, the tags confirmed, the campaign flow saved and merged, the product certified, the deliveries approved, the erasure, the agent approved and revoked, the model asked, with the right names on each.
 
@@ -647,7 +648,8 @@ storscale/
 4. **History and closes:** a table's History and the **Tags** tab (Lab 19); the Data page's **Storage** tab shows each table's files and snapshots and the nightly maintenance (compaction, old snapshots expired, the window the history is kept for).
 5. **Limits:** on a project's Edit page, how many queries at once, how much memory each, how much storage; one project can't starve the others, and a query that hits a limit is told so where it ran.
 6. **Upgrades:** `storscale upgrade --context <cluster> --version <x> --dry-run` shows what a release would change (the Project definition included), then without `--dry-run` applies it, waits for every service, and prints the rollback. The CHANGELOG says what each release needs.
-7. **Backups (Kubernetes):** `storscale backup keygen --out <dir>` makes a key pair; the certificate goes to the chart (`backup.certificate`), the key somewhere other than the cluster. Each night a CronJob dumps every database, exports the projects and their secrets, and keeps them encrypted in the platform's own Buckets or another endpoint (`backup.s3`), the newest few; `backup.data` copies the buckets too. `storscale backup` takes one now; `storscale restore --key <key>` puts one back into the install it came from, and `--into-new` into another install when a cluster is lost. Restoring onto a fresh install is what CI checks a release with.
+7. **Removing a project.** On a project's Overview, the administrators' **Delete** takes away its people's access, its Airflow, its agents' clients and its keys at the gateway, and deletes the credentials it kept (its repo's token, its sources' and targets' passwords, its API tokens, its agents' secrets). Its tables and files stay, for whoever must decide what becomes of them.
+8. **Backups (Kubernetes):** `storscale backup keygen --out <dir>` makes a key pair; the certificate goes to the chart (`backup.certificate`), the key somewhere other than the cluster. Each night a CronJob dumps every database, exports the projects and their secrets, and keeps them encrypted in the platform's own Buckets or another endpoint (`backup.s3`), the newest few; `backup.data` copies the buckets too. `storscale backup` takes one now; `storscale restore --key <key>` puts one back into the install it came from, and `--into-new` into another install when a cluster is lost. Restoring onto a fresh install is what CI checks a release with.
 
 **Check:** Administration → Health shows every service up; a `--dry-run` upgrade to the current version changes nothing.
 
@@ -675,7 +677,7 @@ storscale/
 | 18 | Ninety reviews sorted into five topics by a model, addresses masked first |
 | 19 | September's close reproducible to the row for seven years |
 | 20 | The quarter's changes released as a tag, with a rollback |
-| 21 | The auditor's question answered by a search |
+| 21 | The auditor's question answered by a search; every project's approvals, agents, rules and erasures on one page |
 | 22 | Upgraded and restored by command |
 
 ---
