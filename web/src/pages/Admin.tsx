@@ -19,6 +19,7 @@ export default function Admin() {
             <NavLink to="/admin/access" data-testid="admin-access">Access</NavLink>
             <NavLink to="/admin/audit" data-testid="admin-audit">Audit</NavLink>
             <NavLink to="/admin/governance" data-testid="admin-governance">Governance</NavLink>
+            <NavLink to="/admin/usage" data-testid="admin-usage">Usage</NavLink>
             <NavLink to="/admin/assistants" data-testid="admin-assistants">Assistants</NavLink>
             {tools.some((t) => t.id === "monitoring") && <NavLink to="/admin/monitoring" data-testid="admin-monitoring">Monitoring</NavLink>}
             {external.map((t) => (

@@ -135,7 +135,7 @@ The examples already prove every mapping in this list by hand.
 | LLM Mesh (gateway, cost caps, guardrails) | LiteLLM in front of the models, with a budget per project and per agent, the guardrail, and every call audited | Built (0.19.x); Langfuse (12.8) and knowledge banks (12.6) to come |
 | Agents, prompt studio, Knowledge Banks | The MCP server (phase 4), reaching the governed data products and company model (DevAssist among its clients), agent identity and audit, Langfuse, pgvector | Phase 10 (data products for agents), phase 12 (the rest) |
 | Govern (approvals, registry, standards) | Approvals and a registry for models and agents, in the project; a Governance page across projects | Phase 12 (agents, built; the page 12.9), phase 15 (models) |
-| Usage and cost per project | Trino, Spark and storage use attributed to projects, with budgets, in Grafana | Phase 13 |
+| Usage and cost per project | Trino, Spark and storage use attributed to projects, with budgets, in Grafana | Phase 13 (built 2026-10-21 in the web app, not Grafana: Trino's time, storage and model calls, a rate card, budgets and alerts; Spark left) |
 | AutoML, experiment tracking, model registry, drift | MLflow, FLAML as a library, Evidently + Grafana; a model served as an API; no visual AutoML | Phase 15 |
 | Webapps and Dataiku Apps | Simple data apps per project, a Q&A app, a readers' Home; the API and its Python package | Phase 14 |
 | Answers, Stories | Not planned | Not included; nor a plugin model, R, image and video processing, visual statistics, or third-party model monitoring (the capability map, 2026-10-20) |

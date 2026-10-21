@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **Usage and cost per project** (13.1, R13.1–R13.3): what each project's queries, storage and model calls cost a month, by the install's rate card (`usage.rates`: a CPU-hour of Trino's, a GB-month kept; the model calls are priced by the gateway). Trino tells platformd of each finished query (its HTTP event listener, `usage-events.properties`, with Trino's shared secret), and the query counts for the projects whose tables it read, split evenly between several: its CPU time, the bytes it read, who ran it, and the costliest queries with their SQL. Storage is sampled once a day: each table's data files (Iceberg's `$files`, as the maintenance account) and the project's bucket (Buckets' count, through the operator's new `/buckets/sizes`). A project's new **Usage** tab, for its editors, shows the month against last month, who ran the queries, the costliest ones and the largest tables; **Usage** under Administration, and in the account menu for the install's usage viewers (`usage.viewerGroups`: finance), lists every project's. A project's `cost.budget` is a project alert at 80% and at 100%; nothing is stopped (6.8's limits cap use). Not yet: Spark. The account menu also links the Governance page for its non-administrator viewers.
+
 ## [0.23.0] - 2026-10-21
 
 Agents that work together, and knowledge that keeps itself fresh: an agent may ask another, and call the project's own tools (an API's operations, signed in by its connections); knowledge banks from the project's files, rebuilt on a schedule, and on the canvas; editors add banks on the Agents tab; the Governance page with the install's masks by tag and each agent's last run; and a project's credentials go with it.

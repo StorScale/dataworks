@@ -58,6 +58,7 @@ type Spec struct {
 	LLM         *LLM            `json:"llm,omitempty"`       // the project's use of the LLM gateway (12.1)
 	Knowledge   []KnowledgeBank `json:"knowledge,omitempty"` // text the project's people and agents search by meaning (12.6)
 	Tools       []ConnectorTool `json:"tools,omitempty"`     // its own tools for its agents: an API's operations, signed in by a connection (12.7)
+	Cost        *Cost           `json:"cost,omitempty"`      // what it may cost a month, by the install's rate card (13.1)
 }
 
 // Semantic is how the project's semantic model stands among the others'
@@ -336,6 +337,15 @@ const CatalogUser = "openmetadata"
 // own with a monthly budget (USD), kept as its connection <project>-llm.
 type LLM struct {
 	Budget float64 `json:"budget"`
+}
+
+// Cost is a project's monthly budget (use case 13.1, R13.3): what its
+// Trino time, its storage and its model calls may cost a month, priced by
+// the install's rate card; at 80% and at 100% the project is alerted. It
+// doesn't stop anything (6.8's limits cap use; the gateway's budget caps
+// the model calls).
+type Cost struct {
+	Budget float64 `json:"budget"` // a month, in the rate card's currency
 }
 
 // A KnowledgeBank is text of the project's, searched by meaning (use case

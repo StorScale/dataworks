@@ -114,6 +114,11 @@ type config struct {
 	// too: for the Governance page (12.9), which shows it.
 	Protection       project.ProtectionRules
 	ProtectSuggested bool
+	// Rates is the install's rate card (USAGE_RATES, 13.1), and UsageGroups
+	// see every project's usage and cost (USAGE_VIEWER_GROUPS: finance;
+	// default the administrators).
+	Rates       rates
+	UsageGroups []string
 	// ErasureDeadlineDays is how long the company has to answer a request
 	// to delete a person's data (use case 6.9): the CCPA's 45, by default.
 	ErasureDeadlineDays int
@@ -193,6 +198,10 @@ func configFromEnv(get func(string) string) (config, error) {
 		return c, fmt.Errorf("PROTECTION_TAGS: %w", err)
 	}
 	c.Protection = protection
+	if c.Rates, err = parseRates(get("USAGE_RATES")); err != nil {
+		return c, fmt.Errorf("USAGE_RATES: %w", err)
+	}
+	c.UsageGroups = list("USAGE_VIEWER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers"))
 	var missing []string
 	for k, v := range map[string]string{"PLATFORM_URL": c.PlatformURL, "KEYCLOAK_URL": c.KeycloakURL, "OIDC_CLIENT_SECRET": c.ClientSecret} {
 		if v == "" {

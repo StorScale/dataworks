@@ -79,8 +79,11 @@ type server struct {
 	health          *watch         // nil: no health checks (HEALTH isn't on)
 	projectAlerts   *projectAlerts // nil: no project alerts (HEALTH isn't on)
 	maintainer      *maintainer    // nil: no table maintenance (no MAINTENANCE_TRINO_PASSWORD)
-	audit           *audit.Log     // nil: no audit log (no AUDIT_URL)
-	history         *history       // the catalog's history: tags, as-of, a table's changes
+	usage           *usageCounter  // Trino's queries counted by project (13.1); nil without the platform's bucket
+	nsCache         map[string]string
+	nsCacheAt       time.Time
+	audit           *audit.Log // nil: no audit log (no AUDIT_URL)
+	history         *history   // the catalog's history: tags, as-of, a table's changes
 
 	mu       sync.Mutex
 	sessions map[string]*session
@@ -146,6 +149,7 @@ func newServer(ctx context.Context, cfg config, log *slog.Logger) (*server, erro
 		s.catalog = catalog.New(cfg.CatalogURL, cfg.CatalogTokenFile, "trino")
 	}
 	go s.sweep(ctx)
+	s.startUsage(ctx)
 	if err := s.startMaintenance(ctx); err != nil {
 		return nil, err
 	}
@@ -181,7 +185,10 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/projects/{name}/flow", s.handleFlow)
 	mux.HandleFunc("GET /api/terms", s.handleSemantic)
 	mux.HandleFunc("GET /api/products", s.handleProducts)
-	mux.HandleFunc("GET /api/governance", s.handleGovernance) // across projects (12.9): administrators, certifiers, data-protection approvers
+	mux.HandleFunc("POST /internal/usage/trino", s.handleTrinoEvents)      // Trino's finished queries (its HTTP event listener), for usage (13.1)
+	mux.HandleFunc("GET /api/usage", s.handleUsage)                        // every project's month: usage viewers, administrators
+	mux.HandleFunc("GET /api/projects/{name}/usage", s.handleProjectUsage) // a project's: its editors too
+	mux.HandleFunc("GET /api/governance", s.handleGovernance)              // across projects (12.9): administrators, certifiers, data-protection approvers
 	mux.HandleFunc("GET /api/assistants", s.handleAssistants)
 	mux.HandleFunc("PUT /api/assistants/{name}", s.handlePutAssistant)
 	mux.HandleFunc("DELETE /api/assistants/{name}", s.handleDeleteAssistant)
@@ -352,7 +359,10 @@ func (s *server) handleSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"user": sess.User, "tools": toolsFor(s.cfg.PlatformURL, sess.User.Groups, s.cfg.AdminGroups),
-		"admin": s.isAdmin(sess.User), "projects": s.store != nil, "flow": s.catalog != nil, "semantic": s.cfg.SemanticURL != "", "pipelines": s.airflow != nil,
+		"admin": s.isAdmin(sess.User), "projects": s.store != nil,
+		// the pages across projects some see besides the administrators: usage (finance), governance (certifiers, approvers)
+		"usage":      s.isAdmin(sess.User) || s.inGroups(sess.User.Groups, s.cfg.UsageGroups),
+		"governance": s.isAdmin(sess.User) || s.inGroups(sess.User.Groups, s.cfg.ProductCertifierGroups) || s.inGroups(sess.User.Groups, s.cfg.DeliveryApproverGroups), "flow": s.catalog != nil, "semantic": s.cfg.SemanticURL != "", "pipelines": s.airflow != nil,
 		"brand": s.brand.session()})
 }
 

@@ -52,24 +52,52 @@ func (b *Buckets) ensureBucket(ctx context.Context, name string) error {
 
 // admin sends a request to the admin API (/minio/admin/v3), signed with SigV4.
 func (b *Buckets) admin(ctx context.Context, method, path string, query url.Values, body []byte) error {
+	_, err := b.adminRead(ctx, method, path, query, body)
+	return err
+}
+
+// BucketSizes are the buckets' sizes in bytes, as Buckets last counted them
+// (its data usage scan): for usage per project (13.1).
+func (b *Buckets) BucketSizes(ctx context.Context) (map[string]int64, error) {
+	data, err := b.adminRead(ctx, "GET", "/datausageinfo", url.Values{}, nil)
+	if err != nil {
+		return nil, err
+	}
+	var info struct {
+		Buckets map[string]struct {
+			Size int64 `json:"size"`
+		} `json:"bucketsUsageInfo"`
+	}
+	if err := json.Unmarshal(data, &info); err != nil {
+		return nil, err
+	}
+	out := map[string]int64{}
+	for name, u := range info.Buckets {
+		out[name] = u.Size
+	}
+	return out, nil
+}
+
+// adminRead is admin, with the answer's body.
+func (b *Buckets) adminRead(ctx context.Context, method, path string, query url.Values, body []byte) ([]byte, error) {
 	u := b.URL + "/minio/admin/v3" + path + "?" + query.Encode()
 	req, err := http.NewRequestWithContext(ctx, method, u, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	sum := sha256.Sum256(body)
 	req.Header.Set("X-Amz-Content-Sha256", hex.EncodeToString(sum[:]))
 	req = signer.SignV4(*req, b.AccessKey, b.SecretKey, "", "us-east-1")
 	res, err := client.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer res.Body.Close()
 	if res.StatusCode/100 != 2 {
 		msg, _ := io.ReadAll(io.LimitReader(res.Body, 300))
-		return &HTTPError{Method: method, URL: u, Status: res.StatusCode, Body: string(msg)}
+		return nil, &HTTPError{Method: method, URL: u, Status: res.StatusCode, Body: string(msg)}
 	}
-	return nil
+	return io.ReadAll(io.LimitReader(res.Body, 16<<20))
 }
 
 func (b *Buckets) putPolicy(ctx context.Context, name string, statements []project.Statement) error {

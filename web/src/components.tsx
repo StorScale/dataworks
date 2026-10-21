@@ -20,7 +20,7 @@ function useMenu() {
 
 // TopBar is on every page: the platform, the project you're in, search, your tools, you.
 export function TopBar() {
-  const { user, admin, projects, brand, semantic } = usePlatform();
+  const { user, admin, projects, brand, semantic, usage, governance } = usePlatform();
   const project = useMatch("/p/:project/*")?.params.project;
   const account = useMenu();
   return (
@@ -43,6 +43,8 @@ export function TopBar() {
           <div className="section">Signed in as {user.username}</div>
           <div className="small muted" style={{ padding: "0 12px 8px" }}>{user.groups.join(", ") || "no groups"}</div>
           {admin && <Link to="/admin" onClick={() => account.setOpen(false)} data-testid="nav-admin">Administration</Link>}
+          {!admin && usage && <Link to="/usage" onClick={() => account.setOpen(false)} data-testid="nav-usage">Usage and cost</Link>}
+          {!admin && governance && <Link to="/governance" onClick={() => account.setOpen(false)} data-testid="nav-governance">Governance</Link>}
           <button onClick={signOut} data-testid="sign-out">Sign out</button>
         </div>
       </div>
@@ -230,7 +232,7 @@ function Search({ project }: { project?: string }) {
 // ProjectFrame is every /p/:project page: the project's header and tabs, then the page.
 export function ProjectFrame() {
   const { project = "" } = useParams();
-  const { admin, tools, flow, semantic, pipelines } = usePlatform();
+  const { admin, tools, flow, semantic, pipelines, usage } = usePlatform();
   const { data: view, error, reload } = usePoll(() => getProject(project), [project], 10_000);
   useEffect(() => { if (view?.role || admin) rememberProject(project); }, [project, view, admin]);
   const spec = view?.spec?.spec;
@@ -252,6 +254,7 @@ export function ProjectFrame() {
     ["connections", "Connections", true],
     ["access", "Access", true],
     ["audit", "Audit", view?.role === "editor" || admin],
+    ["usage", "Usage", view?.role === "editor" || admin || !!usage],
   ];
   return (
     <ProjectContext.Provider value={{ name: project, view, error, reload }}>
