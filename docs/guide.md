@@ -137,7 +137,7 @@ As **bob**, open `retail` → **Edit** and, in the JSON box under `tables`, add:
 "freshness": [{"table": "uploads_orders", "within": "24h"}]
 ```
 
-Save. (The freshness part has a form of its own on the page; checks don't yet.) Eight kinds of check exist: `unique`, `notNull`, `rowCount`, `acceptedValues`, `range`, `regex` (every value matches a pattern), `references` (every value is found in another table's column), and `sql` (a query of your own that must return no rows).
+Save. (The freshness part has a form of its own on the page; checks don't yet.) Eight kinds of check exist: `unique`, `notNull`, `rowCount`, `acceptedValues`, `range`, `regex` (every value matches a pattern), `references` (every value is found in another table's column), and `sql` (a query of your own that must return no rows; the project's tables may be named bare, as on the SQL tab).
 
 1. The platform runs the checks in the catalog every minute. Open **Data** → `uploads_orders` → **Quality**: its checks, passing, with when they last ran (the test orders' amount of 9,999 is under the range's ceiling; the references check finds every order's customer).
 2. Break one: on the SQL tab, `INSERT INTO uploads_orders (order_id, region, amount, refunded, test) VALUES (307, 'EU', 5.0, false, false)` (no customer). Within a minute **Quality** shows `notNull` on `customer_id` failing ("nullCount=1"), the project's **Overview** lists it as an issue, and the people the project notifies (a Teams or Slack channel, or email, set on the Edit page) are told. The catalog's own page for the table shows the same test, failed.

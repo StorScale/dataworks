@@ -27,6 +27,7 @@ Metadata is ingested every METADATA_EVERY seconds; checks run every round.
 import json
 import logging
 import os
+import re
 import sys
 import time
 
@@ -442,8 +443,9 @@ def test_case(project, check, catalog="iceberg", namespace=None):
             ref = f"{q(catalog)}.{q(namespace)}.{q(check['refTable'])}"
             sql = (f"SELECT t.{q(check['column'])} FROM {table} t WHERE t.{q(check['column'])} IS NOT NULL "
                    f"AND NOT EXISTS (SELECT 1 FROM {ref} r WHERE r.{q(check['refColumn'])} = t.{q(check['column'])})")
-        else:
-            sql = check.get("sql") or ""
+        else:   # the project's tables named bare, as its people write them: qualified, since the catalog's session has no schema
+            sql = re.sub(r"(?i)\b(from|join)\s+([a-z_][a-z0-9_]*)\b(?!\s*\.)",
+                         lambda m: f"{m.group(1)} {q(catalog)}.{q(namespace)}.{q(m.group(2))}", check.get("sql") or "")
         params += [{"name": "sqlExpression", "value": sql}, {"name": "strategy", "value": "ROWS"},
                    {"name": "operator", "value": "=="}, {"name": "threshold", "value": "0"}]
     return tc
@@ -494,8 +496,7 @@ def profile_tables(token):
             continue
         workflow = ProfilerWorkflow.create({
             "source": {"type": "trino", "serviceName": SERVICE, "serviceConnection": trino_connection(catalog),
-                       "sourceConfig": {"config": {"type": "Profiler", "computeTableMetrics": True, "computeColumnMetrics": True,
-                                                   "profileSampleConfig": {"profileSampleType": "PERCENTAGE", "profileSample": 100},
+                       "sourceConfig": {"config": {"type": "Profiler", "computeTableMetrics": True, "computeColumnMetrics": True,   # the whole table (the default sample)
                                                    "databaseFilterPattern": {"includes": [f"^{catalog}$"]},
                                                    "schemaFilterPattern": {"includes": [f"^{namespace}$"]},
                                                    "tableFilterPattern": {"includes": [f"^{t}$" for t in due]}}}},
