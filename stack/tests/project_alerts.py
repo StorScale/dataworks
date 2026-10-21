@@ -46,12 +46,18 @@ def delete_connection():
 
 
 def cards():
-    """What the channel's been told: each card's text."""
+    """What the Teams channel's been told: each card's text."""
     out = []
     for _, _, body in list(Teams.received):
         att = (json.loads(body).get("attachments") or [{}])[0]
-        out.append(json.dumps(att.get("content", {})))
+        if att:
+            out.append(json.dumps(att.get("content", {})))
     return out
+
+
+def slack_messages():
+    """What the Slack channel's been told (the same webhook plays both): each message's text."""
+    return [json.loads(body).get("text", "") for _, _, body in list(Teams.received) if "attachments" not in json.loads(body)]
 
 
 def main():
@@ -66,7 +72,7 @@ def main():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     put_connection({"webhook": f"http://{socket.gethostbyname(socket.gethostname())}:{PORT}/workflows/sales-signature"})
     spec = json.loads(json.dumps(before))
-    spec["spec"]["notify"] = {"teams": CONNECTION}
+    spec["spec"]["notify"] = {"teams": CONNECTION, "slack": CONNECTION}   # one webhook plays the Teams channel and the Slack one
     spec["spec"]["tables"]["freshness"] = [{"table": TABLE, "within": "1m"}]
     try:
         r = bob.put(url, data=json.dumps(spec), timeout=30)
@@ -78,12 +84,15 @@ def main():
               {"cards": cards()[-2:], "platformd can't tell": alerts(bob).json().get("unknown")})
         check("... as an Adaptive Card naming the project, and linking to the table",
               stale is not None and "sales: " in stale and f"/p/{PROJECT}/data?table={TABLE}" in stale, (stale or "")[:300])
+        said = wait(lambda: next((m for m in slack_messages() if f"{TABLE} is stale" in m), None), 60, every=5)
+        check("... and the Slack channel, as a message with the title in bold and the link",
+              said is not None and said.startswith("*") and f"/p/{PROJECT}/data?table={TABLE}" in said, (said or slack_messages()[-2:]))
 
         # 2. The project's page.
         r = alerts(alice)
         issues = r.json().get("issues", []) if r.ok else []
         check("alice (a reader) sees it on the project's page", any(i["key"] == f"stale/{TABLE}" for i in issues), r.text[:300])
-        check("... where it's told", r.ok and r.json().get("notify", {}).get("teams") is True, r.text[:200])
+        check("... where it's told", r.ok and r.json().get("notify", {}).get("teams") is True and r.json().get("notify", {}).get("slack") is True, r.text[:200])
         code = alice.post(f"{url}/alerts/mute", json={"key": f"stale/{TABLE}", "hours": 1}, timeout=30).status_code
         check("... and can't mute it", code == 403, f"HTTP {code}")
         m = bob.post(f"{url}/alerts/mute", json={"key": f"stale/{TABLE}", "hours": 1}, timeout=30)

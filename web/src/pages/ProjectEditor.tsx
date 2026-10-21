@@ -44,7 +44,7 @@ export default function ProjectEditor() {
   const setSource = (i: number, s: Partial<Source>) => set({ sources: spec.sources!.map((x, j) => (j === i ? { ...x, ...s } : x)) });
   const setNotify = (n: Partial<NonNullable<Spec["notify"]>>) => {
     const next = { ...spec.notify, ...n };
-    set({ notify: next.teams || next.email?.length ? next : undefined });
+    set({ notify: next.teams || next.slack || next.email?.length ? next : undefined });
   };
   const setMaintenance = (m: Partial<NonNullable<NonNullable<Spec["tables"]>["maintenance"]>>) => {
     const next = { ...spec.tables?.maintenance, ...m };
@@ -206,6 +206,9 @@ export default function ProjectEditor() {
           </p>
           <label>Teams channel: the name of a connection of the project's, holding the channel's webhook
             <input value={spec.notify?.teams ?? ""} placeholder="alerts" onChange={(e) => setNotify({ teams: e.target.value || undefined })} />
+          </label>
+          <label>Slack channel: the name of a connection holding its incoming webhook
+            <input value={spec.notify?.slack ?? ""} placeholder="alerts-slack" onChange={(e) => setNotify({ slack: e.target.value || undefined })} />
           </label>
           <label>Email
             <input value={(spec.notify?.email ?? []).join(", ")} placeholder="sales-data@example.com" onChange={(e) => setNotify({ email: list(e.target.value).length ? list(e.target.value) : undefined })} />

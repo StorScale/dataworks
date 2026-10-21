@@ -66,6 +66,8 @@ var ConnectionKinds = []ConnectionKind{
 		{Key: "clientId", Label: "Client"}, {Key: "secret", Label: "Secret", Secret: true, Required: true}}},
 	{Kind: "teams", Label: "A Teams channel", For: "the project's alerts (notify.teams)", Fields: []ConnectionField{
 		{Key: "webhook", Label: "Workflows webhook URL", Secret: true, Required: true}}},
+	{Kind: "slack", Label: "A Slack channel", For: "the project's alerts (notify.slack)", Fields: []ConnectionField{
+		{Key: "webhook", Label: "Incoming webhook URL", Secret: true, Required: true}}},
 }
 
 // KindOf is the kind named, or nil.
