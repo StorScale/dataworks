@@ -135,7 +135,7 @@ def semantic_tests(token, c, work):
         moved = before.get("rows") is not None and before.get("rows") != t.get("rows")
         if t["passed"] and not moved:
             continue
-        mark = "✓" if t["passed"] else "✗"
+        mark = "✓" if t["passed"] else "–" if t.get("skipped") else "✗"
         what = f"- {mark} `{t['name']}`"
         if not t["passed"]:
             what += f": {t.get('why', '')[:200]}"

@@ -199,7 +199,9 @@ def split(text):
 
 def check_tests(tests, metrics):
     """The tests document (use case 12.3): each test names metrics the model
-    has, and what it expects (rows: how many; values: the rows themselves)."""
+    has, and what it expects (rows: how many; values: the rows themselves);
+    or a plain-language question and the metric call it should become
+    (metrics, group_by), which the model is asked through the gateway."""
     names = {m["name"] for m in metrics}
     seen = set()
     for t in tests:
@@ -217,7 +219,11 @@ def check_tests(tests, metrics):
         for k in ("group_by", "where"):
             if t.get(k) is not None and not isinstance(t[k], list):
                 raise ValueError(f"test {t['name']}: {k} is a list")
+        if t.get("question") is not None and (not isinstance(t["question"], str) or not t["question"].strip()):
+            raise ValueError(f"test {t['name']}: question is the plain-language question, as words")
         e = t.get("expect")
+        if t.get("question") and e is None:
+            continue   # a question's test: the metric call the model makes is what's checked
         if not isinstance(e, dict) or not ({"rows", "values"} & set(e)):
             raise ValueError(f"test {t['name']}: expect has rows (how many) or values (the rows)")
         if "rows" in e and not isinstance(e["rows"], int):
@@ -381,6 +387,56 @@ def compile_query(project, metrics, group_by=(), where=(), order_by=(), limit=No
         raise ValueError(f"MetricFlow can't answer that: {e}") from e
 
 
+class NoKey(Exception):
+    """The project has no gateway key: its question tests can't be asked."""
+
+
+QUESTION_MARK = "Translate the question into a metric query"
+
+
+def question_prompt(summary, question):
+    """The question, with the model's metrics (their descriptions, and the terms' synonyms) and dimensions."""
+    synonyms = {t.get("name"): t.get("synonyms") or [] for t in summary.get("terms", [])}
+    lines = [f"{QUESTION_MARK} on the definitions below. Answer with a JSON object "
+             '{"metrics": [...], "group_by": [...]} and nothing else, using only the names listed.', "Metrics:"]
+    dims = set()
+    for m in summary.get("metrics", []):
+        also = synonyms.get(m["name"]) or []
+        lines.append(f"- {m['name']}: {m.get('description') or ''}" + (f" (also called: {', '.join(also)})" if also else ""))
+        dims |= set(m.get("dimensions") or [])
+    lines.append("Dimensions:")
+    lines += [f"- {d}" for d in sorted(dims)]
+    lines.append(f"Question: {question.strip()}")
+    return "\n".join(lines)
+
+
+def ask_platform(c: Caller, project, prompt):
+    """One question to the model, through platformd on the project's gateway key, as the caller."""
+    r = requests.post(f"{PLATFORMD_URL}/api/agent/projects/{project}/ask", json={"prompt": prompt}, timeout=300,
+                      headers={"Authorization": f"Bearer {c.token}"})
+    if r.status_code == 422 and "no gateway key" in r.text:
+        raise NoKey()
+    if not r.ok:
+        try:
+            why = r.json().get("error") or r.text
+        except ValueError:
+            why = r.text
+        raise ValueError(f"the model couldn't be asked: {why[:300]}")
+    return r.json().get("answer", "")
+
+
+def parse_call(text):
+    """The model's metric call: a JSON object with metrics and group_by."""
+    i, j = text.find("{"), text.rfind("}")
+    try:
+        call = json.loads(text[i:j + 1]) if i >= 0 and j > i else None
+    except ValueError:
+        call = None
+    if not isinstance(call, dict):
+        raise ValueError(f"the model's answer isn't a metric call: {text[:200]}")
+    return {"metrics": [str(x) for x in call.get("metrics") or []], "group_by": [str(x) for x in call.get("group_by") or []]}
+
+
 def run_tests(c: Caller, project, text=None, catalog=None):
     """The model's tests (use case 12.3), run as the caller: the project's
     stored model's, or a text's (a merge request's); on the project's tables,
@@ -396,8 +452,30 @@ def run_tests(c: Caller, project, text=None, catalog=None):
     for t in summary.get("tests", []):
         name, metrics = t["name"], t["metrics"]
         result = {"name": name, "metrics": metrics, "group_by": t.get("group_by") or [], "passed": False}
+        group_by = t.get("group_by") or []
+        if t.get("question"):   # the model asked the question: does it make the expected call?
+            result["question"] = t["question"]
+            try:
+                call = parse_call(ask_platform(c, project, question_prompt(summary, t["question"])))
+            except NoKey:
+                result.update(skipped=True, why="not asked: the project has no gateway key (llm.budget)")
+                out.append(result)
+                continue
+            except ValueError as e:
+                result["why"] = str(e)
+                out.append(result)
+                continue
+            result["asked"] = call
+            if set(call["metrics"]) != set(metrics) or set(call["group_by"]) != set(group_by):
+                result["why"] = f"the model asked for {call['metrics']} by {call['group_by']}, expected {metrics} by {group_by}"
+                out.append(result)
+                continue
+            if t.get("expect") is None:
+                result["passed"] = True
+                out.append(result)
+                continue
         try:
-            sql = compile_query(project, metrics, t.get("group_by") or [], t.get("where") or [], engine=engine)
+            sql = compile_query(project, metrics, group_by, t.get("where") or [], engine=engine)
             if catalog and catalog != prod_catalog:
                 sql = re.sub(rf"\b{re.escape(prod_catalog)}\.", f"{catalog}.", sql)
             answer = run(c, project, sql, metrics)
@@ -415,7 +493,8 @@ def run_tests(c: Caller, project, text=None, catalog=None):
         except ValueError as e:
             result["why"] = str(e)
         out.append(result)
-    return {"project": project, "tests": out, "passed": sum(1 for r in out if r["passed"]), "failed": sum(1 for r in out if not r["passed"])}
+    return {"project": project, "tests": out, "passed": sum(1 for r in out if r["passed"]),
+            "failed": sum(1 for r in out if not r["passed"] and not r.get("skipped")), "skipped": sum(1 for r in out if r.get("skipped"))}
 
 
 def same_rows(got, want):

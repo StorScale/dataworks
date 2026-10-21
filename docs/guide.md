@@ -233,7 +233,7 @@ tests:
 
 1. Save. The platform compiled it with MetricFlow before saving; a mistake is refused with the reason. The page lists the metrics and their dimensions.
 2. Ask: pick `revenue` and `order_count`, group by `order__region`, press **Ask**. As bob: US about 11,341, EU about 7,263, APAC about 3,564; 287 orders in all. That's Finance's 22,168, and now everyone's. As **alice**, the same question gives EU only: the question runs as the person asking, under her rule.
-3. Press **Run the 2 tests**: both pass. (As alice they'd fail on `three_regions`: she sees one region. Tests are run by the owner, and in a merge request's review, Lab 10.)
+3. Press **Run the 2 tests**: both pass. (A test may also be a question in words, `question: What was turnover by region?` with the call it should become, `metrics: [revenue]` and `group_by: [order__region]`: once the project has an LLM budget (Lab 16), the model is asked through the gateway and its call compared, so a renamed metric or a lost synonym fails before anyone asks it for real.) (As alice they'd fail on `three_regions`: she sees one region. Tests are run by the owner, and in a merge request's review, Lab 10.)
 4. Change the definition of `amount_sum` to `amount * 0.9` and save: the next answer follows. Put it back.
 5. Open **Tools → Business terms**: **Revenue** and **Customer** are the company's words now, each with its owner, its definition and synonyms, the metrics and tables behind it, and the projects that use it. Search for "turnover" from the top bar: it finds Revenue. The catalog's glossary has the same terms, kept in step.
 

@@ -53,6 +53,33 @@ def save():
         os.replace(STATE + ".tmp", STATE)
 
 
+def resolve(text):
+    """A semantic test's question, as the stand-in reads it: the metrics named in the question (by their
+    names, with spaces for underscores, or a synonym the prompt lists), and the dimensions whose last part
+    it names (region for order__region, quarter for metric_time__quarter)."""
+    q = (re.search(r"^Question: (.*)$", text, re.M) or [None, ""])[1].lower()
+    metrics, dims, section = [], [], None
+    for line in text.splitlines():
+        if line in ("Metrics:", "Dimensions:"):
+            section = line
+            continue
+        m = re.match(r"- ([a-z0-9_]+)(?::.*?)?(?: \(also called: (.*)\))?$", line)
+        if not m:
+            continue
+        name = m.group(1)
+        if section == "Metrics:":
+            words = [name.replace("_", " ")] + [w.strip().lower() for w in (m.group(2) or "").split(",") if w.strip()]
+            if any(re.search(r"\b" + re.escape(w) + r"\b", q) for w in words):
+                metrics.append(name)
+        elif section == "Dimensions:" and name != "metric_time":
+            last = name.split("__")[-1].replace("_", " ")
+            if re.search(r"\b" + re.escape(last) + r"s?\b", q):
+                dims.append(name)
+    if any(d.startswith("metric_time__") for d in dims):   # the time grain asked for, not each one the word matches
+        dims = [d for d in dims if not d.startswith("metric_time__")] + [next(d for d in dims if d.startswith("metric_time__"))]
+    return {"metrics": metrics, "group_by": dims}
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         print("llm-stub:", fmt % args, flush=True)
@@ -136,6 +163,8 @@ class Handler(BaseHTTPRequestHandler):
                 info["spend"] = round(info["spend"] + cost, 6)
                 save()
             reply = "You asked: " + text[:200]
+            if "Translate the question into a metric query" in text:   # a semantic test's question: words matched to names
+                reply = json.dumps(resolve(text))
             shaped = re.search(r"Answer with a JSON array of (\d+) strings", text)
             if shaped:   # an llm step's question: an answer per item, the first label when there are labels
                 labels = re.search(r"exactly one of: (.+?)\.\n", text)

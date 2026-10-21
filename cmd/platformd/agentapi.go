@@ -1,10 +1,15 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 
+	"github.com/StorScale/storscale-platform/internal/flow"
 	"github.com/StorScale/storscale-platform/internal/project"
 )
 
@@ -133,3 +138,34 @@ func (s *server) handleAgentAlerts(w http.ResponseWriter, r *http.Request) {
 }
 
 var _ = project.Reader // the view's role is the member's: reader, editor, pipelines or agent
+
+// handleAgentAsk asks the gateway one question on the project's key, for a
+// member (its bearer token): semanticd's plain-language tests (12.3) ask
+// through it, so the project's key stays with the platform. The gateway's
+// guardrail and the project's budget apply; a refusal is said as it came.
+func (s *server) handleAgentAsk(w http.ResponseWriter, r *http.Request) {
+	v, who := s.agentProject(w, r)
+	if v == nil {
+		return
+	}
+	var in struct {
+		Prompt string `json:"prompt"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 256<<10)).Decode(&in); err != nil || strings.TrimSpace(in.Prompt) == "" {
+		s.fail(w, r, http.StatusBadRequest, "a prompt, as JSON: {\"prompt\": ...}")
+		return
+	}
+	conn, err := s.store.Connection(r.Context(), v.Name, v.Name+"-llm")
+	if err != nil || conn["llmKey"] == "" || conn["llmUrl"] == "" {
+		s.fail(w, r, http.StatusUnprocessableEntity, "the project has no gateway key: give it an LLM budget (llm.budget in its spec) and the operator makes one")
+		return
+	}
+	asker := &flow.GatewayAsker{URL: conn["llmUrl"], Key: conn["llmKey"], User: who}
+	answer, cost, err := asker.Ask(r.Context(), in.Prompt)
+	if err != nil {
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	s.record(r, who, "llm.asked", "project:"+v.Name, fmt.Sprintf("%.4f spent", cost))
+	writeJSON(w, http.StatusOK, map[string]any{"answer": answer, "cost": cost})
+}
