@@ -198,7 +198,7 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 2. She adds a check: `status` takes only `open`, `shipped` or `cancelled`; `amount` is between 0 and 100000. The next run of the pipeline fails on a row outside them, and the project is alerted.
 
 **Requirements**
-- R6.33 Profiling per table (OpenMetadata's profiler), run by the catalog's round or the nightly maintenance, shown on the Data page and in the catalog.
+- R6.33 Profiling per table (OpenMetadata's profiler), run by the catalog's round or the nightly maintenance, shown on the Data page and in the catalog. (Built 2026-10-21: catalog-sync profiles a table that has no profile or one older than an hour; the Data page shows the rows and each column's nulls, distinct values and range.)
 - R6.34 More kinds of check in `tables.checks`: accepted values, a range, a regex, a referential check (a column's values exist in another table's), and a SQL assertion (a query that must return no rows). (Built 2026-10-21: `acceptedValues`, `range`, `regex`, `references`, `sql`.)
 
 ---

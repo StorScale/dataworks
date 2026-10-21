@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { SQLAnswer, TableStats, ago, classify, getClassification, getFlow, getHistory, getMaintenance, runMaintenance, runSQL, when } from "../api";
+import { type ColumnProfile, SQLAnswer, TableStats, ago, classify, getClassification, getFlow, getHistory, getMaintenance, runMaintenance, runSQL, when } from "../api";
 import { CheckPill, checkName, ErrorBanner, failing, limits, maskLabel, Spinner, usePlatform, usePoll, useProject } from "../lib";
 import { FlowStrip } from "./Overview";
 
@@ -10,6 +10,16 @@ type Tab = (typeof TABS)[number];
 // Data is a project's tables: their columns, a look at their rows (as you,
 // so your filters and masks apply), where they come from, their checks, and
 // how they're stored (their files, as maintenance keeps them).
+// holds is a column's profile in a few words: how much is null, how many values, their range.
+function holds(p?: ColumnProfile) {
+  if (!p) return <span className="muted">–</span>;
+  const parts: string[] = [];
+  if (p.nulls !== undefined) parts.push(p.nulls === 0 ? "no nulls" : `${Math.round(p.nulls * 100)}% null`);
+  if (p.distinct !== undefined) parts.push(`${p.distinct} distinct`);
+  if (p.min !== undefined && p.max !== undefined) parts.push(`${p.min} to ${p.max}`);
+  return parts.join(" · ") || <span className="muted">–</span>;
+}
+
 export default function Data() {
   const { name, view } = useProject();
   const { admin } = usePlatform();
@@ -86,13 +96,15 @@ export default function Data() {
             {tab === "columns" && klassError && <ErrorBanner error={klassError} />}
             {tab === "columns" && (
               <div className="scroll-x">
+                {table.rows !== undefined && <p className="small muted" data-testid="profile">{table.rows} rows{table.profiledAt ? `, profiled ${ago(new Date(table.profiledAt))}` : ""}.</p>}
                 <table className="t" data-testid="columns">
-                  <thead><tr><th>Column</th><th>Type</th><th>Readers see</th><th>Protection</th><th>Comes from</th></tr></thead>
+                  <thead><tr><th>Column</th><th>Type</th><th>Holds</th><th>Readers see</th><th>Protection</th><th>Comes from</th></tr></thead>
                   <tbody>
                     {table.columns.map((c) => (
                       <tr key={c.name}>
                         <td className="mono">{c.name}</td>
                         <td className="mono muted">{c.type || "–"}</td>
+                        <td className="small" data-testid={`profile-${c.name}`}>{holds(c.profile)}</td>
                         <td>{lim.hidden ? <span className="pill amber">nothing</span> : lim.masks[c.name] ? <span className="pill amber">{maskLabel(lim.masks[c.name])}</span> : <span className="muted small">all of it</span>}</td>
                         <td data-testid={`protection-${c.name}`}>
                           {protectedOf(c.name).map((pc) => (

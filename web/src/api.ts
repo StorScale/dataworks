@@ -144,8 +144,9 @@ export const getAccess = () => api<{ projects: string[]; people: AccessPerson[] 
 // --- A project's flow (from the catalog) --------------------------------------------
 
 export type FlowCheck = { name: string; status: string; result: string; when?: number };
-export type FlowColumn = { name: string; type: string };
-export type FlowTable = { name: string; fqn: string; description?: string; columns: FlowColumn[]; checks: FlowCheck[]; external?: boolean };
+export type ColumnProfile = { nulls?: number; distinct?: number; min?: string | number; max?: string | number; mean?: number };
+export type FlowColumn = { name: string; type: string; profile?: ColumnProfile };
+export type FlowTable = { name: string; fqn: string; description?: string; columns: FlowColumn[]; checks: FlowCheck[]; external?: boolean; rows?: number; profiledAt?: number };
 export type FlowEdge = { from: string; to: string; pipeline?: string; columns: { from: string[]; to: string }[] };
 export type Flow = { tables: FlowTable[]; edges: FlowEdge[] };
 export const getFlow = (name: string) => api<Flow>("GET", `/api/projects/${encodeURIComponent(name)}/flow`);

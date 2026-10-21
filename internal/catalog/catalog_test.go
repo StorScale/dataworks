@@ -88,7 +88,7 @@ func TestFlow(t *testing.T) {
 	if orders == nil || len(orders.Checks) != 2 || orders.Checks[0].Status != "Failed" || orders.Checks[1].Status != "" {
 		t.Errorf("orders' checks: %+v", orders)
 	}
-	if orders != nil && (len(orders.Columns) != 2 || orders.Columns[0] != (Column{"id", "bigint"}) || orders.Columns[1].Type != "varchar") {
+	if orders != nil && (len(orders.Columns) != 2 || orders.Columns[0] != (Column{Name: "id", Type: "bigint"}) || orders.Columns[1].Type != "varchar") {
 		t.Errorf("orders' columns: %+v, want names and lowercase types", orders.Columns)
 	}
 	if external == nil || !external.External {
