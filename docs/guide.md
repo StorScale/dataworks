@@ -509,6 +509,8 @@ As **bob**, on `retail`:
 5. **Raise it.** Change the spec to `"llm": {"budget": 1}`: the operator makes a new key (the old one answers no more, so a program holding it reads the connection again) and the tab shows `0.00 of 1.00 spent`. Labs 17 and 18 spend against it.
 6. **An agent's own budget.** On the Agents tab, register `nightly-summary` as Lab 17 will, with a **budget** of `0.50`, and have alice approve it. Its row shows `0.00 of 0.50 spent` once the operator has made its key, kept beside its secret in the agent's connection; the agent spends against its own budget, not the project's, and an agent that loops is stopped at its budget with bob alerted. **Revoke** it: its key goes with its client.
 
+7. **What was asked, by whom.** The **Model calls** card on the same tab (for the project's editors) lists every call of the project's keys and its agents': when, whose key, who asked, the model, tokens, cost and seconds, with totals by person and by model for the day, week or month. It's read from the gateway's own records; the questions and answers themselves are never kept.
+
 **Check:** the Agents tab shows the project's spend and the agent's against their budgets; the Audit tab has the budget changes as project edits; a call past the budget is refused by the gateway, not by the platform.
 
 ---

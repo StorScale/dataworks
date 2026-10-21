@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 )
@@ -54,7 +55,7 @@ func (g *Gateway) call(ctx context.Context, method, path string, in, out any) er
 		return fmt.Errorf("the LLM gateway: %w", err)
 	}
 	defer res.Body.Close()
-	data, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+	data, _ := io.ReadAll(io.LimitReader(res.Body, 32<<20)) // a key's calls can be many
 	if res.StatusCode/100 != 2 {
 		return fmt.Errorf("the LLM gateway: %s %s: HTTP %d %s", method, path, res.StatusCode, string(data[:min(len(data), 200)]))
 	}
@@ -130,4 +131,33 @@ func KeyAlias(projectName, agent string) string {
 		return "storscale/" + projectName
 	}
 	return "storscale/" + projectName + "/agent/" + agent
+}
+
+// A Call is one request a key made of the gateway, as LiteLLM's spend logs
+// (and the stand-in's) record it: never the question or the answer.
+type Call struct {
+	RequestID        string    `json:"request_id"`
+	CallType         string    `json:"call_type"`
+	Spend            float64   `json:"spend"`
+	TotalTokens      int       `json:"total_tokens"`
+	PromptTokens     int       `json:"prompt_tokens"`
+	CompletionTokens int       `json:"completion_tokens"`
+	StartTime        time.Time `json:"startTime"`
+	EndTime          time.Time `json:"endTime"`
+	Model            string    `json:"model"`
+	ModelGroup       string    `json:"model_group"`
+	User             string    `json:"user"`
+	Status           string    `json:"status"`
+}
+
+// Calls are a key's calls between two days (UTC, from and to included), newest first.
+func (g *Gateway) Calls(ctx context.Context, key string, from, to time.Time) ([]Call, error) {
+	q := url.Values{"api_key": {key}, "start_date": {from.UTC().Format("2006-01-02")},
+		"end_date": {to.UTC().AddDate(0, 0, 1).Format("2006-01-02")}, "summarize": {"false"}}
+	var out []Call
+	if err := g.call(ctx, "GET", "/spend/logs?"+q.Encode(), nil, &out); err != nil {
+		return nil, err
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].StartTime.After(out[j].StartTime) })
+	return out, nil
 }

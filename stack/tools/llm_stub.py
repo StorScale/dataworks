@@ -15,6 +15,7 @@ key that it enforces.
                        first label, or "ok"), so a flow's llm step runs in CI; x-litellm-response-cost says the cost, as LiteLLM's does
   POST /embeddings, /v1/embeddings  (a key): a vector per input, words hashed into 64 dimensions (shared words are near),
                        under the guardrail and the budget, as LiteLLM's would be
+  GET  /spend/logs?api_key=&start_date=&end_date=&summarize=false  (the master key): a key's calls, as LiteLLM's spend logs
   GET  /health/liveliness, /healthz
 
 Keys and spend are kept in LLM_STUB_STATE (a JSON file; default in memory).
@@ -53,6 +54,16 @@ def save():
         with open(STATE + ".tmp", "w") as f:
             json.dump(keys, f)
         os.replace(STATE + ".tmp", STATE)
+
+
+def log_call(info, call_type, body, cost, tokens):
+    """A call, as LiteLLM's spend logs keep it: never the question or the answer."""
+    now = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
+    info.setdefault("logs", []).append({"request_id": secrets.token_hex(8), "call_type": call_type, "spend": cost, "total_tokens": tokens,
+                                        "prompt_tokens": tokens, "completion_tokens": 0, "startTime": now, "endTime": now,
+                                        "model": body.get("model", "stub"), "model_group": body.get("model", "stub"), "user": body.get("user") or "",
+                                        "status": "success"})
+    del info["logs"][:-1000]   # the newest thousand a key
 
 
 def embed(text, dims=64):
@@ -131,12 +142,21 @@ class Handler(BaseHTTPRequestHandler):
                 return self.answer(401, {"error": {"message": "Authentication Error: invalid key"}})
             if not info:
                 return self.answer(404, {"error": {"message": "key not found"}})
-            return self.answer(200, {"key": key[:8] + "...", "info": info})
+            return self.answer(200, {"key": key[:8] + "...", "info": {k: v for k, v in info.items() if k != "logs"}})
         if u.path == "/key/list":
             if tok != MASTER:
                 return self.answer(401, {"error": {"message": "Authentication Error: not the master key"}})
             with lock:
-                return self.answer(200, {"keys": [{"key": k, "token": k, **v} for k, v in keys.items()], "total_count": len(keys), "total_pages": 1})
+                return self.answer(200, {"keys": [{"key": k, "token": k, **{f: x for f, x in v.items() if f != "logs"}} for k, v in keys.items()],
+                                         "total_count": len(keys), "total_pages": 1})
+        if u.path == "/spend/logs":   # a key's calls between two days, as LiteLLM's spend logs answer (summarize=false)
+            if tok != MASTER:
+                return self.answer(401, {"error": {"message": "Authentication Error: not the master key"}})
+            key = (q.get("api_key") or [""])[0]
+            start, end = (q.get("start_date") or ["0000-00-00"])[0], (q.get("end_date") or ["9999-99-99"])[0]
+            with lock:
+                logs = [c for c in (keys.get(key) or {}).get("logs", []) if start <= c["startTime"][:10] < end]
+            return self.answer(200, logs)
         self.answer(404, {"error": {"message": "no such route"}})
 
     def do_POST(self):
@@ -174,6 +194,7 @@ class Handler(BaseHTTPRequestHandler):
                 if info.get("max_budget") is not None and info["spend"] + cost > float(info["max_budget"]):
                     return self.answer(422, {"error": {"message": "Budget has been exceeded!", "type": "budget_exceeded", "code": "422"}})
                 info["spend"] = round(info["spend"] + cost, 6)
+                log_call(info, "aembedding", b, cost, sum(len(t) for t in texts) // 4)
                 save()
             return self.answer(200, {"object": "list", "model": b.get("model", "stub"),
                                      "data": [{"object": "embedding", "index": i, "embedding": embed(t)} for i, t in enumerate(texts)]}, cost=cost)
@@ -193,6 +214,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.answer(422, {"error": {"message": f"Budget has been exceeded! Current cost: {info['spend']:.2f}, Max budget: {info['max_budget']}",
                                                        "type": "budget_exceeded", "code": "422"}})
                 info["spend"] = round(info["spend"] + cost, 6)
+                log_call(info, "acompletion", b, cost, len(text) // 4)
                 save()
             reply = "You asked: " + text[:200]
             if b.get("tools"):   # an agent's runner: a tool first (the one the task names, else the first), then a report on its answer

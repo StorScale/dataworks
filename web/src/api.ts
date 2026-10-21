@@ -437,6 +437,11 @@ export const getKnowledge = (name: string) => api<{ banks: KnowledgeBank[]; canB
 export const buildKnowledge = (name: string, bank: string) => api<{ table: string; chunks: number; cost: number }>("POST", `${knowledgePath(name)}/${encodeURIComponent(bank)}/build`, {});
 export const searchKnowledge = (name: string, bank: string, query: string, k = 5) =>
   api<{ hits: KnowledgeHit[]; cost: number }>("POST", `${knowledgePath(name)}/${encodeURIComponent(bank)}/search`, { query, k });
+export type LLMCall = { at: string; who: string; user: string; kind: string; model: string; tokens: number; cost: number; seconds: number; status: string };
+export type LLMTotal = { calls: number; tokens: number; cost: number };
+export const getLLMCalls = (name: string, days = 7) =>
+  api<{ days: number; total: LLMTotal; calls: LLMCall[]; byUser: Record<string, LLMTotal>; byModel: Record<string, LLMTotal>; byWho: Record<string, LLMTotal>; byDay: Record<string, LLMTotal>; errors?: string[] }>(
+    "GET", `/api/projects/${encodeURIComponent(name)}/llm/calls?days=${days}`);
 export type LLMUse = { who: string; budget: number; spend: number; key: boolean; error?: string; share?: number };
 export const getLLM = (name: string) => api<{ gateway: string; uses: LLMUse[] }>("GET", `/api/projects/${encodeURIComponent(name)}/llm`);
 export const approveAgent = (name: string, agent: string) =>

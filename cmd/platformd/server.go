@@ -211,6 +211,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/projects/{name}/erasures", s.handleErasures)
 	mux.HandleFunc("POST /api/projects/{name}/erasures", s.handleErase)
 	mux.HandleFunc("GET /api/projects/{name}/llm", s.handleLLM)
+	mux.HandleFunc("GET /api/projects/{name}/llm/calls", s.handleLLMCalls) // its model calls (12.8), to its editors
 	mux.HandleFunc("GET /api/projects/{name}/agents", s.handleAgents)
 	// What an agent reads of its project with its own token (the MCP server's list_runs, list_alerts).
 	mux.HandleFunc("GET /api/agent/projects/{name}/runs", s.handleAgentRuns)
