@@ -96,7 +96,8 @@ func (g *GatewayAsker) Ask(ctx context.Context, prompt string) (string, float64,
 	if model == "" {
 		model = "default"
 	}
-	body, _ := json.Marshal(map[string]any{"model": model, "temperature": 0, "user": g.User,
+	// No temperature: the model's default (some, claude-opus-5 among them, take no other).
+	body, _ := json.Marshal(map[string]any{"model": model, "user": g.User,
 		"messages": []map[string]string{{"role": "user", "content": prompt}}})
 	req, err := http.NewRequestWithContext(ctx, "POST", strings.TrimSuffix(g.URL, "/")+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
