@@ -159,6 +159,31 @@ func (s *server) handleFlowLLMRun(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusBadGateway, "writing "+table+": "+err.Error())
 		return
 	}
+	if s.catalog != nil { // its lineage: the flow's tables upstream of the step, once the catalog has described the new table
+		var from []string
+		for _, id := range c.Order {
+			if in := f.Step(id); in.Kind == flow.Input && (in.ID == step.Inputs[0] || feeds(f, step.Inputs[0], in.ID)) {
+				from = append(from, s.catalog.Service+"."+in.Catalog+"."+in.Namespace+"."+in.Table)
+			}
+		}
+		to := s.catalog.Service + "." + step.Catalog + "." + step.Namespace + "." + step.Table
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
+			for {
+				err := s.catalog.AddLineage(ctx, from, to, "Asked of a model by the flow "+flowName+"'s step "+stepID)
+				if err == nil {
+					return
+				}
+				select {
+				case <-ctx.Done():
+					s.log.Warn("llm step's lineage", "table", to, "error", err)
+					return
+				case <-time.After(20 * time.Second):
+				}
+			}
+		}()
+	}
 	s.record(r, who, "flow.llm", "project:"+name+"/flow:"+flowName+"/step:"+stepID,
 		fmt.Sprintf("%d rows asked in %d questions, %.4f spent, %d answers unread", len(a.Result.Rows), a.Result.Batches, a.Result.Cost, a.Result.Unread))
 	s.log.Info("llm step", "project", name, "flow", flowName, "step", stepID, "user", who, "rows", len(a.Result.Rows), "batches", a.Result.Batches, "cost", a.Result.Cost, "unread", a.Result.Unread)
