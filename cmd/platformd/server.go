@@ -181,6 +181,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/projects/{name}/flow", s.handleFlow)
 	mux.HandleFunc("GET /api/terms", s.handleSemantic)
 	mux.HandleFunc("GET /api/products", s.handleProducts)
+	mux.HandleFunc("GET /api/governance", s.handleGovernance) // across projects (12.9): administrators, certifiers, data-protection approvers
 	mux.HandleFunc("GET /api/assistants", s.handleAssistants)
 	mux.HandleFunc("PUT /api/assistants/{name}", s.handlePutAssistant)
 	mux.HandleFunc("DELETE /api/assistants/{name}", s.handleDeleteAssistant)

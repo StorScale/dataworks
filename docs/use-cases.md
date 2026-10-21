@@ -620,8 +620,8 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 2. An administrator opens **Agents** (platform-wide): every project's agents, their owners, approval, tools, spend and last run.
 
 **Requirements**
-- R12.20 A Governance page for administrators and the governance group, reading what exists: approvals pending, policies, agents, models, erasures.
-- R12.21 A platform-wide Agents page.
+- R12.20 A Governance page for administrators and the governance group, reading what exists: approvals pending, policies, agents, models, erasures. (Built 2026-10-21: approvals pending, readers' rules per project, agents, products, erasures; the masks by tag and the models left.)
+- R12.21 A platform-wide Agents page. (Built 2026-10-21 as the Governance page's Agents table: owner, approval, tools, schedule, spend; the last run left.)
 
 ---
 
