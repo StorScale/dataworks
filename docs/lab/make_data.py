@@ -6,6 +6,7 @@ writes docs/lab/data/*.csv.
   orders.csv              300 orders over 2026-07-01..2026-09-30: region, channel, amount, a few refunds, a few test rows
   campaigns.csv           6 marketing campaigns with budgets
   campaign_responses.csv  180 responses: who responded to which campaign, and whether they converted
+  reviews.csv             90 product reviews: free text (a few with an email address in it, on purpose), stars, the order
 """
 import csv
 import os
@@ -44,12 +45,12 @@ for i in range(1, 301):
 for i in range(301, 306):  # test rows, as a real system has: to be filtered out
     orders.append({"order_id": i, "customer_id": 1, "ordered_on": "2026-09-30", "region": "EU", "channel": "web", "amount": 9999.0, "refunded": "false", "test": "true"})
 
-campaigns = [{"campaign_id": 1, "name": "Summer sale", "channel": "email", "started_on": "2026-07-01", "budget": 12000},
-             {"campaign_id": 2, "name": "Back to school", "channel": "email", "started_on": "2026-08-10", "budget": 8000},
-             {"campaign_id": 3, "name": "Partner push", "channel": "partner", "started_on": "2026-07-15", "budget": 5000},
-             {"campaign_id": 4, "name": "Store weekend", "channel": "store", "started_on": "2026-08-01", "budget": 3000},
-             {"campaign_id": 5, "name": "Enterprise outreach", "channel": "sales", "started_on": "2026-07-20", "budget": 15000},
-             {"campaign_id": 6, "name": "September clearance", "channel": "email", "started_on": "2026-09-05", "budget": 6000}]
+campaigns = [{"campaign_id": 1, "name": "Summer sale", "channel": "email", "started_on": "2026-07-01", "budget": 1200},
+             {"campaign_id": 2, "name": "Back to school", "channel": "email", "started_on": "2026-08-10", "budget": 800},
+             {"campaign_id": 3, "name": "Partner push", "channel": "partner", "started_on": "2026-07-15", "budget": 500},
+             {"campaign_id": 4, "name": "Store weekend", "channel": "store", "started_on": "2026-08-01", "budget": 300},
+             {"campaign_id": 5, "name": "Enterprise outreach", "channel": "sales", "started_on": "2026-07-20", "budget": 1500},
+             {"campaign_id": 6, "name": "September clearance", "channel": "email", "started_on": "2026-09-05", "budget": 600}]
 
 responses = []
 for i in range(1, 181):
@@ -58,7 +59,35 @@ for i in range(1, 181):
     responses.append({"response_id": i, "campaign_id": camp["campaign_id"], "customer_id": c["customer_id"], "responded_on": day.isoformat(),
                       "converted": "true" if random.random() < {"email": 0.25, "partner": 0.4, "store": 0.5, "sales": 0.3}[camp["channel"]] else "false"})
 
-for name, rows in [("customers", customers), ("orders", orders), ("campaigns", campaigns), ("campaign_responses", responses)]:
+# Reviews: what customers say about what they bought, in their own words
+# (the lab's "Ask a model" step sorts them into topics). Drawn after the
+# rest, so the files above come out the same as before them.
+TOPICS = {
+    "delivery": ["Took {d} days to arrive, the box was dented but the {p} was fine.", "Delivery was late by {d} days and nobody told me.",
+                 "Arrived two days early, well packed. Happy with the {p}."],
+    "sizing": ["The {p} runs small, I had to send it back for a larger size.", "Sizing chart is off: ordered medium, fits like a small.",
+               "Perfect fit, the size guide for the {p} was spot on."],
+    "quality": ["The {p} seam split after {d} days of use. Disappointing.", "Solid build, the {p} survived a week of rain.",
+                "Zip on the {p} broke the second time out."],
+    "price": ["Good {p} but {amount} is steep for what it is.", "Worth every cent at {amount}.", "Found the same {p} cheaper elsewhere after buying."],
+    "service": ["Support answered in an hour and sorted the exchange of my {p}.", "Waited {d} days for a reply about my {p}, then got a form letter.",
+                "The store staff helped me pick the right {p}, great service."],
+}
+PRODUCTS = ["jacket", "tent", "boots", "backpack", "sleeping bag", "headlamp"]
+reviews = []
+real_orders = [o for o in orders if o["test"] == "false"]
+for i in range(1, 91):
+    o = random.choice(real_orders)
+    topic = random.choice(list(TOPICS))
+    text = random.choice(TOPICS[topic]).format(d=random.randint(2, 14), p=random.choice(PRODUCTS), amount=f"${o['amount']:.0f}")
+    stars = {"delivery": 3, "sizing": 3, "quality": 2, "price": 3, "service": 4}[topic] + random.choice([-1, 0, 1])
+    if i in (7, 31, 58):  # three reviewers sign off with an address: what the gateway's guardrail refuses, and a prepare step masks
+        c = next(c for c in customers if c["customer_id"] == o["customer_id"])
+        text += f" Write back at {c['email']}."
+    reviews.append({"review_id": i, "order_id": o["order_id"], "customer_id": o["customer_id"], "reviewed_on": o["ordered_on"],
+                    "stars": max(1, min(5, stars)), "text": text})
+
+for name, rows in [("customers", customers), ("orders", orders), ("campaigns", campaigns), ("campaign_responses", responses), ("reviews", reviews)]:
     with open(os.path.join(HERE, name + ".csv"), "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader()
