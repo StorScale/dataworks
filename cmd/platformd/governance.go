@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/StorScale/storscale-platform/internal/project"
 )
 
 // The governance view (use case 12.9): across every project, what awaits
@@ -33,6 +36,19 @@ type govAgent struct {
 	Runs     string   `json:"runs,omitempty"` // its schedule, and what it runs
 	Budget   float64  `json:"budget"`
 	Spend    float64  `json:"spend"`
+	LastRun  *govRun  `json:"lastRun,omitempty"` // a scheduled agent's latest run
+}
+
+type govRun struct {
+	State   string `json:"state"`
+	Started string `json:"started"`
+}
+
+// govTagRule is what a catalog tag means across the platform (12.5): its mask, and who sees through it.
+type govTagRule struct {
+	Tag    string   `json:"tag"`
+	Mask   string   `json:"mask"`
+	Except []string `json:"except"`
 }
 
 type govRules struct {
@@ -42,6 +58,7 @@ type govRules struct {
 	RowFilters []string `json:"rowFilters,omitempty"` // table: condition
 	Masks      []string `json:"masks,omitempty"`      // table.column: how
 	People     []string `json:"people,omitempty"`     // its tables of people's data
+	Tagged     []string `json:"tagged,omitempty"`     // table.column: tag, masked by the install's rule for it
 }
 
 type govProduct struct {
@@ -83,8 +100,10 @@ func (s *server) handleGovernance(w http.ResponseWriter, r *http.Request) {
 		for _, use := range s.llmUses(r.Context(), p) {
 			spend[use.Who] = use.Spend
 		}
+		runs := s.agentRuns(r, p)
 		for _, a := range p.Spec.Agents {
-			ga := govAgent{Project: name, Name: a.Name, Owner: a.Owner, Approved: a.Approved(), Tools: a.Tools, Budget: a.Budget, Spend: spend[a.Name]}
+			ga := govAgent{Project: name, Name: a.Name, Owner: a.Owner, Approved: a.Approved(), Tools: a.Tools, Budget: a.Budget, Spend: spend[a.Name],
+				LastRun: runs[a.DAG(name)]}
 			if ga.Tools == nil {
 				ga.Tools = []string{}
 			}
@@ -139,6 +158,13 @@ func (s *server) handleGovernance(w http.ResponseWriter, r *http.Request) {
 				gr.People = append(gr.People, pp.Table+"."+pp.Column)
 			}
 		}
+		if c, err := s.classificationOf(r.Context(), name); err == nil {
+			for _, col := range c.Columns {
+				if rule, ok := s.cfg.Protection[col.Tag]; ok && (col.State == "confirmed" || s.cfg.ProtectSuggested) {
+					gr.Tagged = append(gr.Tagged, fmt.Sprintf("%s.%s: %s (%s), %s", col.Table, col.Column, col.Tag, col.State, rule.Mask))
+				}
+			}
+		}
 		rules = append(rules, gr)
 		if s.files != nil && s.erasureAllowed(u) {
 			keys, _ := s.files.ListFiles(r.Context(), "erasures/"+name+"/")
@@ -160,9 +186,42 @@ func (s *server) handleGovernance(w http.ResponseWriter, r *http.Request) {
 			certified++
 		}
 	}
+	tagRules := []govTagRule{}
+	for tag, rule := range s.cfg.Protection {
+		except := rule.Except
+		if except == nil {
+			except = []string{}
+		}
+		tagRules = append(tagRules, govTagRule{Tag: tag, Mask: rule.Mask, Except: except})
+	}
+	sort.Slice(tagRules, func(i, j int) bool { return tagRules[i].Tag < tagRules[j].Tag })
 	writeJSON(w, http.StatusOK, map[string]any{"pending": pending, "agents": agents, "rules": rules, "products": products, "erasures": erasures,
+		"tagRules": tagRules, "suggestedApplied": s.cfg.ProtectSuggested,
 		"summary": fmt.Sprintf("%d awaiting approval; %d agents (%d approved); %d of %d products certified; %d erasures recorded",
 			len(pending), len(agents), countApproved(agents), certified, len(products), len(erasures))})
+}
+
+// agentRuns are the latest runs of the project's scheduled agents, by DAG;
+// none when its Airflow doesn't answer (the page shows what it can).
+func (s *server) agentRuns(r *http.Request, p *project.Project) map[string]*govRun {
+	out := map[string]*govRun{}
+	if s.airflow == nil || !slices.ContainsFunc(p.Spec.Agents, func(a project.Agent) bool { return a.Runs() }) {
+		return out
+	}
+	af, _, err := s.pipelinesOf(r.Context(), &projectView{Name: p.Metadata.Name, Spec: p})
+	if err != nil {
+		return out
+	}
+	ps, err := af.Of(r.Context(), p.Metadata.Name, 1)
+	if err != nil {
+		return out
+	}
+	for _, pl := range ps {
+		if len(pl.Runs) > 0 {
+			out[pl.ID] = &govRun{State: pl.Runs[0].State, Started: stamp(pl.Runs[0].Started)}
+		}
+	}
+	return out
 }
 
 func stamp(t time.Time) string {

@@ -135,8 +135,11 @@ type Step struct {
 	// extract, summarize; Prompt says what), its answer the new column Name;
 	// at most Limit rows a run. Its table (Catalog, Namespace, Table) is
 	// written by the platform, not dbt, and the model reads it.
+	// Mode nearest: each row's value searched in the project's knowledge
+	// Bank, the closest passage the column Name and its source Name_source.
 	Prompt string `json:"prompt,omitempty" yaml:"prompt,omitempty"`
 	Mode   string `json:"mode,omitempty" yaml:"mode,omitempty"`
+	Bank   string `json:"bank,omitempty" yaml:"bank,omitempty"`
 	Limit  int    `json:"limit,omitempty" yaml:"limit,omitempty"`
 	// output: the table it makes (Table), and its checks
 	Checks []Check `json:"checks,omitempty" yaml:"checks,omitempty"`

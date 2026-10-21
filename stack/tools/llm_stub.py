@@ -227,6 +227,10 @@ class Handler(BaseHTTPRequestHandler):
                     fn = next((f for f in fns if f.get("name") and f["name"] in task), fns[0])
                     proj = re.search(r"of the project ([a-z0-9-]+)", text)
                     args = {k: (proj.group(1) if k == "project" and proj else "") for k in (fn.get("parameters") or {}).get("required", [])}
+                    for k in (fn.get("parameters") or {}).get("properties", {}):   # name=value or name="some words" in the task
+                        said = re.search(rf'\b{re.escape(k)}=(?:"([^"]*)"|(\S+))', task)
+                        if said:
+                            args[k] = said.group(1) if said.group(1) is not None else said.group(2)
                     msg = {"role": "assistant", "content": None, "tool_calls": [{"id": "call_" + secrets.token_hex(4), "type": "function",
                                                                                 "function": {"name": fn.get("name"), "arguments": json.dumps(args)}}]}
                     return self.answer(200, {"id": "chatcmpl-" + secrets.token_hex(6), "object": "chat.completion", "model": b.get("model", "stub"),

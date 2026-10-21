@@ -35,6 +35,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -43,6 +44,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/StorScale/storscale-platform/internal/project"
 )
 
 func main() {
@@ -106,6 +109,11 @@ type config struct {
 	// ProductCertifierGroups certify data products (use case 10.3): the
 	// governance group; default the administrators.
 	ProductCertifierGroups []string
+	// Protection is what the catalog's tags mean (12.5), as the operator
+	// applies it (PROTECTION_TAGS), and whether suggested tags are applied
+	// too: for the Governance page (12.9), which shows it.
+	Protection       project.ProtectionRules
+	ProtectSuggested bool
 	// ErasureDeadlineDays is how long the company has to answer a request
 	// to delete a person's data (use case 6.9): the CCPA's 45, by default.
 	ErasureDeadlineDays int
@@ -179,6 +187,12 @@ func configFromEnv(get func(string) string) (config, error) {
 		BrandLogo: get("BRAND_LOGO"), BrandIcon: get("BRAND_ICON"),
 	}
 	c.KeycloakDirectURL = strings.TrimRight(or("KEYCLOAK_DIRECT_URL", c.KeycloakURL), "/")
+	c.ProtectSuggested = or("PROTECTION_APPLY_SUGGESTED", "true") != "false"
+	protection, err := project.ParseProtection(get("PROTECTION_TAGS"))
+	if err != nil {
+		return c, fmt.Errorf("PROTECTION_TAGS: %w", err)
+	}
+	c.Protection = protection
 	var missing []string
 	for k, v := range map[string]string{"PLATFORM_URL": c.PlatformURL, "KEYCLOAK_URL": c.KeycloakURL, "OIDC_CLIENT_SECRET": c.ClientSecret} {
 		if v == "" {

@@ -4,12 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"os"
+	"path"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/minio/minio-go/v7"
 
 	"github.com/StorScale/storscale-platform/internal/flow"
 	"github.com/StorScale/storscale-platform/internal/project"
@@ -17,8 +23,9 @@ import (
 )
 
 // Knowledge banks (use case 12.6): a project's text, searched by meaning.
-// Building one reads each source's rows as the caller (an editor, or the
-// project's pipelines), cuts each text into chunks, embeds them through the
+// Building one reads each source's rows, and the text files in its folders
+// of the project's bucket, as the caller (an editor, or the project's
+// pipelines, on the bank's schedule), cuts each text into chunks, embeds them through the
 // gateway on the project's key, and writes them, with their vectors, as the
 // table knowledge_<bank> in the project's namespace, as the caller: an
 // ordinary table of the project's, under its rules. Searching embeds the
@@ -30,7 +37,19 @@ const (
 	knowledgeBatch    = 64   // texts an embedding request
 	knowledgeMaxRows  = 20000
 	knowledgeInsertBy = 20 // rows an INSERT (each carries its vector)
+	knowledgeMaxFiles = 2000
+	knowledgeFileMax  = 4 << 20 // bytes of a file read
 )
+
+var (
+	htmlDropRE = regexp.MustCompile(`(?is)<(script|style|head)\b.*?</(script|style|head)>`)
+	htmlTagRE  = regexp.MustCompile(`(?s)<[^>]*>`)
+)
+
+// htmlText is an HTML page's text: its scripts, styles and head dropped, its tags taken out, its entities read.
+func htmlText(page string) string {
+	return html.UnescapeString(htmlTagRE.ReplaceAllString(htmlDropRE.ReplaceAllString(page, " "), " "))
+}
 
 type knowledgeBank struct {
 	p     *project.Project
@@ -64,15 +83,7 @@ func (s *server) bankOf(w http.ResponseWriter, r *http.Request) (*knowledgeBank,
 		s.fail(w, r, http.StatusUnprocessableEntity, "the project has no gateway key yet: give it an LLM budget (llm.budget) and the operator makes one")
 		return nil, false
 	}
-	cat, ns := "iceberg", strings.ReplaceAll(p.Metadata.Name, "-", "_")
-	if t := p.Spec.Tables; t != nil {
-		if t.Catalog != "" {
-			cat = t.Catalog
-		}
-		if t.Namespace != "" {
-			ns = t.Namespace
-		}
-	}
+	cat, ns := tablesOf(p)
 	return &knowledgeBank{p: p, bank: *bank, cat: cat, ns: ns, key: conn,
 		table: trino.Quote(cat) + "." + trino.Quote(ns) + "." + trino.Quote(bank.KnowledgeTable())}, true
 }
@@ -141,6 +152,46 @@ func (s *server) handleKnowledgeBuild(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	files, skipped := 0, 0
+	if len(kb.bank.Files) > 0 {
+		bc, err := s.bucketAs(ctx, token)
+		if err != nil {
+			s.fail(w, r, http.StatusServiceUnavailable, err.Error())
+			return
+		}
+		for _, f := range kb.bank.Files {
+			for o := range bc.ListObjects(ctx, bucketOf(kb.p), minio.ListObjectsOptions{Prefix: f.Prefix, Recursive: true}) {
+				if o.Err != nil {
+					s.fail(w, r, http.StatusBadGateway, "reading the folder "+f.Prefix+": "+o.Err.Error())
+					return
+				}
+				ext := strings.ToLower(path.Ext(o.Key))
+				if !slices.Contains(project.KnowledgeFileFormats, ext) || o.Size > knowledgeFileMax || files >= knowledgeMaxFiles {
+					skipped++
+					continue
+				}
+				obj, err := bc.GetObject(ctx, bucketOf(kb.p), o.Key, minio.GetObjectOptions{})
+				if err != nil {
+					s.fail(w, r, http.StatusBadGateway, "reading "+o.Key+": "+err.Error())
+					return
+				}
+				data, err := io.ReadAll(io.LimitReader(obj, knowledgeFileMax))
+				obj.Close()
+				if err != nil {
+					s.fail(w, r, http.StatusBadGateway, "reading "+o.Key+": "+err.Error())
+					return
+				}
+				text := string(data)
+				if ext == ".html" || ext == ".htm" {
+					text = htmlText(text)
+				}
+				for i, c := range flow.Chunks(text, knowledgeChunk) {
+					chunks = append(chunks, chunk{source: "files:" + f.Prefix, ref: o.Key, text: c, n: i})
+				}
+				files++
+			}
+		}
+	}
 	asker := &flow.GatewayAsker{URL: kb.key["llmUrl"], Key: kb.key["llmKey"], User: who}
 	vecs := make([][]float64, 0, len(chunks))
 	cost := 0.0
@@ -178,14 +229,15 @@ func (s *server) handleKnowledgeBuild(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	s.record(r, who, "knowledge.built", "project:"+kb.p.Metadata.Name+"/knowledge:"+kb.bank.Name, fmt.Sprintf("%d chunks, %.6f spent", len(chunks), cost))
-	s.log.Info("knowledge bank built", "project", kb.p.Metadata.Name, "bank", kb.bank.Name, "user", who, "chunks", len(chunks), "cost", cost)
-	writeJSON(w, http.StatusOK, map[string]any{"table": kb.cat + "." + kb.ns + "." + kb.bank.KnowledgeTable(), "chunks": len(chunks), "cost": cost})
+	s.record(r, who, "knowledge.built", "project:"+kb.p.Metadata.Name+"/knowledge:"+kb.bank.Name, fmt.Sprintf("%d chunks (%d files), %.6f spent", len(chunks), files, cost))
+	s.log.Info("knowledge bank built", "project", kb.p.Metadata.Name, "bank", kb.bank.Name, "user", who, "chunks", len(chunks), "files", files, "cost", cost)
+	writeJSON(w, http.StatusOK, map[string]any{"table": kb.cat + "." + kb.ns + "." + kb.bank.KnowledgeTable(), "chunks": len(chunks), "files": files,
+		"skipped": skipped, "cost": cost})
 }
 
 // knowledgeHit is one chunk a search found.
 type knowledgeHit struct {
-	Source string  `json:"source"` // table.column
+	Source string  `json:"source"` // table.column, or files:<folder>
 	Ref    string  `json:"ref"`    // the row's id
 	Text   string  `json:"text"`
 	Score  float64 `json:"score"` // cosine similarity, 1 the closest
@@ -266,15 +318,7 @@ func (s *server) handleKnowledgeList(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	cat, ns := "iceberg", strings.ReplaceAll(p.Metadata.Name, "-", "_")
-	if t := p.Spec.Tables; t != nil {
-		if t.Catalog != "" {
-			cat = t.Catalog
-		}
-		if t.Namespace != "" {
-			ns = t.Namespace
-		}
-	}
+	cat, ns := tablesOf(p)
 	type bank struct {
 		project.KnowledgeBank
 		Table  string `json:"table"`
@@ -294,6 +338,87 @@ func (s *server) handleKnowledgeList(w http.ResponseWriter, r *http.Request) {
 		out = append(out, b)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"banks": out, "canBuild": role == "editor"})
+}
+
+// tablesOf is the project's catalog and namespace.
+func tablesOf(p *project.Project) (cat, ns string) {
+	cat, ns = "iceberg", strings.ReplaceAll(p.Metadata.Name, "-", "_")
+	if t := p.Spec.Tables; t != nil {
+		if t.Catalog != "" {
+			cat = t.Catalog
+		}
+		if t.Namespace != "" {
+			ns = t.Namespace
+		}
+	}
+	return cat, ns
+}
+
+// nearestPassages is the canvas's nearest step (an llm step's mode): each
+// row's value embedded, as the step's other modes ask, and the closest
+// passage of the bank found in Trino, as the token's owner; the passage and
+// its source (table.column:ref, or files:<folder>:<key>) added to the row.
+func (s *server) nearestPassages(ctx context.Context, token string, p *project.Project, asker *flow.GatewayAsker, st *flow.Step, columns []string, rows [][]any) (*flow.LLMResult, error) {
+	if !slices.ContainsFunc(p.Spec.Knowledge, func(k project.KnowledgeBank) bool { return k.Name == st.Bank }) {
+		return nil, fmt.Errorf("the project has no knowledge bank %s", st.Bank)
+	}
+	col := slices.Index(columns, st.Column)
+	if col < 0 {
+		return nil, fmt.Errorf("no column %s in the rows", st.Column)
+	}
+	tc, err := s.trinoAs(token)
+	if err != nil {
+		return nil, err
+	}
+	cat, ns := tablesOf(p)
+	table := trino.Quote(cat) + "." + trino.Quote(ns) + "." + trino.Quote(project.KnowledgeBank{Name: st.Bank}.KnowledgeTable())
+	res := &flow.LLMResult{Rows: make([][]any, 0, len(rows))}
+	const batch = 20
+	for start := 0; start < len(rows); start += batch {
+		end := min(start+batch, len(rows))
+		var texts []string
+		var at []int // the batch's rows with a value
+		for i, row := range rows[start:end] {
+			if v := strings.TrimSpace(fmt.Sprint(row[col])); row[col] != nil && v != "" {
+				texts, at = append(texts, v), append(at, i)
+			}
+		}
+		found := map[int][2]any{}
+		if len(texts) > 0 {
+			vecs, cost, err := asker.Embed(ctx, "", texts)
+			res.Cost += cost
+			res.Batches++
+			if err != nil {
+				return res, fmt.Errorf("rows %d to %d: %w", start+1, end, err)
+			}
+			arr := make([]string, len(vecs))
+			for i, v := range vecs {
+				arr[i] = sqlVector(v)
+			}
+			got, err := tc.Exec(ctx, "SELECT q.i, max_by(k.text, cosine_similarity(k.embedding, q.v)), max_by(k.source || ':' || k.ref, cosine_similarity(k.embedding, q.v)) "+
+				"FROM "+table+" k CROSS JOIN UNNEST(ARRAY["+strings.Join(arr, ", ")+"]) WITH ORDINALITY AS q(v, i) GROUP BY q.i")
+			if err != nil {
+				why := err.Error()
+				if strings.Contains(why, "does not exist") {
+					why = "the bank " + st.Bank + " isn't built yet: build it from the project's Knowledge card"
+				}
+				return res, fmt.Errorf("searching %s: %s", st.Bank, why)
+			}
+			for _, g := range got {
+				if i, err := strconv.Atoi(fmt.Sprint(g[0])); err == nil && i >= 1 && i <= len(at) {
+					found[at[i-1]] = [2]any{g[1], g[2]}
+				}
+			}
+		}
+		for i, row := range rows[start:end] {
+			f, ok := found[i]
+			if !ok {
+				res.Unread++
+			}
+			res.Rows = append(res.Rows, append(slices.Clone(row), f[0], f[1]))
+		}
+	}
+	return res, nil
 }
 
 func sqlString(v string) string { return "'" + strings.ReplaceAll(v, "'", "''") + "'" }

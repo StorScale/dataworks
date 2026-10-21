@@ -346,14 +346,22 @@ spec:
                   properties:
                     budget: {type: number}
                 knowledge:
-                  description: "Text the project's people and agents search by meaning (12.6): each bank's sources (a table's text column and its id column) embedded through the gateway on the project's key, kept as the table knowledge_<name> in its namespace."
+                  description: "Text the project's people and agents search by meaning (12.6): each bank's sources (a table's text column and its id column, or a folder of text files in the project's bucket) embedded through the gateway on the project's key, kept as the table knowledge_<name> in its namespace."
                   type: array
                   items:
                     type: object
-                    required: [name, tables]
+                    required: [name]
                     properties:
                       name: {type: string, pattern: '^[a-z_][a-z0-9_]{0,49}$'}
                       description: {type: string}
+                      schedule: {type: string, description: "When the project's pipelines build it afresh (cron, UTC); none: by hand."}
+                      files:
+                        type: array
+                        items:
+                          type: object
+                          required: [prefix]
+                          properties:
+                            prefix: {type: string, description: "A folder of the project's bucket, as landing/docs/: its .txt, .md and .html files."}
                       tables:
                         type: array
                         items:
@@ -363,6 +371,30 @@ spec:
                             table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                             column: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                             id: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                tools:
+                  description: "Tools of the project's own for its agents (12.7): an API's operation, signed in by one of the project's connections (an API token), called by the platform for the agents given it (tool:<name>) and the project's editors."
+                  type: array
+                  items:
+                    type: object
+                    required: [name, description, url, method, path]
+                    properties:
+                      name: {type: string, pattern: '^[a-z][a-z0-9_]{0,40}$'}
+                      description: {type: string}
+                      url: {type: string}
+                      method: {type: string, enum: [GET, POST, PUT, PATCH, DELETE]}
+                      path: {type: string}
+                      connection: {type: string}
+                      parameters:
+                        type: array
+                        items:
+                          type: object
+                          required: [name, in]
+                          properties:
+                            name: {type: string}
+                            in: {type: string, enum: [path, query, body]}
+                            type: {type: string, enum: [string, integer, number, boolean]}
+                            description: {type: string}
+                            required: {type: boolean}
                 agents:
                   description: "Programs of the project's own (12.2): each an identity of its own, allowed the tools named, approved by an editor other than its registrant; who registered and approved are the platform's."
                   type: array
@@ -373,7 +405,7 @@ spec:
                       name: {type: string, pattern: '^[a-z][a-z0-9-]{0,30}$'}
                       description: {type: string}
                       owner: {type: string}
-                      tools: {type: array, items: {type: string, enum: [list_projects, list_metrics, query_metrics, explain_query, list_terms, describe_term, search_terms, list_products, describe_product, query_product, list_runs, list_alerts, search_documents]}}
+                      tools: {type: array, items: {type: string, pattern: '^(list_projects|list_metrics|query_metrics|explain_query|list_terms|describe_term|search_terms|list_products|describe_product|query_product|list_runs|list_alerts|search_documents|list_tools|call_tool|ask_agent|agent:[a-z][a-z0-9-]{2,39}/[a-z][a-z0-9-]{0,30}|tool:[a-z][a-z0-9_]{0,40})$'}}
                       schedule: {type: string, description: "When the platform runs it (cron, UTC), with a notebook."}
                       notebook: {type: string, description: "Its program: an .ipynb in the project's repo, under the pipelines' path, run as the agent on its schedule."}
                       prompt: {type: string, maxLength: 8000}

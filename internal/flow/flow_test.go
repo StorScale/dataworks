@@ -565,18 +565,33 @@ func TestLLMStep(t *testing.T) {
 		s   Step
 		why string
 	}{
-		{Step{ID: "m", Kind: LLM, Inputs: []string{"orders"}, Column: "region", Mode: "guess", Name: "x"}, "classify, extract or summarize"},
+		{Step{ID: "m", Kind: LLM, Inputs: []string{"orders"}, Column: "region", Mode: "guess", Name: "x"}, "classify, extract, summarize or nearest"},
 		{Step{ID: "m", Kind: LLM, Inputs: []string{"orders"}, Column: "nope", Mode: "summarize", Name: "x"}, "no column nope"},
 		{Step{ID: "m", Kind: LLM, Inputs: []string{"orders"}, Column: "region", Mode: "classify", Values: []string{"one"}, Name: "x"}, "at least two labels"},
 		{Step{ID: "m", Kind: LLM, Inputs: []string{"orders"}, Column: "region", Mode: "extract", Name: "x"}, "needs a prompt"},
 		{Step{ID: "m", Kind: LLM, Inputs: []string{"orders"}, Column: "region", Mode: "summarize", Name: "region"}, "already has a column region"},
 		{Step{ID: "m", Kind: LLM, Inputs: []string{"orders"}, Column: "region", Mode: "summarize", Name: "x", Limit: 5000}, "at most 1000 rows"},
+		{Step{ID: "m", Kind: LLM, Inputs: []string{"orders"}, Column: "region", Mode: "nearest", Name: "x"}, "the knowledge bank to search"},
 	} {
 		g := &Flow{Name: "g", Steps: []Step{{ID: "orders", Kind: Input, Table: "orders"}, bad.s}}
 		c, _ := Compile(g, env())
 		if errs := c.Errors(); len(errs) == 0 || !strings.Contains(errs[0], bad.why) {
 			t.Errorf("%v: wanted %q, got %v", bad.s.Mode, bad.why, errs)
 		}
+	}
+}
+
+// The nearest mode adds the passage and its source.
+func TestNearestStep(t *testing.T) {
+	f := &Flow{Name: "g", Steps: []Step{{ID: "orders", Kind: Input, Table: "orders"},
+		{ID: "near", Kind: LLM, Inputs: []string{"orders"}, Column: "region", Mode: "nearest", Bank: "reviews", Name: "passage"}}}
+	c, _ := Compile(f, env())
+	if errs := c.Errors(); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	cols := c.Steps["near"].Columns
+	if n := len(cols); n < 2 || cols[n-2].Name != "passage" || cols[n-1].Name != "passage_source" {
+		t.Errorf("columns: %+v", cols)
 	}
 }
 

@@ -18,7 +18,7 @@ type Agent struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description,omitempty"`
 	Owner       string   `json:"owner"`              // a person: who answers for it
-	Tools       []string `json:"tools,omitempty"`    // of the MCP server's, by name; none: all a reader may use
+	Tools       []string `json:"tools,omitempty"`    // of the MCP server's, by name, agent:<project>/<name> and tool:<name>; none: all the MCP server's
 	Schedule    string   `json:"schedule,omitempty"` // when it runs (cron, UTC), with a notebook
 	Notebook    string   `json:"notebook,omitempty"` // its program: an .ipynb in the project's repo, under the pipelines' path
 	Prompt      string   `json:"prompt,omitempty"`   // or, in its place, what it's to do, in words: the platform's runner does it with its tools (12.7)
@@ -34,7 +34,7 @@ type Agent struct {
 
 // AgentTools are the MCP server's tools an agent may be given.
 var AgentTools = []string{"list_projects", "list_metrics", "query_metrics", "explain_query", "list_terms", "describe_term", "search_terms",
-	"list_products", "describe_product", "query_product", "list_runs", "list_alerts", "search_documents"}
+	"list_products", "describe_product", "query_product", "list_runs", "list_alerts", "search_documents", "list_tools", "call_tool", "ask_agent"}
 
 var agentNameRE = regexp.MustCompile(`^[a-z][a-z0-9-]{0,30}$`)
 
@@ -83,8 +83,8 @@ func (p *Project) agentProblems(bad func(string, ...any)) {
 			bad("agents: %s: owner %q isn't a person's name", a.Name, a.Owner)
 		}
 		for _, t := range a.Tools {
-			if !slices.Contains(AgentTools, t) {
-				bad("agents: %s: no tool %q (one of %s)", a.Name, t, strings.Join(AgentTools, ", "))
+			if problem := p.agentToolProblem(a, t); problem != "" {
+				bad("agents: %s: tool %s: %s", a.Name, t, problem)
 			}
 		}
 		if a.Schedule != "" && !cronRE.MatchString(a.Schedule) {
@@ -152,13 +152,37 @@ func (p *Project) AgentToolsAllowed(clientID string) ([]string, bool) {
 			if !a.Approved() {
 				return nil, true
 			}
-			if len(a.Tools) == 0 {
-				return slices.Clone(AgentTools), true
-			}
-			return slices.Clone(a.Tools), true
+			return a.MCPTools(), true
 		}
 	}
 	return nil, false
+}
+
+// MCPTools are the MCP server's tools the agent may use: those named, or
+// all when none are; with list_tools, and ask_agent or call_tool, when it's
+// given another agent or a tool of its project's (which platformd checks
+// by name on each call).
+func (a Agent) MCPTools() []string {
+	if len(a.Tools) == 0 {
+		return slices.Clone(AgentTools)
+	}
+	var out []string
+	for _, t := range a.Tools {
+		if slices.Contains(AgentTools, t) {
+			out = append(out, t)
+		}
+	}
+	agents, tools := a.AgentGrants()
+	if len(agents)+len(tools) > 0 && !slices.Contains(out, "list_tools") {
+		out = append(out, "list_tools")
+	}
+	if len(agents) > 0 && !slices.Contains(out, "ask_agent") {
+		out = append(out, "ask_agent")
+	}
+	if len(tools) > 0 && !slices.Contains(out, "call_tool") {
+		out = append(out, "call_tool")
+	}
+	return out
 }
 
 // String is the agent in words, for the audit log.

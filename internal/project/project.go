@@ -57,6 +57,7 @@ type Spec struct {
 	Agents      []Agent         `json:"agents,omitempty"`    // programs of the project's own (12.2)
 	LLM         *LLM            `json:"llm,omitempty"`       // the project's use of the LLM gateway (12.1)
 	Knowledge   []KnowledgeBank `json:"knowledge,omitempty"` // text the project's people and agents search by meaning (12.6)
+	Tools       []ConnectorTool `json:"tools,omitempty"`     // its own tools for its agents: an API's operations, signed in by a connection (12.7)
 }
 
 // Semantic is how the project's semantic model stands among the others'
@@ -344,7 +345,23 @@ type LLM struct {
 type KnowledgeBank struct {
 	Name        string            `json:"name"`
 	Description string            `json:"description,omitempty"`
-	Tables      []KnowledgeSource `json:"tables"`
+	Tables      []KnowledgeSource `json:"tables,omitempty"`
+	Files       []KnowledgeFiles  `json:"files,omitempty"`    // text files in the project's bucket
+	Schedule    string            `json:"schedule,omitempty"` // when the project's pipelines build it afresh (cron, UTC); "": by hand
+}
+
+// KnowledgeFiles are the text files (.txt, .md, .html) under a prefix of the
+// project's bucket, as landing/docs/: each file's text, its key the ref.
+type KnowledgeFiles struct {
+	Prefix string `json:"prefix"`
+}
+
+// KnowledgeFileFormats are the files a bank reads, by their extension.
+var KnowledgeFileFormats = []string{".txt", ".md", ".markdown", ".html", ".htm"}
+
+// DAG is the Airflow DAG that builds the bank on its schedule, in a project.
+func (k KnowledgeBank) DAG(project string) string {
+	return "knowledge_" + strings.ReplaceAll(project, "-", "_") + "_" + k.Name
 }
 
 // A KnowledgeSource is a table's text column, and the column that names each row (its id).

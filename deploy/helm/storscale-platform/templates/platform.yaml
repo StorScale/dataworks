@@ -30,6 +30,8 @@ spec:
             - {name: KEYCLOAK_URL, value: "{{ include "storscale.url" . }}/sso"}
             - {name: KEYCLOAK_DIRECT_URL, value: "http://keycloak:8080/sso"}
             - {name: OIDC_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: storscale-env, key: PLATFORM_OAUTH_SECRET}}}
+            - {name: PROTECTION_TAGS, value: {{ .Values.protection.tags | toJson | quote }}}   # shown on the Governance page (12.9)
+            - {name: PROTECTION_APPLY_SUGGESTED, value: {{ .Values.protection.applySuggested | quote }}}
             # Projects are Project resources, with a copy in the bucket for the services that read them there.
             - {name: PROJECT_STORE, value: kubernetes}
             - {name: STORE_URL, value: "http://buckets:9000"}

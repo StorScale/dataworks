@@ -570,12 +570,28 @@ def agent_tools(client_id):
             if f"agent-{name}-{a['name']}" == client_id:
                 if not a.get("approvedBy"):
                     return []
-                return list(a.get("tools") or ALL_TOOLS)
+                return mcp_tools(a.get("tools") or [])
     return []
 
 
 ALL_TOOLS = ["list_projects", "list_metrics", "query_metrics", "explain_query", "list_terms", "describe_term", "search_terms",
-             "list_products", "describe_product", "query_product", "list_runs", "list_alerts", "search_documents"]
+             "list_products", "describe_product", "query_product", "list_runs", "list_alerts", "search_documents",
+             "list_tools", "call_tool", "ask_agent"]
+
+
+def mcp_tools(given):
+    """The MCP server's tools an agent's list gives it (as project.Agent.MCPTools): those named, all when
+    none are; list_tools with ask_agent for another agent given (agent:<project>/<name>), with call_tool for a
+    tool of its project's (tool:<name>). Which agent or tool, platformd checks on each call."""
+    if not given:
+        return list(ALL_TOOLS)
+    out = [t for t in given if t in ALL_TOOLS]
+    agents = any(t.startswith("agent:") for t in given)
+    tools = any(t.startswith("tool:") for t in given)
+    for t, has in (("list_tools", agents or tools), ("ask_agent", agents), ("call_tool", tools)):
+        if has and t not in out:
+            out.append(t)
+    return out
 
 
 def tool(fn):
@@ -726,6 +742,50 @@ def search_documents(project: str, bank: str, query: str, k: int = 5) -> dict:
     if not r.ok:
         raise ValueError(f"the platform couldn't search: {(r.json().get('error') if r.headers.get('content-type', '').startswith('application/json') else r.text)[:300]}")
     return {**r.json(), "link": f"{PLATFORM_URL}/projects/{project}"}
+
+
+def platform_post(c: Caller, path: str, body: dict, timeout=120) -> dict:
+    """What platformd does for this caller in a project, by the caller's own token."""
+    r = requests.post(f"{PLATFORMD_URL}/api/agent{path}", json=body, timeout=timeout, headers={"Authorization": f"Bearer {c.token}"})
+    said = (r.json().get("error") if r.headers.get("content-type", "").startswith("application/json") else r.text[:300]) if not r.ok else None
+    if r.status_code in (401, 403, 404):
+        raise PermissionError(said or f"HTTP {r.status_code}")
+    if not r.ok:
+        raise ValueError(f"the platform couldn't: {said or r.status_code}")
+    return r.json()
+
+
+@mcp.tool()
+@tool
+def list_tools(project: str) -> dict:
+    """A project's own tools you may call (call_tool: an API's operation, with its parameters) and its agents
+    you may ask (ask_agent: each an agent with a task it's for). Read-only."""
+    c = mcp_caller()
+    if project not in projects_of(c):
+        raise PermissionError(f"you're not a member of {project}")
+    return platform_read(c, f"/projects/{project}/tools")
+
+
+@mcp.tool()
+@tool
+def call_tool(project: str, tool: str, arguments: dict | None = None) -> dict:
+    """Calls one of a project's own tools (list_tools names them, with their parameters) with the arguments
+    given, by name. The platform calls the API, signed in by the project's connection; you get its status and answer."""
+    c = mcp_caller()
+    if project not in projects_of(c):
+        raise PermissionError(f"you're not a member of {project}")
+    return platform_post(c, f"/projects/{project}/tools/{tool}/call", {"arguments": arguments or {}})
+
+
+@mcp.tool()
+@tool
+def ask_agent(project: str, agent: str, task: str) -> dict:
+    """Asks another agent of a project (list_tools names those you may ask) to do a task, in words: it does it
+    with its own tools, as itself, and answers with its report and the tools it used. It may take a few minutes."""
+    c = mcp_caller()
+    if project not in projects_of(c):
+        raise PermissionError(f"you're not a member of {project}")
+    return platform_post(c, f"/projects/{project}/agents/{agent}/ask", {"task": task}, timeout=660)
 
 
 @mcp.tool()

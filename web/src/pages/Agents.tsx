@@ -52,7 +52,7 @@ export default function Agents() {
         </div>
       )}
       {canEdit && !adding && <div className="row"><button className="btn primary" onClick={() => setAdding(true)} data-testid="add-agent">Register an agent</button></div>}
-      {adding && <AgentForm project={name} tools={list.data.tools} taken={list.data.agents.map((a) => a.name)} owner={user.username} onDone={() => { setAdding(false); list.reload(); }} />}
+      {adding && <AgentForm project={name} tools={[...list.data.tools, ...(list.data.grants ?? [])]} taken={list.data.agents.map((a) => a.name)} owner={user.username} onDone={() => { setAdding(false); list.reload(); }} />}
       {list.data.agents.length === 0 && <p className="muted">No agents yet.</p>}
       {list.data.agents.map((a) => (
         <div key={a.name} className="card stack" style={{ gap: 6 }} data-testid={`agent-${a.name}`}>
@@ -111,7 +111,7 @@ function AgentForm({ project, tools, taken, owner, onDone }: { project: string; 
       </div>
       <label>Or, in place of a notebook, what it's to do <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3}
         placeholder="Each morning, read the open alerts and the failed runs, and write a two-sentence summary for the team." data-testid="agent-prompt" /></label>
-      <div className="small muted">Tools it may use (of the MCP server's); none picked means every tool a reader may use. With a schedule and a prompt (and a budget), the platform's runner does the prompt as the agent: the model is given its tools, each tool it asks for is called as the agent, and the run's record is the transcript. With a schedule and a notebook (an .ipynb in the project's repo, under the pipelines' path), the platform runs the notebook as the agent: <span className="mono">buckets_lake.agent()</span> is the MCP server, <span className="mono">buckets_lake.ask()</span> the gateway, on its budget.</div>
+      <div className="small muted">Tools it may use (of the MCP server's); none picked means every tool a reader may use. <span className="mono">tool:</span> is one of the project's own tools (an API's operation, signed in by the project's connection, which the agent never sees); <span className="mono">agent:</span> is another agent with a prompt, which it may ask to do a task (that agent does it as itself, and isn't given agents in turn). With a schedule and a prompt (and a budget), the platform's runner does the prompt as the agent: the model is given its tools, each tool it asks for is called as the agent, and the run's record is the transcript. With a schedule and a notebook (an .ipynb in the project's repo, under the pipelines' path), the platform runs the notebook as the agent: <span className="mono">buckets_lake.agent()</span> is the MCP server, <span className="mono">buckets_lake.ask()</span> the gateway, on its budget.</div>
       <div className="chips">
         {tools.map((t) => <button key={t} type="button" className={`chip${picked.includes(t) ? " on" : ""}`} aria-pressed={picked.includes(t)}
           onClick={() => setPicked(picked.includes(t) ? picked.filter((x) => x !== t) : [...picked, t])} data-testid={`tool-${t}`}>{t}</button>)}
@@ -135,7 +135,11 @@ function Knowledge({ project, banks, canBuild, reload }: { project: string; bank
   const [hits, setHits] = useState<KnowledgeHit[]>();
   const build = async (b: string) => {
     setBusy(b); setError(undefined); setNote(undefined);
-    try { const r = await buildKnowledge(project, b); setNote(`${b}: ${r.chunks} passages embedded, ${r.cost.toFixed(4)} spent.`); reload(); }
+    try {
+      const r = await buildKnowledge(project, b);
+      setNote(`${b}: ${r.chunks} passages embedded${r.files ? ` (${r.files} files${r.skipped ? `, ${r.skipped} skipped: not .txt, .md or .html, or too big` : ""})` : ""}, ${r.cost.toFixed(4)} spent.`);
+      reload();
+    }
     catch (e) { setError((e as Error).message); } finally { setBusy(undefined); }
   };
   const search = async () => {
@@ -151,7 +155,8 @@ function Knowledge({ project, banks, canBuild, reload }: { project: string; bank
       {banks.map((b) => (
         <div key={b.name} className="row small" data-testid={`bank-${b.name}`}>
           <span className="mono">{b.name}</span>
-          <span className="muted">{b.tables.map((t) => `${t.table}.${t.column}`).join(", ")}</span>
+          <span className="muted">{[...(b.tables ?? []).map((t) => `${t.table}.${t.column}`), ...(b.files ?? []).map((f) => `files in ${f.prefix}`)].join(", ")}</span>
+          {b.schedule && <span className="muted">built at <span className="mono">{b.schedule}</span> (UTC)</span>}
           <span>{b.chunks === undefined ? "not built" : `${b.chunks} passages`}</span>
           {canBuild && <button className="btn small" disabled={!!busy} onClick={() => build(b.name)}>{busy === b.name ? "Building…" : b.chunks === undefined ? "Build" : "Build again"}</button>}
         </div>

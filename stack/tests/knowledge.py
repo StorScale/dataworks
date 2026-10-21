@@ -11,7 +11,14 @@ reviews. These check (use case 12.6):
      refused;
   3. an assistant asks the MCP server's search_documents as alice, and gets
      the same passage, with its table and row to cite;
-  4. a review holding an email address stops the build at the gateway's
+  4. a bank of the project's files: a Markdown page and an HTML one uploaded
+     to its landing area are embedded (the HTML's tags taken out), and a
+     search finds the page, with its key to cite;
+  5. that bank has a schedule, so it's one of the project's pipelines, which
+     builds it as the project's pipelines;
+  6. a canvas step (an llm step's nearest mode) finds each review's nearest
+     passage in the bank, itself, with where it's from;
+  7. a review holding an email address stops the build at the gateway's
      guardrail, saying what it found.
 
 With the stand-in, embeddings are words hashed into 256 dimensions, so a
@@ -33,9 +40,17 @@ REVIEWS = [(1, "The jacket seam split after a week of use. Disappointing."), (2,
            (3, "Support answered in an hour and sorted the exchange."), (4, "Worth every cent, the tent survived a week of rain.")]
 SPEC = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": NAME},
         "spec": {"description": "Knowledge banks: the knowledge suite's.",
-                 "members": [{"group": "engineers", "role": "editor"}, {"user": "alice", "role": "reader"}], "tables": {},
+                 "members": [{"group": "engineers", "role": "editor"}, {"user": "alice", "role": "reader"}], "tables": {}, "files": {},
                  "llm": {"budget": 1},
-                 "knowledge": [{"name": "reviews", "description": "What customers wrote", "tables": [{"table": "reviews", "column": "text", "id": "review_id"}]}]}}
+                 "knowledge": [{"name": "reviews", "description": "What customers wrote", "tables": [{"table": "reviews", "column": "text", "id": "review_id"}]},
+                               {"name": "manuals", "description": "The care and returns pages", "files": [{"prefix": "landing/uploads/"}],
+                                "schedule": "0 3 * * *"}]}}
+CARE = "# Caring for the jacket\n\nWash it cold. A split seam is mended free within a year of buying it."
+RETURNS = "<html><head><style>p {color: red}</style></head><body><p>Returns are taken within 30 days, with the receipt.</p></body></html>"
+NEAR = {"name": "near", "steps": [{"id": "reviews", "kind": "input", "table": "reviews", "x": 0, "y": 0},
+                                  {"id": "near", "kind": "llm", "inputs": ["reviews"], "column": "text", "mode": "nearest", "bank": "reviews",
+                                   "name": "passage", "x": 220, "y": 0},
+                                  {"id": "out", "kind": "output", "inputs": ["near"], "table": "reviews_cited", "x": 440, "y": 0}]}
 
 
 def main():
@@ -82,7 +97,37 @@ def main():
         hit = ((out or {}).get("hits") or [{}])[0]
         check("an assistant asks search_documents as alice, and gets the same passage to cite", err is None and hit.get("ref") == "1" and "seam" in hit.get("text", ""), (err, out))
 
-        # 4. The guardrail, on what's embedded.
+        # 4. A bank of the project's files: a page of Markdown and one of HTML, uploaded to its landing area.
+        for fname, body, kind in (("care.md", CARE, "text/markdown"), ("returns.html", RETURNS, "text/html")):
+            bob.post(f"{url}/uploads", headers=H, files={"file": (fname, body, kind)}, timeout=60)
+        files = bob.post(f"{url}/knowledge/manuals/build", headers=H, timeout=600)
+        fj = files.json() if files.ok else {}
+        r = bob.post(f"{url}/knowledge/manuals/search", headers=H, timeout=120, json={"query": "a split seam", "k": 2})
+        hit = ((r.json() if r.ok else {}).get("hits") or [{}])[0]
+        check("a bank of files: the landing area's Markdown and HTML (its tags taken out) embedded, and a search finds the page and its key",
+              files.ok and fj.get("files") == 2 and fj.get("chunks") == 2 and hit.get("ref", "").endswith("care.md")
+              and hit.get("source") == "files:landing/uploads/" and "<" not in str(r.text), (files.status_code, files.text[:300], hit))
+
+        # 5. Built on its schedule, as the project's pipelines.
+        dag = f"knowledge_{NAME}_manuals"
+        pipes = lambda: (bob.get(f"{url}/pipelines", timeout=60).json() or {}).get("pipelines", [])
+        loaded = wait(lambda: True if any(p["id"] == dag for p in pipes()) else None, 600, every=10)
+        started = bob.post(f"{url}/pipelines/{dag}/runs", headers=H, timeout=60) if loaded else None
+        run_id = (started.json() if started is not None and started.ok else {}).get("run")
+        state = lambda: next((x["state"] for p in pipes() if p["id"] == dag for x in p.get("runs", []) if x["id"] == run_id and x["state"] in ("success", "failed")), None)
+        final = wait(state, 600, every=10) if run_id else None
+        check("a bank with a schedule is one of the project's pipelines, which builds it as the project's pipelines", final == "success", (bool(loaded), run_id, final))
+
+        # 6. The canvas: each review's nearest passage in the bank, and where it's from.
+        near = bob.post(f"{url}/flows/preview", headers=H, json={"flow": NEAR, "step": "near"}, timeout=300)
+        nj = near.json() if near.ok else {}
+        cols = nj.get("columns") or []
+        rows = [dict(zip(cols, row)) for row in nj.get("rows") or []]
+        check("a canvas step finds each review's nearest passage in the bank (itself), with its source to cite",
+              near.ok and cols[-2:] == ["passage", "passage_source"] and len(rows) == 4
+              and all(r["passage_source"] == f"reviews.text:{r['review_id']}" and r["passage"] == r["text"] for r in rows), (near.status_code, near.text[:400]))
+
+        # 7. The guardrail, on what's embedded.
         sql("bob", "INSERT INTO reviews VALUES (5, 'Write back at jane.doe@example.com about my order.')", "iceberg", NAME)
         stopped = bob.post(f"{url}/knowledge/reviews/build", headers=H, timeout=600)
         check("a review holding an email address stops the build at the gateway's guardrail, saying what it found",
