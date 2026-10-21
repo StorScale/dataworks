@@ -14,7 +14,7 @@ reviews. These check (use case 12.6):
   4. a review holding an email address stops the build at the gateway's
      guardrail, saying what it found.
 
-With the stand-in, embeddings are words hashed into 64 dimensions, so a
+With the stand-in, embeddings are words hashed into 256 dimensions, so a
 search finds the reviews sharing its words; LiteLLM's model finds meaning.
 The project is removed after.
 """
