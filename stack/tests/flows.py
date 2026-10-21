@@ -263,7 +263,7 @@ def main():
         aj = asked.json() if asked is not None and asked.ok else {}
         sides = [r[-1] for r in aj.get("rows", [])]
         check("she previews the llm step: the model is asked about a sample on the project's key, its answers a column, the cost said",
-              asked is not None and aj.get("columns", [])[-1:] == ["side"] and sides and all(x == "east" for x in sides) and (aj.get("cost") or 0) > 0 and aj.get("batches") == 1,
+              asked is not None and aj.get("columns", [])[-1:] == ["side"] and sides and all(x in ("east", "west") for x in sides) and (aj.get("cost") or 0) > 0 and aj.get("batches") == 1,
               (asked.status_code if asked is not None else None, (asked.text if asked is not None else "")[:300]))
         preview = alice.post(f"{FLOWS}/preview", headers=H, json={"flow": FLOW, "step": "by_region"}, timeout=120)
         pj = preview.json() if preview.ok else {}

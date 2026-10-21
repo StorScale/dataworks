@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -19,7 +20,8 @@ import (
 // step's dbt model reads. A preview asks about a sample as the person; a
 // run (the flow's DAG, as the project's pipelines, or an editor) asks about
 // every row the input gives, up to the step's limit, and writes the table
-// as the platform's maintenance account.
+// as the caller, signed in to Trino with their token (the pipelines own the
+// project's tables; an editor may make them), under their rules.
 
 const llmPreviewRows = 50
 
@@ -99,8 +101,9 @@ func (s *server) handleFlowLLMRun(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusNotFound, "no such project")
 		return
 	}
-	if s.maintainer == nil {
-		s.fail(w, r, http.StatusServiceUnavailable, "writing the step's table needs the platform's Trino account (maintenance)")
+	tc, err := trino.New(envOr("TRINO_URL", "https://trino:8443"), "", "", os.Getenv("TRINO_CA"))
+	if err != nil {
+		s.fail(w, r, http.StatusServiceUnavailable, "Trino: "+err.Error())
 		return
 	}
 	flowName, stepID := r.PathValue("flow"), r.PathValue("step")
@@ -152,7 +155,7 @@ func (s *server) handleFlowLLMRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	table := trino.Quote(step.Catalog) + "." + trino.Quote(step.Namespace) + "." + trino.Quote(step.Table)
-	if err := writeTable(ctx, s.maintainer.trino, table, a.Columns, a.Types, a.Result.Rows); err != nil {
+	if err := writeTable(ctx, tc.As(token), table, a.Columns, a.Types, a.Result.Rows); err != nil {
 		s.fail(w, r, http.StatusBadGateway, "writing "+table+": "+err.Error())
 		return
 	}
