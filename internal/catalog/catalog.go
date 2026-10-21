@@ -154,6 +154,49 @@ func (c *Client) PatchTable(ctx context.Context, id string, patch []map[string]a
 	return nil
 }
 
+// AddLineage records in the catalog that a table is made from others (a
+// flow's llm step: the platform writes it, not dbt, so no run reports it).
+// Tables are named as the catalog does (trino.iceberg.sales.orders); one
+// the catalog doesn't know yet is an error, for the caller to try again.
+func (c *Client) AddLineage(ctx context.Context, from []string, to, description string) error {
+	id := func(fqn string) (string, error) {
+		var t omTable
+		if err := c.get(ctx, "/tables/name/"+url.PathEscape(fqn), &t); err != nil {
+			return "", fmt.Errorf("%s: %w", fqn, err)
+		}
+		return t.ID, nil
+	}
+	toID, err := id(to)
+	if err != nil {
+		return err
+	}
+	token, err := os.ReadFile(c.TokenFile)
+	if err != nil {
+		return fmt.Errorf("the catalog isn't set up yet (no token): %w", err)
+	}
+	for _, f := range from {
+		fromID, err := id(f)
+		if err != nil {
+			return err
+		}
+		body, _ := json.Marshal(map[string]any{"edge": map[string]any{
+			"fromEntity": map[string]string{"id": fromID, "type": "table"}, "toEntity": map[string]string{"id": toID, "type": "table"},
+			"lineageDetails": map[string]string{"description": description}}})
+		req, _ := http.NewRequestWithContext(ctx, "PUT", c.URL+"/api/v1/lineage", strings.NewReader(string(body)))
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(string(token)))
+		req.Header.Set("Content-Type", "application/json")
+		res, err := c.http.Do(req)
+		if err != nil {
+			return err
+		}
+		res.Body.Close()
+		if res.StatusCode/100 != 2 {
+			return fmt.Errorf("catalog: lineage %s -> %s: HTTP %d", f, to, res.StatusCode)
+		}
+	}
+	return nil
+}
+
 type omTable struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`

@@ -198,7 +198,8 @@ def catalog():
 
 
 def lineage(om):
-    r = om.get(f"{OM}/lineage/table/name/trino.iceberg.{NAME}.revenue_by_region?upstreamDepth=1&downstreamDepth=0", timeout=30)
+    """The tables revenue_by_region is made from, as far back as the catalog says (the llm step's table between)."""
+    r = om.get(f"{OM}/lineage/table/name/trino.iceberg.{NAME}.revenue_by_region?upstreamDepth=3&downstreamDepth=0", timeout=30)
     if not r.ok:
         return None
     names = {n["id"]: n["fullyQualifiedName"] for n in r.json().get("nodes", [])}
@@ -338,8 +339,9 @@ def main():
         table = sorted(tuple(r) for r in sql("bob", "SELECT region, revenue, orders FROM revenue_by_region", "iceberg", NAME)) if state == "success" else state
         check("merged, the project's Airflow builds it with dbt: the table is there, with its numbers", table == [("EU", 22.5, 2), ("US", 7.0, 1)], (run_id, table))
         om = catalog()
-        up = wait(lambda: lineage(om), 420, every=15) if state == "success" else None
-        check("... and the catalog has it, its lineage from orders", bool(up) and any(u.endswith(f".{NAME}.orders") for u in up), up)
+        up = wait(lambda: (lambda u: u if u and any(x.endswith(f".{NAME}.orders") for x in u) else None)(lineage(om)), 420, every=15) if state == "success" else None
+        check("... and the catalog has it, its lineage back to orders (through the llm step's table, which the platform records)",
+              bool(up) and any(u.endswith(f".{NAME}.orders") for u in up), up or lineage(om))
 
         # 4. bob changes a model by hand: a code step from then on.
         pg.git("fetch", "-q", "origin", cwd=work)
