@@ -113,7 +113,7 @@ def ask(prompt, model="default", system=None):
     messages = ([{"role": "system", "content": system}] if system else []) + [{"role": "user", "content": prompt}]
     r = requests.post(f"{url.rstrip('/')}/chat/completions", timeout=300, headers={"Authorization": f"Bearer {key}"},
                       json={"model": model, "messages": messages, "user": username()})
-    if r.status_code == 400 and "udget" in r.text:
+    if r.status_code in (400, 422) and "udget" in r.text:   # LiteLLM answers 422 past the budget (400 before 1.8x)
         raise RuntimeError("the agent is at its LLM budget: the gateway answers it no more this month")
     if r.status_code == 400 and "guardrail" in r.text:   # what may not leave the platform: the gateway names it, never the value
         try:

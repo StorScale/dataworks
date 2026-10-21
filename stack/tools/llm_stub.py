@@ -8,7 +8,7 @@ key that it enforces.
   GET  /key/list       -> {keys: [{key, token, key_alias, max_budget, spend}], total_pages: 1}  (the master key; LiteLLM's
                        return_full_object, size and page are taken and ignored: one page, the whole objects, the key as its token too)
   POST /chat/completions, /v1/chat/completions  (a key): an answer that repeats the question; each call
-                       costs 0.01 per 100 characters, and a key past its budget gets HTTP 400 as LiteLLM gives it;
+                       costs 0.01 per 100 characters, and a key past its budget gets HTTP 422 as LiteLLM gives it;
                        a question carrying what may not leave (llm_guard: a masked value's shape, a secret)
                        is refused first, HTTP 400, as the guardrail refuses it at LiteLLM (LLM_GUARDRAILS=false turns it off)
   GET  /health/liveliness, /healthz
@@ -126,8 +126,8 @@ class Handler(BaseHTTPRequestHandler):
                 text = " ".join(str(m.get("content", "")) for m in b.get("messages", []))
                 cost = COST_PER_100_CHARS * max(1, len(text) / 100)
                 if info.get("max_budget") is not None and info["spend"] + cost > float(info["max_budget"]):
-                    return self.answer(400, {"error": {"message": f"Budget has been exceeded! Current cost: {info['spend']:.2f}, Max budget: {info['max_budget']}",
-                                                       "type": "budget_exceeded", "code": "400"}})
+                    return self.answer(422, {"error": {"message": f"Budget has been exceeded! Current cost: {info['spend']:.2f}, Max budget: {info['max_budget']}",
+                                                       "type": "budget_exceeded", "code": "422"}})
                 info["spend"] = round(info["spend"] + cost, 6)
                 save()
             reply = "You asked: " + text[:200]
