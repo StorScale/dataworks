@@ -337,7 +337,73 @@ func (s *server) handleKnowledgeList(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, b)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"banks": out, "canBuild": role == "editor"})
+	writeJSON(w, http.StatusOK, map[string]any{"banks": out, "canBuild": role == "editor",
+		// what a new bank needs, so the card can say: a budget to embed on, a bucket for files, pipelines for a schedule
+		"hasBudget": p.Spec.LLM != nil && p.Spec.LLM.Budget > 0, "hasFiles": p.Spec.Files != nil, "hasPipelines": p.Spec.Pipelines != nil})
+}
+
+// handlePutKnowledge declares a bank, or changes one: the project's editors,
+// as they register its agents. Its table is made when it's first built.
+func (s *server) handlePutKnowledge(w http.ResponseWriter, r *http.Request) {
+	sess, v := s.editorOf(w, r, "declare its knowledge banks")
+	if sess == nil {
+		return
+	}
+	var k project.KnowledgeBank
+	dec := json.NewDecoder(io.LimitReader(r.Body, 256<<10))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&k); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "a knowledge bank, as JSON: "+err.Error())
+		return
+	}
+	k.Name = r.PathValue("bank")
+	p := *v.Spec
+	p.Spec.Knowledge = slices.Clone(p.Spec.Knowledge)
+	i := slices.IndexFunc(p.Spec.Knowledge, func(x project.KnowledgeBank) bool { return x.Name == k.Name })
+	if i < 0 {
+		p.Spec.Knowledge = append(p.Spec.Knowledge, k)
+	} else {
+		p.Spec.Knowledge[i] = k
+	}
+	if err := s.saveSpec(r.Context(), &p); err != nil {
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	var sources []string
+	for _, t := range k.Tables {
+		sources = append(sources, t.Table+"."+t.Column)
+	}
+	for _, f := range k.Files {
+		sources = append(sources, "files in "+f.Prefix)
+	}
+	s.record(r, sess.User.Username, "knowledge.declared", "project:"+v.Name+"/knowledge:"+k.Name,
+		map[bool]string{true: "declared ", false: "changed "}[i < 0]+k.Name+" from "+strings.Join(sources, ", ")+map[bool]string{true: ", built at " + k.Schedule, false: ""}[k.Schedule != ""])
+	s.kick(r.Context(), v.Name)
+	writeJSON(w, http.StatusOK, k)
+}
+
+// handleDeleteKnowledge takes a bank out of the project: its editors. Its
+// table stays, a table of the project's like any other, until they drop it.
+func (s *server) handleDeleteKnowledge(w http.ResponseWriter, r *http.Request) {
+	sess, v := s.editorOf(w, r, "remove its knowledge banks")
+	if sess == nil {
+		return
+	}
+	name := r.PathValue("bank")
+	p := *v.Spec
+	before := len(p.Spec.Knowledge)
+	p.Spec.Knowledge = slices.DeleteFunc(slices.Clone(p.Spec.Knowledge), func(x project.KnowledgeBank) bool { return x.Name == name })
+	if len(p.Spec.Knowledge) == before {
+		s.fail(w, r, http.StatusNotFound, "no such knowledge bank")
+		return
+	}
+	if err := s.saveSpec(r.Context(), &p); err != nil {
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	s.record(r, sess.User.Username, "knowledge.removed", "project:"+v.Name+"/knowledge:"+name, "its table knowledge_"+name+" kept")
+	s.kick(r.Context(), v.Name)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // tablesOf is the project's catalog and namespace.
