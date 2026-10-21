@@ -345,6 +345,24 @@ spec:
                   type: object
                   properties:
                     budget: {type: number}
+                knowledge:
+                  description: "Text the project's people and agents search by meaning (12.6): each bank's sources (a table's text column and its id column) embedded through the gateway on the project's key, kept as the table knowledge_<name> in its namespace."
+                  type: array
+                  items:
+                    type: object
+                    required: [name, tables]
+                    properties:
+                      name: {type: string, pattern: '^[a-z_][a-z0-9_]{0,49}$'}
+                      description: {type: string}
+                      tables:
+                        type: array
+                        items:
+                          type: object
+                          required: [table, column, id]
+                          properties:
+                            table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                            column: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                            id: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                 agents:
                   description: "Programs of the project's own (12.2): each an identity of its own, allowed the tools named, approved by an editor other than its registrant; who registered and approved are the platform's."
                   type: array
@@ -355,7 +373,7 @@ spec:
                       name: {type: string, pattern: '^[a-z][a-z0-9-]{0,30}$'}
                       description: {type: string}
                       owner: {type: string}
-                      tools: {type: array, items: {type: string, enum: [list_projects, list_metrics, query_metrics, explain_query, list_terms, describe_term, search_terms, list_products, describe_product, query_product, list_runs, list_alerts]}}
+                      tools: {type: array, items: {type: string, enum: [list_projects, list_metrics, query_metrics, explain_query, list_terms, describe_term, search_terms, list_products, describe_product, query_product, list_runs, list_alerts, search_documents]}}
                       schedule: {type: string, description: "When the platform runs it (cron, UTC), with a notebook."}
                       notebook: {type: string, description: "Its program: an .ipynb in the project's repo, under the pipelines' path, run as the agent on its schedule."}
                       budget: {type: number, description: "USD a month at the LLM gateway (12.1); none: no key."}

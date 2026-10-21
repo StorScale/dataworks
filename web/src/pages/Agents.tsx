@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { approveAgent, getAgents, getLLM, putAgent, removeAgent, type LLMUse } from "../api";
+import { approveAgent, buildKnowledge, getAgents, getKnowledge, getLLM, putAgent, removeAgent, searchKnowledge, type KnowledgeHit, type LLMUse } from "../api";
 import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
 
 // Agents are programs of the project's own (use case 12.2): each with an
@@ -12,6 +12,7 @@ export default function Agents() {
   const list = usePoll(() => getAgents(name), [name], 15_000);
   const llm = usePoll(() => getLLM(name), [name], 30_000);
   const useOf = (who: string): LLMUse | undefined => llm.data?.uses.find((u) => u.who === who);
+  const knowledge = usePoll(() => getKnowledge(name), [name], 60_000);
   const [error, setError] = useState<string>();
   const [adding, setAdding] = useState(false);
   const [secret, setSecret] = useState<{ agent: string; clientId: string; secret: string; mcpUrl: string }>();
@@ -33,6 +34,7 @@ export default function Agents() {
           <div><button className="btn small" onClick={() => setSecret(undefined)}>Done</button></div>
         </div>
       )}
+      {(knowledge.data?.banks.length ?? 0) > 0 && <Knowledge project={name} banks={knowledge.data!.banks} canBuild={knowledge.data!.canBuild || admin} reload={knowledge.reload} />}
       {llm.data?.gateway && (
         <div className="card stack" style={{ gap: 4 }} data-testid="llm">
           <strong>The LLM gateway</strong>
@@ -116,5 +118,51 @@ function AgentForm({ project, tools, taken, owner, onDone }: { project: string; 
         <span className="small muted">Owner: {owner}. Another editor approves it before it may sign in.</span>
       </div>
     </form>
+  );
+}
+
+// Knowledge banks (use case 12.6): the project's text, searched by meaning, as the person; built by its editors.
+function Knowledge({ project, banks, canBuild, reload }: { project: string; banks: import("../api").KnowledgeBank[]; canBuild: boolean; reload: () => void }) {
+  const [busy, setBusy] = useState<string>();
+  const [error, setError] = useState<string>();
+  const [note, setNote] = useState<string>();
+  const [bank, setBank] = useState(banks[0]?.name ?? "");
+  const [query, setQuery] = useState("");
+  const [hits, setHits] = useState<KnowledgeHit[]>();
+  const build = async (b: string) => {
+    setBusy(b); setError(undefined); setNote(undefined);
+    try { const r = await buildKnowledge(project, b); setNote(`${b}: ${r.chunks} passages embedded, ${r.cost.toFixed(4)} spent.`); reload(); }
+    catch (e) { setError((e as Error).message); } finally { setBusy(undefined); }
+  };
+  const search = async () => {
+    setBusy("search"); setError(undefined);
+    try { setHits((await searchKnowledge(project, bank, query)).hits); } catch (e) { setError((e as Error).message); } finally { setBusy(undefined); }
+  };
+  return (
+    <div className="card stack" style={{ gap: 6 }} data-testid="knowledge">
+      <strong>Knowledge banks</strong>
+      <div className="small muted">The project's text, embedded through the gateway on its key and kept as a table of the project's; searched by meaning, as you, and by agents with the tool <span className="mono">search_documents</span>.</div>
+      <ErrorBanner error={error} />
+      {note && <div className="small">{note}</div>}
+      {banks.map((b) => (
+        <div key={b.name} className="row small" data-testid={`bank-${b.name}`}>
+          <span className="mono">{b.name}</span>
+          <span className="muted">{b.tables.map((t) => `${t.table}.${t.column}`).join(", ")}</span>
+          <span>{b.chunks === undefined ? "not built" : `${b.chunks} passages`}</span>
+          {canBuild && <button className="btn small" disabled={!!busy} onClick={() => build(b.name)}>{busy === b.name ? "Building…" : b.chunks === undefined ? "Build" : "Build again"}</button>}
+        </div>
+      ))}
+      <div className="row">
+        <select value={bank} onChange={(e) => setBank(e.target.value)} aria-label="Bank">{banks.map((b) => <option key={b.name}>{b.name}</option>)}</select>
+        <input className="grow" value={query} placeholder="Search by meaning: early termination terms" onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && query && search()} data-testid="knowledge-query" />
+        <button className="btn small" disabled={!query || !!busy} onClick={search}>Search</button>
+      </div>
+      {hits && (hits.length === 0 ? <div className="small muted">Nothing found.</div> : (
+        <table className="t" data-testid="knowledge-hits">
+          <thead><tr><th>Score</th><th>From</th><th>Passage</th></tr></thead>
+          <tbody>{hits.map((h, i) => <tr key={i}><td className="mono">{h.score.toFixed(2)}</td><td className="mono small">{h.source} #{h.ref}</td><td className="small">{h.text}</td></tr>)}</tbody>
+        </table>
+      ))}
+    </div>
   );
 }

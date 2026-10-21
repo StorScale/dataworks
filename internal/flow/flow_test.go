@@ -585,3 +585,26 @@ type refusingAsker struct{}
 func (refusingAsker) Ask(context.Context, string) (string, float64, error) {
 	return "", 0, fmt.Errorf("the gateway refused (HTTP 400): the question holds an email address, which may not leave the platform")
 }
+
+// Chunks cut at a sentence, else a space, near the size; short text is one chunk.
+func TestChunks(t *testing.T) {
+	if got := Chunks("  one   short\ttext ", 100); len(got) != 1 || got[0] != "one short text" {
+		t.Errorf("short: %q", got)
+	}
+	long := strings.Repeat("The seam split after a week. ", 100)
+	got := Chunks(long, 200)
+	for i, c := range got {
+		if len(c) > 200 {
+			t.Errorf("chunk %d is %d long", i, len(c))
+		}
+		if i < len(got)-1 && !strings.HasSuffix(c, ".") {
+			t.Errorf("chunk %d isn't cut at a sentence: %q", i, c[len(c)-20:])
+		}
+	}
+	if strings.Join(got, " ") != strings.TrimSpace(strings.Join(strings.Fields(long), " ")) {
+		t.Errorf("the chunks don't make the text")
+	}
+	if got := Chunks(strings.Repeat("x", 500), 200); len(got) != 3 {
+		t.Errorf("no space to cut at: %d chunks", len(got))
+	}
+}

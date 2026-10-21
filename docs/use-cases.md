@@ -590,8 +590,8 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 3. sam's assistant asks `search_documents` for "early termination terms"; the answer cites the passages, from documents sam may read. A canvas step enriches each ticket with the nearest contract clause.
 
 **Requirements**
-- R12.12 Knowledge banks per project (`spec.knowledge`): bucket prefixes and table columns, embedded through the gateway on the project's key, kept in pgvector in the platform's Postgres, refreshed as the sources change.
-- R12.13 A `search_documents` MCP tool and a canvas step (nearest passages for a column), as the person or agent, under the project's access; answers cite the passages.
+- R12.12 Knowledge banks per project (`spec.knowledge`): bucket prefixes and table columns, embedded through the gateway on the project's key, kept in pgvector in the platform's Postgres, refreshed as the sources change. (Built 2026-10-21 for table columns, kept as an Iceberg table in the project's namespace and searched with Trino's cosine similarity, not pgvector; files and scheduled rebuilds left.)
+- R12.13 A `search_documents` MCP tool and a canvas step (nearest passages for a column), as the person or agent, under the project's access; answers cite the passages. (The tool built 2026-10-21; the canvas step left.)
 - R12.14 A Q&A app over a knowledge bank and the semantic layer (14.1's apps), as the person.
 
 ### 12.7 An agent without a notebook (added 2026-10-20)

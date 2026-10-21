@@ -13,6 +13,8 @@ key that it enforces.
                        is refused first, HTTP 400, as the guardrail refuses it at LiteLLM (LLM_GUARDRAILS=false turns it off);
                        a question shaped as an llm step's ("Answer with a JSON array of N strings") gets N answers (the
                        first label, or "ok"), so a flow's llm step runs in CI; x-litellm-response-cost says the cost, as LiteLLM's does
+  POST /embeddings, /v1/embeddings  (a key): a vector per input, words hashed into 64 dimensions (shared words are near),
+                       under the guardrail and the budget, as LiteLLM's would be
   GET  /health/liveliness, /healthz
 
 Keys and spend are kept in LLM_STUB_STATE (a JSON file; default in memory).
@@ -51,6 +53,19 @@ def save():
         with open(STATE + ".tmp", "w") as f:
             json.dump(keys, f)
         os.replace(STATE + ".tmp", STATE)
+
+
+def embed(text, dims=64):
+    """A text as the stand-in embeds it: its words (and their halves, so seam ~ seams) hashed into dims, normalized."""
+    import hashlib
+    import math
+    v = [0.0] * dims
+    for w in re.findall(r"[a-z0-9]+", text.lower()):
+        for part in (w, w[: max(3, len(w) - 1)]):
+            h = int(hashlib.sha256(part.encode()).hexdigest(), 16)
+            v[h % dims] += 1.0 if (h >> 8) % 2 else -1.0
+    n = math.sqrt(sum(x * x for x in v)) or 1.0
+    return [x / n for x in v]
 
 
 def resolve(text):
@@ -145,6 +160,23 @@ class Handler(BaseHTTPRequestHandler):
                 gone = [k for k in b.get("keys") or [] if keys.pop(k, None) is not None]
                 save()
             return self.answer(200, {"deleted_keys": gone})
+        if u.path in ("/embeddings", "/v1/embeddings"):   # a stand-in's embeddings: words hashed into 64 dimensions, so shared words are near
+            with lock:
+                info = keys.get(tok)
+                if not info:
+                    return self.answer(401, {"error": {"message": "Authentication Error: invalid key"}})
+                b = self.body()
+                texts = b.get("input") if isinstance(b.get("input"), list) else [b.get("input") or ""]
+                kinds = llm_guard.found([{"content": t} for t in texts]) if GUARDRAILS else []
+                if kinds:
+                    return self.answer(400, {"error": {"message": llm_guard.refusal(kinds), "type": "guardrail", "code": "400"}})
+                cost = 0.0001 * max(1, sum(len(t) for t in texts) / 1000)
+                if info.get("max_budget") is not None and info["spend"] + cost > float(info["max_budget"]):
+                    return self.answer(422, {"error": {"message": "Budget has been exceeded!", "type": "budget_exceeded", "code": "422"}})
+                info["spend"] = round(info["spend"] + cost, 6)
+                save()
+            return self.answer(200, {"object": "list", "model": b.get("model", "stub"),
+                                     "data": [{"object": "embedding", "index": i, "embedding": embed(t)} for i, t in enumerate(texts)]}, cost=cost)
         if u.path in ("/chat/completions", "/v1/chat/completions"):
             with lock:
                 info = keys.get(tok)
