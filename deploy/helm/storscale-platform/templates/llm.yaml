@@ -19,6 +19,29 @@ spec:
     spec:
       enableServiceLinks: false
       serviceAccountName: storscale
+      {{- if ne .Values.llm.gateway "stub" }}
+      # LiteLLM's database and account on the platform's Postgres (its keys and
+      # spend), made if missing, as the other tools' are: the master key is its password.
+      initContainers:
+        - name: database
+          image: {{ .Values.upstream.postgres }}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 999, runAsGroup: 999, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          command: ["bash", "-c"]
+          args:
+            - |
+              until pg_isready -h postgres -U postgres -q; do sleep 2; done
+              psql -h postgres -U postgres -v ON_ERROR_STOP=1 -v pw="$LITELLM_DB_PASSWORD" <<'SQL'
+              SELECT 'CREATE ROLE litellm LOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'litellm') \gexec
+              ALTER ROLE litellm PASSWORD :'pw';
+              SELECT 'CREATE DATABASE litellm OWNER litellm' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'litellm') \gexec
+              REVOKE CONNECT, TEMPORARY ON DATABASE litellm FROM PUBLIC;
+              SQL
+          env:
+            - {name: PGPASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: POSTGRES_ADMIN_PASSWORD}}}
+            - {name: LITELLM_DB_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: LLM_MASTER_KEY}}}
+          resources:
+            requests: {cpu: 10m, memory: 32Mi}
+      {{- end }}
       containers:
       {{- if eq .Values.llm.gateway "stub" }}
         - name: llm
