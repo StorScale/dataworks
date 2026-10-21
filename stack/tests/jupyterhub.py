@@ -111,6 +111,16 @@ import pandas as pd
 import buckets_lake
 from botocore.exceptions import ClientError
 
+def proxied():
+    """What jupyter-server-proxy serves on this server (its servers-info), as the server itself says."""
+    import urllib.request
+    url = "http://127.0.0.1:8888" + os.environ.get("JUPYTERHUB_SERVICE_PREFIX", "/") + "server-proxy/servers-info"
+    req = urllib.request.Request(url, headers={"Authorization": "token " + os.environ.get("JUPYTERHUB_API_TOKEN", "")})
+    try:
+        return [s.get("name") for s in json.load(urllib.request.urlopen(req, timeout=10)).get("server_processes", [])]
+    except Exception as e:  # noqa: BLE001
+        return str(e)[:200]
+
 def code(fn):
     try:
         fn(); return "OK"
@@ -140,6 +150,7 @@ print(json.dumps({
     "libraries": [m for m in ("sklearn", "statsmodels", "scipy", "lightgbm", "xgboost", "flaml", "mlflow", "geopandas", "networkx")
                   if __import__("importlib").util.find_spec(m) is None],
     "code_server": __import__("shutil").which("code-server") is not None,
+    "proxied": proxied(),
 }))
 '''
 
@@ -152,7 +163,7 @@ def notebook_checks(user, other):
     result = json.loads(out.strip().splitlines()[-1])
     # VS Code, as JupyterLab's launcher opens it: served by the person's own server through jupyter-server-proxy.
     vs = requests.get(f"{HUB}/user/{user}/vscode/", headers={"Authorization": f"token {server_token(s, user)}"}, timeout=120, allow_redirects=True)
-    result["vscode"] = vs.status_code
+    result["vscode"] = vs.status_code if vs.ok else f"{vs.status_code} at {vs.url}: {vs.text[:200]}"
     hub_api(s, "DELETE", f"/users/{user}/server")  # done: stop it, as the hub's idle culler would
     return me, result
 
@@ -182,7 +193,7 @@ def main():
     _, r = sign_in("carol")
     check("people in neither group can't sign in", r.status_code == 403, f"HTTP {r.status_code}")
     check("a notebook has the analysis and ML libraries, and VS Code opens from the launcher (7.8)",
-          a["libraries"] == [] and a["code_server"] is True and a["vscode"] == 200, (a["libraries"], a["code_server"], a["vscode"]))
+          a["libraries"] == [] and a["code_server"] is True and a["vscode"] == 200, (a["libraries"], a["code_server"], a["proxied"], a["vscode"]))
 
     # 2. Each notebook works as its person, with no keys.
     check("each notebook gets its own person's Keycloak token",
