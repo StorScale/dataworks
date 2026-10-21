@@ -11,12 +11,13 @@ type Tab = (typeof TABS)[number];
 // so your filters and masks apply), where they come from, their checks, and
 // how they're stored (their files, as maintenance keeps them).
 // holds is a column's profile in a few words: how much is null, how many values, their range.
-function holds(p?: ColumnProfile) {
+function holds(p?: ColumnProfile, type?: string) {
   if (!p) return <span className="muted">–</span>;
   const parts: string[] = [];
   if (p.nulls !== undefined) parts.push(p.nulls === 0 ? "no nulls" : `${Math.round(p.nulls * 100)}% null`);
   if (p.distinct !== undefined) parts.push(`${p.distinct} distinct`);
-  if (p.min !== undefined && p.max !== undefined) parts.push(`${p.min} to ${p.max}`);
+  const text = /char|varchar|string|json/i.test(type ?? "");   // a text column's min and max are its values' lengths
+  if (p.min !== undefined && p.max !== undefined) parts.push(text ? `${p.min} to ${p.max} characters` : `${p.min} to ${p.max}`);
   return parts.join(" · ") || <span className="muted">–</span>;
 }
 
@@ -104,7 +105,7 @@ export default function Data() {
                       <tr key={c.name}>
                         <td className="mono">{c.name}</td>
                         <td className="mono muted">{c.type || "–"}</td>
-                        <td className="small" data-testid={`profile-${c.name}`}>{holds(c.profile)}</td>
+                        <td className="small" data-testid={`profile-${c.name}`}>{holds(c.profile, c.type)}</td>
                         <td>{lim.hidden ? <span className="pill amber">nothing</span> : lim.masks[c.name] ? <span className="pill amber">{maskLabel(lim.masks[c.name])}</span> : <span className="muted small">all of it</span>}</td>
                         <td data-testid={`protection-${c.name}`}>
                           {protectedOf(c.name).map((pc) => (

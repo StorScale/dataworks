@@ -28,7 +28,7 @@ FROM quay.io/jupyter/base-notebook:hub-6.0.1 AS notebook
 RUN pip install --no-cache-dir jupyterlab==4.5.10 boto3==1.43.108 requests==2.34.2 pandas==3.0.6 pyarrow==25.0.1 \
       scikit-learn==1.9.1 statsmodels==0.15.0 scipy==1.18.1 lightgbm==4.7.0 xgboost==3.4.1 flaml==2.7.0 mlflow-skinny==3.17.2 \
       geopandas==1.2.0 networkx==3.7 \
-      jupyter-server-proxy==4.6.0 jupyter-codeserver-proxy==0.1.0
+      jupyter-server-proxy==4.6.0
 # code-server for the image's architecture (the image has Python, not curl).
 ARG TARGETARCH
 USER root
@@ -44,6 +44,8 @@ with urllib.request.urlopen(url) as r, tarfile.open(fileobj=io.BytesIO(r.read())
 os.symlink("/opt/code-server/bin/code-server", "/usr/local/bin/code-server")
 PY
 USER ${NB_UID}
+# VS Code at the person's server's /vscode/, on JupyterLab's launcher: the hub has signed them in, so code-server asks nothing more.
+COPY vscode/storscale_vscode.json /opt/conda/etc/jupyter/jupyter_server_config.d/storscale_vscode.json
 COPY buckets_lake.py /opt/buckets/buckets_lake.py
 COPY schedule/storscale_schedule.py /opt/buckets/storscale_schedule.py
 RUN echo /opt/buckets > "$(python -c 'import site; print(site.getsitepackages()[0])')/buckets.pth"

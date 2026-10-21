@@ -62,7 +62,7 @@ CHECKS = {  # a project's check -> OpenMetadata's test definition
     "rowCount": "tableRowCountToBeBetween",
     "acceptedValues": "columnValuesToBeInSet",
     "range": "columnValuesToBeBetween",
-    "regex": "columnValuesToMatchRegex",
+    "regex": "tableCustomSQLQuery",        # Trino's regexp_like: OpenMetadata's own regex test falls back to LIKE on Trino
     "references": "tableCustomSQLQuery",   # a query for the values the other table lacks
     "sql": "tableCustomSQLQuery",          # the project's own query, which must return no rows
 }
@@ -435,10 +435,13 @@ def test_case(project, check, catalog="iceberg", namespace=None):
                 params.append({"name": param, "value": str(check[k])})
     elif kind == "acceptedValues":
         params.append({"name": "allowedValues", "value": json.dumps(check.get("values") or [])})
-    elif kind == "regex":
-        params.append({"name": "regex", "value": check.get("pattern") or ""})
-    elif kind in ("references", "sql"):
-        if kind == "references":   # the column's values that aren't in the other table's column
+    elif kind in ("regex", "references", "sql"):
+        if kind == "regex":   # the column's values that don't match
+            table = f"{q(catalog)}.{q(namespace)}.{q(check['table'])}"
+            pattern = (check.get("pattern") or "").replace("'", "''")
+            sql = (f"SELECT {q(check['column'])} FROM {table} WHERE {q(check['column'])} IS NOT NULL "
+                   f"AND NOT regexp_like(CAST({q(check['column'])} AS varchar), '{pattern}')")
+        elif kind == "references":   # the column's values that aren't in the other table's column
             table = f"{q(catalog)}.{q(namespace)}.{q(check['table'])}"
             ref = f"{q(catalog)}.{q(namespace)}.{q(check['refTable'])}"
             sql = (f"SELECT t.{q(check['column'])} FROM {table} t WHERE t.{q(check['column'])} IS NOT NULL "
@@ -476,22 +479,24 @@ def run_checks(token):
             workflow.stop()
 
 
+PROFILED = {}   # table FQN -> when this process last profiled it (the catalog's list doesn't carry the profile)
+
+
 def profile_tables(token):
     """Each project's tables that have no profile, or one older than
     PROFILE_EVERY, profiled by OpenMetadata's profiler as the catalog's Trino
     account (row counts; each column's nulls, distinct values, min, max,
     mean), for the Data page and the catalog's own pages (use case 6.11)."""
     h = {"Authorization": f"Bearer {token}"}
-    stale = (time.time() - PROFILE_EVERY) * 1000
+    stale = time.time() - PROFILE_EVERY
     for p in projects():
         tables = p["spec"].get("tables") or {}
         namespace = tables.get("namespace") or p["metadata"]["name"].replace("-", "_")
         catalog = tables.get("catalog") or "iceberg"
-        r = requests.get(f"{OM}/v1/tables", headers=h, timeout=30,
-                         params={"databaseSchema": f"{SERVICE}.{catalog}.{namespace}", "fields": "profile", "limit": 200})
+        r = requests.get(f"{OM}/v1/tables", headers=h, timeout=30, params={"databaseSchema": f"{SERVICE}.{catalog}.{namespace}", "limit": 200})
         if not r.ok:
             continue
-        due = [t["name"] for t in r.json().get("data", []) if not t.get("deleted") and ((t.get("profile") or {}).get("timestamp") or 0) < stale]
+        due = [t["name"] for t in r.json().get("data", []) if not t.get("deleted") and PROFILED.get(t["fullyQualifiedName"], 0) < stale]
         if not due:
             continue
         workflow = ProfilerWorkflow.create({
@@ -506,6 +511,8 @@ def profile_tables(token):
         })
         workflow.execute()
         workflow.stop()
+        for t in due:
+            PROFILED[f"{SERVICE}.{catalog}.{namespace}.{t}"] = time.time()
         log.info("profiled %s: %s", namespace, ", ".join(due))
 
 

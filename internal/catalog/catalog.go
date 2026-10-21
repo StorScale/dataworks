@@ -41,7 +41,7 @@ type Table struct {
 	Columns     []Column `json:"columns"`
 	Checks      []Check  `json:"checks"`
 	External    bool     `json:"external,omitempty"` // in the flow, but not the project's
-	Rows        *int64   `json:"rows,omitempty"`     // the profiler's count, when it has run (6.11)
+	Rows        *float64 `json:"rows,omitempty"`     // the profiler's count, when it has run (6.11)
 	ProfiledAt  int64    `json:"profiledAt,omitempty"`
 }
 
@@ -305,8 +305,8 @@ func (c *Client) checks(ctx context.Context, fqn string) ([]Check, error) {
 func (c *Client) profile(ctx context.Context, tb *Table) {
 	var res struct {
 		Profile *struct {
-			RowCount  *int64 `json:"rowCount"`
-			Timestamp int64  `json:"timestamp"`
+			RowCount  *float64 `json:"rowCount"` // OpenMetadata says 8.0
+			Timestamp int64    `json:"timestamp"`
 		} `json:"profile"`
 		Columns []struct {
 			Name    string `json:"name"`
