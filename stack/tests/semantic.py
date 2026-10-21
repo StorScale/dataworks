@@ -55,8 +55,8 @@ class Agent:
         r.raise_for_status()
         return r.json()
 
-    def call(self, tool, **args):
-        """(result, error): a tool's structured result, or its error text."""
+    def call(self, tool, /, **args):
+        """(result, error): a tool's structured result, or its error text. (tool is positional: call_tool takes a tool too.)"""
         res = self.rpc("tools/call", {"name": tool, "arguments": args}).get("result", {})
         text = " ".join(c.get("text", "") for c in res.get("content", []))
         if res.get("isError"):
