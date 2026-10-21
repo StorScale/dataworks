@@ -51,6 +51,42 @@
           "table": "orders",
           "check": "rowCount",
           "min": 1
+        },
+        {
+          "table": "orders",
+          "column": "region",
+          "check": "acceptedValues",
+          "values": [
+            "EU",
+            "US",
+            "APAC"
+          ]
+        },
+        {
+          "table": "orders",
+          "column": "amount",
+          "check": "range",
+          "min": 0,
+          "max": 100000
+        },
+        {
+          "table": "orders",
+          "column": "region",
+          "check": "regex",
+          "pattern": "^[A-Z]{2,4}$"
+        },
+        {
+          "table": "orders_by_region",
+          "column": "region",
+          "check": "references",
+          "refTable": "orders",
+          "refColumn": "region"
+        },
+        {
+          "table": "orders",
+          "check": "sql",
+          "name": "no_negative_amounts",
+          "sql": "SELECT id FROM orders WHERE amount < 0"
         }
       ]
     },

@@ -90,10 +90,22 @@ func (p *Project) checkTables(bad func(format string, a ...any)) {
 				bad("check %d: table %q isn't an identifier", i+1, c.Table)
 			case !slices.Contains(CheckTypes, c.Check):
 				bad("check %d: %q must be one of %s", i+1, c.Check, strings.Join(CheckTypes, ", "))
-			case c.Check != "rowCount" && !identifierRE.MatchString(c.Column):
+			case c.Check != "rowCount" && c.Check != "sql" && !identifierRE.MatchString(c.Column):
 				bad("check %d: %s needs a column", i+1, c.Check)
-			case c.Check == "rowCount" && c.Min == nil && c.Max == nil:
-				bad("check %d: rowCount needs a min, a max, or both", i+1)
+			case (c.Check == "rowCount" || c.Check == "range") && c.Min == nil && c.Max == nil:
+				bad("check %d: %s needs a min, a max, or both", i+1, c.Check)
+			case c.Check == "acceptedValues" && len(c.Values) == 0:
+				bad("check %d: acceptedValues needs the values", i+1)
+			case c.Check == "regex" && c.Pattern == "":
+				bad("check %d: regex needs a pattern", i+1)
+			case c.Check == "references" && (!identifierRE.MatchString(c.RefTable) || !identifierRE.MatchString(c.RefColumn)):
+				bad("check %d: references needs refTable and refColumn (the table and column every value is found in)", i+1)
+			case c.Check == "sql" && strings.TrimSpace(c.SQL) == "":
+				bad("check %d: sql needs the query (one that returns no rows when all is well)", i+1)
+			case c.Check == "sql" && !identifierRE.MatchString(c.Name):
+				bad("check %d: a sql check needs a name (lowercase letters, digits and underscores)", i+1)
+			case c.Name != "" && !identifierRE.MatchString(c.Name):
+				bad("check %d: a check's name is lowercase letters, digits and underscores: %q isn't", i+1, c.Name)
 			}
 		}
 	}

@@ -199,7 +199,7 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 
 **Requirements**
 - R6.33 Profiling per table (OpenMetadata's profiler), run by the catalog's round or the nightly maintenance, shown on the Data page and in the catalog.
-- R6.34 More kinds of check in `tables.checks`: accepted values, a range, a regex, a referential check (a column's values exist in another table's), and a SQL assertion (a query that must return no rows).
+- R6.34 More kinds of check in `tables.checks`: accepted values, a range, a regex, a referential check (a column's values exist in another table's), and a SQL assertion (a query that must return no rows). (Built 2026-10-21: `acceptedValues`, `range`, `regex`, `references`, `sql`.)
 
 ---
 

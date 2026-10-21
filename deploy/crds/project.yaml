@@ -131,11 +131,17 @@ spec:
                         type: object
                         required: [table, check]
                         properties:
+                          name: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                           table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                           column: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
-                          check: {type: string, enum: [unique, notNull, rowCount]}
+                          check: {type: string, enum: [unique, notNull, rowCount, acceptedValues, range, regex, references, sql]}
                           min: {type: integer}
                           max: {type: integer}
+                          values: {type: array, items: {type: string}}
+                          pattern: {type: string}
+                          refTable: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                          refColumn: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                          sql: {type: string}
                 files:
                   type: object
                   description: A bucket in Buckets.
