@@ -20,12 +20,13 @@ import { Results } from "./Data";
 
 const KINDS: [string, string][] = [
   ["input", "Input"], ["select", "Select and rename"], ["retype", "Retype"], ["filter", "Filter"], ["join", "Join"], ["union", "Union"],
-  ["dedupe", "Deduplicate"], ["group", "Group by"], ["pivot", "Pivot"], ["unpivot", "Unpivot"], ["window", "Window"], ["prepare", "Prepare"], ["formula", "Formula"], ["metric", "Metric"], ["output", "Output"],
+  ["dedupe", "Deduplicate"], ["group", "Group by"], ["pivot", "Pivot"], ["unpivot", "Unpivot"], ["window", "Window"], ["prepare", "Prepare"], ["formula", "Formula"], ["llm", "Ask a model"], ["metric", "Metric"], ["output", "Output"],
 ];
 const label = (kind: string) => KINDS.find((k) => k[0] === kind)?.[1] ?? (kind === "code" ? "Code" : kind);
 const AGGREGATES = ["sum", "count", "min", "max", "avg", "count_distinct"];
 const WINDOWS = ["rank", "dense_rank", "row_number", "running_sum", "sum", "avg", "min", "max", "count", "lag", "lead"];
 const UNITS = ["year", "quarter", "month", "week", "day", "hour"];
+const LLM_MODES: [string, string][] = [["classify", "Classify into labels"], ["extract", "Extract"], ["summarize", "Summarize"]];
 const GROUPS: [string, string][] = [["text", "Text"], ["nulls", "Nulls"], ["numbers", "Numbers"], ["dates", "Dates"], ["flags", "Flags and values"]];
 const TESTS = ["not_null", "unique", "accepted_values"];
 const TYPES = ["varchar", "bigint", "integer", "double", "decimal(10,2)", "boolean", "date", "timestamp", "timestamp(6)"];
@@ -355,7 +356,11 @@ function Canvas({ project, flowName, canEdit, noRepo, onClose }: { project: stri
       {step && tab === "preview" && previewError && <div className="banner error" data-testid="preview-error">{previewError}</div>}
       {step && tab === "preview" && preview && (
         <div className="card" style={{ padding: 0 }}>
-          <Results answer={preview} testid="preview-rows" note={preview.sampled?.length ? `A sample of ${preview.sampled.join(", ")}.` : undefined} />
+          <Results answer={preview} testid="preview-rows" note={[
+            preview.sampled?.length ? `A sample of ${preview.sampled.join(", ")}.` : "",
+            preview.cost !== undefined ? `The model was asked ${preview.batches ?? 0} question(s) about these rows, ${preview.cost.toFixed(4)} spent${preview.unread ? `, ${preview.unread} answer(s) unread` : ""}.` : "",
+            ...(preview.notes ?? []),
+          ].filter(Boolean).join(" ") || undefined} />
         </div>
       )}
       {step && tab === "preview" && !preview && result?.columns && (
@@ -549,6 +554,20 @@ function Settings({ step, steps, inputs, canEdit, update, remove, tables, metric
             <input value={c.expression ?? ""} readOnly={ro} placeholder="amount * 1.2" onChange={(e) => s({ ...c, expression: e.target.value })} style={{ flex: "2 1 120px" }} />
             <TypePick value={c.type} onChange={(type) => s({ ...c, type: type || undefined })} style={{ flex: "0 1 90px" }} />
           </>} />
+      </>}
+      {step.kind === "llm" && <>
+        <span className="small muted">A model is asked about each row's value through the platform's gateway, on the project's key and budget, under the guardrail (mask personal values with a prepare step first); its answer is a new column. The platform asks in batches before the flow's models build; a preview asks about a sample and says what it cost.</span>
+        <label>Column<ColumnPick value={step.column} onChange={(column) => set({ column })} /></label>
+        <label>What to do<select value={step.mode ?? ""} disabled={ro} onChange={(e) => set({ mode: e.target.value })} data-testid="llm-mode">
+          <option value="">mode…</option>{LLM_MODES.map(([m, l]) => <option key={m} value={m}>{l}</option>)}</select></label>
+        {step.mode === "classify" && <label>Labels, comma-separated<input value={(step.values ?? []).join(", ")} readOnly={ro} placeholder="billing, delivery, product"
+          onChange={(e) => set({ values: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })} data-testid="llm-labels" /></label>}
+        <label>{step.mode === "extract" ? "What to extract" : "Instructions (optional)"}<textarea value={step.prompt ?? ""} readOnly={ro} rows={2} onChange={(e) => set({ prompt: e.target.value || undefined })}
+          placeholder={step.mode === "extract" ? "the product name the complaint is about" : "Billing is about invoices and payments; delivery about shipping."} data-testid="llm-prompt" /></label>
+        <div className="row">
+          <label>Answer column<input value={step.name ?? ""} readOnly={ro} placeholder="category" onChange={(e) => set({ name: e.target.value })} data-testid="llm-name" /></label>
+          <label>Rows a run, at most<input type="number" value={step.limit ?? ""} readOnly={ro} placeholder="1000" min={1} max={1000} onChange={(e) => set({ limit: e.target.value ? Number(e.target.value) : undefined })} style={{ width: 90 }} /></label>
+        </div>
       </>}
       {step.kind === "metric" && <>
         <span className="small muted">A metric query on the project's definitions (and the company's it builds on): its SQL is the semantic layer's.</span>

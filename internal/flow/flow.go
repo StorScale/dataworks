@@ -33,12 +33,13 @@ const (
 	Window  = "window"
 	Formula = "formula"
 	Prepare = "prepare" // named processors on columns (R11.7; prepare.go)
+	LLM     = "llm"     // a column asked of a model through the gateway (R11.8; llm.go)
 	Output  = "output"
 	Metric  = "metric" // a metric query on the semantic layer's definitions (11.2's step 3)
 	Code    = "code"   // a model written or changed by hand (11.2)
 )
 
-var Kinds = []string{Input, Select, Retype, Filter, Join, Union, Dedupe, Group, Pivot, Unpivot, Window, Formula, Prepare, Output, Metric, Code}
+var Kinds = []string{Input, Select, Retype, Filter, Join, Union, Dedupe, Group, Pivot, Unpivot, Window, Formula, Prepare, LLM, Output, Metric, Code}
 
 // A Column is one of a step's result, with its Trino type ("" when the
 // platform can't tell: a formula without a type, a code step not yet run).
@@ -130,6 +131,13 @@ type Step struct {
 	Windows []WindowFunction `json:"windows,omitempty" yaml:"windows,omitempty"`
 	// prepare: processors on columns, in order
 	Processors []Processor `json:"processors,omitempty" yaml:"processors,omitempty"`
+	// llm: a model asked about Column, row by row (Mode: classify into Values,
+	// extract, summarize; Prompt says what), its answer the new column Name;
+	// at most Limit rows a run. Its table (Catalog, Namespace, Table) is
+	// written by the platform, not dbt, and the model reads it.
+	Prompt string `json:"prompt,omitempty" yaml:"prompt,omitempty"`
+	Mode   string `json:"mode,omitempty" yaml:"mode,omitempty"`
+	Limit  int    `json:"limit,omitempty" yaml:"limit,omitempty"`
 	// output: the table it makes (Table), and its checks
 	Checks []Check `json:"checks,omitempty" yaml:"checks,omitempty"`
 	// metric: a metric query (its metrics, grouped by By, filtered by Where),
@@ -376,7 +384,7 @@ func (f *Flow) Sources() []Source {
 	var out []Source
 	for i := range f.Steps {
 		s := &f.Steps[i]
-		if s.Kind != Input {
+		if s.Kind != Input && !(s.Kind == LLM && s.Table != "") {
 			continue
 		}
 		name := SourceName(f.Name, s.Catalog, s.Namespace)
@@ -646,10 +654,20 @@ func isEphemeral(text string) bool {
 func (f *Flow) CodeOutput(s *Step) bool { return s.Kind == Code && s.Table != "" }
 
 // DAG is the Airflow DAG that builds the flow on its schedule.
-func DAG(project, name, schedule, owner, dbtPath string) string {
+func DAG(project, name, schedule, owner, dbtPath string, llmSteps []string) string {
 	sched := "None"
 	if schedule != "" {
 		sched = fmt.Sprintf("%q", schedule)
+	}
+	imports, body := "from storscale import dbt", fmt.Sprintf("    dbt.build(project=%q, path=%q, select=\"flows.%s\")", project, dbtPath, name)
+	if len(llmSteps) > 0 { // the model's answers first, written as tables the models read
+		imports = "from storscale import dbt, llm"
+		var asks []string
+		for _, st := range llmSteps {
+			asks = append(asks, fmt.Sprintf("llm.run(project=%q, flow=%q, step=%q)", project, name, st))
+		}
+		body = fmt.Sprintf("    asked = [%s]   # the platform asks the model and writes each step's table\n    asked >> dbt.build(project=%q, path=%q, select=\"flows.%s\")",
+			strings.Join(asks, ", "), project, dbtPath, name)
 	}
 	return fmt.Sprintf(`"""The flow %s, built on the platform's canvas by %s: its dbt models are
 %s/models/flows/%s, built by the platform's helper (storscale.dbt) in Trino, as
@@ -659,15 +677,26 @@ the project's pipelines, with their checks.
 import pendulum
 
 from airflow.sdk import dag
-from storscale import dbt
+%s
 
 
 @dag(dag_id="flow_%s", schedule=%s, start_date=pendulum.datetime(2026, 1, 1, tz="UTC"), catchup=False,
      max_active_runs=1, tags=["flow"])  # one build of the table at a time
 def flow_%s():
-    dbt.build(project=%q, path=%q, select="flows.%s")
+%s
 
 
 flow_%s()
-`, name, owner, dbtPath, name, name, sched, name, project, dbtPath, name, name)
+`, name, owner, dbtPath, name, imports, name, sched, name, body, name)
+}
+
+// LLMSteps are the flow's llm steps, in the flow's order.
+func (f *Flow) LLMSteps() []string {
+	var out []string
+	for i := range f.Steps {
+		if f.Steps[i].Kind == LLM {
+			out = append(out, f.Steps[i].ID)
+		}
+	}
+	return out
 }

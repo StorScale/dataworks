@@ -229,6 +229,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("PUT /api/projects/{name}/flows/{flow}", s.handleSaveFlow)
 	mux.HandleFunc("POST /api/projects/{name}/flows/compile", s.handleFlowCompile)
 	mux.HandleFunc("POST /api/projects/{name}/flows/preview", s.handleFlowPreview)
+	mux.HandleFunc("POST /api/projects/{name}/flows/{flow}/steps/{step}/run", s.handleFlowLLMRun) // the llm step's table, by the flow's DAG
 	mux.HandleFunc("GET /api/notebooks/projects", s.handleNotebookProjects)
 	mux.HandleFunc("POST /api/projects/{name}/notebooks/schedules", s.handleScheduleNotebook)
 	mux.HandleFunc("POST /api/projects/{name}/notebooks/runs/{dag}/{run}", s.handleNotebookRun)

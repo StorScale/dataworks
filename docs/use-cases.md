@@ -521,7 +521,7 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 
 **Requirements**
 - R11.7 A prepare step: named processors on columns (trim, case, split, parse a date or number, fill nulls, extract by regex, replace, round, bucket, standardize), the common forty first, each compiled to Trino SQL. (Built 2026-10-20: 42 processors in five groups, in place or as a new column, typed; the `flows` suite runs one.)
-- R11.8 An LLM step: classify, extract or summarize a column through the gateway (12.1), on the project's key and budget, under the guardrail, with the prompt kept in the model's file; the preview says what a sample cost.
+- R11.8 An LLM step: classify, extract or summarize a column through the gateway (12.1), on the project's key and budget, under the guardrail, with the prompt kept in the model's file; the preview says what a sample cost. (Built 2026-10-21: the platform asks in batches and writes the step's table before dbt builds; a thousand rows a run.)
 - R11.9 A Python step beside R11.6's Spark: a model written in Python, run by the project's Airflow, its columns declared.
 
 ---

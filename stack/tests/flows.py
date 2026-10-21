@@ -56,10 +56,12 @@ FLOW = {"name": "weekly", "schedule": "0 6 * * 1", "steps": [
     {"id": "clean", "kind": "prepare", "inputs": ["real"], "description": "Regions as written", "x": 440, "y": 0,
      "processors": [{"column": "region", "do": "trim"}, {"column": "region", "do": "upper"}, {"column": "region", "do": "standardize", "args": ["EUROPE=EU, USA=US"]},
                     {"column": "region", "do": "length", "as": "region_len"}]},
-    {"id": "by_region", "kind": "group", "inputs": ["clean"], "by": ["region"],
-     "aggregates": [{"function": "sum", "column": "amount", "as": "revenue"}, {"function": "count", "as": "orders"}], "x": 660, "y": 0},
+    {"id": "mood", "kind": "llm", "inputs": ["clean"], "column": "region", "mode": "classify", "values": ["east", "west"], "name": "side",
+     "prompt": "Which side of the Atlantic is the region on?", "description": "The platform asks the model", "x": 660, "y": 0},
+    {"id": "by_region", "kind": "group", "inputs": ["mood"], "by": ["region"],
+     "aggregates": [{"function": "sum", "column": "amount", "as": "revenue"}, {"function": "count", "as": "orders"}], "x": 880, "y": 0},
     {"id": "out", "kind": "output", "inputs": ["by_region"], "table": "revenue_by_region",
-     "checks": [{"column": "region", "test": "not_null"}, {"column": "region", "test": "unique"}], "x": 880, "y": 0},
+     "checks": [{"column": "region", "test": "not_null"}, {"column": "region", "test": "unique"}], "x": 1100, "y": 0},
 ]}
 
 
@@ -220,6 +222,7 @@ def main():
     spec = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": NAME},
             "spec": {"description": "A pipeline on the canvas: the flows suite's.",
                      "members": [{"group": "engineers", "role": "editor"}, {"user": "alice", "role": "reader"}], "tables": {},
+                     "llm": {"budget": 1},   # the llm step asks on the project's key
                      "pipelines": {"serviceAccount": "airflow-pipelines", "repo": repo, "path": "dags", "credentials": {"secretRef": CONNECTION}}}}
     try:
         r = bob.put(f"{PLATFORM}/api/projects/{NAME}", data=json.dumps(spec), timeout=30)
@@ -256,6 +259,12 @@ def main():
         why = (refused.json().get("steps", {}).get("joined", {}).get("error", "") if refused.ok else refused.text)
         check("a join on columns of different types is refused, saying which, before it runs",
               "join on real.order_id (integer) and suppliers.id (varchar): their types differ" in why, why[:200])
+        asked = wait(lambda: (lambda r: r if r.ok else None)(alice.post(f"{FLOWS}/preview", headers=H, json={"flow": FLOW, "step": "mood"}, timeout=120)), 180, every=10)
+        aj = asked.json() if asked is not None and asked.ok else {}
+        sides = [r[-1] for r in aj.get("rows", [])]
+        check("she previews the llm step: the model is asked about a sample on the project's key, its answers a column, the cost said",
+              asked is not None and aj.get("columns", [])[-1:] == ["side"] and sides and all(x == "east" for x in sides) and (aj.get("cost") or 0) > 0 and aj.get("batches") == 1,
+              (asked.status_code if asked is not None else None, (asked.text if asked is not None else "")[:300]))
         preview = alice.post(f"{FLOWS}/preview", headers=H, json={"flow": FLOW, "step": "by_region"}, timeout=120)
         pj = preview.json() if preview.ok else {}
         rows = sorted(tuple(r) for r in pj.get("rows", []))

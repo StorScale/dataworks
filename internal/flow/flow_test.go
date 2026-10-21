@@ -1,6 +1,8 @@
 package flow
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -347,13 +349,13 @@ func TestPreview(t *testing.T) {
 }
 
 func TestDAG(t *testing.T) {
-	d := DAG("sales", "weekly", "0 6 * * 1", "alice", "dbt")
+	d := DAG("sales", "weekly", "0 6 * * 1", "alice", "dbt", nil)
 	for _, part := range []string{`dag_id="flow_weekly"`, `schedule="0 6 * * 1"`, `dbt.build(project="sales", path="dbt", select="flows.weekly")`, "from airflow.sdk import dag", "max_active_runs=1"} {
 		if !strings.Contains(d, part) {
 			t.Errorf("DAG lacks %q:\n%s", part, d)
 		}
 	}
-	if !strings.Contains(DAG("sales", "weekly", "", "alice", "dbt"), "schedule=None") {
+	if !strings.Contains(DAG("sales", "weekly", "", "alice", "dbt", nil), "schedule=None") {
 		t.Error("no schedule isn't None")
 	}
 }
@@ -476,4 +478,110 @@ func TestPrepareStep(t *testing.T) {
 	if errs := c.Errors(); len(errs) != 0 || !strings.Contains(c.Steps["clean"].SQL, `replace("region", '''; drop table x; --', 'y')`) {
 		t.Errorf("a literal argument: %v\n%s", errs, c.Steps["clean"].SQL)
 	}
+}
+
+type fakeAsker struct {
+	answers func(prompt string) string
+	prompts []string
+}
+
+func (a *fakeAsker) Ask(_ context.Context, prompt string) (string, float64, error) {
+	a.prompts = append(a.prompts, prompt)
+	return a.answers(prompt), 0.001, nil
+}
+
+// An llm step: typed as its input plus the answer's column, its table a
+// source the model reads, its DAG asking before dbt builds; and the asking
+// itself, in batches, with the labels checked.
+func TestLLMStep(t *testing.T) {
+	f := &Flow{Name: "moods", Steps: []Step{
+		{ID: "orders", Kind: Input, Table: "orders"},
+		{ID: "mood", Kind: LLM, Inputs: []string{"orders"}, Column: "region", Mode: "classify", Values: []string{"east", "west"},
+			Prompt: "Which side of the Atlantic is the region on?", Name: "side"},
+		{ID: "out", Kind: Output, Inputs: []string{"mood"}, Table: "orders_sided"},
+	}}
+	c, err := Compile(f, env())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if errs := c.Errors(); len(errs) > 0 {
+		t.Fatalf("errors: %v", errs)
+	}
+	if got := describe(c.Steps["mood"].Columns); !strings.HasSuffix(got, "test boolean, side varchar") {
+		t.Errorf("columns: %s", got)
+	}
+	if sql := c.Steps["mood"].SQL; !strings.Contains(sql, "{{ source('moods__iceberg_sales', 'moods__mood') }}") {
+		t.Errorf("the model reads the platform's table: %s", sql)
+	}
+	files := Files(c)
+	if src := files["models/flows/moods/sources.yml"]; !strings.Contains(src, "moods__mood") {
+		t.Errorf("sources.yml lacks the step's table:\n%s", src)
+	}
+	dag := DAG("sales", "moods", "", "alice", "dbt", f.LLMSteps())
+	for _, frag := range []string{"from storscale import dbt, llm", `llm.run(project="sales", flow="moods", step="mood")`, "asked >> dbt.build("} {
+		if !strings.Contains(dag, frag) {
+			t.Errorf("DAG lacks %s:\n%s", frag, dag)
+		}
+	}
+	// A later step's preview leaves the column empty.
+	pv, err := c.Preview("out", func(_, _, _ string) float64 { return 100 }, 10)
+	if err != nil || !strings.Contains(pv, `cast(null as varchar) as "side"`) {
+		t.Errorf("preview: %v\n%s", err, pv)
+	}
+	// Asking: two batches of twenty and one of five, the labels checked.
+	rows := make([][]any, 45)
+	for i := range rows {
+		rows[i] = []any{float64(i), "EU"}
+	}
+	ask := &fakeAsker{answers: func(prompt string) string {
+		n := strings.Count(prompt, "\n") - 3 // the instruction, the prompt, the shape; then the items
+		var out []string
+		for i := 0; i < n; i++ {
+			out = append(out, []string{"EAST", "west", "north"}[i%3])
+		}
+		b, _ := json.Marshal(out)
+		return "Sure:\n" + string(b)
+	}}
+	res, err := LLMApply(context.Background(), f.Step("mood"), []string{"order_id", "region"}, rows, ask)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Batches != 3 || len(res.Rows) != 45 || res.Unread != 13 || res.Cost < 0.0029 { // "north" at every third place of each batch: 6, 6 and 1
+		t.Errorf("batches %d rows %d unread %d cost %v", res.Batches, len(res.Rows), res.Unread, res.Cost)
+	}
+	if res.Rows[0][2] != "east" || res.Rows[1][2] != "west" || res.Rows[2][2] != nil {
+		t.Errorf("answers: %v %v %v", res.Rows[0][2], res.Rows[1][2], res.Rows[2][2])
+	}
+	if p := ask.prompts[0]; !strings.HasPrefix(p, "Classify each item below as exactly one of: east, west.\nWhich side") || !strings.Contains(p, "JSON array of 20 strings") || !strings.Contains(p, "\n20. EU\n") {
+		t.Errorf("prompt:\n%s", p)
+	}
+	// Refused by the gateway: the whole fails, saying why.
+	_, err = LLMApply(context.Background(), f.Step("mood"), []string{"order_id", "region"}, rows[:3], refusingAsker{})
+	if err == nil || !strings.Contains(err.Error(), "rows 1 to 3: the gateway refused") {
+		t.Errorf("refusal: %v", err)
+	}
+	// What the step refuses.
+	for _, bad := range []struct {
+		s   Step
+		why string
+	}{
+		{Step{ID: "m", Kind: LLM, Inputs: []string{"orders"}, Column: "region", Mode: "guess", Name: "x"}, "classify, extract or summarize"},
+		{Step{ID: "m", Kind: LLM, Inputs: []string{"orders"}, Column: "nope", Mode: "summarize", Name: "x"}, "no column nope"},
+		{Step{ID: "m", Kind: LLM, Inputs: []string{"orders"}, Column: "region", Mode: "classify", Values: []string{"one"}, Name: "x"}, "at least two labels"},
+		{Step{ID: "m", Kind: LLM, Inputs: []string{"orders"}, Column: "region", Mode: "extract", Name: "x"}, "needs a prompt"},
+		{Step{ID: "m", Kind: LLM, Inputs: []string{"orders"}, Column: "region", Mode: "summarize", Name: "region"}, "already has a column region"},
+		{Step{ID: "m", Kind: LLM, Inputs: []string{"orders"}, Column: "region", Mode: "summarize", Name: "x", Limit: 5000}, "at most 1000 rows"},
+	} {
+		g := &Flow{Name: "g", Steps: []Step{{ID: "orders", Kind: Input, Table: "orders"}, bad.s}}
+		c, _ := Compile(g, env())
+		if errs := c.Errors(); len(errs) == 0 || !strings.Contains(errs[0], bad.why) {
+			t.Errorf("%v: wanted %q, got %v", bad.s.Mode, bad.why, errs)
+		}
+	}
+}
+
+type refusingAsker struct{}
+
+func (refusingAsker) Ask(context.Context, string) (string, float64, error) {
+	return "", 0, fmt.Errorf("the gateway refused (HTTP 400): the question holds an email address, which may not leave the platform")
 }
