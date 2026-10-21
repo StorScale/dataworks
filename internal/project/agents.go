@@ -33,7 +33,7 @@ type Agent struct {
 
 // AgentTools are the MCP server's tools an agent may be given.
 var AgentTools = []string{"list_projects", "list_metrics", "query_metrics", "explain_query", "list_terms", "describe_term", "search_terms",
-	"list_products", "describe_product", "query_product", "list_runs", "list_alerts"}
+	"list_products", "describe_product", "query_product", "list_runs", "list_alerts", "search_documents"}
 
 var agentNameRE = regexp.MustCompile(`^[a-z][a-z0-9-]{0,30}$`)
 

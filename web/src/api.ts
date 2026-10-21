@@ -430,6 +430,13 @@ export type AgentView = {
 export const getAgents = (name: string) => api<{ agents: AgentView[]; tools: string[]; canEdit: boolean }>("GET", `/api/projects/${encodeURIComponent(name)}/agents`);
 export const putAgent = (name: string, a: { name: string; description?: string; owner: string; tools?: string[]; schedule?: string; notebook?: string; budget?: number }) =>
   api<AgentView[]>("PUT", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(a.name)}`, { description: a.description, owner: a.owner, tools: a.tools, schedule: a.schedule, notebook: a.notebook, budget: a.budget || undefined });
+export type KnowledgeBank = { name: string; description?: string; tables: { table: string; column: string; id: string }[]; table: string; chunks?: number };
+export type KnowledgeHit = { source: string; ref: string; text: string; score: number };
+const knowledgePath = (name: string) => `/api/projects/${encodeURIComponent(name)}/knowledge`;
+export const getKnowledge = (name: string) => api<{ banks: KnowledgeBank[]; canBuild: boolean }>("GET", knowledgePath(name));
+export const buildKnowledge = (name: string, bank: string) => api<{ table: string; chunks: number; cost: number }>("POST", `${knowledgePath(name)}/${encodeURIComponent(bank)}/build`, {});
+export const searchKnowledge = (name: string, bank: string, query: string, k = 5) =>
+  api<{ hits: KnowledgeHit[]; cost: number }>("POST", `${knowledgePath(name)}/${encodeURIComponent(bank)}/search`, { query, k });
 export type LLMUse = { who: string; budget: number; spend: number; key: boolean; error?: string; share?: number };
 export const getLLM = (name: string) => api<{ gateway: string; uses: LLMUse[] }>("GET", `/api/projects/${encodeURIComponent(name)}/llm`);
 export const approveAgent = (name: string, agent: string) =>

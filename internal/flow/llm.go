@@ -267,3 +267,81 @@ func LLMApply(ctx context.Context, s *Step, columns []string, rows [][]any, ask 
 	}
 	return res, nil
 }
+
+// Embed is the gateway's embeddings of the texts, in order, on the key (the
+// model named "embedding" unless told another), and what they cost.
+func (g *GatewayAsker) Embed(ctx context.Context, model string, texts []string) ([][]float64, float64, error) {
+	if model == "" {
+		model = "embedding"
+	}
+	body, _ := json.Marshal(map[string]any{"model": model, "input": texts, "user": g.User})
+	req, err := http.NewRequestWithContext(ctx, "POST", strings.TrimSuffix(g.URL, "/")+"/embeddings", bytes.NewReader(body))
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+g.Key)
+	req.Header.Set("Content-Type", "application/json")
+	client := g.HTTP
+	if client == nil {
+		client = &http.Client{Timeout: 5 * time.Minute}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("the gateway: %w", err)
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 256<<20))
+	if resp.StatusCode != 200 {
+		var e struct {
+			Error any `json:"error"`
+		}
+		msg := strings.TrimSpace(string(data))
+		if json.Unmarshal(data, &e) == nil {
+			if m, ok := e.Error.(map[string]any); ok {
+				if t, ok := m["message"].(string); ok {
+					msg = t
+				}
+			}
+		}
+		return nil, 0, fmt.Errorf("the gateway refused (HTTP %d): %s", resp.StatusCode, msg)
+	}
+	var out struct {
+		Data []struct {
+			Index     int       `json:"index"`
+			Embedding []float64 `json:"embedding"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil || len(out.Data) != len(texts) {
+		return nil, 0, fmt.Errorf("the gateway's answer isn't %d embeddings", len(texts))
+	}
+	vecs := make([][]float64, len(texts))
+	for _, d := range out.Data {
+		if d.Index >= 0 && d.Index < len(vecs) {
+			vecs[d.Index] = d.Embedding
+		}
+	}
+	cost, _ := strconv.ParseFloat(resp.Header.Get("x-litellm-response-cost"), 64)
+	return vecs, cost, nil
+}
+
+// Chunks are a text in pieces of about size characters, cut at a sentence
+// or a space where one is near, so each is embedded whole.
+func Chunks(text string, size int) []string {
+	text = strings.Join(strings.Fields(text), " ")
+	var out []string
+	for len(text) > size {
+		cut := strings.LastIndexAny(text[:size], ".!?")
+		if cut < size/2 {
+			cut = strings.LastIndex(text[:size], " ")
+		}
+		if cut < size/2 {
+			cut = size - 1
+		}
+		out = append(out, strings.TrimSpace(text[:cut+1]))
+		text = strings.TrimSpace(text[cut+1:])
+	}
+	if text != "" {
+		out = append(out, text)
+	}
+	return out
+}

@@ -575,7 +575,7 @@ def agent_tools(client_id):
 
 
 ALL_TOOLS = ["list_projects", "list_metrics", "query_metrics", "explain_query", "list_terms", "describe_term", "search_terms",
-             "list_products", "describe_product", "query_product", "list_runs", "list_alerts"]
+             "list_products", "describe_product", "query_product", "list_runs", "list_alerts", "search_documents"]
 
 
 def tool(fn):
@@ -708,6 +708,24 @@ def list_alerts(project: str) -> dict:
         raise PermissionError(f"you're not a member of {project}")
     out = platform_read(c, f"/projects/{project}/alerts")
     return {**out, "link": f"{PLATFORM_URL}/projects/{project}"}
+
+
+@mcp.tool()
+@tool
+def search_documents(project: str, bank: str, query: str, k: int = 5) -> dict:
+    """A project's knowledge bank searched by meaning: the passages closest to the question, each with the
+    table and row it comes from and its score (1 the closest). Cite the source and ref when you use a passage.
+    Read as the caller, under the project's rules."""
+    c = mcp_caller()
+    if project not in projects_of(c):
+        raise PermissionError(f"you're not a member of {project}")
+    r = requests.post(f"{PLATFORMD_URL}/api/projects/{project}/knowledge/{bank}/search", json={"query": query, "k": int(k)}, timeout=120,
+                      headers={"Authorization": f"Bearer {c.token}"})
+    if r.status_code in (401, 403, 404):
+        raise PermissionError(r.json().get("error") if r.headers.get("content-type", "").startswith("application/json") else f"HTTP {r.status_code}")
+    if not r.ok:
+        raise ValueError(f"the platform couldn't search: {(r.json().get('error') if r.headers.get('content-type', '').startswith('application/json') else r.text)[:300]}")
+    return {**r.json(), "link": f"{PLATFORM_URL}/projects/{project}"}
 
 
 @mcp.tool()

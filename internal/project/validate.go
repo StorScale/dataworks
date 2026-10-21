@@ -17,6 +17,7 @@ var validators = []func(p *Project, bad func(format string, a ...any)){
 	(*Project).checkMembers, (*Project).checkTables, (*Project).checkFiles, (*Project).checkPipelines,
 	(*Project).productProblems, (*Project).agentProblems, (*Project).checkSemantic, (*Project).checkHistory, (*Project).checkNotify,
 	(*Project).checkSources, (*Project).checkImports, (*Project).checkDeliveries, (*Project).checkLimits, (*Project).checkLLM,
+	(*Project).checkKnowledge,
 }
 
 // Validate says what's wrong with a project, all at once.
@@ -417,6 +418,32 @@ func (p *Project) checkDeliveries(bad func(format string, a ...any)) {
 func (p *Project) checkLLM(bad func(format string, a ...any)) {
 	if l := p.Spec.LLM; l != nil && (l.Budget < 0 || l.Budget > 1_000_000) {
 		bad("llm: budget %v: USD a month, up to a million", l.Budget)
+	}
+}
+
+// checkKnowledge checks the project's knowledge banks: named, their sources
+// a table's text column and its id column; and the project has a gateway key
+// to embed them on.
+func (p *Project) checkKnowledge(bad func(format string, a ...any)) {
+	seen := map[string]bool{}
+	for i, k := range p.Spec.Knowledge {
+		switch {
+		case !identifierRE.MatchString(k.Name) || len(k.Name) > 50:
+			bad("knowledge %d: a bank's name is lowercase letters, digits and underscores: %q isn't", i+1, k.Name)
+		case seen[k.Name]:
+			bad("knowledge: two banks named %s", k.Name)
+		case len(k.Tables) == 0:
+			bad("knowledge %s: names at least one table's text column", k.Name)
+		}
+		seen[k.Name] = true
+		for j, t := range k.Tables {
+			if !identifierRE.MatchString(t.Table) || !identifierRE.MatchString(t.Column) || !identifierRE.MatchString(t.ID) {
+				bad("knowledge %s, source %d: a table, its text column and the column that names each row (id)", k.Name, j+1)
+			}
+		}
+	}
+	if len(p.Spec.Knowledge) > 0 && (p.Spec.LLM == nil || p.Spec.LLM.Budget <= 0) {
+		bad("knowledge: a bank is embedded on the project's gateway key: give the project an LLM budget (llm.budget)")
 	}
 }
 

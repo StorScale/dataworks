@@ -42,20 +42,21 @@ type Metadata struct {
 }
 
 type Spec struct {
-	Description string     `json:"description,omitempty"`
-	Members     []Member   `json:"members"`
-	Tables      *Tables    `json:"tables,omitempty"`
-	Files       *Files     `json:"files,omitempty"`
-	Pipelines   *Pipelines `json:"pipelines,omitempty"`
-	Limits      *Limits    `json:"limits,omitempty"`
-	Notify      *Notify    `json:"notify,omitempty"`
-	Sources     []Source   `json:"sources,omitempty"`
-	Imports     []Import   `json:"imports,omitempty"`
-	Deliveries  []Delivery `json:"deliveries,omitempty"`
-	Semantic    *Semantic  `json:"semantic,omitempty"`
-	Products    []Product  `json:"products,omitempty"`
-	Agents      []Agent    `json:"agents,omitempty"` // programs of the project's own (12.2)
-	LLM         *LLM       `json:"llm,omitempty"`    // the project's use of the LLM gateway (12.1)
+	Description string          `json:"description,omitempty"`
+	Members     []Member        `json:"members"`
+	Tables      *Tables         `json:"tables,omitempty"`
+	Files       *Files          `json:"files,omitempty"`
+	Pipelines   *Pipelines      `json:"pipelines,omitempty"`
+	Limits      *Limits         `json:"limits,omitempty"`
+	Notify      *Notify         `json:"notify,omitempty"`
+	Sources     []Source        `json:"sources,omitempty"`
+	Imports     []Import        `json:"imports,omitempty"`
+	Deliveries  []Delivery      `json:"deliveries,omitempty"`
+	Semantic    *Semantic       `json:"semantic,omitempty"`
+	Products    []Product       `json:"products,omitempty"`
+	Agents      []Agent         `json:"agents,omitempty"`    // programs of the project's own (12.2)
+	LLM         *LLM            `json:"llm,omitempty"`       // the project's use of the LLM gateway (12.1)
+	Knowledge   []KnowledgeBank `json:"knowledge,omitempty"` // text the project's people and agents search by meaning (12.6)
 }
 
 // Semantic is how the project's semantic model stands among the others'
@@ -335,6 +336,26 @@ const CatalogUser = "openmetadata"
 type LLM struct {
 	Budget float64 `json:"budget"`
 }
+
+// A KnowledgeBank is text of the project's, searched by meaning (use case
+// 12.6): each source's rows embedded through the gateway on the project's
+// key, kept as the table knowledge_<name> in the project's namespace (so
+// the project's rules apply to it as to any table), and searched in Trino.
+type KnowledgeBank struct {
+	Name        string            `json:"name"`
+	Description string            `json:"description,omitempty"`
+	Tables      []KnowledgeSource `json:"tables"`
+}
+
+// A KnowledgeSource is a table's text column, and the column that names each row (its id).
+type KnowledgeSource struct {
+	Table  string `json:"table"`
+	Column string `json:"column"`
+	ID     string `json:"id"`
+}
+
+// KnowledgeTable is the bank's table, in the project's namespace.
+func (k KnowledgeBank) KnowledgeTable() string { return "knowledge_" + k.Name }
 
 // MaintenanceUser is the platform's Trino account for table maintenance,
 // erasure and retention: it reads and writes every table, unmasked.
