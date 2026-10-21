@@ -48,9 +48,10 @@ func (r *Reconciler) Agents(ctx context.Context) ([]ProjectAgent, error) {
 	out := []ProjectAgent{}
 	for _, st := range statuses {
 		p := st.Spec
-		if p == nil || st.Phase == project.Deleting || p.Spec.Pipelines == nil || p.Spec.Pipelines.Repo == "" {
+		if p == nil || st.Phase == project.Deleting {
 			continue
 		}
+		hasRepo := p.Spec.Pipelines != nil && p.Spec.Pipelines.Repo != ""
 		ready := false
 		for _, pt := range st.Parts {
 			ready = ready || pt.System == "agents" && pt.OK
@@ -58,16 +59,22 @@ func (r *Reconciler) Agents(ctx context.Context) ([]ProjectAgent, error) {
 		if !ready {
 			continue
 		}
-		pl := p.Spec.Pipelines
-		ref := pl.Ref
-		if ref == "" && r.Airflow != nil {
-			ref = r.Airflow.DefaultRef
-		}
 		for _, a := range p.Spec.Agents {
-			if a.Runs() {
-				out = append(out, ProjectAgent{Project: p.Metadata.Name, Own: r.ownAirflow(p), ConnID: AgentConnID(p, a), GitConnID: p.GitConnID(),
-					Repo: pl.Repo, Ref: ref, Path: strings.Trim(pl.Path, "/"), DAG: a.DAG(p.Metadata.Name), Agent: a})
+			if !a.Runs() {
+				continue
 			}
+			pa := ProjectAgent{Project: p.Metadata.Name, Own: r.ownAirflow(p), ConnID: AgentConnID(p, a), DAG: a.DAG(p.Metadata.Name), Agent: a}
+			if a.Notebook != "" { // a notebook runs from the repo; a prompt needs none
+				if !hasRepo {
+					continue
+				}
+				pl := p.Spec.Pipelines
+				pa.GitConnID, pa.Repo, pa.Ref, pa.Path = p.GitConnID(), pl.Repo, pl.Ref, strings.Trim(pl.Path, "/")
+				if pa.Ref == "" && r.Airflow != nil {
+					pa.Ref = r.Airflow.DefaultRef
+				}
+			}
+			out = append(out, pa)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ConnID < out[j].ConnID })

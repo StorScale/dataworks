@@ -195,6 +195,19 @@ class Handler(BaseHTTPRequestHandler):
                 info["spend"] = round(info["spend"] + cost, 6)
                 save()
             reply = "You asked: " + text[:200]
+            if b.get("tools"):   # an agent's runner: a tool first (the one the task names, else the first), then a report on its answer
+                if not any(m.get("role") == "tool" for m in b.get("messages", [])):
+                    task = next((str(m.get("content") or "") for m in b["messages"] if m.get("role") == "user"), "")
+                    fns = [t.get("function") or {} for t in b["tools"]]
+                    fn = next((f for f in fns if f.get("name") and f["name"] in task), fns[0])
+                    proj = re.search(r"of the project ([a-z0-9-]+)", text)
+                    args = {k: (proj.group(1) if k == "project" and proj else "") for k in (fn.get("parameters") or {}).get("required", [])}
+                    msg = {"role": "assistant", "content": None, "tool_calls": [{"id": "call_" + secrets.token_hex(4), "type": "function",
+                                                                                "function": {"name": fn.get("name"), "arguments": json.dumps(args)}}]}
+                    return self.answer(200, {"id": "chatcmpl-" + secrets.token_hex(6), "object": "chat.completion", "model": b.get("model", "stub"),
+                                             "choices": [{"index": 0, "message": msg, "finish_reason": "tool_calls"}]}, cost=cost)
+                last = next((str(m.get("content") or "") for m in reversed(b["messages"]) if m.get("role") == "tool"), "")
+                reply = "Report: " + last[:300]
             if "Translate the question into a metric query" in text:   # a semantic test's question: words matched to names
                 reply = json.dumps(resolve(text))
             shaped = re.search(r"Answer with a JSON array of (\d+) strings", text)

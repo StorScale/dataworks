@@ -21,6 +21,7 @@ type Agent struct {
 	Tools       []string `json:"tools,omitempty"`    // of the MCP server's, by name; none: all a reader may use
 	Schedule    string   `json:"schedule,omitempty"` // when it runs (cron, UTC), with a notebook
 	Notebook    string   `json:"notebook,omitempty"` // its program: an .ipynb in the project's repo, under the pipelines' path
+	Prompt      string   `json:"prompt,omitempty"`   // or, in its place, what it's to do, in words: the platform's runner does it with its tools (12.7)
 	Budget      float64  `json:"budget,omitempty"`   // USD a month at the LLM gateway (12.1); 0: no key
 	// The platform's, kept as they were on each save: who registered it, who
 	// approved it (someone else), and when. Changed tools or owner need
@@ -54,12 +55,14 @@ func (a Agent) Approved() bool { return a.ApprovedBy != "" }
 
 // Fingerprint is what approval covers: a change to it needs approval again.
 func (a Agent) Fingerprint() string {
-	return a.Owner + "|" + strings.Join(sorted(a.Tools), ",") + "|" + a.Schedule + "|" + a.Notebook + "|" + fmt.Sprint(a.Budget)
+	return a.Owner + "|" + strings.Join(sorted(a.Tools), ",") + "|" + a.Schedule + "|" + a.Notebook + "|" + fmt.Sprint(a.Budget) + "|" + a.Prompt
 }
 
 // Runs says whether the platform runs the agent itself: approved, with a
-// notebook and a schedule.
-func (a Agent) Runs() bool { return a.Approved() && a.Schedule != "" && a.Notebook != "" }
+// schedule, and a notebook or a prompt.
+func (a Agent) Runs() bool {
+	return a.Approved() && a.Schedule != "" && (a.Notebook != "" || a.Prompt != "")
+}
 
 // DAG is the Airflow DAG that runs the agent on its schedule, in a project.
 func (a Agent) DAG(project string) string {
@@ -88,8 +91,14 @@ func (p *Project) agentProblems(bad func(string, ...any)) {
 			bad("agents: %s: schedule %q: five cron fields, as 0 6 * * 1", a.Name, a.Schedule)
 		}
 		switch {
-		case a.Notebook == "" && a.Schedule != "":
-			bad("agents: %s: a schedule needs a notebook to run (notebook: a path in the project's repo)", a.Name)
+		case a.Notebook != "" && a.Prompt != "":
+			bad("agents: %s: a notebook or a prompt, not both: the notebook is the program, the prompt is for the platform's runner", a.Name)
+		case a.Prompt != "" && (len(a.Prompt) > 8000 || strings.TrimSpace(a.Prompt) == ""):
+			bad("agents: %s: a prompt is what the agent is to do, in words, up to 8,000 characters", a.Name)
+		case a.Prompt != "" && a.Budget <= 0:
+			bad("agents: %s: a prompt is done by a model through the gateway: give the agent a budget", a.Name)
+		case a.Notebook == "" && a.Prompt == "" && a.Schedule != "":
+			bad("agents: %s: a schedule needs something to run: a notebook (a path in the project's repo) or a prompt", a.Name)
 		case a.Notebook != "" && (p.Spec.Pipelines == nil || p.Spec.Pipelines.Repo == ""):
 			bad("agents: %s: a notebook runs from the project's repo (pipelines.repo), which the project doesn't have", a.Name)
 		case a.Notebook != "" && !notebookPathRE.MatchString(a.Notebook):

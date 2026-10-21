@@ -19,7 +19,7 @@ import urllib.request
 import pendulum
 from airflow.sdk import BaseHook, dag, get_current_context, task
 
-from storscale import git, notebook
+from storscale import agent, git, notebook
 
 OPERATOR = os.environ.get("OPERATOR_URL", "http://platform-operator:8081")
 MINE = os.environ.get("STORSCALE_PROJECT", "")
@@ -43,10 +43,10 @@ def make(pa):
 
     @dag(dag_id=dag_id, schedule=a["schedule"], start_date=start, catchup=False, max_active_runs=1,
          tags=[f"project:{project}", "agent"],
-         description=f"the agent {a['name']} ({a.get('description') or 'no description'}): {a['notebook']} at {a['schedule']} (UTC)",
+         description=f"the agent {a['name']} ({a.get('description') or 'no description'}): {a.get('notebook') or 'its prompt'} at {a['schedule']} (UTC)",
          doc_md=f"The agent **{a['name']}** of the project {project}, owner {a.get('owner')}, approved by {a.get('approvedBy')}: "
-                f"runs `{a['notebook']}` from the project's repo as itself, with the tools {', '.join(a.get('tools') or []) or 'a reader may use'}. "
-                f"Each run's executed notebook is linked from the run.")
+                + (f"runs `{a['notebook']}` from the project's repo as itself" if a.get("notebook") else "does its prompt with the platform's runner, as itself")
+                + f", with the tools {', '.join(a.get('tools') or []) or 'a reader may use'}. Each run's record is linked from the run.")
     def the_agent():
         @task(task_id="run_agent", retries=0)
         def run_agent():
@@ -54,6 +54,18 @@ def make(pa):
             c = BaseHook.get_connection(pa["connId"])
             extra = c.extra_dejson or {}
             work = tempfile.mkdtemp(prefix="agent-")
+            if a.get("prompt"):   # no notebook: the platform's runner does the prompt with the agent's tools (12.7)
+                record = os.path.join(work, f"{a['name']}.ipynb")
+                kc = notebook._keycloak()
+                try:
+                    report = agent.run(project, a["name"], a["prompt"], a.get("description") or "", extra.get("mcp_url", ""), extra.get("llm_url") or "",
+                                       extra.get("llm_key") or "", kc["STORSCALE_TOKEN_URL"], c.login, c.password, record)
+                except Exception as e:
+                    notebook.keep(project, dag_id, run_id, record, str(e)[:500])
+                    raise RuntimeError(f"the agent {a['name']}: {e}") from e
+                notebook.keep(project, dag_id, run_id, record, "")
+                print(f"storscale.agent: {a['name']}'s report:\n{report}")
+                return
             repo = os.path.join(work, "repo")
             git.checkout(BaseHook.get_connection(pa["gitConnId"]), pa.get("ref") or "HEAD", repo)
             source = os.path.join(repo, pa.get("path") or "", a["notebook"])
