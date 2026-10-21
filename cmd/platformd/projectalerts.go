@@ -110,6 +110,7 @@ func (s *server) issuesOf(ctx context.Context, p *project.Project) (out []issue,
 			}
 		}
 		out = append(out, s.llmIssues(ctx, p, link)...)
+		out = append(out, s.usageIssues(ctx, p, link)...)
 		if c, err := s.classificationOf(ctx, p.Metadata.Name); err == nil {
 			for _, pc := range c.Columns {
 				if pc.State == "suggested" {

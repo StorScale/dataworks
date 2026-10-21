@@ -240,6 +240,16 @@ func main() {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(ds)
 		})
+		// The buckets' sizes, for usage per project (13.1): platformd's daily sample.
+		mux.HandleFunc("GET /buckets/sizes", func(w http.ResponseWriter, req *http.Request) {
+			sizes, err := r.Buckets.BucketSizes(req.Context())
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(sizes)
+		})
 		// Every Airflow makes a DAG of each agent it runs on a schedule (storscale_agents.py, the bundle storscale).
 		mux.HandleFunc("GET /airflow/agents", func(w http.ResponseWriter, req *http.Request) {
 			as, err := r.Agents(req.Context())

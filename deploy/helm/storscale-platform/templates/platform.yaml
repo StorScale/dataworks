@@ -31,6 +31,11 @@ spec:
             - {name: KEYCLOAK_DIRECT_URL, value: "http://keycloak:8080/sso"}
             - {name: OIDC_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: storscale-env, key: PLATFORM_OAUTH_SECRET}}}
             - {name: PROTECTION_TAGS, value: {{ .Values.protection.tags | toJson | quote }}}   # shown on the Governance page (12.9)
+            - {name: TRINO_SHARED_SECRET, valueFrom: {secretKeyRef: {name: storscale-env, key: TRINO_SHARED_SECRET}}}   # Trino's finished queries come with it (13.1)
+            - {name: USAGE_RATES, value: {{ .Values.usage.rates | toJson | quote }}}
+            {{- with .Values.usage.viewerGroups }}
+            - {name: USAGE_VIEWER_GROUPS, value: {{ join "," . | quote }}}
+            {{- end }}
             - {name: PROTECTION_APPLY_SUGGESTED, value: {{ .Values.protection.applySuggested | quote }}}
             # Projects are Project resources, with a copy in the bucket for the services that read them there.
             - {name: PROJECT_STORE, value: kubernetes}

@@ -454,6 +454,9 @@ func (p *Project) checkKnowledge(bad func(format string, a ...any)) {
 			}
 		}
 	}
+	if c := p.Spec.Cost; c != nil && (c.Budget <= 0 || c.Budget > 10_000_000) {
+		bad("cost: budget %v: a month, more than nothing and up to ten million", c.Budget)
+	}
 	if len(p.Spec.Knowledge) > 0 && (p.Spec.LLM == nil || p.Spec.LLM.Budget <= 0) {
 		bad("knowledge: a bank is embedded on the project's gateway key: give the project an LLM budget (llm.budget)")
 	}

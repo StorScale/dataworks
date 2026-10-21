@@ -634,9 +634,9 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 3. At 80% of the month's budget, frank and the project's owner get an alert.
 
 **Requirements**
-- R13.1 Usage attributed to projects: Trino (query to project, through the person or service account), Spark, Buckets storage, the LLM gateway.
-- R13.2 A rate card (what a CPU-hour, a GB-month and a token cost), set by the install.
-- R13.3 Budgets per project, with alerts. (The limits that cap a project's use are 6.8's.)
+- R13.1 Usage attributed to projects: Trino (query to project, through the person or service account), Spark, Buckets storage, the LLM gateway. (Built 2026-10-21: Trino by the tables each query read (its HTTP event listener, to platformd), its CPU time, bytes read, who ran it and the costliest queries; storage sampled daily, tables' data files and the project's bucket; the gateway's spend. Spark left: nothing runs Spark per project yet.)
+- R13.2 A rate card (what a CPU-hour, a GB-month and a token cost), set by the install. (Built 2026-10-21: `usage.rates`; a token's price is the gateway's.)
+- R13.3 Budgets per project, with alerts. (The limits that cap a project's use are 6.8's.) (Built 2026-10-21: `cost.budget`, a project alert at 80% and 100%; the Usage tab for its editors, and a page of every project's for finance, `usage.viewerGroups`, and the administrators.)
 
 ---
 

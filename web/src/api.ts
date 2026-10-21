@@ -16,7 +16,7 @@ export type Tool = {
 export type Brand = { name: string; logo: string };
 
 export type Session =
-  | { state: "signed-in"; user: User; tools: Tool[]; admin: boolean; projects: boolean; flow: boolean; semantic: boolean; pipelines: boolean; brand: Brand }
+  | { state: "signed-in"; user: User; tools: Tool[]; admin: boolean; projects: boolean; flow: boolean; semantic: boolean; pipelines: boolean; brand: Brand; usage?: boolean; governance?: boolean }
   | { state: "refused"; user: User; error: string };
 
 // session is null when nobody is signed in.
@@ -452,6 +452,20 @@ export const getLLM = (name: string) => api<{ gateway: string; uses: LLMUse[] }>
 export const approveAgent = (name: string, agent: string) =>
   api<{ approved: boolean; by: string; clientId: string; secret?: string; mcpUrl: string }>("POST", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(agent)}/approve`, {});
 export const removeAgent = (name: string, agent: string) => api<void>("DELETE", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(agent)}`);
+
+// --- Usage and cost per project (use case 13.1) ---------------------------------------
+export type UsageShare = { queries: number; cpuSeconds: number };
+export type UsageMonth = {
+  project: string; month: string; currency: string; budget?: number; share?: number; avgGB: number; llmSpend: number;
+  cost: { trino: number; storage: number; llm: number; total: number };
+  trino: { queries: number; cpuSeconds: number; readBytes: number; failed: number; byUser?: Record<string, UsageShare>; byDay?: Record<string, UsageShare>;
+    top?: { id: string; user: string; at: string; cpuSeconds: number; readBytes: number; sql: string }[] };
+  storage?: { tables: Record<string, number>; bucket: number; llmSpend: number }; storageAt?: string;
+};
+export type Rates = { currency: string; cpuHour: number; storageGBMonth: number };
+export const getProjectUsage = (name: string, month?: string) =>
+  api<{ usage: UsageMonth; before: { month: string; cost: UsageMonth["cost"] }; rates: Rates }>("GET", `/api/projects/${encodeURIComponent(name)}/usage${month ? `?month=${month}` : ""}`);
+export const getUsage = (month?: string) => api<{ month: string; projects: (UsageMonth & { before: number })[]; rates: Rates }>("GET", `/api/usage${month ? `?month=${month}` : ""}`);
 
 // --- Governance across projects (use case 12.9) ---------------------------------------
 export type Governance = {

@@ -223,6 +223,14 @@ protection:
     financial: {mask: MASK, except: []}
     health: {mask: MASK_NULL, except: []}
 
+# Usage and cost per project (use case 13.1): the rate card that prices
+# Trino's CPU time and storage (the model calls are priced already), and the
+# groups that see every project's usage (finance; default the administrators).
+# A project's cost.budget is alerted at 80% and 100%.
+usage:
+  rates: {currency: USD, cpuHour: 0.05, storageGBMonth: 0.023}
+  viewerGroups: []
+
 # Projects as code (use case 7.4): which of a project's targets this install
 # is. A plan of the project's repo lays storscale/targets/<target>.yaml over
 # storscale/project.yaml.

@@ -371,6 +371,12 @@ spec:
                             table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                             column: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                             id: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                cost:
+                  description: "What the project may cost a month (13.1), priced by the install's rate card: alerted at 80% and 100%; nothing is stopped."
+                  type: object
+                  required: [budget]
+                  properties:
+                    budget: {type: number}
                 tools:
                   description: "Tools of the project's own for its agents (12.7): an API's operation, signed in by one of the project's connections (an API token), called by the platform for the agents given it (tool:<name>) and the project's editors."
                   type: array

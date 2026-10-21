@@ -264,6 +264,7 @@ services:
     restart: unless-stopped
     image: ${PLATFORMD_IMAGE}
     environment:
+      TRINO_SHARED_SECRET: ${TRINO_SHARED_SECRET}   # Trino's finished queries come with it (usage, 13.1)
       # What the catalog's Protection tags mean, as the operator applies them: shown on the Governance page (12.9).
       PROTECTION_TAGS: '{"personal": {"mask": "MASK_HASH", "except": ["engineers"]}, "financial": {"mask": "MASK", "except": ["engineers"]}, "health": {"mask": "MASK_NULL", "except": ["engineers"]}}'
       # The Health page, and alerts (where the platform's Secret storscale-alerts says).
@@ -638,6 +639,7 @@ services:
       - ./trino/ranger-trino-security.xml:/etc/trino/ranger-trino-security.xml:ro
       - ./trino/ranger-trino-audit.xml:/etc/trino/ranger-trino-audit.xml:ro
       - ./trino/resource-groups.properties:/etc/trino/resource-groups.properties:ro
+      - ./trino/usage-events.properties:/etc/trino/usage-events.properties:ro
       - ./trino/catalog:/etc/trino/catalog-install:ro
       - tls:/etc/trino/tls:ro
       - trino-auth:/etc/trino/auth:ro

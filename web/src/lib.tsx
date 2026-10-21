@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { Brand, FlowCheck, ProjectView, Spec, Tool, User } from "./api";
 
 // What every page may need: who's signed in, and what the platform has.
-export type Platform = { user: User; tools: Tool[]; admin: boolean; projects: boolean; flow: boolean; semantic: boolean; pipelines: boolean; brand: Brand };
+export type Platform = { user: User; tools: Tool[]; admin: boolean; projects: boolean; flow: boolean; semantic: boolean; pipelines: boolean; brand: Brand; usage?: boolean; governance?: boolean };
 export const PlatformContext = createContext<Platform>(null!);
 export const usePlatform = () => useContext(PlatformContext);
 
