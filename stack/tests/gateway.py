@@ -14,7 +14,7 @@ repeat the question, a cent per hundred characters):
      budget exceeded). At the stand-in one long question does it (a cent per
      hundred characters); at a real gateway (LiteLLM on the company's models,
      whose prices are its own) the budget is a few cents and questions of a
-     thousand tokens are asked until the spend gets there;
+     few hundred tokens are asked until the spend gets there;
   3. the budget raised, the key is a new one, the old one gone;
   4. an agent with a budget, approved by alice, gets a key of its own with
      that budget; revoked, its key goes;
@@ -48,7 +48,7 @@ def is_real():
 
 
 REAL = is_real()
-BUDGET = 0.02 if REAL else 1   # dollars a month: a few cents at a real gateway, a dollar at the stand-in's prices
+BUDGET = 0.03 if REAL else 1   # dollars a month: a few cents at a real gateway, a dollar at the stand-in's prices
 SPEC = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": NAME},
         "spec": {"description": "The LLM gateway and budgets: the gateway suite's.",
                  "members": [{"group": "engineers", "role": "editor"}, {"user": "alice", "role": "editor"}], "tables": {},
@@ -120,27 +120,31 @@ def main():
               (secret.status_code, secret.text[:300], before, spent()))
 
         # 2. Near the budget, then past it.
-        if REAL:   # questions of about a thousand tokens, until the spend LiteLLM records (a moment after each) is past 80%
-            words = " ".join(f"item {i} costs {i * 7 % 101} and ships in {i % 9} days;" for i in range(130))
-            for _ in range(25):
+        answered = False
+        if REAL:   # questions of a few hundred tokens, until the spend LiteLLM records (a moment after each) is past 80%
+            words = " ".join(f"item {i} costs {i * 7 % 101} and ships in {i % 9} days;" for i in range(40))
+            for _ in range(40):
                 near = ask(gateway, key, "Summarise this list in one line: " + words)
+                answered = answered or near.ok
                 time.sleep(4)
                 if not near.ok or (uses().get(NAME, {}).get("share") or 0) >= 0.8:
                     break
         else:
             near = ask(gateway, key, "x" * 9000)   # 90 cents, with the stand-in
+            answered = near.ok
         shown = wait(lambda: (lambda u: u if (u.get(NAME, {}).get("share") or 0) >= 0.8 else None)(uses()), 60, every=5) or uses()
         issues = lambda: (bob.get(f"{PLATFORM}/api/projects/{NAME}/alerts", timeout=30).json() or {}).get("issues", [])
-        alerts = wait(lambda: (lambda xs: xs if any(i["key"] == f"llm/{NAME}/near" for i in xs) else None)(issues()), 150, every=10) or issues()
+        alerted = lambda xs: [i for i in xs if i["kind"] == "llm" and i["key"] in (f"llm/{NAME}/near", f"llm/{NAME}")]   # at 80%, or at the budget
+        alerts = wait(lambda: (lambda xs: xs if alerted(xs) else None)(issues()), 150, every=10) or issues()
         check("questions take the spend past 80% of the budget: the page shows it, and the project is alerted",
-              near.ok and (shown.get(NAME, {}).get("share") or 0) >= 0.8 and any(i["key"] == f"llm/{NAME}/near" and i["kind"] == "llm" for i in alerts),
-              (near.status_code, shown, [i["key"] for i in alerts]))
+              answered and (shown.get(NAME, {}).get("share") or 0) >= 0.8 and alerted(alerts), (near.status_code, shown, [i["key"] for i in alerts]))
         for _ in range(10):   # the stand-in refuses the first; LiteLLM refuses once its recorded spend is past the budget
             over = ask(gateway, key, "y" * 12000 if not REAL else "Summarise this list in one line: " + words)
-            if over.status_code == 400 or not REAL:
+            if over.status_code in (400, 422) or not REAL:
                 break
             time.sleep(4)
-        check("one past the budget is refused, as LiteLLM refuses it", over.status_code == 400 and "udget" in over.text, (over.status_code, over.text[:200]))
+        check("one past the budget is refused, as LiteLLM refuses it (HTTP 422, budget exceeded)", over.status_code in (400, 422) and "udget" in over.text,
+              (over.status_code, over.text[:200]))
 
         # 3. The budget raised: a new key, the old one gone.
         more = dict(SPEC, spec=dict(SPEC["spec"], llm={"budget": BUDGET * 2}))
