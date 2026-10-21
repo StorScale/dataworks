@@ -105,7 +105,7 @@ func (r *Reconciler) sweepLLMKeys(ctx context.Context, name string, want map[str
 	var errs []error
 	for _, k := range keys {
 		if (strings.HasPrefix(k.Alias, "storscale/"+name+"/") || k.Alias == "storscale/"+name) && !want[k.Alias] {
-			errs = append(errs, r.Gateway.Delete(ctx, k.Key))
+			errs = append(errs, r.Gateway.Delete(ctx, k.ID()))
 		}
 	}
 	return errors.Join(errs...)

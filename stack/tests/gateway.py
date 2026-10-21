@@ -22,9 +22,10 @@ The master key is LLM_MASTER_KEY (the install's). The project is removed after.
 import json
 import os
 
+import k8s
 import requests
 
-from lakekit import check, finish
+from lakekit import check, finish, s3_root
 from projects import platform, projects, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
@@ -38,9 +39,26 @@ SPEC = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "meta
 
 
 def keys(gateway):
-    """The project's keys at the gateway, by alias (the master key's view)."""
-    r = requests.get(f"{gateway}/key/list", headers={"Authorization": f"Bearer {MASTER}"}, timeout=10)
-    return {k["key_alias"]: k for k in (r.json() if r.ok else {}).get("keys", []) if (k.get("key_alias") or "").startswith(f"storscale/{NAME}")}
+    """The project's keys at the gateway, by alias (the master key's view): each with its id, the key
+    itself at the stand-in, its hash at LiteLLM (which lists keys by their hash, never the key)."""
+    r = requests.get(f"{gateway}/key/list", params={"return_full_object": "true", "size": 100}, headers={"Authorization": f"Bearer {MASTER}"}, timeout=10)
+    out = {}
+    for k in (r.json() if r.ok else {}).get("keys", []):
+        if isinstance(k, dict) and (k.get("key_alias") or "").startswith(f"storscale/{NAME}"):
+            out[k["key_alias"]] = {**k, "id": k.get("key") or k.get("token")}
+    return out
+
+
+def raw_key(conn):
+    """The key the operator made, from the connection it keeps it in (the platform shows it to no one):
+    the project's Secret on Kubernetes, connections/<project>/<name>.json in the platform's bucket on Compose."""
+    if k8s.in_cluster():
+        return k8s.get_secret(conn).get("llmKey", "")
+    try:
+        d = json.loads(s3_root().get_object(Bucket="storscale-platform", Key=f"connections/{NAME}/{conn}.json")["Body"].read())
+    except Exception:   # not there yet
+        return ""
+    return d.get("llmKey") or (d.get("data") or {}).get("llmKey") or ""
 
 
 def ask(gateway, key, text):
@@ -66,8 +84,8 @@ def main():
               (r.text[:150], mine, conn))
         check("... the Agents tab's page shows the budget, with no spend yet", mine.get(NAME, {}).get("budget") == 1 and mine.get(NAME, {}).get("spend") == 0, mine)
         at = keys(gateway)
-        key = at.get(f"storscale/{NAME}", {}).get("key", "")
-        check("... and the gateway lists it under the project's name, with its budget", key.startswith("sk-") and at[f"storscale/{NAME}"].get("max_budget") == 1, at)
+        key = raw_key(f"{NAME}-llm")
+        check("... and the gateway lists it under the project's name, with its budget", key.startswith("sk-") and at.get(f"storscale/{NAME}", {}).get("max_budget") == 1, (key[:3], at))
 
         # 1. It answers.
         a = ask(gateway, key, "How many orders came in yesterday?")
@@ -98,11 +116,13 @@ def main():
         # 3. The budget raised: a new key, the old one gone.
         more = dict(SPEC, spec=dict(SPEC["spec"], llm={"budget": 2}))
         up = bob.put(f"{PLATFORM}/api/projects/{NAME}", data=json.dumps(more), timeout=30)
-        renewed = wait(lambda: (lambda k: k if k and k != key else None)(keys(gateway).get(f"storscale/{NAME}", {}).get("key")), 300, every=10)
-        fresh = ask(gateway, renewed or key, "Are you back?")
+        first = at.get(f"storscale/{NAME}", {}).get("id")
+        renewed = wait(lambda: (lambda k: k if k and k != first else None)(keys(gateway).get(f"storscale/{NAME}", {}).get("id")), 300, every=10)
+        new_key = wait(lambda: (lambda k: k if k and k != key else None)(raw_key(f"{NAME}-llm")), 120, every=5) or key
+        fresh = ask(gateway, new_key, "Are you back?")
         check("the budget raised, the key is a new one that answers again, the old one gone",
               up.ok and renewed is not None and fresh.ok and uses().get(NAME, {}).get("budget") == 2 and ask(gateway, key, "old?").status_code == 401,
-              (up.status_code, up.text[:150], renewed is not None, fresh.status_code, uses()))
+              (up.status_code, up.text[:150], renewed is not None, fresh.status_code, fresh.text[:200], uses()))
 
         # 4. An agent with a budget of its own.
         reg = bob.put(f"{PLATFORM}/api/projects/{NAME}/agents/helper", headers=H, timeout=30, json={"description": "answers questions", "budget": 0.5})
