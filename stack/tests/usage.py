@@ -25,7 +25,7 @@ H = {"X-Platform-Request": "1"}
 SPEC = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": NAME},
         "spec": {"description": "Usage and cost: the usage suite's.",
                  "members": [{"group": "engineers", "role": "editor"}, {"user": "alice", "role": "reader"}], "tables": {},
-                 "cost": {"budget": 0.000001}}}
+                 "cost": {"budget": 0.000000001}}}   # less than a few queries' CPU, at the default rate
 MARK = "usage_suite_marker"
 
 
@@ -50,7 +50,7 @@ def main():
         check("bob's queries are counted for the project: how many, their CPU time, who ran them, the costliest with their SQL",
               t.get("queries", 0) >= 3 and "bob" in (t.get("byUser") or {}) and t.get("cpuSeconds", 0) > 0
               and any(MARK in q.get("sql", "") for q in t.get("top") or []), {k: t.get(k) for k in ("queries", "cpuSeconds", "byUser")})
-        check("... priced by the install's rate card, against the project's budget", (u.get("share") or 0) > 0 and u.get("budget") == 0.000001 and "total" in (u.get("cost") or {}),
+        check("... priced by the install's rate card, against the project's budget", (u.get("share") or 0) > 0 and u.get("budget") == 0.000000001 and "total" in (u.get("cost") or {}),
               {k: u.get(k) for k in ("cost", "budget", "share")})
 
         # 2. Who sees it.

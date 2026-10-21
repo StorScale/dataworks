@@ -219,12 +219,15 @@ func (s *server) startUsage(ctx context.Context) {
 	go func() {
 		tick := time.NewTicker(time.Minute)
 		defer tick.Stop()
-		sampled := ""
+		sampled, tried := "", time.Time{}
 		for {
 			s.usage.keep(ctx, s)
-			if day := time.Now().UTC().Format("2006-01-02"); day != sampled {
-				s.sampleUsage(ctx, day)
-				sampled = day
+			// once a day; a sample that couldn't be taken whole (Trino or the operator starting) again ten minutes on
+			if day := time.Now().UTC().Format("2006-01-02"); day != sampled && time.Since(tried) >= 10*time.Minute {
+				tried = time.Now()
+				if s.sampleUsage(ctx, day) {
+					sampled = day
+				}
 			}
 			select {
 			case <-ctx.Done():
@@ -321,7 +324,13 @@ func (s *server) handleTrinoEvents(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	namespaces := s.namespaces(r.Context())
+	var read []string
+	for _, e := range events {
+		for _, in := range e.IOMetadata.Inputs {
+			read = append(read, in.Catalog+"."+in.Schema)
+		}
+	}
+	namespaces := s.namespaces(r.Context(), read)
 	for _, e := range events {
 		projects := map[string]bool{}
 		for _, in := range e.IOMetadata.Inputs {
@@ -340,10 +349,18 @@ func (s *server) handleTrinoEvents(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// namespaces are the projects by their tables' catalog.namespace, a minute old at most.
-func (s *server) namespaces(ctx context.Context) map[string]string {
+// namespaces are the projects by their tables' catalog.namespace, a minute
+// old at most; read again sooner (a few seconds apart) when one asked for
+// isn't there, so a project made a moment ago counts its first queries.
+func (s *server) namespaces(ctx context.Context, want []string) map[string]string {
 	s.mu.Lock()
-	if s.nsCache != nil && time.Since(s.nsCacheAt) < time.Minute {
+	fresh := s.nsCache != nil && time.Since(s.nsCacheAt) < time.Minute
+	for _, ns := range want {
+		if _, ok := s.nsCache[ns]; !ok && time.Since(s.nsCacheAt) > 5*time.Second {
+			fresh = false
+		}
+	}
+	if fresh {
 		defer s.mu.Unlock()
 		return s.nsCache
 	}
@@ -382,16 +399,24 @@ func (d storageDay) bytes() int64 {
 	return n
 }
 
-// sampleUsage samples each project's storage and model spend, once a day.
-func (s *server) sampleUsage(ctx context.Context, day string) {
+// sampleUsage samples each project's storage and model spend, once a day;
+// whether it could (the buckets' sizes and every table's read).
+func (s *server) sampleUsage(ctx context.Context, day string) bool {
 	specs, err := s.store.Projects(ctx)
 	if err != nil {
-		return
+		return false
 	}
+	whole := true
 	buckets := map[string]int64{}
 	if req, err := http.NewRequestWithContext(ctx, "GET", s.cfg.OperatorURL+"/buckets/sizes", nil); err == nil {
-		if resp, err := (&http.Client{Timeout: time.Minute}).Do(req); err == nil {
-			json.NewDecoder(resp.Body).Decode(&buckets)
+		resp, err := (&http.Client{Timeout: time.Minute}).Do(req)
+		if err == nil && resp.StatusCode == 200 {
+			whole = json.NewDecoder(resp.Body).Decode(&buckets) == nil && whole
+		} else {
+			whole = false
+			s.log.Warn("usage: the buckets' sizes", "error", err)
+		}
+		if resp != nil {
 			resp.Body.Close()
 		}
 	}
@@ -402,7 +427,10 @@ func (s *server) sampleUsage(ctx context.Context, day string) {
 			d.Bucket = buckets[p.Spec.Files.Bucket]
 		}
 		if s.maintainer != nil && p.Spec.Tables != nil {
-			d.Tables = s.tableSizes(ctx, s.maintainer.trino, p)
+			var ok bool
+			if d.Tables, ok = s.tableSizes(ctx, s.maintainer.trino, p); !ok {
+				whole = false
+			}
 		}
 		for _, u := range s.llmUses(ctx, p) {
 			d.LLMSpend += u.Spend
@@ -419,17 +447,25 @@ func (s *server) sampleUsage(ctx context.Context, day string) {
 		b, _ := json.Marshal(sample)
 		if err := s.files.PutFile(ctx, key, b, "application/json"); err != nil {
 			s.log.Warn("usage: keeping the day's sample", "project", p.Metadata.Name, "error", err)
+			whole = false
 		}
 	}
+	return whole
 }
 
-// tableSizes are each of the project's tables' data files' bytes, as Iceberg's $files says.
-func (s *server) tableSizes(ctx context.Context, tc *trino.Client, p *project.Project) map[string]int64 {
+// tableSizes are each of the project's tables' data files' bytes, as
+// Iceberg's $files says; and whether they could be read (a namespace not
+// made yet has none, and that's whole).
+func (s *server) tableSizes(ctx context.Context, tc *trino.Client, p *project.Project) (map[string]int64, bool) {
 	out := map[string]int64{}
 	cat, ns := tablesOf(p)
 	rows, err := tc.Exec(ctx, "SHOW TABLES FROM "+trino.Quote(cat)+"."+trino.Quote(ns))
 	if err != nil {
-		return out
+		if strings.Contains(err.Error(), "does not exist") {
+			return out, true
+		}
+		s.log.Warn("usage: the tables' sizes", "project", p.Metadata.Name, "error", err)
+		return out, false
 	}
 	for _, row := range rows {
 		t, _ := row[0].(string)
@@ -443,7 +479,7 @@ func (s *server) tableSizes(ctx context.Context, tc *trino.Client, p *project.Pr
 			}
 		}
 	}
-	return out
+	return out, true
 }
 
 // usageOf is a project's month: Trino's time (every host's), storage, model spend, and what it costs.
