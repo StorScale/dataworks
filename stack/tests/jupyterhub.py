@@ -136,6 +136,10 @@ print(json.dumps({
     "put_other": code(lambda: s3.put_object(Bucket="home", Key=f"{other}/hello.txt", Body=b"hi")),
     "orders": len(orders),
     "write_datasets": code(lambda: s3.put_object(Bucket="sales", Key=f"datasets/from-{me}.txt", Body=b"x")),
+    # The libraries the common analyses and models need (use case 7.8), and VS Code on the path.
+    "libraries": [m for m in ("sklearn", "statsmodels", "scipy", "lightgbm", "xgboost", "flaml", "mlflow", "geopandas", "networkx")
+                  if __import__("importlib").util.find_spec(m) is None],
+    "code_server": __import__("shutil").which("code-server") is not None,
 }))
 '''
 
@@ -145,8 +149,12 @@ def notebook_checks(user, other):
     me = hub_api(s, "GET", "/user")
     wait_for_server(s, user)
     out = run(user, server_token(s, user), NOTEBOOK.replace("OTHER", repr(other)))
+    result = json.loads(out.strip().splitlines()[-1])
+    # VS Code, as JupyterLab's launcher opens it: served by the person's own server through jupyter-server-proxy.
+    vs = requests.get(f"{HUB}/user/{user}/vscode/", headers={"Authorization": f"token {server_token(s, user)}"}, timeout=120, allow_redirects=True)
+    result["vscode"] = vs.status_code
     hub_api(s, "DELETE", f"/users/{user}/server")  # done: stop it, as the hub's idle culler would
-    return me, json.loads(out.strip().splitlines()[-1])
+    return me, result
 
 
 def main():
@@ -173,6 +181,8 @@ def main():
           bob["admin"] is True and alice["admin"] is False, f"bob admin={bob['admin']}, alice admin={alice['admin']}")
     _, r = sign_in("carol")
     check("people in neither group can't sign in", r.status_code == 403, f"HTTP {r.status_code}")
+    check("a notebook has the analysis and ML libraries, and VS Code opens from the launcher (7.8)",
+          a["libraries"] == [] and a["code_server"] is True and a["vscode"] == 200, (a["libraries"], a["code_server"], a["vscode"]))
 
     # 2. Each notebook works as its person, with no keys.
     check("each notebook gets its own person's Keycloak token",

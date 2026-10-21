@@ -336,7 +336,7 @@ This lab needs a GitLab repo the platform can reach. Make the repo a project acc
 
 **Value:** an analyst's notebook becomes a pipeline with one button, and stays a reviewed, versioned change: no notebook running from someone's laptop, no copy pasted into a DAG by an engineer.
 
-With the repo from Lab 10, as **alice**, open **Tools → Notebooks** (JupyterLab opens in the platform, signed in as her) and make a notebook, `call_list.ipynb`, with one cell:
+With the repo from Lab 10, as **alice**, open **Tools → Notebooks** (JupyterLab opens in the platform, signed in as her; its launcher also opens **VS Code** in the browser, on the same files, for those who prefer it, and the image has scikit-learn, statsmodels, geopandas and the other libraries an analysis needs) and make a notebook, `call_list.ipynb`, with one cell:
 
 ```python
 import io, pandas as pd, buckets_lake

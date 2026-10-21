@@ -6,6 +6,7 @@ from flask_appbuilder.security.manager import AUTH_OAUTH
 from superset.security import SupersetSecurityManager
 
 SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]
+MAPBOX_API_KEY = os.environ.get("MAPBOX_API_KEY", "")   # the deck.gl map charts' base map (empty: the layers alone)
 # Its own cookie name: the platform's tools share one address (Airflow's
 # Flask app would otherwise use "session" too).
 SESSION_COOKIE_NAME = "superset_session"
