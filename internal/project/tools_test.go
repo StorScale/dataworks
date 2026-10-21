@@ -7,7 +7,7 @@ import (
 )
 
 func TestAProjectsToolsAndAgentsGrants(t *testing.T) {
-	base := `{"metadata":{"name":"sales"},"spec":{"members":[{"user":"bob","role":"editor"}],"tables":{},"files":{},"llm":{"budget":5}}}`
+	base := `{"metadata":{"name":"sales"},"spec":{"members":[{"user":"bob","role":"editor"}],"tables":{},"files":{},"llm":{"budget":5},"pipelines":{"serviceAccount":"airflow-pipelines"}}}`
 	p, err := Parse([]byte(base))
 	if err != nil {
 		t.Fatal(err)
@@ -52,6 +52,7 @@ func TestAProjectsToolsAndAgentsGrants(t *testing.T) {
 		{func(q *Project) { q.Spec.Files = nil }, "which it doesn't have (files)"},
 		{func(q *Project) { q.Spec.Knowledge[0].Schedule = "nightly" }, "five cron fields"},
 		{func(q *Project) { q.Spec.Knowledge[0].Files = nil }, "a folder of files"},
+		{func(q *Project) { q.Spec.Pipelines = nil }, "give the project pipelines"},
 	} {
 		q, _ := Parse([]byte(base))
 		q.Spec = p.Spec
