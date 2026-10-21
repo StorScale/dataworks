@@ -123,7 +123,7 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 4. bob mutes the stale-table alert for a day while he fixes it.
 
 **Requirements**
-- R6.19 Notifications per project to chat (Slack, Teams) and email: a pipeline failed, a check failed, a table is stale.
+- R6.19 Notifications per project to chat (Slack, Teams) and email: a pipeline failed, a check failed, a table is stale. (Teams and email built 2026-10-16; Slack 2026-10-21.)
 - R6.20 Freshness targets per table, in the project; stale tables shown in the catalog and the project's pages.
 - R6.21 Who's told, set per project; alerts muted for a while, recorded.
 

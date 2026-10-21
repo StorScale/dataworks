@@ -26,6 +26,7 @@ import (
 //	smtpFrom, smtpUser, smtpPassword
 type Targets struct {
 	TeamsWebhook string
+	SlackWebhook string // a Slack incoming webhook
 	EmailTo      []string
 	SMTPServer   string
 	SMTPFrom     string
@@ -35,7 +36,7 @@ type Targets struct {
 
 // TargetsFrom reads them from the Secret's keys.
 func TargetsFrom(sec map[string]string) Targets {
-	t := Targets{TeamsWebhook: strings.TrimSpace(sec["teamsWebhook"]), SMTPServer: sec["smtpServer"],
+	t := Targets{TeamsWebhook: strings.TrimSpace(sec["teamsWebhook"]), SlackWebhook: strings.TrimSpace(sec["slackWebhook"]), SMTPServer: sec["smtpServer"],
 		SMTPFrom: sec["smtpFrom"], SMTPUser: sec["smtpUser"], SMTPPassword: sec["smtpPassword"]}
 	for _, a := range strings.Split(sec["emailTo"], ",") {
 		if a = strings.TrimSpace(a); a != "" {
@@ -133,6 +134,9 @@ func (n *Notifier) Send(ctx context.Context, a Alert) map[string]error {
 	if t.TeamsWebhook != "" {
 		out["teams"] = n.teams(ctx, t.TeamsWebhook, a)
 	}
+	if t.SlackWebhook != "" {
+		out["slack"] = n.slack(ctx, t.SlackWebhook, a)
+	}
 	if len(t.EmailTo) > 0 && t.SMTPServer != "" {
 		out["email"] = n.email(t, a)
 	}
@@ -169,7 +173,35 @@ func Card(a Alert) map[string]any {
 }
 
 func (n *Notifier) teams(ctx context.Context, webhook string, a Alert) error {
-	b, _ := json.Marshal(Card(a))
+	return n.post(ctx, "teams", webhook, Card(a))
+}
+
+// SlackMessage is the alert as a Slack message, for an incoming webhook:
+// the title in bold, each fact on a line, and the link.
+func SlackMessage(a Alert) map[string]any {
+	var b strings.Builder
+	fmt.Fprintf(&b, "*%s*", a.Title)
+	for _, f := range a.Facts {
+		fmt.Fprintf(&b, "\n%s: %s", f[0], f[1])
+	}
+	if a.Link != "" {
+		text := a.LinkText
+		if text == "" {
+			text = "Open the Health page"
+		}
+		fmt.Fprintf(&b, "\n<%s|%s>", a.Link, text)
+	}
+	return map[string]any{"text": b.String()}
+}
+
+func (n *Notifier) slack(ctx context.Context, webhook string, a Alert) error {
+	return n.post(ctx, "slack", webhook, SlackMessage(a))
+}
+
+// post sends a message to a channel's webhook, naming the channel's kind
+// and never the webhook's address (it holds a signature, a credential).
+func (n *Notifier) post(ctx context.Context, kind, webhook string, body any) error {
+	b, _ := json.Marshal(body)
 	req, err := http.NewRequestWithContext(ctx, "POST", webhook, bytes.NewReader(b))
 	if err != nil {
 		return err
@@ -181,16 +213,15 @@ func (n *Notifier) teams(ctx context.Context, webhook string, a Alert) error {
 	}
 	res, err := c.Do(req)
 	if err != nil {
-		// Never the webhook's address: it holds its signature, a credential.
 		var ue *url.Error
 		if errors.As(err, &ue) {
 			err = ue.Err
 		}
-		return fmt.Errorf("teams: %s", plain(err))
+		return fmt.Errorf("%s: %s", kind, plain(err))
 	}
 	res.Body.Close()
 	if res.StatusCode/100 != 2 {
-		return fmt.Errorf("teams: HTTP %d", res.StatusCode)
+		return fmt.Errorf("%s: HTTP %d", kind, res.StatusCode)
 	}
 	return nil
 }

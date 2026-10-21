@@ -193,9 +193,10 @@ spec:
                   description: >-
                     Where the project's alerts go (a failed pipeline, a failing check, a stale table):
                     teams names one of its connections, holding a Teams channel's Workflows webhook
-                    (key webhook); email goes through the install's mail server.
+                    (key webhook); slack one holding a Slack incoming webhook; email goes through the install's mail server.
                   properties:
                     teams: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
+                    slack: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
                     email: {type: array, items: {type: string}}
                 products:
                   description: "Tables the project publishes for others (data products): owner, version, contract, the business terms they hold; consumers and certification are the platform's."

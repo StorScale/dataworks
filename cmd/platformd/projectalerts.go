@@ -278,6 +278,13 @@ func (s *server) projectTargets(ctx context.Context, p *project.Project) (health
 		}
 		t.TeamsWebhook = strings.TrimSpace(sec["webhook"])
 	}
+	if n.Slack != "" {
+		sec, err := s.store.Connection(ctx, p.Metadata.Name, n.Slack)
+		if err != nil {
+			return t, err
+		}
+		t.SlackWebhook = strings.TrimSpace(sec["webhook"])
+	}
 	if len(n.Email) > 0 {
 		install, err := s.store.Secret(ctx, alertsSecret)
 		if err == nil {
@@ -344,7 +351,7 @@ func (s *server) handleProjectAlerts(w http.ResponseWriter, r *http.Request) {
 	pa.mu.Unlock()
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	n := v.Spec.Spec.Notify
-	dest := map[string]any{"teams": n != nil && n.Teams != "", "email": []string{}}
+	dest := map[string]any{"teams": n != nil && n.Teams != "", "slack": n != nil && n.Slack != "", "email": []string{}}
 	if n != nil && len(n.Email) > 0 {
 		dest["email"] = n.Email
 	}

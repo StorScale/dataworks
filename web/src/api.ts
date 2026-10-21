@@ -70,7 +70,7 @@ export type Spec = {
   pipelines?: { serviceAccount: string; repo?: string; path?: string; ref?: string; credentials?: { secretRef: string }; memory?: string;
     reviews?: { gitlab?: string; project?: string; dbt?: string } };
   limits?: { queries?: number; queued?: number; queryMemory?: string; storage?: string };
-  notify?: { teams?: string; email?: string[] };
+  notify?: { teams?: string; slack?: string; email?: string[] };
   sources?: Source[];
   imports?: Import[];
   deliveries?: { name: string }[];
@@ -230,7 +230,7 @@ export const testAlert = () => api<{ targets: Record<string, string> }>("POST", 
 // --- A project's alerts: what's wrong in it now, and where it's told ----------------
 
 export type ProjectIssue = { key: string; kind: "pipeline" | "check" | "stale"; title: string; detail?: string; link: string; mutedUntil?: string };
-export type ProjectAlerts = { checked: boolean; issues: ProjectIssue[]; notify?: { teams: boolean; email: string[] }; unknown?: string[] };
+export type ProjectAlerts = { checked: boolean; issues: ProjectIssue[]; notify?: { teams: boolean; slack?: boolean; email: string[] }; unknown?: string[] };
 export const getProjectAlerts = (name: string) => api<ProjectAlerts>("GET", `/api/projects/${encodeURIComponent(name)}/alerts`);
 export const muteProjectAlert = (name: string, key: string, hours: number) =>
   api<ProjectAlerts>("POST", `/api/projects/${encodeURIComponent(name)}/alerts/mute`, { key, hours });

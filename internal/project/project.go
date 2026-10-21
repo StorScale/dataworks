@@ -459,6 +459,7 @@ type Freshness struct {
 // goes through the install's mail server.
 type Notify struct {
 	Teams string   `json:"teams,omitempty"`
+	Slack string   `json:"slack,omitempty"` // a connection holding a Slack incoming webhook (key webhook)
 	Email []string `json:"email,omitempty"`
 }
 

@@ -236,7 +236,7 @@ func (s *server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		out["findings"] = s.health.findings.All()
 		out["certificate"] = cert
 		out["alerts"] = s.health.notifier.Recent()
-		dest := map[string]any{"teams": targets.TeamsWebhook != "", "email": targets.EmailTo}
+		dest := map[string]any{"teams": targets.TeamsWebhook != "", "slack": targets.SlackWebhook != "", "email": targets.EmailTo}
 		if terr != nil {
 			dest["error"] = terr.Error()
 		}
