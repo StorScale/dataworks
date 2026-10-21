@@ -4,6 +4,10 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+- **A provider key pasted with a trailing newline**: the gateway trims it before LiteLLM starts. Its Anthropic client tolerated the newline, but its OpenAI and Azure clients put it in the request header, which was refused as a connection error, so an embedding model on the same key couldn't be reached.
+- **A change to the gateway's models starts it again**: LiteLLM reads its config as it starts, and a new model in `llm.litellm.models` waited for the next restart. The chart's example lists an embedding model (Azure OpenAI's `text-embedding-3-small` on Foundry, for the knowledge banks).
+
 ## [0.21.0] - 2026-10-21
 
 A model asked on the canvas, and what a table holds: an llm step that classifies, extracts or summarizes a column through the gateway; the catalog profiling each table and five more kinds of check; the notebook's analysis and ML libraries and VS Code; Slack beside Teams; the guardrail keeping the install's own terms in; and a semantic model's tests asked in plain language.
