@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Images for the JupyterHub example.
 #
 #   docker compose build      (compose.yaml builds the "hub" and "notebook" targets)
@@ -28,11 +29,20 @@ RUN pip install --no-cache-dir jupyterlab==4.5.10 boto3==1.43.108 requests==2.34
       scikit-learn==1.9.1 statsmodels==0.15.0 scipy==1.18.1 lightgbm==4.7.0 xgboost==3.4.1 flaml==2.7.0 mlflow-skinny==3.17.2 \
       geopandas==1.2.0 networkx==3.7 \
       jupyter-server-proxy==4.6.0 jupyter-codeserver-proxy==0.1.0
+# code-server for the image's architecture (the image has Python, not curl).
+ARG TARGETARCH
 USER root
-RUN mkdir -p /opt/code-server \
- && curl -fsSL https://github.com/coder/code-server/releases/download/v4.141.0/code-server-4.141.0-linux-amd64.tar.gz \
-    | tar -xz -C /opt/code-server --strip-components=1 \
- && ln -s /opt/code-server/bin/code-server /usr/local/bin/code-server
+RUN python - <<'PY'
+import io, os, tarfile, urllib.request
+arch = {"amd64": "amd64", "arm64": "arm64"}[os.environ.get("TARGETARCH") or "amd64"]
+url = f"https://github.com/coder/code-server/releases/download/v4.141.0/code-server-4.141.0-linux-{arch}.tar.gz"
+with urllib.request.urlopen(url) as r, tarfile.open(fileobj=io.BytesIO(r.read()), mode="r:gz") as t:
+    for m in t.getmembers():
+        m.name = m.name.split("/", 1)[1] if "/" in m.name else ""
+        if m.name:
+            t.extract(m, "/opt/code-server", filter="tar")
+os.symlink("/opt/code-server/bin/code-server", "/usr/local/bin/code-server")
+PY
 USER ${NB_UID}
 COPY buckets_lake.py /opt/buckets/buckets_lake.py
 COPY schedule/storscale_schedule.py /opt/buckets/storscale_schedule.py
