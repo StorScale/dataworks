@@ -448,6 +448,17 @@ export const approveAgent = (name: string, agent: string) =>
   api<{ approved: boolean; by: string; clientId: string; secret?: string; mcpUrl: string }>("POST", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(agent)}/approve`, {});
 export const removeAgent = (name: string, agent: string) => api<void>("DELETE", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(agent)}`);
 
+// --- Governance across projects (use case 12.9) ---------------------------------------
+export type Governance = {
+  summary: string;
+  pending: { project: string; kind: "agent" | "delivery" | "access"; name: string; waits: string; since?: string; link: string }[];
+  agents: { project: string; name: string; owner: string; approved: boolean; tools: string[]; runs?: string; budget: number; spend: number }[];
+  rules: { project: string; readers: string[]; tables?: string[]; rowFilters?: string[]; masks?: string[]; people?: string[] }[];
+  products: { project: string; name: string; owner: string; certified: boolean; consumers: string[] }[];
+  erasures: { project: string; id: string; at: string; dueBy: string; by: string; errors: number }[];
+};
+export const getGovernance = () => api<Governance>("GET", "/api/governance");
+
 // --- Erasure of a person's data (use case 6.9) ------------------------------------------
 export type Erasure = {
   id: string; project: string; personHash: string; requestedOn: string; dueBy: string; by: string; verifiedBy: string; at: string;

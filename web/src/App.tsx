@@ -20,6 +20,7 @@ import Metrics from "./pages/Metrics";
 import Overview from "./pages/Overview";
 import Pipelines from "./pages/Pipelines";
 const Flows = lazy(() => import("./pages/Flows"));
+import Governance from "./pages/Governance";
 import Agents from "./pages/Agents"; // React Flow is loaded only when the canvas is
 import ProjectAccess from "./pages/ProjectAccess";
 import ProjectEditor from "./pages/ProjectEditor";
@@ -92,9 +93,11 @@ function Shell() {
           <Route path="access" element={<AdminAccess />} />
           <Route path="health" element={<AdminHealth />} />
           <Route path="audit" element={<AdminAudit />} />
+          <Route path="governance" element={<Governance />} />
           <Route path="assistants" element={<AdminAssistants />} />
           <Route path="monitoring" element={<AdminMonitoring />} />
         </Route>
+        <Route path="/governance" element={<Governance />} />
         <Route path="/tools/:id" element={null} />
         {/* Addresses from before the redesign. */}
         <Route path="/projects" element={<Navigate to={admin ? "/admin/projects" : "/"} replace />} />
