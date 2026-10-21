@@ -136,12 +136,14 @@ func Compile(f *Flow, env Env) (*Compiled, error) {
 // refs say how a step's SQL names its inputs and its tables: dbt's way in
 // the models, CTEs and sampled tables in a preview.
 type refs struct {
+	flow  string
 	step  func(id string) string
 	table func(s *Step) string
 }
 
 func dbtRefs(f *Flow) refs {
 	return refs{
+		flow: f.Name,
 		step: func(id string) string { return "{{ ref('" + ModelName(f.Name, f.Step(id)) + "') }}" },
 		table: func(s *Step) string {
 			return "{{ source('" + SourceName(f.Name, s.Catalog, s.Namespace) + "', '" + s.Table + "') }}"
@@ -603,6 +605,9 @@ func compileStep(s *Step, inputs [][]Column, env Env, r refs) ([]Column, string,
 	case Prepare:
 		return compilePrepare(s, in, from(0))
 
+	case LLM:
+		return compileLLM(s, in, env, r)
+
 	case Formula:
 		if len(s.Columns) == 0 {
 			return nil, "", fmt.Errorf("a formula step computes at least one column")
@@ -798,6 +803,7 @@ func (c *Compiled) Preview(stepID string, sample Sampler, limit int) (string, er
 		}
 	}
 	r := refs{
+		flow: f.Name,
 		step: func(id string) string { return q(id) },
 		table: func(s *Step) string {
 			t := q(s.Catalog) + "." + q(s.Namespace) + "." + q(s.Table)
@@ -823,6 +829,8 @@ func (c *Compiled) Preview(stepID string, sample Sampler, limit int) (string, er
 			if sql = c.Steps[id].SQL; sql == "" {
 				return "", fmt.Errorf("step %s: its SQL isn't known yet (sign in, so the semantic layer can be asked as you)", id)
 			}
+		} else if st.Kind == LLM { // the model isn't asked in a later step's preview: its column is empty there
+			sql = "select *, cast(null as varchar) as " + q(st.Name) + "\nfrom " + q(st.Inputs[0])
 		} else {
 			var inputs [][]Column
 			for _, in := range st.Inputs {

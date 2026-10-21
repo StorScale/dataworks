@@ -374,6 +374,7 @@ export type FlowStep = {
   unpivot?: string[]; name?: string;
   windows?: { function: string; column?: string; as: string; offset?: number }[];
   processors?: FlowProcessor[];
+  prompt?: string; mode?: string; limit?: number;
   checks?: { column: string; test: string; values?: string[] }[];
   metrics?: string[]; sql?: string; x: number; y: number;
 };
@@ -385,7 +386,7 @@ export type FlowView = {
   processors?: FlowProcessorDef[]; // what a prepare step offers
 };
 export type FlowItem = { name: string; branch?: string; mergeRequest?: string };
-export type FlowPreview = SQLAnswer & { sql: string; types?: string[]; sampled?: string[] };
+export type FlowPreview = SQLAnswer & { sql: string; types?: string[]; sampled?: string[]; cost?: number; batches?: number; unread?: number; notes?: string[] };
 export type FlowSaved = { branch: string; mergeRequest: string; new: boolean; files: string[]; dag: string };
 
 const flowsPath = (name: string) => `/api/projects/${encodeURIComponent(name)}/flows`;

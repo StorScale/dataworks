@@ -514,6 +514,21 @@ func (s *server) handleFlowPreview(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
+	if st := f.Step(step); st != nil && st.Kind == flow.LLM { // the model asked about a sample, as the person
+		if res := c.Steps[step]; res != nil && res.Error != "" {
+			s.fail(w, r, http.StatusUnprocessableEntity, "step "+step+": "+res.Error)
+			return
+		}
+		a, code, err := s.askLLMStep(ctx, token, who, p, c, st, min(limit, llmPreviewRows), s.flowSampler(ctx))
+		if err != nil {
+			s.fail(w, r, code, err.Error())
+			return
+		}
+		s.log.Info("flow preview", "project", p.Metadata.Name, "flow", f.Name, "step", step, "user", who, "rows", len(a.Result.Rows), "cost", a.Result.Cost)
+		writeJSON(w, http.StatusOK, map[string]any{"sql": a.SQL, "columns": a.Columns, "types": a.Types, "rows": a.Result.Rows, "seconds": a.Seconds, "sampled": a.Sampled,
+			"cost": a.Result.Cost, "batches": a.Result.Batches, "unread": a.Result.Unread, "notes": a.Result.Warnings})
+		return
+	}
 	sql, err := c.Preview(step, s.flowSampler(ctx), limit)
 	if err != nil {
 		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
@@ -525,8 +540,14 @@ func (s *server) handleFlowPreview(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, code, err.Error())
 		return
 	}
+	var notes []string
+	for _, id := range c.Order { // an llm step before this one: its column is empty here
+		if st := f.Step(id); st.Kind == flow.LLM && feeds(f, step, id) {
+			notes = append(notes, "the column "+st.Name+" of the step "+id+" is empty in this preview: preview that step to ask the model")
+		}
+	}
 	s.log.Info("flow preview", "project", p.Metadata.Name, "flow", f.Name, "step", step, "user", who, "rows", len(ans.Rows), "took", time.Since(started).Round(time.Millisecond))
-	writeJSON(w, http.StatusOK, map[string]any{"sql": sql, "columns": ans.Columns, "types": ans.Types, "rows": ans.Rows, "seconds": ans.Seconds, "sampled": sampled(c, step, s.flowSampler(ctx))})
+	writeJSON(w, http.StatusOK, map[string]any{"sql": sql, "columns": ans.Columns, "types": ans.Types, "rows": ans.Rows, "seconds": ans.Seconds, "sampled": sampled(c, step, s.flowSampler(ctx)), "notes": notes})
 }
 
 // sampled are the inputs a preview read a sample of, not all of.
@@ -613,7 +634,7 @@ func (s *server) handleSaveFlow(w http.ResponseWriter, r *http.Request) {
 	for rel, text := range flow.Files(c) {
 		files[path.Join(dbt, rel)] = text
 	}
-	files[path.Join(dags, "flow_"+name+".py")] = flow.DAG(p.Metadata.Name, name, f.Schedule, who, "dbt")
+	files[path.Join(dags, "flow_"+name+".py")] = flow.DAG(p.Metadata.Name, name, f.Schedule, who, "dbt", f.LLMSteps())
 	branch := flowBranch(name)
 	has, err := gl.HasBranch(ctx, branch)
 	if err != nil {

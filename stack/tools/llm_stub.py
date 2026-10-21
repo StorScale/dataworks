@@ -10,7 +10,9 @@ key that it enforces.
   POST /chat/completions, /v1/chat/completions  (a key): an answer that repeats the question; each call
                        costs 0.01 per 100 characters, and a key past its budget gets HTTP 422 as LiteLLM gives it;
                        a question carrying what may not leave (llm_guard: a masked value's shape, a secret)
-                       is refused first, HTTP 400, as the guardrail refuses it at LiteLLM (LLM_GUARDRAILS=false turns it off)
+                       is refused first, HTTP 400, as the guardrail refuses it at LiteLLM (LLM_GUARDRAILS=false turns it off);
+                       a question shaped as an llm step's ("Answer with a JSON array of N strings") gets N answers (the
+                       first label, or "ok"), so a flow's llm step runs in CI; x-litellm-response-cost says the cost, as LiteLLM's does
   GET  /health/liveliness, /healthz
 
 Keys and spend are kept in LLM_STUB_STATE (a JSON file; default in memory).
@@ -18,6 +20,7 @@ The master key is LLM_MASTER_KEY.
 """
 import json
 import os
+import re
 import secrets
 import threading
 import time
@@ -54,10 +57,12 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         print("llm-stub:", fmt % args, flush=True)
 
-    def answer(self, code, body):
+    def answer(self, code, body, cost=None):
         data = json.dumps(body).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
+        if cost is not None:
+            self.send_header("x-litellm-response-cost", f"{cost:.6f}")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -131,9 +136,14 @@ class Handler(BaseHTTPRequestHandler):
                 info["spend"] = round(info["spend"] + cost, 6)
                 save()
             reply = "You asked: " + text[:200]
+            shaped = re.search(r"Answer with a JSON array of (\d+) strings", text)
+            if shaped:   # an llm step's question: an answer per item, the first label when there are labels
+                labels = re.search(r"exactly one of: (.+?)\.\n", text)
+                one = labels.group(1).split(",")[0].strip() if labels else "ok"
+                reply = json.dumps([one] * int(shaped.group(1)))
             return self.answer(200, {"id": "chatcmpl-" + secrets.token_hex(6), "object": "chat.completion", "model": b.get("model", "stub"),
                                      "choices": [{"index": 0, "message": {"role": "assistant", "content": reply}, "finish_reason": "stop"}],
-                                     "usage": {"prompt_tokens": len(text) // 4, "completion_tokens": len(reply) // 4, "total_tokens": (len(text) + len(reply)) // 4}})
+                                     "usage": {"prompt_tokens": len(text) // 4, "completion_tokens": len(reply) // 4, "total_tokens": (len(text) + len(reply)) // 4}}, cost=cost)
         self.answer(404, {"error": {"message": "no such route"}})
 
 
