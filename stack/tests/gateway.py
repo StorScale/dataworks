@@ -108,6 +108,12 @@ def main():
         a = ask(gateway, key, "How many orders came in yesterday?")
         content = (a.json() if a.ok else {}).get("choices", [{}])[0].get("message", {}).get("content", "")
         check("the key answers a completion", a.ok and (bool(content.strip()) if REAL else "orders" in content), (a.status_code, a.text[:200]))   # a real model's words are its own
+        calls = lambda: bob.get(f"{PLATFORM}/api/projects/{NAME}/llm/calls", timeout=60).json() or {}
+        seen = wait(lambda: (lambda c: c if (c.get("total") or {}).get("calls") else None)(calls()), 120, every=5) or calls()   # LiteLLM writes its logs a moment later
+        first = (seen.get("calls") or [{}])[-1]
+        check("the project's model calls (12.8): the call, whose key, the model, tokens, cost and time, never the question",
+              (seen.get("total") or {}).get("calls", 0) >= 1 and first.get("who") == NAME and first.get("model") and first.get("tokens", 0) > 0
+              and "orders came in" not in json.dumps(seen), (seen.get("total"), first, seen.get("errors")))
         spent = lambda: keys(gateway).get(f"storscale/{NAME}", {}).get("spend")
         before = spent()
         masked = ask(gateway, key, "Write to jane.doe@example.com that card 4111 1111 1111 1111 was declined")

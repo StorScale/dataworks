@@ -611,7 +611,7 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 2. bob edits `triage`'s prompt there, labels a version `production`, and the runner uses it on the next run.
 
 **Requirements**
-- R12.18 Langfuse in the chart, fed by the gateway: traces, latency, tokens and cost per project and agent, scores; its sign-in through Keycloak, each project's people seeing their own.
+- R12.18 Langfuse in the chart, fed by the gateway: traces, latency, tokens and cost per project and agent, scores; its sign-in through Keycloak, each project's people seeing their own. (Built 2026-10-21 without Langfuse: the calls, their latency, tokens and cost per project, agent and person, read from the gateway's own records on the Agents tab; Langfuse's ClickHouse, Redis and blob storage were more to run than this needs. Scores and prompts by version left.)
 - R12.19 Prompts managed there (versions, labels), fetched by name by the runner and `buckets_lake.ask()`.
 
 ### 12.9 The governance group's view (added 2026-10-20)

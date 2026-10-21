@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { approveAgent, buildKnowledge, getAgents, getKnowledge, getLLM, putAgent, removeAgent, searchKnowledge, type KnowledgeHit, type LLMUse } from "../api";
+import { approveAgent, buildKnowledge, getAgents, getKnowledge, getLLM, getLLMCalls, putAgent, removeAgent, searchKnowledge, type KnowledgeHit, type LLMUse } from "../api";
 import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
 
 // Agents are programs of the project's own (use case 12.2): each with an
@@ -34,6 +34,7 @@ export default function Agents() {
           <div><button className="btn small" onClick={() => setSecret(undefined)}>Done</button></div>
         </div>
       )}
+      {canEdit && llm.data?.gateway && llm.data.uses.some((u) => u.key) && <ModelCalls project={name} />}
       {(knowledge.data?.banks.length ?? 0) > 0 && <Knowledge project={name} banks={knowledge.data!.banks} canBuild={knowledge.data!.canBuild || admin} reload={knowledge.reload} />}
       {llm.data?.gateway && (
         <div className="card stack" style={{ gap: 4 }} data-testid="llm">
@@ -166,6 +167,38 @@ function Knowledge({ project, banks, canBuild, reload }: { project: string; bank
           <tbody>{hits.map((h, i) => <tr key={i}><td className="mono">{h.score.toFixed(2)}</td><td className="mono small">{h.source} #{h.ref}</td><td className="small">{h.text}</td></tr>)}</tbody>
         </table>
       ))}
+    </div>
+  );
+}
+
+// The project's calls of the gateway (use case 12.8), to its editors: who asked, with which key, the model,
+// tokens, cost and time; never the question or the answer.
+function ModelCalls({ project }: { project: string }) {
+  const [days, setDays] = useState(7);
+  const calls = usePoll(() => getLLMCalls(project, days), [project, days], 60_000);
+  const d = calls.data;
+  const money = (x: number) => x < 0.01 ? x.toFixed(4) : x.toFixed(2);
+  const top = (m?: Record<string, { calls: number; cost: number }>) => Object.entries(m ?? {}).sort((a, b) => b[1].cost - a[1].cost).slice(0, 5);
+  return (
+    <div className="card stack" style={{ gap: 6 }} data-testid="llm-calls">
+      <div className="row"><strong>Model calls</strong><span className="grow" />
+        <select value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="Days">{[1, 7, 31].map((n) => <option key={n} value={n}>last {n} day{n > 1 ? "s" : ""}</option>)}</select></div>
+      {calls.error && <ErrorBanner error={calls.error} />}
+      {!d ? <Spinner /> : <>
+        <div className="small">{d.total.calls} calls, {d.total.tokens} tokens, {money(d.total.cost)} USD.
+          {top(d.byUser).length > 0 && <> By who asked: {top(d.byUser).map(([u, t]) => `${u || "unnamed"} ${money(t.cost)}`).join(", ")}.</>}
+          {top(d.byModel).length > 0 && <> By model: {top(d.byModel).map(([m, t]) => `${m} ${t.calls}`).join(", ")}.</>}</div>
+        {d.calls.length > 0 && (
+          <div className="scroll-x"><table className="t">
+            <thead><tr><th>When</th><th>Key</th><th>Who asked</th><th>Model</th><th>Tokens</th><th>Cost</th><th>Seconds</th><th></th></tr></thead>
+            <tbody>{d.calls.slice(0, 50).map((c, i) => (
+              <tr key={i}><td className="small">{new Date(c.at).toLocaleString()}</td><td className="mono small">{c.who === project ? "the project" : c.who}</td>
+                <td className="mono small">{c.user || "–"}</td><td className="mono small">{c.model} <span className="muted">{c.kind}</span></td>
+                <td>{c.tokens}</td><td>{money(c.cost)}</td><td>{c.seconds.toFixed(1)}</td>
+                <td>{c.status !== "success" && <span className="pill red">{c.status}</span>}</td></tr>))}</tbody>
+          </table></div>)}
+        <div className="small muted">As the gateway records them: the question and the answer are never kept.</div>
+      </>}
     </div>
   );
 }
