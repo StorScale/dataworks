@@ -4,6 +4,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-10-21
+
+Governed AI, continued: knowledge banks a project's people and agents search by meaning; agents that are a prompt and tools, with no notebook; each of a project's model calls, from the gateway's own records; and the Governance page across projects.
+
+**Upgrading from 0.21.0:** `storscale upgrade --context <cluster> --version 0.22.0`, after a `--dry-run`. The Project CRD gains `knowledge` and `agents[].prompt`, and the tool `search_documents` (the upgrade applies it). A knowledge bank needs an embedding model named `embedding` in `llm.litellm.models` (the chart's example has Azure OpenAI's `text-embedding-3-small`); the gateway restarts when its models change. The Airflow, semanticd, tools and platformd images are rebuilt. On Compose, nothing to set.
+
 ### Added
 - **The Governance page** (12.9, R12.20, R12.21): every project at once, to the administrators (Administration → Governance), the products' certifiers and the data-protection approvers (`/governance`): what waits for an approval (agents, deliveries, requests for a data product) and for whom, every agent with its owner, approval, tools, schedule and spend against its budget, what each project's readers may see (their tables, row filters and masks) and its tables of people's data, the data products and whether certified, and the erasures recorded with their deadlines (to those who may see erasures). It reads what exists and changes nothing; each row links to where it's decided (`GET /api/governance`). Not yet: the install's masks by tag, the models (phase 15), an agent's last run.
 - **The project's model calls** (12.8, R12.18, first part): the Agents tab's *Model calls* card, to the project's editors, lists each call of its gateway keys (the project's and its agents') over the last day, week or month: when, whose key, who asked (the person or the agent's account), the model and whether a chat or embeddings, tokens, cost, seconds and outcome, with the totals by person and by model (`GET /api/projects/{name}/llm/calls?days=`). Read from LiteLLM's own records of each call (its spend logs), so nothing new runs: never the question or the answer. Langfuse, for prompts by version and traces, stays an option the platform doesn't need for this. The stand-in keeps the same records; the `gateway` suite checks a call shows.
