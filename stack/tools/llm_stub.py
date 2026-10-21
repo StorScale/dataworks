@@ -5,7 +5,8 @@ key that it enforces.
   POST /key/generate   {key_alias, max_budget, metadata}  -> {key}      (the master key)
   POST /key/delete     {keys: [...]}                                     (the master key)
   GET  /key/info?key=  -> {info: {key_alias, max_budget, spend, metadata}} (the master key, or the key itself)
-  GET  /key/list       -> {keys: [{key, key_alias, max_budget, spend}]}  (the master key)
+  GET  /key/list       -> {keys: [{key, token, key_alias, max_budget, spend}], total_pages: 1}  (the master key; LiteLLM's
+                       return_full_object, size and page are taken and ignored: one page, the whole objects, the key as its token too)
   POST /chat/completions, /v1/chat/completions  (a key): an answer that repeats the question; each call
                        costs 0.01 per 100 characters, and a key past its budget gets HTTP 400 as LiteLLM gives it;
                        a question carrying what may not leave (llm_guard: a masked value's shape, a secret)
@@ -88,7 +89,7 @@ class Handler(BaseHTTPRequestHandler):
             if tok != MASTER:
                 return self.answer(401, {"error": {"message": "Authentication Error: not the master key"}})
             with lock:
-                return self.answer(200, {"keys": [{"key": k, **v} for k, v in keys.items()]})
+                return self.answer(200, {"keys": [{"key": k, "token": k, **v} for k, v in keys.items()], "total_count": len(keys), "total_pages": 1})
         self.answer(404, {"error": {"message": "no such route"}})
 
     def do_POST(self):

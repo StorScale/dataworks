@@ -25,7 +25,8 @@ type Gateway struct {
 
 // GatewayKey is a key as the gateway lists it.
 type GatewayKey struct {
-	Key       string         `json:"key"`
+	Key       string         `json:"key"`   // the stand-in lists the key itself
+	Token     string         `json:"token"` // LiteLLM lists its hash, which its key API takes in the key's place
 	Alias     string         `json:"key_alias"`
 	MaxBudget *float64       `json:"max_budget"`
 	Spend     float64        `json:"spend"`
@@ -95,15 +96,32 @@ func (g *Gateway) Info(ctx context.Context, key string) (*GatewayKey, error) {
 	return &out.Info, nil
 }
 
-// List is every key the gateway has (the stand-in's and LiteLLM's /key/list).
+// ID is what names the key to the gateway's key API: the key, or LiteLLM's hash of it.
+func (k GatewayKey) ID() string {
+	if k.Key != "" {
+		return k.Key
+	}
+	return k.Token
+}
+
+// List is every key the gateway has (the stand-in's and LiteLLM's /key/list):
+// the whole objects, a page at a time (LiteLLM pages its list, 100 at most).
 func (g *Gateway) List(ctx context.Context) ([]GatewayKey, error) {
-	var out struct {
-		Keys []GatewayKey `json:"keys"`
+	var all []GatewayKey
+	for page := 1; page < 1000; page++ {
+		var out struct {
+			Keys       []GatewayKey `json:"keys"`
+			TotalPages int          `json:"total_pages"`
+		}
+		if err := g.call(ctx, "GET", fmt.Sprintf("/key/list?return_full_object=true&size=100&page=%d", page), nil, &out); err != nil {
+			return nil, err
+		}
+		all = append(all, out.Keys...)
+		if page >= out.TotalPages || len(out.Keys) == 0 {
+			break
+		}
 	}
-	if err := g.call(ctx, "GET", "/key/list", nil, &out); err != nil {
-		return nil, err
-	}
-	return out.Keys, nil
+	return all, nil
 }
 
 // KeyAlias names a project's key, or an agent's, at the gateway.
