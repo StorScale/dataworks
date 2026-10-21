@@ -276,7 +276,7 @@ type flowView struct {
 }
 
 func viewOf(c *flow.Compiled) flowView {
-	v := flowView{Flow: c.Flow, Order: c.Order, Steps: c.Steps, Errors: c.Errors()}
+	v := flowView{Flow: c.Flow, Order: c.Order, Steps: c.Steps, Errors: c.Errors(), Processors: flow.Processors()}
 	if v.Errors == nil {
 		v.Errors = []string{}
 	}
@@ -440,7 +440,7 @@ func (s *server) handleFlowView(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v := viewOf(c)
-	v.Branch, v.DbtPath, v.Processors = branch, dbtDir(p), flow.Processors()
+	v.Branch, v.DbtPath = branch, dbtDir(p)
 	if branch != "" {
 		if mrs, err := gl.OpenMergeRequests(ctx, target); err == nil {
 			for _, mr := range mrs {

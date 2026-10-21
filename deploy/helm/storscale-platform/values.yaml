@@ -180,12 +180,15 @@ llm:
   guardrails: true
   litellm:
     image: ghcr.io/berriai/litellm:main-v1.77.3
-    # The models, as LiteLLM names them (model_list): Anthropic's on Microsoft Foundry, say.
+    # The models, as LiteLLM names them (model_list). The platform asks for "default" unless told a
+    # name, so the first is called that. Anthropic's models on Microsoft Foundry answer the Anthropic
+    # Messages API at https://<resource>.openai.azure.com/anthropic (or <resource>.services.ai.azure.com),
+    # which LiteLLM's anthropic provider speaks: model anthropic/<deployment>, that address as api_base.
     models:
-      - model_name: claude
+      - model_name: default
         litellm_params:
-          model: azure_ai/claude-sonnet-4-5
-          api_base: ""          # the Foundry resource's endpoint
+          model: anthropic/claude-opus-5
+          api_base: ""          # https://<resource>.openai.azure.com/anthropic
           api_key: os.environ/LLM_PROVIDER_KEY
 
 # Erasure (use case 6.9): how many days the company has to answer a request to
