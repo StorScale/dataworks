@@ -41,11 +41,23 @@ type Table struct {
 	Columns     []Column `json:"columns"`
 	Checks      []Check  `json:"checks"`
 	External    bool     `json:"external,omitempty"` // in the flow, but not the project's
+	Rows        *int64   `json:"rows,omitempty"`     // the profiler's count, when it has run (6.11)
+	ProfiledAt  int64    `json:"profiledAt,omitempty"`
 }
 
 type Column struct {
-	Name string `json:"name"`
-	Type string `json:"type"` // as the catalog shows it: bigint, varchar, decimal(10,2)
+	Name    string         `json:"name"`
+	Type    string         `json:"type"` // as the catalog shows it: bigint, varchar, decimal(10,2)
+	Profile *ColumnProfile `json:"profile,omitempty"`
+}
+
+// A ColumnProfile is what the catalog's profiler found in a column.
+type ColumnProfile struct {
+	NullProportion *float64 `json:"nulls,omitempty"`    // 0 to 1
+	Distinct       *float64 `json:"distinct,omitempty"` // distinct values
+	Min            any      `json:"min,omitempty"`
+	Max            any      `json:"max,omitempty"`
+	Mean           *float64 `json:"mean,omitempty"`
 }
 
 type Check struct {
@@ -187,6 +199,7 @@ func (c *Client) Flow(ctx context.Context, trinoCatalog, namespace string) (*Flo
 		if tb.Checks, err = c.checks(ctx, t.FQN); err != nil {
 			return nil, err
 		}
+		c.profile(ctx, &tb) // what the profiler found, when it has run
 		flow.Tables = append(flow.Tables, tb)
 	}
 	seen := map[string]bool{}
@@ -284,6 +297,42 @@ func (c *Client) checks(ctx context.Context, fqn string) ([]Check, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
+}
+
+// profile adds the table's latest profile (its row count, each column's
+// nulls, distinct values, min, max and mean) when the profiler has run;
+// without one the table is as it was.
+func (c *Client) profile(ctx context.Context, tb *Table) {
+	var res struct {
+		Profile *struct {
+			RowCount  *int64 `json:"rowCount"`
+			Timestamp int64  `json:"timestamp"`
+		} `json:"profile"`
+		Columns []struct {
+			Name    string `json:"name"`
+			Profile *struct {
+				NullProportion *float64 `json:"nullProportion"`
+				DistinctCount  *float64 `json:"distinctCount"`
+				Min            any      `json:"min"`
+				Max            any      `json:"max"`
+				Mean           *float64 `json:"mean"`
+			} `json:"profile"`
+		} `json:"columns"`
+	}
+	if err := c.get(ctx, "/tables/"+url.PathEscape(tb.FQN)+"/tableProfile/latest?includeColumnProfile=true", &res); err != nil || res.Profile == nil {
+		return
+	}
+	tb.Rows, tb.ProfiledAt = res.Profile.RowCount, res.Profile.Timestamp
+	byName := map[string]*ColumnProfile{}
+	for _, col := range res.Columns {
+		if col.Profile != nil {
+			byName[col.Name] = &ColumnProfile{NullProportion: col.Profile.NullProportion, Distinct: col.Profile.DistinctCount,
+				Min: col.Profile.Min, Max: col.Profile.Max, Mean: col.Profile.Mean}
+		}
+	}
+	for i := range tb.Columns {
+		tb.Columns[i].Profile = byName[tb.Columns[i].Name]
+	}
 }
 
 func lastPart(fqn string) string {

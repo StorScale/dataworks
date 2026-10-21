@@ -35,6 +35,7 @@ import classify
 import requests
 from metadata.workflow.data_quality import TestSuiteWorkflow
 from metadata.workflow.metadata import MetadataWorkflow
+from metadata.workflow.profiler import ProfilerWorkflow
 
 logging.basicConfig(level=logging.INFO, format="catalog-sync: %(message)s")
 log = logging.getLogger("catalog-sync")
@@ -53,6 +54,7 @@ SERVICE = "trino"
 EVERY = int(env.get("SYNC_EVERY", "20"))
 METADATA_EVERY = int(env.get("METADATA_EVERY", "60"))
 CLASSIFY_EVERY = int(env.get("CLASSIFY_EVERY", "120"))   # where personal data is (use case 12.5)
+PROFILE_EVERY = int(env.get("PROFILE_EVERY", "3600"))    # what each table holds (6.11): a table is profiled when it has no profile, or one this old
 CHECKS = {  # a project's check -> OpenMetadata's test definition
     "unique": "columnValuesToBeUnique",
     "notNull": "columnValuesToBeNotNull",
@@ -472,6 +474,40 @@ def run_checks(token):
             workflow.stop()
 
 
+def profile_tables(token):
+    """Each project's tables that have no profile, or one older than
+    PROFILE_EVERY, profiled by OpenMetadata's profiler as the catalog's Trino
+    account (row counts; each column's nulls, distinct values, min, max,
+    mean), for the Data page and the catalog's own pages (use case 6.11)."""
+    h = {"Authorization": f"Bearer {token}"}
+    stale = (time.time() - PROFILE_EVERY) * 1000
+    for p in projects():
+        tables = p["spec"].get("tables") or {}
+        namespace = tables.get("namespace") or p["metadata"]["name"].replace("-", "_")
+        catalog = tables.get("catalog") or "iceberg"
+        r = requests.get(f"{OM}/v1/tables", headers=h, timeout=30,
+                         params={"databaseSchema": f"{SERVICE}.{catalog}.{namespace}", "fields": "profile", "limit": 200})
+        if not r.ok:
+            continue
+        due = [t["name"] for t in r.json().get("data", []) if not t.get("deleted") and ((t.get("profile") or {}).get("timestamp") or 0) < stale]
+        if not due:
+            continue
+        workflow = ProfilerWorkflow.create({
+            "source": {"type": "trino", "serviceName": SERVICE, "serviceConnection": trino_connection(catalog),
+                       "sourceConfig": {"config": {"type": "Profiler", "computeTableMetrics": True, "computeColumnMetrics": True,
+                                                   "profileSampleConfig": {"profileSampleType": "PERCENTAGE", "profileSample": 100},
+                                                   "databaseFilterPattern": {"includes": [f"^{catalog}$"]},
+                                                   "schemaFilterPattern": {"includes": [f"^{namespace}$"]},
+                                                   "tableFilterPattern": {"includes": [f"^{t}$" for t in due]}}}},
+            "processor": {"type": "orm-profiler", "config": {}},
+            "sink": {"type": "metadata-rest", "config": {}},
+            "workflowConfig": server_config(token),
+        })
+        workflow.execute()
+        workflow.stop()
+        log.info("profiled %s: %s", namespace, ", ".join(due))
+
+
 def lineage_settings():
     """Pipelines that report lineage (OpenLineage) belong to the service "airflow"."""
     h = admin_headers()
@@ -573,6 +609,10 @@ def main():
                     log.warning("classification: %s", e)
                 last_classified = time.time()
             run_checks(token)
+            try:
+                profile_tables(token)
+            except Exception as e:  # noqa: BLE001 (the next round tries again)
+                log.warning("profiling: %s", e)
             with open("/catalog/ready", "w") as f:
                 f.write(str(time.time()))
         except Exception as e:  # noqa: BLE001 (keep going: the next round may work)
