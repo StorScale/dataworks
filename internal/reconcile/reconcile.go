@@ -243,6 +243,16 @@ func (r *Reconciler) Delete(ctx context.Context, p *project.Project) error {
 		}
 		keep(r.Nessie.syncTags(ctx, &gone))
 	}
+	// Last, its connections: the credentials it kept (repos' tokens, sources'
+	// passwords, agents' secrets, its gateway keys), which nothing reads now.
+	// Its tables and files stay; its credentials don't outlive it.
+	if cs, err := r.Store.Connections(ctx, p.Metadata.Name); err == nil {
+		for _, c := range cs {
+			keep(r.Store.DeleteConnection(ctx, p.Metadata.Name, c.Name))
+		}
+	} else {
+		keep(err)
+	}
 	if len(errs) > 0 {
 		return fmt.Errorf("%v", errs)
 	}

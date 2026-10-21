@@ -622,7 +622,7 @@ A first-principles look at the code after phase 11 found the architecture sound 
 
 **Who.** The project's members see the list: each one's name, kind, the values that aren't secret, who added and changed it, and what in the spec uses it. Its editors (and administrators) add one, whose name starts with the project's and a dash (`sales-dags`), so it can't be the platform's own Secret or another project's (and one whose name is taken by something not the project's is refused); give one new values (a secret left empty stays as it was: rotating is pasting the new one), after which the operator applies the project at once; and remove one the spec doesn't name (one it names says by what). Each change is in the audit log, never with a value.
 
-**Left:** connections stay when their project is removed (a project made again with the same name finds them); the platform's own Secrets aren't on any tab.
+**Left:** the platform's own Secrets aren't on any tab. (Connections went with their project from 2026-10-21: before, they stayed, and a project made again with the same name found them.)
 
 ### The project as code, from development to production (use case 7.4), how (design, 2026-10-18)
 
