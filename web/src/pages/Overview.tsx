@@ -195,7 +195,7 @@ export default function Overview() {
                 <Link className="btn" to="edit" data-testid="edit-project">Edit project</Link>
                 {confirm ? (
                   <>
-                    <span className="small">Delete {name}? Its access goes; its data stays.</span>
+                    <span className="small">Delete {name}? Its access and the credentials it keeps go; its data stays.</span>
                     <button className="btn danger" onClick={remove} data-testid="confirm-delete">Delete</button>
                     <button className="btn" onClick={() => setConfirm(false)}>Cancel</button>
                   </>
