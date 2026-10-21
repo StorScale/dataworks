@@ -590,8 +590,8 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 3. sam's assistant asks `search_documents` for "early termination terms"; the answer cites the passages, from documents sam may read. A canvas step enriches each ticket with the nearest contract clause.
 
 **Requirements**
-- R12.12 Knowledge banks per project (`spec.knowledge`): bucket prefixes and table columns, embedded through the gateway on the project's key, kept in pgvector in the platform's Postgres, refreshed as the sources change. (Built 2026-10-21 for table columns, kept as an Iceberg table in the project's namespace and searched with Trino's cosine similarity, not pgvector; files and scheduled rebuilds left.)
-- R12.13 A `search_documents` MCP tool and a canvas step (nearest passages for a column), as the person or agent, under the project's access; answers cite the passages. (The tool built 2026-10-21; the canvas step left.)
+- R12.12 Knowledge banks per project (`spec.knowledge`): bucket prefixes and table columns, embedded through the gateway on the project's key, kept in pgvector in the platform's Postgres, refreshed as the sources change. (Built 2026-10-21 for table columns, kept as an Iceberg table in the project's namespace and searched with Trino's cosine similarity, not pgvector; then text files under a folder of the project's bucket (.txt, .md, .html), and rebuilt on a schedule as the project's pipelines. PDFs left.)
+- R12.13 A `search_documents` MCP tool and a canvas step (nearest passages for a column), as the person or agent, under the project's access; answers cite the passages. (Built 2026-10-21: the tool, and the canvas step as the llm step's mode `nearest`, the passage and its source two new columns.)
 - R12.14 A Q&A app over a knowledge bank and the semantic layer (14.1's apps), as the person.
 
 ### 12.7 An agent without a notebook (added 2026-10-20)
@@ -602,8 +602,8 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 
 **Requirements**
 - R12.15 An agent run by the platform's runner from its prompt, tools and schedule (semanticd's loop over the gateway and the MCP server, as the agent), its run kept as its record; the Agents tab's form is all of it. (Built 2026-10-21: the runner runs in the project's Airflow, `storscale.agent`, the transcript kept as the run's record.)
-- R12.16 An approved agent as a tool of another (`agent:<project>/<name>`), audited as both.
-- R12.17 A project's own connector tools: an OpenAPI operation and the connection it signs in with, declared in the project, served by the MCP server to the agents given it.
+- R12.16 An approved agent as a tool of another (`agent:<project>/<name>`), audited as both. (Built 2026-10-21: the MCP tool `ask_agent`; platformd runs the agent asked as itself and records `agent.asked` naming both; an agent asked isn't given `ask_agent`, so asking can't loop.)
+- R12.17 A project's own connector tools: an OpenAPI operation and the connection it signs in with, declared in the project, served by the MCP server to the agents given it. (Built 2026-10-21: `spec.tools`, each a method, path and parameters with an API connection; `list_tools` and `call_tool`; platformd calls the API, so the token never reaches the agent. Reading an OpenAPI document for them left.)
 
 ### 12.8 What the models are doing (added 2026-10-20)
 
@@ -620,8 +620,8 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 2. An administrator opens **Agents** (platform-wide): every project's agents, their owners, approval, tools, spend and last run.
 
 **Requirements**
-- R12.20 A Governance page for administrators and the governance group, reading what exists: approvals pending, policies, agents, models, erasures. (Built 2026-10-21: approvals pending, readers' rules per project, agents, products, erasures; the masks by tag and the models left.)
-- R12.21 A platform-wide Agents page. (Built 2026-10-21 as the Governance page's Agents table: owner, approval, tools, schedule, spend; the last run left.)
+- R12.20 A Governance page for administrators and the governance group, reading what exists: approvals pending, policies, agents, models, erasures. (Built 2026-10-21: approvals pending, readers' rules per project, the install's masks by tag and each project's tagged columns, agents, products, erasures; the models left, with phase 15.)
+- R12.21 A platform-wide Agents page. (Built 2026-10-21 as the Governance page's Agents table: owner, approval, tools, schedule, last run, spend.)
 
 ---
 

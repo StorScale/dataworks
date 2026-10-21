@@ -264,6 +264,8 @@ services:
     restart: unless-stopped
     image: ${PLATFORMD_IMAGE}
     environment:
+      # What the catalog's Protection tags mean, as the operator applies them: shown on the Governance page (12.9).
+      PROTECTION_TAGS: '{"personal": {"mask": "MASK_HASH", "except": ["engineers"]}, "financial": {"mask": "MASK", "except": ["engineers"]}, "health": {"mask": "MASK_NULL", "except": ["engineers"]}}'
       # The Health page, and alerts (where the platform's Secret storscale-alerts says).
       HEALTH: "on"
       GATEWAY_HEALTH_URL: http://gateway:${STORSCALE_PORT}/healthz

@@ -38,7 +38,7 @@ export default function Governance() {
           <h2>Agents</h2>
           {data.agents.length === 0 ? <p className="muted">No project has an agent.</p> : (
             <table className="t" data-testid="governance-agents">
-              <thead><tr><th>Project</th><th>Agent</th><th>Owner</th><th>Tools</th><th>Runs</th><th>Spend</th></tr></thead>
+              <thead><tr><th>Project</th><th>Agent</th><th>Owner</th><th>Tools</th><th>Runs</th><th>Last run</th><th>Spend</th></tr></thead>
               <tbody>
                 {data.agents.map((a) => (
                   <tr key={a.project + "/" + a.name}>
@@ -47,6 +47,7 @@ export default function Governance() {
                     <td>{a.owner}</td>
                     <td className="small mono">{a.tools.join(", ")}</td>
                     <td className="small">{a.runs ?? <span className="muted">when asked</span>}</td>
+                    <td className="small">{a.lastRun ? <><span className={`pill ${a.lastRun.state === "failed" ? "red" : ""}`}>{a.lastRun.state}</span> {a.lastRun.started && new Date(a.lastRun.started).toLocaleString()}</> : <span className="muted">–</span>}</td>
                     <td className="small">${a.spend.toFixed(2)}{a.budget > 0 && <span className="muted"> of ${a.budget.toFixed(2)}</span>}</td>
                   </tr>
                 ))}
@@ -55,8 +56,16 @@ export default function Governance() {
           )}
 
           <h2>What readers see</h2>
+          <p className="small muted" style={{ margin: 0 }}>
+            Across the platform, a column the catalog tags is masked by the install's rule for the tag{data.suggestedApplied ? ", suggested or confirmed" : ", once a person confirms it"}:
+          </p>
+          <table className="t" data-testid="governance-tag-rules">
+            <thead><tr><th>Tag</th><th>Mask</th><th>Who sees it as it is</th></tr></thead>
+            <tbody>{data.tagRules.map((t) => <tr key={t.tag}><td><span className="pill">{t.tag}</span></td><td className="mono small">{t.mask}</td>
+              <td className="small">{t.except.join(", ") || <span className="muted">no one</span>}</td></tr>)}</tbody>
+          </table>
           <table className="t" data-testid="governance-rules">
-            <thead><tr><th>Project</th><th>Readers</th><th>Only these tables</th><th>Rows</th><th>Masked</th><th>People's data</th></tr></thead>
+            <thead><tr><th>Project</th><th>Readers</th><th>Only these tables</th><th>Rows</th><th>Masked</th><th>Tagged</th><th>People's data</th></tr></thead>
             <tbody>
               {data.rules.map((r) => (
                 <tr key={r.project}>
@@ -65,6 +74,7 @@ export default function Governance() {
                   <td className="small mono">{r.tables?.join(", ") || <span className="muted">all</span>}</td>
                   <td className="small mono">{r.rowFilters?.map((f) => <div key={f}>{f}</div>) ?? <span className="muted">all</span>}</td>
                   <td className="small mono">{r.masks?.map((m) => <div key={m}>{m}</div>) ?? <span className="muted">none</span>}</td>
+                  <td className="small mono">{r.tagged?.map((m) => <div key={m}>{m}</div>) ?? <span className="muted">none</span>}</td>
                   <td className="small mono">{r.people?.join(", ") ?? <span className="muted">none</span>}</td>
                 </tr>
               ))}

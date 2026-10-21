@@ -55,6 +55,15 @@ func (s *server) askLLMStep(ctx context.Context, token, who string, p *project.P
 		return nil, code, err
 	}
 	asker := &flow.GatewayAsker{URL: conn["llmUrl"], Key: conn["llmKey"], User: who}
+	if st.Mode == "nearest" {
+		res, err := s.nearestPassages(ctx, token, p, asker, st, ans.Columns, ans.Rows)
+		if err != nil {
+			return nil, http.StatusUnprocessableEntity, err
+		}
+		return &llmAnswered{Columns: append(append([]string{}, ans.Columns...), st.Name, st.Name+"_source"),
+			Types:  append(append([]string{}, ans.Types...), "varchar", "varchar"),
+			Result: res, SQL: sql, Seconds: time.Since(started).Seconds(), Sampled: sampled(c, st.Inputs[0], sample)}, 200, nil
+	}
 	res, err := flow.LLMApply(ctx, st, ans.Columns, ans.Rows, asker)
 	if err != nil {
 		why := err.Error()

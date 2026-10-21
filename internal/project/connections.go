@@ -49,7 +49,7 @@ var ConnectionKinds = []ConnectionKind{
 		{Key: "instanceUrl", Label: "Instance address (with a session, in place of a user)"}, {Key: "sessionId", Label: "Session", Secret: true},
 		{Key: "caCertificate", Label: "A CA's certificate to trust as well (a proxy that inspects TLS)", Multi: true}},
 		OneOf: []string{"password", "sessionId"}},
-	{Kind: "api", Label: "An API token", For: "rest_api imports", Fields: []ConnectionField{
+	{Kind: "api", Label: "An API token", For: "rest_api imports, and the project's tools (sent as a Bearer)", Fields: []ConnectionField{
 		{Key: "token", Label: "Token", Secret: true, Required: true}}},
 	{Kind: "sftp", Label: "An SFTP server", For: "deliveries' targets", Fields: []ConnectionField{
 		{Key: "host", Label: "Host", Required: true}, {Key: "port", Label: "Port"}, {Key: "username", Label: "User", Required: true},
@@ -136,6 +136,11 @@ func (p *Project) ConnectionUses(name string) []string {
 	for _, d := range s.Deliveries {
 		if d.Target == name || d.PGP == name {
 			out = append(out, "delivery "+d.Name)
+		}
+	}
+	for _, t := range s.Tools {
+		if t.Connection == name {
+			out = append(out, "tool "+t.Name)
 		}
 	}
 	return out

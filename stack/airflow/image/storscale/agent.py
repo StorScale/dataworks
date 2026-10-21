@@ -32,7 +32,7 @@ class MCP:
 
     def rpc(self, method, params=None):
         self.n += 1
-        r = requests.post(self.url, timeout=120, json={"jsonrpc": "2.0", "id": self.n, "method": method, **({"params": params} if params else {})},
+        r = requests.post(self.url, timeout=720, json={"jsonrpc": "2.0", "id": self.n, "method": method, **({"params": params} if params else {})},
                           headers={"Accept": "application/json, text/event-stream", "Authorization": f"Bearer {self.get_token()}"})
         r.raise_for_status()
         return r.json()

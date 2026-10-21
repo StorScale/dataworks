@@ -74,6 +74,7 @@ export type Spec = {
   sources?: Source[];
   imports?: Import[];
   deliveries?: { name: string }[];
+  knowledge?: { name: string; description?: string }[];
 };
 // An application's data (or a database's, by a cursor), copied into the project's tables on a schedule (dlt).
 export type APIResource = { name: string; path: string; dataSelector?: string; primaryKey?: string; cursor?: string; cursorParam?: string; cursorStart?: string };
@@ -375,7 +376,7 @@ export type FlowStep = {
   unpivot?: string[]; name?: string;
   windows?: { function: string; column?: string; as: string; offset?: number }[];
   processors?: FlowProcessor[];
-  prompt?: string; mode?: string; limit?: number;
+  prompt?: string; mode?: string; bank?: string; limit?: number;
   checks?: { column: string; test: string; values?: string[] }[];
   metrics?: string[]; sql?: string; x: number; y: number;
 };
@@ -427,14 +428,14 @@ export type AgentView = {
   registeredBy?: string; registeredAt?: string; approvedBy?: string; approvedAt?: string;
   clientId: string; connection: string; approved: boolean; mcpUrl: string; dag?: string;
 };
-export const getAgents = (name: string) => api<{ agents: AgentView[]; tools: string[]; canEdit: boolean }>("GET", `/api/projects/${encodeURIComponent(name)}/agents`);
+export const getAgents = (name: string) => api<{ agents: AgentView[]; tools: string[]; grants?: string[]; canEdit: boolean }>("GET", `/api/projects/${encodeURIComponent(name)}/agents`);
 export const putAgent = (name: string, a: { name: string; description?: string; owner: string; tools?: string[]; schedule?: string; notebook?: string; prompt?: string; budget?: number }) =>
   api<AgentView[]>("PUT", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(a.name)}`, { description: a.description, owner: a.owner, tools: a.tools, schedule: a.schedule, notebook: a.notebook, prompt: a.prompt, budget: a.budget || undefined });
-export type KnowledgeBank = { name: string; description?: string; tables: { table: string; column: string; id: string }[]; table: string; chunks?: number };
+export type KnowledgeBank = { name: string; description?: string; tables?: { table: string; column: string; id: string }[]; files?: { prefix: string }[]; schedule?: string; table: string; chunks?: number };
 export type KnowledgeHit = { source: string; ref: string; text: string; score: number };
 const knowledgePath = (name: string) => `/api/projects/${encodeURIComponent(name)}/knowledge`;
 export const getKnowledge = (name: string) => api<{ banks: KnowledgeBank[]; canBuild: boolean }>("GET", knowledgePath(name));
-export const buildKnowledge = (name: string, bank: string) => api<{ table: string; chunks: number; cost: number }>("POST", `${knowledgePath(name)}/${encodeURIComponent(bank)}/build`, {});
+export const buildKnowledge = (name: string, bank: string) => api<{ table: string; chunks: number; files?: number; skipped?: number; cost: number }>("POST", `${knowledgePath(name)}/${encodeURIComponent(bank)}/build`, {});
 export const searchKnowledge = (name: string, bank: string, query: string, k = 5) =>
   api<{ hits: KnowledgeHit[]; cost: number }>("POST", `${knowledgePath(name)}/${encodeURIComponent(bank)}/search`, { query, k });
 export type LLMCall = { at: string; who: string; user: string; kind: string; model: string; tokens: number; cost: number; seconds: number; status: string };
@@ -452,8 +453,10 @@ export const removeAgent = (name: string, agent: string) => api<void>("DELETE", 
 export type Governance = {
   summary: string;
   pending: { project: string; kind: "agent" | "delivery" | "access"; name: string; waits: string; since?: string; link: string }[];
-  agents: { project: string; name: string; owner: string; approved: boolean; tools: string[]; runs?: string; budget: number; spend: number }[];
-  rules: { project: string; readers: string[]; tables?: string[]; rowFilters?: string[]; masks?: string[]; people?: string[] }[];
+  agents: { project: string; name: string; owner: string; approved: boolean; tools: string[]; runs?: string; budget: number; spend: number; lastRun?: { state: string; started: string } }[];
+  rules: { project: string; readers: string[]; tables?: string[]; rowFilters?: string[]; masks?: string[]; people?: string[]; tagged?: string[] }[];
+  tagRules: { tag: string; mask: string; except: string[] }[];
+  suggestedApplied: boolean;
   products: { project: string; name: string; owner: string; certified: boolean; consumers: string[] }[];
   erasures: { project: string; id: string; at: string; dueBy: string; by: string; errors: number }[];
 };

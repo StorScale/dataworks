@@ -26,7 +26,7 @@ const label = (kind: string) => KINDS.find((k) => k[0] === kind)?.[1] ?? (kind =
 const AGGREGATES = ["sum", "count", "min", "max", "avg", "count_distinct"];
 const WINDOWS = ["rank", "dense_rank", "row_number", "running_sum", "sum", "avg", "min", "max", "count", "lag", "lead"];
 const UNITS = ["year", "quarter", "month", "week", "day", "hour"];
-const LLM_MODES: [string, string][] = [["classify", "Classify into labels"], ["extract", "Extract"], ["summarize", "Summarize"]];
+const LLM_MODES: [string, string][] = [["classify", "Classify into labels"], ["extract", "Extract"], ["summarize", "Summarize"], ["nearest", "Nearest passage in a knowledge bank"]];
 const GROUPS: [string, string][] = [["text", "Text"], ["nulls", "Nulls"], ["numbers", "Numbers"], ["dates", "Dates"], ["flags", "Flags and values"]];
 const TESTS = ["not_null", "unique", "accepted_values"];
 const TYPES = ["varchar", "bigint", "integer", "double", "decimal(10,2)", "boolean", "date", "timestamp", "timestamp(6)"];
@@ -384,6 +384,7 @@ const tableKey = (t: { table?: string; namespace?: string } | FlowTable) =>
   "fqn" in t ? (t.external ? `${t.fqn.split(".")[1]}.${t.name}` : t.name) : t.namespace ? `${t.namespace}.${t.table ?? ""}` : t.table ?? "";
 
 function Settings({ step, steps, inputs, canEdit, update, remove, tables, metrics, processors }: SettingsProps) {
+  const { view } = useProject();
   const set = (patch: Partial<FlowStep>) => update({ ...step, ...patch });
   const ro = !canEdit;
   const cols = inputs[0] ?? [];
@@ -560,10 +561,13 @@ function Settings({ step, steps, inputs, canEdit, update, remove, tables, metric
         <label>Column<ColumnPick value={step.column} onChange={(column) => set({ column })} /></label>
         <label>What to do<select value={step.mode ?? ""} disabled={ro} onChange={(e) => set({ mode: e.target.value })} data-testid="llm-mode">
           <option value="">mode…</option>{LLM_MODES.map(([m, l]) => <option key={m} value={m}>{l}</option>)}</select></label>
+        {step.mode === "nearest" && <label>Knowledge bank<select value={step.bank ?? ""} disabled={ro} onChange={(e) => set({ bank: e.target.value || undefined })} data-testid="llm-bank">
+          <option value="">bank…</option>{(view?.spec?.spec.knowledge ?? []).map((k) => <option key={k.name} value={k.name}>{k.name}</option>)}</select>
+          <span className="small muted">Each value is embedded and searched in the bank, as the flow's runner: the closest passage is the answer column, and where it's from the column of that name with _source.</span></label>}
         {step.mode === "classify" && <label>Labels, comma-separated<input value={(step.values ?? []).join(", ")} readOnly={ro} placeholder="billing, delivery, product"
           onChange={(e) => set({ values: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })} data-testid="llm-labels" /></label>}
-        <label>{step.mode === "extract" ? "What to extract" : "Instructions (optional)"}<textarea value={step.prompt ?? ""} readOnly={ro} rows={2} onChange={(e) => set({ prompt: e.target.value || undefined })}
-          placeholder={step.mode === "extract" ? "the product name the complaint is about" : "Billing is about invoices and payments; delivery about shipping."} data-testid="llm-prompt" /></label>
+        {step.mode !== "nearest" && <label>{step.mode === "extract" ? "What to extract" : "Instructions (optional)"}<textarea value={step.prompt ?? ""} readOnly={ro} rows={2} onChange={(e) => set({ prompt: e.target.value || undefined })}
+          placeholder={step.mode === "extract" ? "the product name the complaint is about" : "Billing is about invoices and payments; delivery about shipping."} data-testid="llm-prompt" /></label>}
         <div className="row">
           <label>Answer column<input value={step.name ?? ""} readOnly={ro} placeholder="category" onChange={(e) => set({ name: e.target.value })} data-testid="llm-name" /></label>
           <label>Rows a run, at most<input type="number" value={step.limit ?? ""} readOnly={ro} placeholder="1000" min={1} max={1000} onChange={(e) => set({ limit: e.target.value ? Number(e.target.value) : undefined })} style={{ width: 90 }} /></label>

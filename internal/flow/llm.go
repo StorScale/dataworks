@@ -21,8 +21,9 @@ import (
 // answers as a table in the project's namespace, which the step's dbt
 // model reads as a source; the DAG asks before it builds.
 
-// The modes.
-var LLMModes = []string{"classify", "extract", "summarize"}
+// The modes. nearest isn't a question: each value is embedded and searched
+// in a knowledge bank of the project's (12.6), for the closest passage.
+var LLMModes = []string{"classify", "extract", "summarize", "nearest"}
 
 const (
 	llmBatch    = 20   // rows a question carries
@@ -34,7 +35,7 @@ const (
 // and the answer's. Its SQL reads the table the platform writes.
 func compileLLM(s *Step, in []Column, env Env, r refs) ([]Column, string, error) {
 	if !slices.Contains(LLMModes, s.Mode) {
-		return nil, "", fmt.Errorf("an llm step's mode is classify, extract or summarize, not %q", s.Mode)
+		return nil, "", fmt.Errorf("an llm step's mode is classify, extract, summarize or nearest, not %q", s.Mode)
 	}
 	if _, err := need(in, s.Column, "llm"); err != nil {
 		return nil, "", err
@@ -59,6 +60,13 @@ func compileLLM(s *Step, in []Column, env Env, r refs) ([]Column, string, error)
 		if strings.TrimSpace(s.Prompt) == "" {
 			return nil, "", fmt.Errorf("extract needs a prompt saying what to extract")
 		}
+	case "nearest":
+		if !NameOK(s.Bank) {
+			return nil, "", fmt.Errorf("nearest needs the knowledge bank to search (bank)")
+		}
+		if _, dup := find(in, s.Name+"_source"); dup {
+			return nil, "", fmt.Errorf("the input already has a column %s_source", s.Name)
+		}
 	}
 	if s.Limit < 0 || s.Limit > llmMaxRows {
 		return nil, "", fmt.Errorf("an llm step reads at most %d rows a run (filter first)", llmMaxRows)
@@ -73,6 +81,9 @@ func compileLLM(s *Step, in []Column, env Env, r refs) ([]Column, string, error)
 		s.Table = ModelName(r.flow, s)
 	}
 	out := append(slices.Clone(in), Column{Name: s.Name, Type: "varchar"})
+	if s.Mode == "nearest" {
+		out = append(out, Column{Name: s.Name + "_source", Type: "varchar"})
+	}
 	return out, "select * from " + r.table(s), nil
 }
 
@@ -344,4 +355,62 @@ func Chunks(text string, size int) []string {
 		out = append(out, text)
 	}
 	return out
+}
+
+// Chat is one round of a conversation with tools (an agent's, 12.7): the
+// messages so far and the tools the model may call, in the gateway's
+// (OpenAI's) shape; the model's message back (its content, or the tools it
+// calls) and what it cost.
+func (g *GatewayAsker) Chat(ctx context.Context, messages []map[string]any, tools []map[string]any) (map[string]any, float64, error) {
+	model := g.Model
+	if model == "" {
+		model = "default"
+	}
+	in := map[string]any{"model": model, "user": g.User, "messages": messages}
+	if len(tools) > 0 {
+		in["tools"] = tools
+	}
+	body, _ := json.Marshal(in)
+	req, err := http.NewRequestWithContext(ctx, "POST", strings.TrimSuffix(g.URL, "/")+"/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+g.Key)
+	req.Header.Set("Content-Type", "application/json")
+	client := g.HTTP
+	if client == nil {
+		client = &http.Client{Timeout: 5 * time.Minute}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("the gateway: %w", err)
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if resp.StatusCode != 200 {
+		msg := strings.TrimSpace(string(data))
+		var e struct {
+			Error any `json:"error"`
+		}
+		if json.Unmarshal(data, &e) == nil {
+			if m, ok := e.Error.(map[string]any); ok {
+				if t, ok := m["message"].(string); ok {
+					msg = t
+				}
+			} else if t, ok := e.Error.(string); ok {
+				msg = t
+			}
+		}
+		return nil, 0, fmt.Errorf("the gateway refused (HTTP %d): %s", resp.StatusCode, msg)
+	}
+	var out struct {
+		Choices []struct {
+			Message map[string]any `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil || len(out.Choices) == 0 || out.Choices[0].Message == nil {
+		return nil, 0, fmt.Errorf("the gateway's answer isn't a completion")
+	}
+	cost, _ := strconv.ParseFloat(resp.Header.Get("x-litellm-response-cost"), 64)
+	return out.Choices[0].Message, cost, nil
 }

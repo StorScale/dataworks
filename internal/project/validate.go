@@ -17,7 +17,7 @@ var validators = []func(p *Project, bad func(format string, a ...any)){
 	(*Project).checkMembers, (*Project).checkTables, (*Project).checkFiles, (*Project).checkPipelines,
 	(*Project).productProblems, (*Project).agentProblems, (*Project).checkSemantic, (*Project).checkHistory, (*Project).checkNotify,
 	(*Project).checkSources, (*Project).checkImports, (*Project).checkDeliveries, (*Project).checkLimits, (*Project).checkLLM,
-	(*Project).checkKnowledge,
+	(*Project).checkKnowledge, (*Project).checkTools,
 }
 
 // Validate says what's wrong with a project, all at once.
@@ -432,10 +432,20 @@ func (p *Project) checkKnowledge(bad func(format string, a ...any)) {
 			bad("knowledge %d: a bank's name is lowercase letters, digits and underscores: %q isn't", i+1, k.Name)
 		case seen[k.Name]:
 			bad("knowledge: two banks named %s", k.Name)
-		case len(k.Tables) == 0:
-			bad("knowledge %s: names at least one table's text column", k.Name)
+		case len(k.Tables) == 0 && len(k.Files) == 0:
+			bad("knowledge %s: names at least one table's text column, or a folder of files", k.Name)
+		case k.Schedule != "" && !cronRE.MatchString(k.Schedule):
+			bad("knowledge %s: schedule %q: five cron fields, as 0 3 * * *", k.Name, k.Schedule)
 		}
 		seen[k.Name] = true
+		for j, f := range k.Files {
+			switch {
+			case p.Spec.Files == nil:
+				bad("knowledge %s: files are read from the project's bucket, which it doesn't have (files)", k.Name)
+			case f.Prefix == "" || strings.HasPrefix(f.Prefix, "/") || strings.Contains(f.Prefix, "..") || !strings.HasSuffix(f.Prefix, "/"):
+				bad("knowledge %s, folder %d: a folder of the bucket, ending in /, as landing/docs/", k.Name, j+1)
+			}
+		}
 		for j, t := range k.Tables {
 			if !identifierRE.MatchString(t.Table) || !identifierRE.MatchString(t.Column) || !identifierRE.MatchString(t.ID) {
 				bad("knowledge %s, source %d: a table, its text column and the column that names each row (id)", k.Name, j+1)

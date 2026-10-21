@@ -52,7 +52,18 @@ func (s *server) handleAgents(w http.ResponseWriter, r *http.Request) {
 	if v == nil {
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"agents": s.agentViews(v.Spec), "tools": project.AgentTools,
+	// Beside the MCP server's tools, an agent may be given the project's own
+	// tools and its agents with a prompt (12.7).
+	grants := []string{}
+	for _, t := range v.Spec.Spec.Tools {
+		grants = append(grants, "tool:"+t.Name)
+	}
+	for _, a := range v.Spec.Spec.Agents {
+		if a.Prompt != "" {
+			grants = append(grants, "agent:"+v.Name+"/"+a.Name)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"agents": s.agentViews(v.Spec), "tools": project.AgentTools, "grants": grants,
 		"canEdit": v.Role == project.Editor || s.isAdmin(sess.User)})
 }
 
