@@ -25,6 +25,7 @@ import time
 import requests
 
 from lakekit import check, env, finish
+from projects import wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
 MCP = PLATFORM + "/mcp"
@@ -155,6 +156,26 @@ def main():
     rj = ran.json() if ran.ok else {}
     check("the model's tests run from the platform, and pass", ran.ok and rj.get("failed") == 0 and rj.get("passed", 0) >= 2
           and all(t["passed"] for t in rj.get("tests", [])), (ran.status_code, ran.text[:300]))
+    # A question's test (12.3): the model is asked, through the gateway on the project's key, and its metric call compared.
+    url = f"{PLATFORM}/api/projects/sales"
+    before = bob.get(url, timeout=30).json()["spec"]
+    budgeted = json.loads(json.dumps(before))
+    budgeted["spec"]["llm"] = {"budget": 1}
+    asked_yaml = original + "\n---\ntests:\n  - name: asked_revenue_by_region\n    question: What was revenue by region?\n    metrics: [revenue]\n    group_by: [order__region]\n"
+    try:
+        no_key = bob.post(f"{PLATFORM}/api/projects/sales/semantic/tests", json={"yaml": asked_yaml}, headers={"X-Platform-Request": "1"}, timeout=120).json()
+        q = next((t for t in no_key.get("tests", []) if t["name"] == "asked_revenue_by_region"), {})
+        check("a question's test on a project with no gateway key is skipped, saying why", q.get("skipped") is True and "gateway key" in q.get("why", ""), q)
+        bob.put(url, data=json.dumps(budgeted), timeout=30)
+        conns = lambda: {c["name"] for c in (bob.get(f"{PLATFORM}/api/projects/sales/connections", timeout=30).json() or {}).get("connections", [])}
+        wait(lambda: True if "sales-llm" in conns() else None, 180, every=5)
+        asked = bob.post(f"{PLATFORM}/api/projects/sales/semantic/tests", json={"yaml": asked_yaml}, headers={"X-Platform-Request": "1"}, timeout=300)
+        aj = asked.json() if asked.ok else {}
+        q = next((t for t in aj.get("tests", []) if t["name"] == "asked_revenue_by_region"), {})
+        check("a question's test asks the model through the gateway, and its metric call is the expected one (revenue by order__region)",
+              q.get("passed") is True and q.get("asked", {}).get("metrics") == ["revenue"], (asked.status_code, q))
+    finally:
+        bob.put(url, data=json.dumps(before), timeout=30)
     renamed = original.replace("name: order_count", "name: orders_count")
     refused = bob.put(f"{PLATFORM}/api/projects/sales/semantic", json={"yaml": renamed}, timeout=60)
     check("a change that breaks a test (its metric renamed) is refused, saying which", refused.status_code == 422

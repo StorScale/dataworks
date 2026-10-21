@@ -215,6 +215,7 @@ func (s *server) routes() http.Handler {
 	// What an agent reads of its project with its own token (the MCP server's list_runs, list_alerts).
 	mux.HandleFunc("GET /api/agent/projects/{name}/runs", s.handleAgentRuns)
 	mux.HandleFunc("GET /api/agent/projects/{name}/alerts", s.handleAgentAlerts)
+	mux.HandleFunc("POST /api/agent/projects/{name}/ask", s.handleAgentAsk) // a question to the model, on the project's key (12.3's plain-language tests)
 	mux.HandleFunc("PUT /api/projects/{name}/agents/{agent}", s.handlePutAgent)
 	mux.HandleFunc("POST /api/projects/{name}/agents/{agent}/approve", s.handleApproveAgent)
 	mux.HandleFunc("DELETE /api/projects/{name}/agents/{agent}", s.handleDeleteAgent)
