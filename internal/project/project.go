@@ -465,15 +465,21 @@ type Notify struct {
 // A Check is a data-quality test on one of the project's tables. The catalog
 // runs it, and shows its result on the table.
 type Check struct {
-	Table  string `json:"table"`
-	Column string `json:"column,omitempty"` // for unique and notNull
-	Check  string `json:"check"`            // one of CheckTypes
-	Min    *int64 `json:"min,omitempty"`    // for rowCount
-	Max    *int64 `json:"max,omitempty"`
+	Name      string   `json:"name,omitempty"` // what to call it (a sql check needs one; the others are named by table, column and kind)
+	Table     string   `json:"table"`
+	Column    string   `json:"column,omitempty"` // for unique, notNull, acceptedValues, range, regex, references
+	Check     string   `json:"check"`            // one of CheckTypes
+	Min       *int64   `json:"min,omitempty"`    // rowCount: rows; range: the column's values
+	Max       *int64   `json:"max,omitempty"`
+	Values    []string `json:"values,omitempty"`   // acceptedValues: what the column may hold
+	Pattern   string   `json:"pattern,omitempty"`  // regex: what every value matches
+	RefTable  string   `json:"refTable,omitempty"` // references: the table and column every value is found in
+	RefColumn string   `json:"refColumn,omitempty"`
+	SQL       string   `json:"sql,omitempty"` // sql: a query that must return no rows
 }
 
 // CheckTypes are the checks a project can ask for.
-var CheckTypes = []string{"unique", "notNull", "rowCount"}
+var CheckTypes = []string{"unique", "notNull", "rowCount", "acceptedValues", "range", "regex", "references", "sql"}
 
 // ReaderView narrows what readers see. Editors and pipelines see everything.
 type ReaderView struct {

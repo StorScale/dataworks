@@ -128,19 +128,23 @@ As **bob**, open `retail` → **Edit** and, in the JSON box under `tables`, add:
 "checks": [
   {"table": "uploads_orders", "check": "notNull", "column": "customer_id"},
   {"table": "uploads_orders", "check": "rowCount", "min": 300},
-  {"table": "uploads_customers", "check": "unique", "column": "email"}
+  {"table": "uploads_customers", "check": "unique", "column": "email"},
+  {"table": "uploads_orders", "check": "acceptedValues", "column": "region", "values": ["EU", "US", "APAC"]},
+  {"table": "uploads_orders", "check": "range", "column": "amount", "min": 0, "max": 10000},
+  {"table": "uploads_orders", "check": "references", "column": "customer_id", "refTable": "uploads_customers", "refColumn": "customer_id"},
+  {"table": "uploads_orders", "check": "sql", "name": "no_refund_without_amount", "sql": "SELECT order_id FROM uploads_orders WHERE refunded AND amount <= 0"}
 ],
 "freshness": [{"table": "uploads_orders", "within": "24h"}]
 ```
 
-Save. (The freshness part has a form of its own on the page; checks don't yet.)
+Save. (The freshness part has a form of its own on the page; checks don't yet.) Eight kinds of check exist: `unique`, `notNull`, `rowCount`, `acceptedValues`, `range`, `regex` (every value matches a pattern), `references` (every value is found in another table's column), and `sql` (a query of your own that must return no rows).
 
-1. The platform runs the checks in the catalog every minute. Open **Data** → `uploads_orders` → **Quality**: the three checks, passing, with when they last ran.
+1. The platform runs the checks in the catalog every minute. Open **Data** → `uploads_orders` → **Quality**: its checks, passing, with when they last ran (the test orders' amount of 9,999 is under the range's ceiling; the references check finds every order's customer).
 2. Break one: on the SQL tab, `INSERT INTO uploads_orders (order_id, region, amount, refunded, test) VALUES (307, 'EU', 5.0, false, false)` (no customer). Within a minute **Quality** shows `notNull` on `customer_id` failing ("nullCount=1"), the project's **Overview** lists it as an issue, and the people the project notifies (a Teams channel or email, set on the Edit page) are told. The catalog's own page for the table shows the same test, failed.
 3. Fix it: `DELETE FROM uploads_orders WHERE order_id = 307`. The next round passes, the issue clears, and the channel is told it's resolved.
 4. **Freshness:** `uploads_orders` must change within a day. Tomorrow, if nothing has loaded it, the Overview says it's stale and the channel hears; a load (the import's hourly run writes nothing when nothing changed, so set the window to what the business expects). The same rule is what a data product's contract promises (Lab 12).
 
-**Check:** Quality shows three checks passing again, and the Audit tab shows your insert and delete.
+**Check:** Quality shows every check passing again, and the Audit tab shows your insert and delete.
 
 **What Part I gained:** four files are tables anyone entitled can read, the EU analysts see EU rows and nobody sees an email address they shouldn't, the ERP is one query away without a copy, and the orders table reports its own faults. The shared drive is retired.
 

@@ -57,6 +57,11 @@ CHECKS = {  # a project's check -> OpenMetadata's test definition
     "unique": "columnValuesToBeUnique",
     "notNull": "columnValuesToBeNotNull",
     "rowCount": "tableRowCountToBeBetween",
+    "acceptedValues": "columnValuesToBeInSet",
+    "range": "columnValuesToBeBetween",
+    "regex": "columnValuesToMatchRegex",
+    "references": "tableCustomSQLQuery",   # a query for the values the other table lacks
+    "sql": "tableCustomSQLQuery",          # the project's own query, which must return no rows
 }
 
 
@@ -407,15 +412,38 @@ def import_lineage():
                     log.warning("lineage of %s to %s: HTTP %d %s", dag, name, r.status_code, r.text[:200])
 
 
-def test_case(project, check):
-    name = "_".join(filter(None, [project, check["table"], check.get("column"), check["check"]]))
-    tc = {"name": name, "testDefinitionName": CHECKS[check["check"]], "parameterValues": []}
+def q(name):
+    return '"' + name.replace('"', '""') + '"'
+
+
+def test_case(project, check, catalog="iceberg", namespace=None):
+    """One of the project's checks as an OpenMetadata test case: named by the
+    project, the table, the column and the kind (or as the check names
+    itself), with the kind's parameters."""
+    kind = check["check"]
+    name = "_".join(filter(None, [project, check["table"], check.get("name") or check.get("column"), kind]))
+    tc = {"name": name, "testDefinitionName": CHECKS[kind], "parameterValues": []}
     if check.get("column"):
         tc["columnName"] = check["column"]
-    if check["check"] == "rowCount":
+    params = tc["parameterValues"]
+    if kind in ("rowCount", "range"):
         for k, param in (("min", "minValue"), ("max", "maxValue")):
             if check.get(k) is not None:
-                tc["parameterValues"].append({"name": param, "value": str(check[k])})
+                params.append({"name": param, "value": str(check[k])})
+    elif kind == "acceptedValues":
+        params.append({"name": "allowedValues", "value": json.dumps(check.get("values") or [])})
+    elif kind == "regex":
+        params.append({"name": "regex", "value": check.get("pattern") or ""})
+    elif kind in ("references", "sql"):
+        if kind == "references":   # the column's values that aren't in the other table's column
+            table = f"{q(catalog)}.{q(namespace)}.{q(check['table'])}"
+            ref = f"{q(catalog)}.{q(namespace)}.{q(check['refTable'])}"
+            sql = (f"SELECT t.{q(check['column'])} FROM {table} t WHERE t.{q(check['column'])} IS NOT NULL "
+                   f"AND NOT EXISTS (SELECT 1 FROM {ref} r WHERE r.{q(check['refColumn'])} = t.{q(check['column'])})")
+        else:
+            sql = check.get("sql") or ""
+        params += [{"name": "sqlExpression", "value": sql}, {"name": "strategy", "value": "ROWS"},
+                   {"name": "operator", "value": "=="}, {"name": "threshold", "value": "0"}]
     return tc
 
 
@@ -427,7 +455,7 @@ def run_checks(token):
         catalog = tables.get("catalog") or "iceberg"
         by_table = {}
         for c in checks:
-            by_table.setdefault(c["table"], []).append(test_case(p["metadata"]["name"], c))
+            by_table.setdefault(c["table"], []).append(test_case(p["metadata"]["name"], c, catalog, namespace))
         for table, cases in by_table.items():
             fqn = f"{SERVICE}.{catalog}.{namespace}.{table}"
             r = requests.get(f"{OM}/v1/tables/name/{fqn}", headers={"Authorization": f"Bearer {token}"}, timeout=10)
