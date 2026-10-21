@@ -436,6 +436,8 @@ func (p *Project) checkKnowledge(bad func(format string, a ...any)) {
 			bad("knowledge %s: names at least one table's text column, or a folder of files", k.Name)
 		case k.Schedule != "" && !cronRE.MatchString(k.Schedule):
 			bad("knowledge %s: schedule %q: five cron fields, as 0 3 * * *", k.Name, k.Schedule)
+		case k.Schedule != "" && p.Spec.Pipelines == nil:
+			bad("knowledge %s: on a schedule, the project's pipelines build it: give the project pipelines (pipelines.serviceAccount)", k.Name)
 		}
 		seen[k.Name] = true
 		for j, f := range k.Files {

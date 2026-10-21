@@ -33,7 +33,7 @@ func (r *Reconciler) KnowledgeBanks(ctx context.Context) ([]ProjectBank, error) 
 			continue
 		}
 		for _, k := range p.Spec.Knowledge {
-			if k.Schedule != "" {
+			if k.Schedule != "" && p.Spec.Pipelines != nil {
 				out = append(out, ProjectBank{Project: p.Metadata.Name, Own: r.ownAirflow(p), DAG: k.DAG(p.Metadata.Name), Bank: k})
 			}
 		}

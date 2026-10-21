@@ -354,7 +354,7 @@ spec:
                     properties:
                       name: {type: string, pattern: '^[a-z_][a-z0-9_]{0,49}$'}
                       description: {type: string}
-                      schedule: {type: string, description: "When the project's pipelines build it afresh (cron, UTC); none: by hand."}
+                      schedule: {type: string, description: "When the project's pipelines build it afresh (cron, UTC; the project needs pipelines); none: by hand."}
                       files:
                         type: array
                         items:

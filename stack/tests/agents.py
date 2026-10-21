@@ -150,7 +150,8 @@ def main():
         kc_token = requests.post(f"{env['KEYCLOAK_URL']}/realms/lakehouse/protocol/openid-connect/token", timeout=10,
                                  data={"grant_type": "password", "client_id": "storscale-agent", "username": "alice", "scope": "openid",
                                        "password": env["LAKEHOUSE_USER_PASSWORD"]}).json().get("access_token", "")
-        conn = bob.put(f"{PLATFORM}/api/projects/{NAME}/connections/{NAME}-kc", headers=H, timeout=30, json={"kind": "api", "values": {"token": kc_token}})
+        conn = bob.post(f"{PLATFORM}/api/projects/{NAME}/connections", headers=H, timeout=30,
+                        json={"name": f"{NAME}-kc", "kind": "api", "values": {"token": kc_token}})
         spec = (bob.get(f"{PLATFORM}/api/projects/{NAME}", timeout=30).json() or {}).get("spec") or {}
         spec.setdefault("spec", {})["tools"] = [{"name": "whoami", "description": "Who the connection's token belongs to.", "method": "GET",
                                                  "url": "http://keycloak:8080/sso/realms/lakehouse/protocol/openid-connect", "path": "/userinfo",   # as platformd reaches it

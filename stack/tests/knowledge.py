@@ -41,7 +41,7 @@ REVIEWS = [(1, "The jacket seam split after a week of use. Disappointing."), (2,
 SPEC = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": NAME},
         "spec": {"description": "Knowledge banks: the knowledge suite's.",
                  "members": [{"group": "engineers", "role": "editor"}, {"user": "alice", "role": "reader"}], "tables": {}, "files": {},
-                 "llm": {"budget": 1},
+                 "llm": {"budget": 1}, "pipelines": {"serviceAccount": "airflow-pipelines"},
                  "knowledge": [{"name": "reviews", "description": "What customers wrote", "tables": [{"table": "reviews", "column": "text", "id": "review_id"}]},
                                {"name": "manuals", "description": "The care and returns pages", "files": [{"prefix": "landing/uploads/"}],
                                 "schedule": "0 3 * * *"}]}}
