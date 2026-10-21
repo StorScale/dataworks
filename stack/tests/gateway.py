@@ -9,9 +9,12 @@ repeat the question, a cent per hundred characters):
      key answers a completion; a question carrying a card number and an email
      address, or one of the platform's secrets, is refused by the guardrail
      (HTTP 400, naming what was found and never the value), and costs nothing;
-  2. a long question takes the spend past 80%: the page shows it, and the
-     project is alerted; one past the budget is refused as LiteLLM refuses it
-     (HTTP 400, budget exceeded);
+  2. questions take the spend past 80%: the page shows it, and the project is
+     alerted; one past the budget is refused as LiteLLM refuses it (HTTP 400,
+     budget exceeded). At the stand-in one long question does it (a cent per
+     hundred characters); at a real gateway (LiteLLM on the company's models,
+     whose prices are its own) the budget is a few cents and questions of a
+     thousand tokens are asked until the spend gets there;
   3. the budget raised, the key is a new one, the old one gone;
   4. an agent with a budget, approved by alice, gets a key of its own with
      that budget; revoked, its key goes;
@@ -21,6 +24,7 @@ The master key is LLM_MASTER_KEY (the install's). The project is removed after.
 """
 import json
 import os
+import time
 
 import k8s
 import requests
@@ -30,12 +34,25 @@ from projects import platform, projects, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
 MASTER = os.environ.get("LLM_MASTER_KEY") or "sk-storscale-local"
+GATEWAY = os.environ.get("LLM_GATEWAY_URL", "http://llm:4000")
 NAME = "gated"
 H = {"X-Platform-Request": "1"}
+
+
+def is_real():
+    """LiteLLM answers /health/readiness (its version and models); the stand-in doesn't."""
+    try:
+        return requests.get(f"{GATEWAY}/health/readiness", timeout=10).ok
+    except requests.RequestException:
+        return False
+
+
+REAL = is_real()
+BUDGET = 0.02 if REAL else 1   # dollars a month: a few cents at a real gateway, a dollar at the stand-in's prices
 SPEC = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": NAME},
         "spec": {"description": "The LLM gateway and budgets: the gateway suite's.",
                  "members": [{"group": "engineers", "role": "editor"}, {"user": "alice", "role": "editor"}], "tables": {},
-                 "llm": {"budget": 1}}}
+                 "llm": {"budget": BUDGET}}}
 
 
 def keys(gateway):
@@ -82,10 +99,10 @@ def main():
         check("bob makes a project with an LLM budget of a dollar; the operator makes it a key, kept as the connection gated-llm",
               r.ok and ready is not None and mine.get(NAME, {}).get("key") is True and conn.get("kind") == "llm" and conn.get("addedBy") == "platform-operator",
               (r.text[:150], mine, conn))
-        check("... the Agents tab's page shows the budget, with no spend yet", mine.get(NAME, {}).get("budget") == 1 and mine.get(NAME, {}).get("spend") == 0, mine)
+        check("... the Agents tab's page shows the budget, with no spend yet", mine.get(NAME, {}).get("budget") == BUDGET and mine.get(NAME, {}).get("spend") == 0, mine)
         at = keys(gateway)
         key = raw_key(f"{NAME}-llm")
-        check("... and the gateway lists it under the project's name, with its budget", key.startswith("sk-") and at.get(f"storscale/{NAME}", {}).get("max_budget") == 1, (key[:3], at))
+        check("... and the gateway lists it under the project's name, with its budget", key.startswith("sk-") and at.get(f"storscale/{NAME}", {}).get("max_budget") == BUDGET, (key[:3], at))
 
         # 1. It answers.
         a = ask(gateway, key, "How many orders came in yesterday?")
@@ -103,25 +120,37 @@ def main():
               (secret.status_code, secret.text[:300], before, spent()))
 
         # 2. Near the budget, then past it.
-        near = ask(gateway, key, "x" * 9000)   # 90 cents, with the stand-in
+        if REAL:   # questions of about a thousand tokens, until the spend LiteLLM records (a moment after each) is past 80%
+            words = " ".join(f"item {i} costs {i * 7 % 101} and ships in {i % 9} days;" for i in range(130))
+            for _ in range(25):
+                near = ask(gateway, key, "Summarise this list in one line: " + words)
+                time.sleep(4)
+                if not near.ok or (uses().get(NAME, {}).get("share") or 0) >= 0.8:
+                    break
+        else:
+            near = ask(gateway, key, "x" * 9000)   # 90 cents, with the stand-in
         shown = wait(lambda: (lambda u: u if (u.get(NAME, {}).get("share") or 0) >= 0.8 else None)(uses()), 60, every=5) or uses()
         issues = lambda: (bob.get(f"{PLATFORM}/api/projects/{NAME}/alerts", timeout=30).json() or {}).get("issues", [])
         alerts = wait(lambda: (lambda xs: xs if any(i["key"] == f"llm/{NAME}/near" for i in xs) else None)(issues()), 150, every=10) or issues()
-        check("a long question takes the spend past 80% of the budget: the page shows it, and the project is alerted",
-              near.ok and shown.get(NAME, {}).get("spend", 0) >= 0.9 and any(i["key"] == f"llm/{NAME}/near" and i["kind"] == "llm" for i in alerts),
+        check("questions take the spend past 80% of the budget: the page shows it, and the project is alerted",
+              near.ok and (shown.get(NAME, {}).get("share") or 0) >= 0.8 and any(i["key"] == f"llm/{NAME}/near" and i["kind"] == "llm" for i in alerts),
               (near.status_code, shown, [i["key"] for i in alerts]))
-        over = ask(gateway, key, "y" * 12000)
+        for _ in range(10):   # the stand-in refuses the first; LiteLLM refuses once its recorded spend is past the budget
+            over = ask(gateway, key, "y" * 12000 if not REAL else "Summarise this list in one line: " + words)
+            if over.status_code == 400 or not REAL:
+                break
+            time.sleep(4)
         check("one past the budget is refused, as LiteLLM refuses it", over.status_code == 400 and "udget" in over.text, (over.status_code, over.text[:200]))
 
         # 3. The budget raised: a new key, the old one gone.
-        more = dict(SPEC, spec=dict(SPEC["spec"], llm={"budget": 2}))
+        more = dict(SPEC, spec=dict(SPEC["spec"], llm={"budget": BUDGET * 2}))
         up = bob.put(f"{PLATFORM}/api/projects/{NAME}", data=json.dumps(more), timeout=30)
         first = at.get(f"storscale/{NAME}", {}).get("id")
         renewed = wait(lambda: (lambda k: k if k and k != first else None)(keys(gateway).get(f"storscale/{NAME}", {}).get("id")), 300, every=10)
         new_key = wait(lambda: (lambda k: k if k and k != key else None)(raw_key(f"{NAME}-llm")), 120, every=5) or key
         fresh = ask(gateway, new_key, "Are you back?")
         check("the budget raised, the key is a new one that answers again, the old one gone",
-              up.ok and renewed is not None and fresh.ok and uses().get(NAME, {}).get("budget") == 2 and ask(gateway, key, "old?").status_code == 401,
+              up.ok and renewed is not None and fresh.ok and uses().get(NAME, {}).get("budget") == BUDGET * 2 and ask(gateway, key, "old?").status_code == 401,
               (up.status_code, up.text[:150], renewed is not None, fresh.status_code, fresh.text[:200], uses()))
 
         # 4. An agent with a budget of its own.
