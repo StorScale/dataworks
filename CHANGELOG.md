@@ -11,6 +11,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 ### Changed
 - **LiteLLM on Microsoft Foundry, as the chart's example**: Anthropic's models there answer the Anthropic Messages API at `https://<resource>.openai.azure.com/anthropic`, which LiteLLM's anthropic provider speaks, so the chart's `llm.litellm.models` example is `anthropic/<deployment>` with that address as `api_base`; the first model is named `default`, the name the platform asks for unless told another. The chart makes LiteLLM's database and account on the platform's Postgres as it starts (the master key its password), and the network policy lets it reach Postgres: an install switching to `llm.gateway: litellm` needs nothing made by hand but the Secret `storscale-llm`. LiteLLM is 1.106.0 (the `main-v1.77.3` tag the chart named never existed; releases carry their own tags now), its config and the guardrail are projected into one directory (a file can't be mounted into a ConfigMap's directory), and its database password is listed before the URL that names it (Kubernetes expands a variable only from those listed before it).
 
+### Fixed
+- **A gateway key the gateway no longer has is made again**: the operator trusted the key a project's connection held, so a key gone from the gateway (its database lost; a connection a removed project left behind, found by a project made again with its name) answered 401 until the budget changed. It now checks the connection's key against the gateway's list each pass and makes a new one when it's missing. Seen on the dev cluster, switching to LiteLLM.
+
 ## [0.19.1] - 2026-10-20
 
 An agent reads its project's runs and alerts, the stateful pods placed by node, a bigger canvas whose settings pick from dropdowns, and fixes: a new source's catalog made on the pass that added it, a GitLab refusal that says why, and the shared Airflow's scheduler running on when a project's repo comes or goes.
