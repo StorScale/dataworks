@@ -347,6 +347,7 @@ services:
     environment:
       LLM_MASTER_KEY: ${LLM_MASTER_KEY:-sk-storscale-local}
       LLM_GUARDRAILS: ${LLM_GUARDRAILS:-true}   # the guardrail (llm_guard.py): what may not leave is refused
+      LLM_FORBIDDEN_TERMS: ${LLM_FORBIDDEN_TERMS:-Project Falcon}   # the install's own terms, one a line (the suite asks with this one)
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:4000/health/liveliness')"]
       interval: 5s

@@ -53,6 +53,7 @@ spec:
             - {name: LLM_MASTER_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: LLM_MASTER_KEY}}}
             - {name: LLM_STUB_STATE, value: /state/keys.json}
             - {name: LLM_GUARDRAILS, value: {{ .Values.llm.guardrails | quote }}}
+            - {name: LLM_FORBIDDEN_TERMS, value: {{ join "\n" .Values.llm.forbiddenTerms | quote }}}
           ports:
             - {name: http, containerPort: 4000}
           readinessProbe:
@@ -70,6 +71,7 @@ spec:
           env:
             - {name: LITELLM_MASTER_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: LLM_MASTER_KEY}}}
             - {name: LLM_PROVIDER_KEY, valueFrom: {secretKeyRef: {name: storscale-llm, key: api_key, optional: true}}}
+            - {name: LLM_FORBIDDEN_TERMS, value: {{ join "\n" .Values.llm.forbiddenTerms | quote }}}
             # The password first: Kubernetes expands $(VAR) only for a variable listed before.
             - {name: LITELLM_DB_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: LLM_MASTER_KEY}}}
             - {name: DATABASE_URL, value: "postgresql://litellm:$(LITELLM_DB_PASSWORD)@postgres:5432/litellm"}
