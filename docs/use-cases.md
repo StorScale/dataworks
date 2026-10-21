@@ -309,8 +309,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 2. Her notebook imports scikit-learn, statsmodels and geopandas; they're in the image, with the libraries the common analyses and models need.
 
 **Requirements**
-- R7.23 code-server (VS Code in the browser) as a JupyterHub profile beside JupyterLab, the project's repo cloned into it with its connection, as the person.
-- R7.24 The notebook image carries the analysis and ML libraries (scikit-learn, statsmodels, scipy, lightgbm, xgboost, FLAML, mlflow, geopandas, networkx), and Superset its map charts.
+- R7.23 code-server (VS Code in the browser) as a JupyterHub profile beside JupyterLab, the project's repo cloned into it with its connection, as the person. (Built 2026-10-21 as a launcher tile in JupyterLab, on the person's own server and files; cloning the project's repo with its connection is left.)
+- R7.24 The notebook image carries the analysis and ML libraries (scikit-learn, statsmodels, scipy, lightgbm, xgboost, FLAML, mlflow, geopandas, networkx), and Superset its map charts. (Built 2026-10-21; the map charts' base map needs `superset.mapboxApiKey`.)
 
 ---
 
