@@ -15,7 +15,9 @@ func TestAgents(t *testing.T) {
 		{`{"name":"a","owner":"bob","schedule":"daily"}`, "five cron fields"},
 		{`{"name":"a","owner":"bob"},{"name":"a","owner":"bob"}`, `"a" twice`},
 		{`{"name":"a","owner":"bob","registeredBy":"bob","approvedBy":"bob"}`, "approved by the one who registered it"},
-		{`{"name":"a","owner":"bob","schedule":"0 6 * * *"}`, "a schedule needs a notebook"},
+		{`{"name":"a","owner":"bob","schedule":"0 6 * * *"}`, "a schedule needs something to run"},
+		{`{"name":"a","owner":"bob","schedule":"0 6 * * *","prompt":"sum the day","notebook":"n.ipynb"}`, "a notebook or a prompt, not both"},
+		{`{"name":"a","owner":"bob","schedule":"0 6 * * *","prompt":"sum the day"}`, "give the agent a budget"},
 		{`{"name":"a","owner":"bob","notebook":"notebooks/nightly.ipynb"}`, "which the project doesn't have"},
 	} {
 		_, err := Parse([]byte(strings.Replace(spec, "%s", tc.agent, 1)))

@@ -107,7 +107,7 @@ def main():
         # 1. It answers.
         a = ask(gateway, key, "How many orders came in yesterday?")
         content = (a.json() if a.ok else {}).get("choices", [{}])[0].get("message", {}).get("content", "")
-        check("the key answers a completion", a.ok and "orders" in content, (a.status_code, a.text[:200]))
+        check("the key answers a completion", a.ok and (bool(content.strip()) if REAL else "orders" in content), (a.status_code, a.text[:200]))   # a real model's words are its own
         spent = lambda: keys(gateway).get(f"storscale/{NAME}", {}).get("spend")
         before = spent()
         masked = ask(gateway, key, "Write to jane.doe@example.com that card 4111 1111 1111 1111 was declined")

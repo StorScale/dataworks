@@ -160,7 +160,10 @@ class StorScaleGuardrail(CustomGuardrail):
         super().__init__(**kwargs)
 
     async def async_pre_call_hook(self, user_api_key_dict, cache, data, call_type):
-        kinds = found(data.get("messages"))
+        # A chat's messages, or the text sent to be embedded (a knowledge bank's passages, a search's question).
+        inp = data.get("input")
+        texts = [inp] if isinstance(inp, str) else [t for t in (inp or []) if isinstance(t, str)]
+        kinds = found((data.get("messages") or []) + [{"content": t} for t in texts])
         if not kinds:
             return data
         from fastapi import HTTPException

@@ -537,6 +537,8 @@ As **bob**, on `retail`:
 
    Register the agent again with the tools `query_metrics`, `list_runs` and `list_alerts` (the last two are read-only views of the Pipelines tab and the project's alerts, for an agent that reports), a **budget** of `0.50`, a **schedule** of `0 6 * * *` and the **notebook** `notebooks/nightly_summary.ipynb`, and have alice approve it. Within a minute or two the Agents tab names its pipeline, `agent_retail_nightly_summary`, on the Pipelines tab: run it now. The run checks the repo out and executes the notebook as the agent: `buckets_lake.username()` says `service-account-agent-retail-nightly-summary`, the audit names it, a tool it wasn't given raises in the notebook naming what it may use, and `ask()` spends against the agent's own budget. The executed notebook, outputs and all, is linked from the run, and the Audit tab has `agent.ran`.
 
+7. **Or no notebook at all.** Register `triage` with the tools `list_alerts` and `list_runs`, a **budget** of `0.50`, a **schedule** of `0 7 * * *`, and, in place of a notebook, what it's to do: *Each morning, read the open alerts and the failed runs, and write a two-sentence summary for the team.* No repo needed. Once alice approves it, it's a pipeline like the other; run it now. The platform's runner gives the model the agent's tools, calls each one it asks for as the agent, and stops at its report; the run's record shows the task, each tool call with its answer, and the report.
+
 **Check:** on the Audit tab, `agent.registered`, `agent.approved`, `agent.ran` and `agent.revoked`, each with who did it; the agent's run notebook shows the agent's own name as who ran it.
 
 ---

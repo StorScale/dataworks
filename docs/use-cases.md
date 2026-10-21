@@ -601,7 +601,7 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 3. bob gives `triage` as a tool to a second agent, `weekly`, which asks it for the week's summaries; both are audited as themselves. He also gives `weekly` the company's ticketing API, declared in the project with the connection to sign in with.
 
 **Requirements**
-- R12.15 An agent run by the platform's runner from its prompt, tools and schedule (semanticd's loop over the gateway and the MCP server, as the agent), its run kept as its record; the Agents tab's form is all of it.
+- R12.15 An agent run by the platform's runner from its prompt, tools and schedule (semanticd's loop over the gateway and the MCP server, as the agent), its run kept as its record; the Agents tab's form is all of it. (Built 2026-10-21: the runner runs in the project's Airflow, `storscale.agent`, the transcript kept as the run's record.)
 - R12.16 An approved agent as a tool of another (`agent:<project>/<name>`), audited as both.
 - R12.17 A project's own connector tools: an OpenAPI operation and the connection it signs in with, declared in the project, served by the MCP server to the agents given it.
 

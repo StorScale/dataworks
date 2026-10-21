@@ -428,8 +428,8 @@ export type AgentView = {
   clientId: string; connection: string; approved: boolean; mcpUrl: string; dag?: string;
 };
 export const getAgents = (name: string) => api<{ agents: AgentView[]; tools: string[]; canEdit: boolean }>("GET", `/api/projects/${encodeURIComponent(name)}/agents`);
-export const putAgent = (name: string, a: { name: string; description?: string; owner: string; tools?: string[]; schedule?: string; notebook?: string; budget?: number }) =>
-  api<AgentView[]>("PUT", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(a.name)}`, { description: a.description, owner: a.owner, tools: a.tools, schedule: a.schedule, notebook: a.notebook, budget: a.budget || undefined });
+export const putAgent = (name: string, a: { name: string; description?: string; owner: string; tools?: string[]; schedule?: string; notebook?: string; prompt?: string; budget?: number }) =>
+  api<AgentView[]>("PUT", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(a.name)}`, { description: a.description, owner: a.owner, tools: a.tools, schedule: a.schedule, notebook: a.notebook, prompt: a.prompt, budget: a.budget || undefined });
 export type KnowledgeBank = { name: string; description?: string; tables: { table: string; column: string; id: string }[]; table: string; chunks?: number };
 export type KnowledgeHit = { source: string; ref: string; text: string; score: number };
 const knowledgePath = (name: string) => `/api/projects/${encodeURIComponent(name)}/knowledge`;

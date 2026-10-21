@@ -11,7 +11,11 @@ what the other registered). These check (use case 12.2):
      the agent's own token); a tool it wasn't given is refused, naming
      what it may use;
   3. a change to its tools takes the approval away;
-  4. revoked, it signs in no more.
+  4. revoked, it signs in no more;
+  5. an agent with a prompt and no notebook (12.7), on a schedule, with a
+     budget: approved, it's a pipeline of the project's, and a run has the
+     platform's runner do the prompt with its tools, as the agent, through
+     the gateway on its key; the run's record is the transcript.
 
 The project is removed after.
 """
@@ -30,7 +34,8 @@ NAME = "agented"
 H = {"X-Platform-Request": "1"}
 SPEC = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": NAME},
         "spec": {"description": "An agent of the project's own: the agents suite's.",
-                 "members": [{"group": "engineers", "role": "editor"}, {"user": "alice", "role": "editor"}], "tables": {}}}
+                 "members": [{"group": "engineers", "role": "editor"}, {"user": "alice", "role": "editor"}], "tables": {},
+                 "llm": {"budget": 1}}}
 MODEL = """semantic_model:
   name: orders
   node_relation: {database: iceberg, schema_name: agented, alias: orders}
@@ -116,6 +121,25 @@ def main():
         gone = wait(lambda: True if token_for(aj.get("clientId", ""), secret2) is None else None, 180, every=10) if back else None
         check("approved again it's back, with a new secret; revoked, it signs in no more", back is not None and rv.status_code == 204 and gone is True,
               (ap2.status_code, rv.status_code, gone))
+
+        # 5. An agent with a prompt and no notebook, run by the platform (12.7).
+        reg = bob.put(f"{PLATFORM}/api/projects/{NAME}/agents/triage", headers=H, timeout=30,
+                      json={"description": "sums up the open alerts", "tools": ["list_alerts"], "schedule": "0 6 * * *", "budget": 0.5,
+                            "prompt": "Read the project's open alerts (list_alerts) and sum them up in two sentences for the team."})
+        ap3 = alice.post(f"{PLATFORM}/api/projects/{NAME}/agents/triage/approve", headers=H, timeout=30)
+        dag = "agent_" + NAME + "_triage"
+        listed = lambda: (bob.get(f"{PLATFORM}/api/projects/{NAME}/pipelines", timeout=60).json() or {}).get("pipelines", [])
+        loaded = wait(lambda: True if any(p["id"] == dag for p in listed()) else None, 600, every=10)
+        started = bob.post(f"{PLATFORM}/api/projects/{NAME}/pipelines/{dag}/runs", headers=H, timeout=60) if loaded else None
+        run_id = (started.json() if started is not None and started.ok else {}).get("run")
+        state = lambda: next((x["state"] for p in listed() if p["id"] == dag for x in p.get("runs", []) if x["id"] == run_id and x["state"] in ("success", "failed")), None)
+        final = wait(state, 600, every=10) if run_id else None
+        record = bob.get(f"{PLATFORM}/api/projects/{NAME}/notebooks/runs/{dag}/{requests.utils.quote(run_id or '', safe='')}", timeout=60) if final else None
+        page = record.text if record is not None and record.ok else ""
+        check("an agent with a prompt and no notebook: approved, its pipeline runs the prompt with its tools as the agent, the transcript its record",
+              reg.ok and ap3.ok and final == "success" and "list_alerts" in page and "The report" in page,
+              (reg.status_code, reg.text[:200], ap3.status_code, bool(loaded), final, page[:300]))
+        bob.delete(f"{PLATFORM}/api/projects/{NAME}/agents/triage", headers=H, timeout=30)
     finally:
         bob.delete(f"{PLATFORM}/api/projects/{NAME}", headers=H, timeout=30)
         wait(lambda: NAME not in (projects(bob) or {}), 300)
