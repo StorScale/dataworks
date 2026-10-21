@@ -1,7 +1,7 @@
 campaign_id,name,channel,started_on,budget
-1,Summer sale,email,2026-07-01,12000
-2,Back to school,email,2026-08-10,8000
-3,Partner push,partner,2026-07-15,5000
-4,Store weekend,store,2026-08-01,3000
-5,Enterprise outreach,sales,2026-07-20,15000
-6,September clearance,email,2026-09-05,6000
+1,Summer sale,email,2026-07-01,1200
+2,Back to school,email,2026-08-10,800
+3,Partner push,partner,2026-07-15,500
+4,Store weekend,store,2026-08-01,300
+5,Enterprise outreach,sales,2026-07-20,1500
+6,September clearance,email,2026-09-05,600
