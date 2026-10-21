@@ -434,7 +434,11 @@ export const putAgent = (name: string, a: { name: string; description?: string; 
 export type KnowledgeBank = { name: string; description?: string; tables?: { table: string; column: string; id: string }[]; files?: { prefix: string }[]; schedule?: string; table: string; chunks?: number };
 export type KnowledgeHit = { source: string; ref: string; text: string; score: number };
 const knowledgePath = (name: string) => `/api/projects/${encodeURIComponent(name)}/knowledge`;
-export const getKnowledge = (name: string) => api<{ banks: KnowledgeBank[]; canBuild: boolean }>("GET", knowledgePath(name));
+export const getKnowledge = (name: string) =>
+  api<{ banks: KnowledgeBank[]; canBuild: boolean; hasBudget?: boolean; hasFiles?: boolean; hasPipelines?: boolean }>("GET", knowledgePath(name));
+export type KnowledgeSpec = { description?: string; tables?: { table: string; column: string; id: string }[]; files?: { prefix: string }[]; schedule?: string };
+export const putKnowledge = (name: string, bank: string, k: KnowledgeSpec) => api<KnowledgeSpec>("PUT", `${knowledgePath(name)}/${encodeURIComponent(bank)}`, k);
+export const deleteKnowledge = (name: string, bank: string) => api<void>("DELETE", `${knowledgePath(name)}/${encodeURIComponent(bank)}`);
 export const buildKnowledge = (name: string, bank: string) => api<{ table: string; chunks: number; files?: number; skipped?: number; cost: number }>("POST", `${knowledgePath(name)}/${encodeURIComponent(bank)}/build`, {});
 export const searchKnowledge = (name: string, bank: string, query: string, k = 5) =>
   api<{ hits: KnowledgeHit[]; cost: number }>("POST", `${knowledgePath(name)}/${encodeURIComponent(bank)}/search`, { query, k });

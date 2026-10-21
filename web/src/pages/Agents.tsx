@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
-import { approveAgent, buildKnowledge, getAgents, getKnowledge, getLLM, getLLMCalls, putAgent, removeAgent, searchKnowledge, type KnowledgeHit, type LLMUse } from "../api";
+import { approveAgent, buildKnowledge, deleteKnowledge, getAgents, getKnowledge, getLLM, getLLMCalls, putAgent, putKnowledge, removeAgent, searchKnowledge, type KnowledgeHit, type LLMUse } from "../api";
 import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
 
 // Agents are programs of the project's own (use case 12.2): each with an
@@ -35,7 +35,7 @@ export default function Agents() {
         </div>
       )}
       {canEdit && llm.data?.gateway && llm.data.uses.some((u) => u.key) && <ModelCalls project={name} />}
-      {(knowledge.data?.banks.length ?? 0) > 0 && <Knowledge project={name} banks={knowledge.data!.banks} canBuild={knowledge.data!.canBuild || admin} reload={knowledge.reload} />}
+      {knowledge.data && <Knowledge project={name} info={knowledge.data} canBuild={knowledge.data.canBuild || admin} reload={knowledge.reload} />}
       {llm.data?.gateway && (
         <div className="card stack" style={{ gap: 4 }} data-testid="llm">
           <strong>The LLM gateway</strong>
@@ -109,7 +109,8 @@ function AgentForm({ project, tools, taken, owner, onDone }: { project: string; 
         <label>Notebook <input className="mono" value={notebook} onChange={(e) => setNotebook(e.target.value)} placeholder="notebooks/nightly.ipynb, in the repo" style={{ width: 240 }} data-testid="agent-notebook" /></label>
         <label>LLM budget (USD a month) <input className="mono" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="none" style={{ width: 90 }} data-testid="agent-budget" /></label>
       </div>
-      <label>Or, in place of a notebook, what it's to do <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3}
+      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>Or, in place of a notebook, what it's to do <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={10}
+        style={{ width: "100%", minHeight: 200, resize: "vertical", boxSizing: "border-box" }}
         placeholder="Each morning, read the open alerts and the failed runs, and write a two-sentence summary for the team." data-testid="agent-prompt" /></label>
       <div className="small muted">Tools it may use (of the MCP server's); none picked means every tool a reader may use. <span className="mono">tool:</span> is one of the project's own tools (an API's operation, signed in by the project's connection, which the agent never sees); <span className="mono">agent:</span> is another agent with a prompt, which it may ask to do a task (that agent does it as itself, and isn't given agents in turn). With a schedule and a prompt (and a budget), the platform's runner does the prompt as the agent: the model is given its tools, each tool it asks for is called as the agent, and the run's record is the transcript. With a schedule and a notebook (an .ipynb in the project's repo, under the pipelines' path), the platform runs the notebook as the agent: <span className="mono">buckets_lake.agent()</span> is the MCP server, <span className="mono">buckets_lake.ask()</span> the gateway, on its budget.</div>
       <div className="chips">
@@ -126,11 +127,18 @@ function AgentForm({ project, tools, taken, owner, onDone }: { project: string; 
 }
 
 // Knowledge banks (use case 12.6): the project's text, searched by meaning, as the person; built by its editors.
-function Knowledge({ project, banks, canBuild, reload }: { project: string; banks: import("../api").KnowledgeBank[]; canBuild: boolean; reload: () => void }) {
+function Knowledge({ project, info, canBuild, reload }: { project: string; info: Awaited<ReturnType<typeof getKnowledge>>; canBuild: boolean; reload: () => void }) {
+  const banks = info.banks;
+  const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<string>();
   const [note, setNote] = useState<string>();
   const [bank, setBank] = useState(banks[0]?.name ?? "");
+  const remove = async (b: string) => {
+    if (!window.confirm(`Take the bank ${b} out of the project? Its table knowledge_${b} stays until it's dropped.`)) return;
+    setBusy(b); setError(undefined);
+    try { await deleteKnowledge(project, b); reload(); } catch (e) { setError((e as Error).message); } finally { setBusy(undefined); }
+  };
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<KnowledgeHit[]>();
   const build = async (b: string) => {
@@ -144,14 +152,18 @@ function Knowledge({ project, banks, canBuild, reload }: { project: string; bank
   };
   const search = async () => {
     setBusy("search"); setError(undefined);
-    try { setHits((await searchKnowledge(project, bank, query)).hits); } catch (e) { setError((e as Error).message); } finally { setBusy(undefined); }
+    try { setHits((await searchKnowledge(project, bank || banks[0].name, query)).hits); } catch (e) { setError((e as Error).message); } finally { setBusy(undefined); }
   };
   return (
     <div className="card stack" style={{ gap: 6 }} data-testid="knowledge">
-      <strong>Knowledge banks</strong>
-      <div className="small muted">The project's text, embedded through the gateway on its key and kept as a table of the project's; searched by meaning, as you, and by agents with the tool <span className="mono">search_documents</span>.</div>
+      <div className="row"><strong>Knowledge banks</strong><span className="grow" />
+        {canBuild && !adding && <button className="btn small" onClick={() => setAdding(true)} data-testid="add-bank">Add a bank</button>}</div>
+      <div className="small muted">The project's text (a table's text column, or the files in a folder of its bucket), embedded through the gateway on its key and kept as a table of the project's; searched by meaning, as you, by agents with the tool <span className="mono">search_documents</span>, and on the canvas (Ask a model, nearest passage).</div>
       <ErrorBanner error={error} />
       {note && <div className="small">{note}</div>}
+      {!info.hasBudget && <div className="small muted">A bank is embedded on the project's gateway key: the project needs an LLM budget first (an administrator sets it on Edit).</div>}
+      {adding && <BankForm project={project} info={info} taken={banks.map((b) => b.name)} onDone={() => { setAdding(false); reload(); }} />}
+      {banks.length === 0 && !adding && <div className="small muted">No banks yet.{canBuild ? " Add one: its sources, and whether to build it on a schedule." : ""}</div>}
       {banks.map((b) => (
         <div key={b.name} className="row small" data-testid={`bank-${b.name}`}>
           <span className="mono">{b.name}</span>
@@ -159,13 +171,14 @@ function Knowledge({ project, banks, canBuild, reload }: { project: string; bank
           {b.schedule && <span className="muted">built at <span className="mono">{b.schedule}</span> (UTC)</span>}
           <span>{b.chunks === undefined ? "not built" : `${b.chunks} passages`}</span>
           {canBuild && <button className="btn small" disabled={!!busy} onClick={() => build(b.name)}>{busy === b.name ? "Building…" : b.chunks === undefined ? "Build" : "Build again"}</button>}
+          {canBuild && <button className="btn small" disabled={!!busy} onClick={() => remove(b.name)}>Remove</button>}
         </div>
       ))}
-      <div className="row">
-        <select value={bank} onChange={(e) => setBank(e.target.value)} aria-label="Bank">{banks.map((b) => <option key={b.name}>{b.name}</option>)}</select>
+      {banks.length > 0 && <div className="row">
+        <select value={bank || banks[0].name} onChange={(e) => setBank(e.target.value)} aria-label="Bank">{banks.map((b) => <option key={b.name}>{b.name}</option>)}</select>
         <input className="grow" value={query} placeholder="Search by meaning: early termination terms" onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && query && search()} data-testid="knowledge-query" />
         <button className="btn small" disabled={!query || !!busy} onClick={search}>Search</button>
-      </div>
+      </div>}
       {hits && (hits.length === 0 ? <div className="small muted">Nothing found.</div> : (
         <table className="t" data-testid="knowledge-hits">
           <thead><tr><th>Score</th><th>From</th><th>Passage</th></tr></thead>
@@ -173,6 +186,57 @@ function Knowledge({ project, banks, canBuild, reload }: { project: string; bank
         </table>
       ))}
     </div>
+  );
+}
+
+// A new bank: its name, its sources (tables' text columns, folders of the project's bucket), and a schedule.
+function BankForm({ project, info, taken, onDone }: { project: string; info: Awaited<ReturnType<typeof getKnowledge>>; taken: string[]; onDone: () => void }) {
+  const [bankName, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [tables, setTables] = useState([{ table: "", column: "", id: "" }]);
+  const [folder, setFolder] = useState("");
+  const [schedule, setSchedule] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const used = tables.filter((t) => t.table || t.column || t.id);
+  const ok = /^[a-z_][a-z0-9_]{0,49}$/.test(bankName) && !taken.includes(bankName) && (used.length > 0 || folder.trim() !== "");
+  const save = async () => {
+    setBusy(true); setError(undefined);
+    try {
+      const prefix = folder.trim() && (folder.trim().endsWith("/") ? folder.trim() : folder.trim() + "/");
+      await putKnowledge(project, bankName, { description: description || undefined, tables: used.length ? used : undefined,
+        files: prefix ? [{ prefix }] : undefined, schedule: schedule || undefined });
+      onDone();
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  };
+  return (
+    <form className="card stack" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); save(); }} data-testid="bank-form">
+      <strong>A new knowledge bank</strong>
+      <ErrorBanner error={error} />
+      <div className="row">
+        <label>Name <input className="mono" value={bankName} onChange={(e) => setName(e.target.value)} placeholder="reviews" data-testid="bank-name" /></label>
+        <label className="grow">What it holds <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What customers wrote" style={{ width: "100%" }} /></label>
+      </div>
+      <div className="small muted">A table's text column, and the column that names each row (cited with each passage):</div>
+      {tables.map((t, i) => (
+        <div key={i} className="row">
+          <input className="mono" value={t.table} placeholder="table" onChange={(e) => setTables(tables.map((x, j) => j === i ? { ...x, table: e.target.value } : x))} aria-label="Table" />
+          <input className="mono" value={t.column} placeholder="text column" onChange={(e) => setTables(tables.map((x, j) => j === i ? { ...x, column: e.target.value } : x))} aria-label="Text column" />
+          <input className="mono" value={t.id} placeholder="id column" onChange={(e) => setTables(tables.map((x, j) => j === i ? { ...x, id: e.target.value } : x))} aria-label="Id column" />
+          {tables.length > 1 && <button type="button" className="btn small" onClick={() => setTables(tables.filter((_, j) => j !== i))}>Remove</button>}
+        </div>
+      ))}
+      <div><button type="button" className="btn small" onClick={() => setTables([...tables, { table: "", column: "", id: "" }])}>Add a table</button></div>
+      <label>And/or a folder of the project's bucket: its .txt, .md and .html files
+        <input className="mono" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder={info.hasFiles ? "landing/uploads/" : "the project has no bucket (files)"} disabled={!info.hasFiles} data-testid="bank-folder" /></label>
+      <label>Build it afresh on a schedule
+        <input className="mono" value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder={info.hasPipelines ? "0 3 * * * (UTC), or by hand" : "by hand (a schedule needs the project's pipelines)"} disabled={!info.hasPipelines} data-testid="bank-schedule" /></label>
+      <div className="row">
+        <button className="btn primary" type="submit" disabled={!ok || busy} data-testid="save-bank">{busy ? "Saving…" : "Add"}</button>
+        <button className="btn" type="button" onClick={onDone}>Cancel</button>
+        <span className="small muted">Then press Build: nothing is embedded until it's built.</span>
+      </div>
+    </form>
   );
 }
 

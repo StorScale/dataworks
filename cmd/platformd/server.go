@@ -237,6 +237,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/projects/{name}/flows/preview", s.handleFlowPreview)
 	mux.HandleFunc("POST /api/projects/{name}/flows/{flow}/steps/{step}/run", s.handleFlowLLMRun) // the llm step's table, by the flow's DAG
 	mux.HandleFunc("GET /api/projects/{name}/knowledge", s.handleKnowledgeList)
+	mux.HandleFunc("PUT /api/projects/{name}/knowledge/{bank}", s.handlePutKnowledge)            // its editors declare a bank
+	mux.HandleFunc("DELETE /api/projects/{name}/knowledge/{bank}", s.handleDeleteKnowledge)      // and take one out (its table stays)
 	mux.HandleFunc("POST /api/projects/{name}/knowledge/{bank}/build", s.handleKnowledgeBuild)   // editors, the project's pipelines
 	mux.HandleFunc("POST /api/projects/{name}/knowledge/{bank}/search", s.handleKnowledgeSearch) // members, and agents by their own token
 	mux.HandleFunc("GET /api/notebooks/projects", s.handleNotebookProjects)
