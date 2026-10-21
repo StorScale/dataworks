@@ -36,11 +36,22 @@ func (r *Reconciler) applyLLM(ctx context.Context, p *project.Project) error {
 		have[c.Name] = c
 	}
 	want := map[string]bool{} // aliases that should have a key
+	// The keys the gateway has, by alias: a key a connection holds that the
+	// gateway no longer knows (its database lost, a run that left a connection
+	// behind) is made again, not trusted. Unknown when the gateway can't be asked.
+	var present map[string]bool
+	listed, listErr := r.Gateway.List(ctx)
+	if listErr == nil {
+		present = map[string]bool{}
+		for _, k := range listed {
+			present[k.Alias] = true
+		}
+	}
 	var errs []error
 	ensure := func(connName, alias string, budget float64, meta map[string]any, into map[string]string) {
 		want[alias] = true
 		c, ok := have[connName]
-		if ok && c.Data["llmKey"] != "" && c.Data["llmBudget"] == fmt.Sprint(budget) {
+		if ok && c.Data["llmKey"] != "" && c.Data["llmBudget"] == fmt.Sprint(budget) && (present == nil || present[alias]) {
 			return
 		}
 		if ok && c.Data["llmKey"] != "" { // the budget changed: a new key, the old one gone
@@ -89,9 +100,12 @@ func (r *Reconciler) applyLLM(ctx context.Context, p *project.Project) error {
 		}
 	}
 	// Keys of the project's at the gateway that nothing wants any more (an
-	// agent revoked, whose connection platformd removed).
-	if err := r.sweepLLMKeys(ctx, name, want); err != nil {
-		errs = append(errs, err)
+	// agent revoked, whose connection platformd removed): the list from
+	// before any key was made this pass, so a new one is never swept.
+	if listErr != nil {
+		errs = append(errs, listErr)
+	} else {
+		errs = append(errs, r.sweepListed(ctx, name, listed, want))
 	}
 	return errors.Join(errs...)
 }
@@ -102,6 +116,10 @@ func (r *Reconciler) sweepLLMKeys(ctx context.Context, name string, want map[str
 	if err != nil {
 		return err
 	}
+	return r.sweepListed(ctx, name, keys, want)
+}
+
+func (r *Reconciler) sweepListed(ctx context.Context, name string, keys []llm.GatewayKey, want map[string]bool) error {
 	var errs []error
 	for _, k := range keys {
 		if (strings.HasPrefix(k.Alias, "storscale/"+name+"/") || k.Alias == "storscale/"+name) && !want[k.Alias] {
