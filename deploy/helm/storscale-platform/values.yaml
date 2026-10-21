@@ -178,6 +178,9 @@ llm:
   # secret of the platform's (a key by its shape, a secret's name with a value) is refused before it reaches
   # the model, naming what was found. false: everything goes through.
   guardrails: true
+  # Words and patterns the guardrail refuses as well (with guardrails on): a codename, a client's name.
+  # A word or phrase matches whole, in any case; one in slashes is a pattern: ["Project Falcon", "/acme-\\d+/"].
+  forbiddenTerms: []
   litellm:
     image: ghcr.io/berriai/litellm:v1.106.0   # a release's own tag (the main-vX.Y.Z-stable tags stopped at 1.83)
     # The models, as LiteLLM names them (model_list). The platform asks for "default" unless told a

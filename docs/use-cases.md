@@ -540,7 +540,7 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 - R12.1 Every answer from the semantic layer, run as the person, with its definitions cited.
 - R12.2 An LLM gateway (LiteLLM) in front of the models: per project and per person budgets, cost recorded, and guardrails (no secrets or masked values sent out). (Built 2026-10-19: the gateway, keys and budgets per project and per agent, spend shown; 2026-10-20: the guardrail, refusing masked values' shapes and the platform's secrets. Per-person budgets left.)
 - R12.3 Agents' calls audited with the person behind them (R6.11).
-- R12.11 Forbidden terms (the install's words and patterns the guardrail refuses: a codename, a client's name), and a moderation guardrail through the gateway itself (toxicity, by a model), each on by a setting. (Added 2026-10-20.)
+- R12.11 Forbidden terms (the install's words and patterns the guardrail refuses: a codename, a client's name), and a moderation guardrail through the gateway itself (toxicity, by a model), each on by a setting. (Added 2026-10-20. Forbidden terms built 2026-10-21: `llm.forbiddenTerms`.)
 
 ### 12.2 An agent of the project's own
 

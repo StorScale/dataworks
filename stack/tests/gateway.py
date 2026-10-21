@@ -115,6 +115,10 @@ def main():
         check("a question carrying a card number and an email address is refused by the guardrail, naming what was found and never the value",
               masked.status_code == 400 and "a card number" in masked.text and "an email address" in masked.text
               and "4111" not in masked.text and "jane" not in masked.text, (masked.status_code, masked.text[:300]))
+        if not k8s.in_cluster():   # Compose keeps "Project Falcon" in (LLM_FORBIDDEN_TERMS); a chart install names its own terms
+            term = ask(gateway, key, "Draft a teaser for project falcon's launch")
+            check("... one naming a term the company keeps in (Compose's: Project Falcon), naming the kind and not the term",
+                  term.status_code == 400 and "a term the company keeps in" in term.text and "falcon" not in term.text.lower(), (term.status_code, term.text[:300]))
         check("... one carrying a secret of the platform's too, and neither costs anything",
               secret.status_code == 400 and "a gateway key" in secret.text and "sk-0123" not in secret.text and spent() == before,
               (secret.status_code, secret.text[:300], before, spent()))

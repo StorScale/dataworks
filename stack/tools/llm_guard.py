@@ -10,12 +10,15 @@ A question is refused, before it reaches the model, when its text carries
   - a secret of the platform's: one of its keys by shape (the gateway's own
     keys, GitLab's and GitHub's tokens, AWS keys, bearer tokens and JWTs,
     private keys), or one of its secrets' names with a value beside it
-    (LLM_MASTER_KEY=..., a *_PASSWORD, *_SECRET, *_TOKEN or *_API_KEY).
+    (LLM_MASTER_KEY=..., a *_PASSWORD, *_SECRET, *_TOKEN or *_API_KEY);
+  - a term the install keeps in (LLM_FORBIDDEN_TERMS: a codename, a client's
+    name), as a word or a pattern.
 
 The refusal names what was found, never the value. The same module serves
 LiteLLM (StorScaleGuardrail, a pre-call guardrail in the chart's config) and
 the stand-in (llm_stub.py), so the two refuse the same things.
 """
+import os
 import re
 
 # What a mask would hide: whole tokens of the text, as catalog-sync looks at a column's values.
@@ -38,6 +41,28 @@ SECRETS = [
     ("a private key", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
     ("a secret by its name", re.compile(r"\b(?:LLM_MASTER_KEY|STORSCALE_LLM_KEY|STORSCALE_AGENT_SECRET|[A-Z][A-Z0-9_]*(?:PASSWORD|SECRET|TOKEN|API_KEY))\s*[=:]\s*[^\s,;\"']{8,}")),
 ]
+
+
+def forbidden_terms():
+    """The install's own words and patterns that may not leave (a codename, a client's name):
+    LLM_FORBIDDEN_TERMS, one a line; a line in slashes is a pattern (/acme-\\d+/), any other
+    a word or phrase, matched whole and in any case."""
+    out = []
+    for line in os.environ.get("LLM_FORBIDDEN_TERMS", "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if len(line) > 2 and line.startswith("/") and line.endswith("/"):
+            try:
+                out.append(re.compile(line[1:-1], re.I))
+            except re.error:
+                pass   # a pattern that isn't one is skipped, not the whole list
+        else:
+            out.append(re.compile(r"(?<!\w)" + re.escape(line) + r"(?!\w)", re.I))
+    return out
+
+
+TERMS = forbidden_terms()
 
 
 def luhn(s):
@@ -85,6 +110,8 @@ def found(messages):
     for name, pattern in SECRETS:
         if pattern.search(text):
             kinds.append(name)
+    if any(t.search(text) for t in TERMS):
+        kinds.append("a term the company keeps in")
     return kinds
 
 
