@@ -13,7 +13,7 @@ key that it enforces.
                        is refused first, HTTP 400, as the guardrail refuses it at LiteLLM (LLM_GUARDRAILS=false turns it off);
                        a question shaped as an llm step's ("Answer with a JSON array of N strings") gets N answers (the
                        first label, or "ok"), so a flow's llm step runs in CI; x-litellm-response-cost says the cost, as LiteLLM's does
-  POST /embeddings, /v1/embeddings  (a key): a vector per input, words hashed into 64 dimensions (shared words are near),
+  POST /embeddings, /v1/embeddings  (a key): a vector per input, words hashed into 256 dimensions (shared words are near),
                        under the guardrail and the budget, as LiteLLM's would be
   GET  /spend/logs?api_key=&start_date=&end_date=&summarize=false  (the master key): a key's calls, as LiteLLM's spend logs
   GET  /health/liveliness, /healthz
@@ -66,12 +66,15 @@ def log_call(info, call_type, body, cost, tokens):
     del info["logs"][:-1000]   # the newest thousand a key
 
 
-def embed(text, dims=64):
-    """A text as the stand-in embeds it: its words (and their halves, so seam ~ seams) hashed into dims, normalized."""
+def embed(text, dims=256):
+    """A text as the stand-in embeds it: its words (and their halves, so seam ~ seams) hashed into dims, normalized.
+    Words of three letters or fewer (the, of, a) are left out when there are others: in few dimensions their
+    collisions outweighed the words that matter."""
     import hashlib
     import math
     v = [0.0] * dims
-    for w in re.findall(r"[a-z0-9]+", text.lower()):
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    for w in [w for w in words if len(w) > 3] or words:
         for part in (w, w[: max(3, len(w) - 1)]):
             h = int(hashlib.sha256(part.encode()).hexdigest(), 16)
             v[h % dims] += 1.0 if (h >> 8) % 2 else -1.0
@@ -180,7 +183,7 @@ class Handler(BaseHTTPRequestHandler):
                 gone = [k for k in b.get("keys") or [] if keys.pop(k, None) is not None]
                 save()
             return self.answer(200, {"deleted_keys": gone})
-        if u.path in ("/embeddings", "/v1/embeddings"):   # a stand-in's embeddings: words hashed into 64 dimensions, so shared words are near
+        if u.path in ("/embeddings", "/v1/embeddings"):   # a stand-in's embeddings: words hashed into 256 dimensions, so shared words are near
             with lock:
                 info = keys.get(tok)
                 if not info:
