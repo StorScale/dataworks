@@ -424,7 +424,8 @@ def test_case(project, check, catalog="iceberg", namespace=None):
     project, the table, the column and the kind (or as the check names
     itself), with the kind's parameters."""
     kind = check["check"]
-    name = "_".join(filter(None, [project, check["table"], check.get("name") or check.get("column"), kind]))
+    # (a regex check is named _matches: once a test of OpenMetadata's own regex, whose definition a test case can't change)
+    name = "_".join(filter(None, [project, check["table"], check.get("name") or check.get("column"), "matches" if kind == "regex" else kind]))
     tc = {"name": name, "testDefinitionName": CHECKS[kind], "parameterValues": []}
     if check.get("column"):
         tc["columnName"] = check["column"]
@@ -454,6 +455,19 @@ def test_case(project, check, catalog="iceberg", namespace=None):
     return tc
 
 
+def prune_checks(token, project, fqn, keep):
+    """The project's test cases on the table that its spec no longer declares, deleted (with their results)."""
+    h = {"Authorization": f"Bearer {token}"}
+    link = f"<#E::table::{fqn}>"
+    r = requests.get(f"{OM}/v1/dataQuality/testCases", headers=h, timeout=30, params={"entityLink": link, "includeAllTests": "true", "limit": 200})
+    if not r.ok:
+        return
+    for t in r.json().get("data", []):
+        if t["name"].startswith(project + "_") and t["name"] not in keep:
+            requests.delete(f"{OM}/v1/dataQuality/testCases/{t['id']}", headers=h, timeout=30, params={"hardDelete": "true", "recursive": "true"})
+            log.info("check %s: no longer declared, removed", t["name"])
+
+
 def run_checks(token):
     for p in projects():
         tables = p["spec"].get("tables") or {}
@@ -468,6 +482,7 @@ def run_checks(token):
             r = requests.get(f"{OM}/v1/tables/name/{fqn}", headers={"Authorization": f"Bearer {token}"}, timeout=10)
             if r.status_code == 404:
                 continue  # not ingested yet
+            prune_checks(token, p["metadata"]["name"], fqn, {c["name"] for c in cases})
             workflow = TestSuiteWorkflow.create({
                 "source": {"type": "testsuite", "serviceName": SERVICE,
                            "sourceConfig": {"config": {"type": "TestSuite", "entityFullyQualifiedName": fqn}}},
@@ -479,6 +494,7 @@ def run_checks(token):
             workflow.stop()
 
 
+PROFILE_PER_ROUND = int(env.get("PROFILE_PER_ROUND", "3"))
 PROFILED = {}   # table FQN -> when this process last profiled it (the catalog's list doesn't carry the profile)
 
 
@@ -497,6 +513,7 @@ def profile_tables(token):
         if not r.ok:
             continue
         due = [t["name"] for t in r.json().get("data", []) if not t.get("deleted") and PROFILED.get(t["fullyQualifiedName"], 0) < stale]
+        due = due[:PROFILE_PER_ROUND]   # a few a round, so a round (and the checks in it) stays short after a restart
         if not due:
             continue
         workflow = ProfilerWorkflow.create({
