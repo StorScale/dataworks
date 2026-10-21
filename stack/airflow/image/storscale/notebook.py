@@ -56,8 +56,9 @@ def failure(executed):
     return ""
 
 
-def keep(project, dag_id, run_id, executed, failed):
-    """The executed notebook (and its HTML) to the platform: never fails the run."""
+def keep(project, dag_id, run_id, executed, failed, bearer=None):
+    """The executed notebook (and its HTML) to the platform, as the project's pipelines
+    (or with the token given: an agent keeps its own run's record): never fails the run."""
     try:
         with open(executed) as f:
             nb = json.load(f)
@@ -70,7 +71,7 @@ def keep(project, dag_id, run_id, executed, failed):
     try:
         r = requests.post(f"{dbt.PLATFORM}/api/projects/{project}/notebooks/runs/{dag_id}/{quote(run_id, safe='')}",
                           json={"notebook": nb, "html": html, "failed": failed}, timeout=120,
-                          headers={"Authorization": f"Bearer {dbt.token()}"})
+                          headers={"Authorization": f"Bearer {bearer or dbt.token()}"})
         print(f"storscale.notebook: the executed notebook to the platform: HTTP {r.status_code} {r.text[:200]}")
     except requests.RequestException as e:
         print(f"storscale.notebook: the executed notebook not sent: {e}")

@@ -46,6 +46,7 @@ def main():
         ready = wait(lambda: (lambda x: x if x and (x.get("status") or {}).get("phase") == "Ready" else None)((projects(bob) or {}).get(NAME)), 900, every=10)
         conns = lambda: {c["name"] for c in (bob.get(f"{url}/connections", timeout=30).json() or {}).get("connections", [])}
         keyed = wait(lambda: True if f"{NAME}-llm" in conns() else None, 300, every=5)
+        sql("bob", "DROP TABLE IF EXISTS knowledge_reviews", "iceberg", NAME)   # a run before may have left it (the namespace outlives the project)
         sql("bob", "CREATE TABLE IF NOT EXISTS reviews (review_id integer, text varchar)", "iceberg", NAME)
         sql("bob", "DELETE FROM reviews", "iceberg", NAME)
         sql("bob", "INSERT INTO reviews VALUES " + ", ".join(f"({i}, '{t}')" for i, t in REVIEWS), "iceberg", NAME)

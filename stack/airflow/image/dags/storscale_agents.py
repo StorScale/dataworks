@@ -57,13 +57,14 @@ def make(pa):
             if a.get("prompt"):   # no notebook: the platform's runner does the prompt with the agent's tools (12.7)
                 record = os.path.join(work, f"{a['name']}.ipynb")
                 kc = notebook._keycloak()
+                own = lambda: agent.token(kc["STORSCALE_TOKEN_URL"], c.login, c.password)   # the record is kept as the agent
                 try:
                     report = agent.run(project, a["name"], a["prompt"], a.get("description") or "", extra.get("mcp_url", ""), extra.get("llm_url") or "",
                                        extra.get("llm_key") or "", kc["STORSCALE_TOKEN_URL"], c.login, c.password, record)
                 except Exception as e:
-                    notebook.keep(project, dag_id, run_id, record, str(e)[:500])
+                    notebook.keep(project, dag_id, run_id, record, str(e)[:500], bearer=own())
                     raise RuntimeError(f"the agent {a['name']}: {e}") from e
-                notebook.keep(project, dag_id, run_id, record, "")
+                notebook.keep(project, dag_id, run_id, record, "", bearer=own())
                 print(f"storscale.agent: {a['name']}'s report:\n{report}")
                 return
             repo = os.path.join(work, "repo")

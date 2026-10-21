@@ -235,11 +235,15 @@ func notebookRunKey(p, dag, run, ext string) string {
 // project's pipelines.
 func (s *server) handleNotebookRun(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	who, ok := s.projectPipelines(w, r, name)
-	if !ok {
-		return
-	}
 	dag, run := r.PathValue("dag"), r.PathValue("run")
+	// An agent keeps its own run's record (one with a prompt runs in a project
+	// that may have no pipelines account); everything else, the project's pipelines.
+	who, ok := s.agentKeepingItsOwn(r, name, dag)
+	if !ok {
+		if who, ok = s.projectPipelines(w, r, name); !ok {
+			return
+		}
+	}
 	if !strings.HasPrefix(dag, "notebook_") && !strings.HasPrefix(dag, "agent_") || !runFileRE.MatchString(dag) || !runFileRE.MatchString(run) {
 		s.fail(w, r, http.StatusBadRequest, "a notebook's (or an agent's) DAG and run")
 		return
@@ -316,4 +320,26 @@ func (s *server) handleNotebookRunView(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Write(data)
+}
+
+// agentKeepingItsOwn is the agent whose token the request carries, when the
+// DAG is that agent's own (agent_<project>_<name>) and the agent is the project's.
+func (s *server) agentKeepingItsOwn(r *http.Request, name, dag string) (string, bool) {
+	if s.store == nil || !strings.HasPrefix(dag, "agent_") {
+		return "", false
+	}
+	who, err := s.bearer(r)
+	if err != nil {
+		return "", false
+	}
+	p, err := s.store.Project(r.Context(), name)
+	if err != nil || p == nil {
+		return "", false
+	}
+	for _, a := range p.Spec.Agents {
+		if a.Approved() && a.DAG(name) == dag && who == "service-account-"+a.ClientID(name) {
+			return who, true
+		}
+	}
+	return "", false
 }
