@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+- **A cost under a cent shows as one**: usage kept costs to the cent, so a small project's month, and its alert, read 0.00 of 0.00. Costs are kept to a millionth, and an amount under a cent is written to two significant digits (0.000042).
+
 ## [0.24.0] - 2026-10-21
 
 What each project costs: its queries' CPU time, what it keeps and its model calls, priced by the install's rate card, against a monthly budget that alerts the project at 80% and 100%, on a Usage tab for its editors and a page of every project's for finance.

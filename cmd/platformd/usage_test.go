@@ -69,13 +69,13 @@ func TestTrinosQueriesAreCountedByProjectAndPriced(t *testing.T) {
 	if o := s.usageOf(context.Background(), ops, month); o.Trino.Queries != 1 || o.Trino.CPUSeconds != 0.125 {
 		t.Errorf("ops: %+v", o.Trino)
 	}
-	if u.Cost["trino"] != 0.73 || u.Cost["total"] != 0.73 || u.Share == nil {
+	if u.Cost["trino"] != 0.725 || u.Cost["total"] != 0.725 || u.Share == nil {
 		t.Errorf("cost: %v", u.Cost)
 	}
 	// Another host's count is added to it.
 	other, _ := json.Marshal(&trinoUsage{Queries: 1, CPUSeconds: 0.2, ByUser: map[string]*usageShare{"bob": {Queries: 1, CPUSeconds: 0.2}}, ByDay: map[string]*usageShare{}})
 	files.PutFile(context.Background(), usageKey("sales", month, "b"), other, "")
-	if u := s.usageOf(context.Background(), sales, month); u.Trino.Queries != 3 || u.Cost["total"] != 0.93 {
+	if u := s.usageOf(context.Background(), sales, month); u.Trino.Queries != 3 || u.Cost["total"] != 0.925 {
 		t.Errorf("two hosts: %+v %v", u.Trino.Queries, u.Cost)
 	}
 	if is := s.usageIssues(context.Background(), sales, "/p/sales"); len(is) != 1 || is[0].Kind != "cost" || !strings.Contains(is[0].Title, "92%") {
@@ -96,6 +96,14 @@ func TestTrinosQueriesAreCountedByProjectAndPriced(t *testing.T) {
 		{"frank", "/api/usage", 200}, {"bob", "/api/usage", 403}, {"bob", "/api/projects/sales/usage?month=soon", 400}} {
 		if code := get(c.who, c.path); code != c.want {
 			t.Errorf("%s %s: %d, want %d", c.who, c.path, code, c.want)
+		}
+	}
+}
+
+func TestMoneyKeepsASmallAmount(t *testing.T) {
+	for in, want := range map[float64]string{12.345: "12.35", 0: "0.00", 0.0000417: "0.000042", 0.005: "0.005", 1e-9: "0.000000001", -0.0023: "-0.0023"} {
+		if got := money(in); got != want {
+			t.Errorf("money(%v) = %s, want %s", in, got, want)
 		}
 	}
 }
