@@ -57,6 +57,7 @@ PLATFORMD_URL = env.get("PLATFORMD_URL", "http://platformd:8080")  # platformd i
 TRINO_AUDIENCE = env.get("TRINO_AUDIENCE", "lakehouse")
 STORE_BUCKET = env.get("STORE_BUCKET", "storscale-platform")
 MAX_ROWS = 1000
+SCRIPT_ROWS = 100_000   # the SQL route's most when a script asks for more (buckets_lake.sql: a model's training rows)
 
 jwks = jwt.PyJWKClient(JWKS, cache_keys=True, lifespan=300)
 store = boto3.client("s3", endpoint_url=env.get("STORE_URL", "http://buckets:9000"), region_name="us-east-1",
@@ -1102,7 +1103,8 @@ def post_tests(c, project, body, request):
 
 
 def post_sql(c, project, body, request):
-    """A SQL statement, run in Trino as the caller (the platform's SQL editor, and table previews)."""
+    """A SQL statement, run in Trino as the caller (the platform's SQL editor, and table previews): its
+    first thousand rows, or as many as asked up to SCRIPT_ROWS (a notebook's training data)."""
     member(c, project)
     sql = (body.get("sql") or "").strip().rstrip(";")
     if not sql:
@@ -1111,7 +1113,7 @@ def post_sql(c, project, body, request):
         raise ValueError("one statement at a time")
     started = time.time()
     try:
-        out = run(c, project, sql, ["sql"], limit=min(int(body.get("limit") or MAX_ROWS), MAX_ROWS))
+        out = run(c, project, sql, ["sql"], limit=min(int(body.get("limit") or MAX_ROWS), SCRIPT_ROWS))
     except trino.exceptions.TrinoUserError as e:
         raise PermissionError(e.message) if e.error_name == "PERMISSION_DENIED" else ValueError(e.message) from e
     out["seconds"] = round(time.time() - started, 2)

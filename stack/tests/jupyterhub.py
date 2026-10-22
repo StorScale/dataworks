@@ -147,8 +147,11 @@ print(json.dumps({
     "orders": len(orders),
     "write_datasets": code(lambda: s3.put_object(Bucket="sales", Key=f"datasets/from-{me}.txt", Body=b"x")),
     # The libraries the common analyses and models need (use case 7.8), and VS Code on the path.
-    "libraries": [m for m in ("sklearn", "statsmodels", "scipy", "lightgbm", "xgboost", "flaml", "mlflow", "geopandas", "networkx")
-                  if __import__("importlib").util.find_spec(m) is None],
+    # Each imported, as a notebook would (LightGBM needs the OpenMP runtime; FLAML's AutoML imports it).
+    "libraries": [m for m in ("sklearn", "statsmodels", "scipy", "lightgbm", "xgboost", "flaml", "flaml.automl", "mlflow", "skops.io", "geopandas", "networkx")
+                  if __import__("subprocess").run([__import__("sys").executable, "-c", "import " + m], capture_output=True).returncode != 0],
+    # The models' templates (15.1, R15.7), put in the person's work folder as the server started.
+    "templates": sorted(f for f in os.listdir(os.path.expanduser("~/work/templates")) if f.endswith(".ipynb")) if os.path.isdir(os.path.expanduser("~/work/templates")) else [],
     "code_server": __import__("shutil").which("code-server") is not None,
     "proxied": proxied(),
 }))
@@ -194,6 +197,8 @@ def main():
     check("people in neither group can't sign in", r.status_code == 403, f"HTTP {r.status_code}")
     check("a notebook has the analysis and ML libraries, and VS Code opens from the launcher (7.8)",
           a["libraries"] == [] and a["code_server"] is True and a["vscode"] == 200, (a["libraries"], a["code_server"], a["proxied"], a["vscode"]))
+    check("... and the models' templates, churn, forecast and propensity, are in the person's work folder (15.1)",
+          a["templates"] == ["churn.ipynb", "forecast.ipynb", "propensity.ipynb"], a["templates"])
 
     # 2. Each notebook works as its person, with no keys.
     check("each notebook gets its own person's Keycloak token",

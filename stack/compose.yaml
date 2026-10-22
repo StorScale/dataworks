@@ -266,6 +266,7 @@ services:
     environment:
       TRINO_SHARED_SECRET: ${TRINO_SHARED_SECRET}   # Trino's finished queries come with it (usage, 13.1)
       MLFLOW_URL: http://mlflow:5000   # the projects' experiments and models (15.1), through platformd alone
+      SERVING_URL: http://serving:8080   # the projects' models answering as an API (15.1): the shared server
       # What the catalog's Protection tags mean, as the operator applies them: shown on the Governance page (12.9).
       PROTECTION_TAGS: '{"personal": {"mask": "MASK_HASH", "except": ["engineers"]}, "financial": {"mask": "MASK", "except": ["engineers"]}, "health": {"mask": "MASK_NULL", "except": ["engineers"]}}'
       # The Health page, and alerts (where the platform's Secret storscale-alerts says).
@@ -380,6 +381,7 @@ services:
       NESSIE_URL: http://nessie:19120
       # Projects' pipelines repos: their git connections, through the platform's Airflow account.
       AIRFLOW_URL: http://airflow:8090/pipelines
+      SERVING_ACCOUNT: airflow-pipelines   # the shared model server signs in as it: a reader of each project it serves
       AIRFLOW_PASSWORD: ${AIRFLOW_PLATFORM_PASSWORD}
       # Projects' limits: Trino's resource groups, and the projects' buckets' sizes.
       TRINO_DB_PASSWORD: ${TRINO_DB_PASSWORD}
@@ -555,6 +557,29 @@ services:
       setup: {condition: service_completed_successfully}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 5s
+      retries: 60
+
+  # The projects' models answering as an API (15.1): in Compose one server for
+  # every project's servings (on Kubernetes each has its own), in Airflow's
+  # image, in the virtualenv the scorings run in; signed in as the pipelines'
+  # account, which the operator makes a reader of each project with servings.
+  # platformd alone calls it.
+  serving:
+    restart: unless-stopped
+    build: ./airflow/image
+    image: storscale-airflow
+    entrypoint: ["/opt/score/bin/python", "/opt/score/storscale_serve.py"]
+    environment:
+      <<: *urls
+      OPERATOR_URL: http://platform-operator:8081
+      STORSCALE_PLATFORMD_URL: http://platformd:8080
+      SERVING_CLIENT_ID: airflow-pipelines
+      SERVING_CLIENT_SECRET: ${AIRFLOW_PIPELINES_SECRET}
+    depends_on:
+      platform-operator: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "/opt/score/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
       interval: 5s
       retries: 60
 

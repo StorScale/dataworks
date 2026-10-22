@@ -33,6 +33,7 @@ spec:
             - {name: PROTECTION_TAGS, value: {{ .Values.protection.tags | toJson | quote }}}   # shown on the Governance page (12.9)
             - {name: TRINO_SHARED_SECRET, valueFrom: {secretKeyRef: {name: storscale-env, key: TRINO_SHARED_SECRET}}}   # Trino's finished queries come with it (13.1)
             - {name: MLFLOW_URL, value: "http://mlflow:5000"}   # the projects' experiments and models (15.1), through platformd alone
+            - {name: SERVING_URL, value: "http://{server}:8080"}   # each served model's own server (templates/serving.yaml)
             - {name: USAGE_RATES, value: {{ .Values.usage.rates | toJson | quote }}}
             {{- with .Values.usage.viewerGroups }}
             - {name: USAGE_VIEWER_GROUPS, value: {{ join "," . | quote }}}
@@ -138,6 +139,7 @@ spec:
       annotations:
         checksum/airflow-project: {{ include "storscale.airflow.project" . | sha256sum }}
         checksum/copy: {{ include "storscale.copy" . | sha256sum }}
+        checksum/serving: {{ include "storscale.serving" . | sha256sum }}
     spec:
       enableServiceLinks: false
       serviceAccountName: storscale
@@ -201,10 +203,14 @@ spec:
             # Projects' sources copied into their tables (templates/copy.yaml).
             - {name: COPY_TEMPLATE, value: /etc/storscale/copy/template.json}
             - {name: COPY_COMMIT_EVERY, value: {{ .Values.copy.commitEvery | quote }}}
+            # Projects' models answering as an API (templates/serving.yaml): a server each.
+            - {name: SERVING_TEMPLATE, value: /etc/storscale/serving/template.json}
+            - {name: SERVING_DEFAULT_MEMORY, value: {{ .Values.serving.memory | quote }}}
           volumeMounts:
             - {name: airflow-project, mountPath: /etc/storscale/airflow-project, readOnly: true}
             - {name: trino-cert, mountPath: /trino-cert, readOnly: true}
             - {name: copy, mountPath: /etc/storscale/copy, readOnly: true}
+            - {name: serving, mountPath: /etc/storscale/serving, readOnly: true}
           ports:
             - {name: health, containerPort: 8081}
           readinessProbe:
@@ -216,6 +222,7 @@ spec:
         - {name: airflow-project, configMap: {name: storscale-airflow-project}}
         - {name: trino-cert, secret: {secretName: trino-tls, items: [{key: cert.pem, path: cert.pem}]}}
         - {name: copy, configMap: {name: storscale-copy}}
+        - {name: serving, configMap: {name: storscale-serving}}
 ---
 apiVersion: v1
 kind: Service

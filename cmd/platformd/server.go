@@ -188,6 +188,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/terms", s.handleSemantic)
 	mux.HandleFunc("GET /api/products", s.handleProducts)
 	mux.HandleFunc("POST /internal/usage/trino", s.handleTrinoEvents)      // Trino's finished queries (its HTTP event listener), for usage (13.1)
+	mux.HandleFunc("GET /internal/catalog/models", s.handleCatalogModels)  // every project's models and scorings, for catalog-sync (R15.6)
 	mux.HandleFunc("GET /api/usage", s.handleUsage)                        // every project's month: usage viewers, administrators
 	mux.HandleFunc("GET /api/projects/{name}/usage", s.handleProjectUsage) // a project's: its editors too
 	mux.HandleFunc("GET /api/governance", s.handleGovernance)              // across projects (12.9): administrators, certifiers, data-protection approvers
@@ -244,13 +245,15 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("PUT /api/projects/{name}/flows/{flow}", s.handleSaveFlow)
 	mux.HandleFunc("POST /api/projects/{name}/flows/compile", s.handleFlowCompile)
 	mux.HandleFunc("POST /api/projects/{name}/flows/preview", s.handleFlowPreview)
-	mux.HandleFunc("POST /api/projects/{name}/flows/{flow}/steps/{step}/run", s.handleFlowLLMRun) // the llm step's table, by the flow's DAG
-	mux.HandleFunc("/mlflow/{name}/{rest...}", s.handleMLflow)                                    // MLflow, in the project's workspace (15.1)
-	mux.HandleFunc("GET /api/projects/{name}/models", s.handleModels)
+	mux.HandleFunc("POST /api/projects/{name}/flows/{flow}/steps/{step}/run", s.handleFlowLLMRun)               // the llm step's table, by the flow's DAG
+	mux.HandleFunc("/mlflow/{name}/{rest...}", s.handleMLflow)                                                  // MLflow, in the project's workspace (15.1)
+	mux.HandleFunc("GET /api/projects/{name}/models", s.handleModels)                                           // its models and experiments
+	mux.HandleFunc("GET /api/projects/{name}/serving", s.handleServings)                                        // its models answering as an API, and the version each serves
+	mux.HandleFunc("POST /api/projects/{name}/serving/{serving}/predict", s.handleServingPredict)               // a served model's predictions, audited
 	mux.HandleFunc("GET /api/projects/{name}/scoring", s.handleScorings)                                        // its scorings and their recent runs
 	mux.HandleFunc("GET /api/projects/{name}/scoring/{scoring}/reference", s.handleScoringReference)            // a version's drift reference
 	mux.HandleFunc("PUT /api/projects/{name}/scoring/{scoring}/reference", s.handleScoringReference)            // the first run's, once (its pipelines)
-	mux.HandleFunc("POST /api/projects/{name}/scoring/{scoring}/runs", s.handleScoringRun)                      // a run's drift (its pipelines)                                           // its models and experiments
+	mux.HandleFunc("POST /api/projects/{name}/scoring/{scoring}/runs", s.handleScoringRun)                      // a run's drift (its pipelines)
 	mux.HandleFunc("POST /api/projects/{name}/models/{model}/versions/{version}/approve", s.handleApproveModel) // an editor other than who registered it
 	mux.HandleFunc("GET /api/projects/{name}/apps", s.handleApps)                                               // its apps (14.1), to its members
 	mux.HandleFunc("PUT /api/projects/{name}/apps/{app}", s.handlePutApp)                                       // its editors make one

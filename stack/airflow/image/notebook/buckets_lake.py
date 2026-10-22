@@ -10,6 +10,8 @@ themselves.
 import datetime
 import json
 import os
+import warnings
+from urllib.parse import quote
 
 import boto3
 import requests
@@ -57,6 +59,55 @@ def session():
 def s3():
     """A boto3 S3 client for Buckets, as the project's pipelines."""
     return session().client("s3", endpoint_url=ENDPOINT, config=Config(s3={"addressing_style": "path"}))
+
+
+# --- SQL, as the SQL tab runs it ---------------------------------------------------------
+
+ROWS = 100_000   # the most the platform's SQL route answers a script with
+_INTEGER = ("tinyint", "smallint", "integer", "bigint")
+_REAL = ("real", "double", "decimal")
+
+
+def sql(project, query):
+    """A query's answer as a pandas DataFrame, its columns named: run in Trino
+    through the platform's SQL route, as the project's pipelines (or the
+    agent), under the project's rules and with its own table names (FROM
+    orders, not iceberg.<project>.orders).
+    Integers come back as int64 (float64 with nulls), reals and decimals as
+    float64, dates and timestamps as datetimes. At most 100,000 rows: aggregate
+    or sample in the query. A refusal raises, with the platform's reason:
+    PermissionError when it's who runs it, RuntimeError otherwise."""
+    import pandas as pd
+    url = os.environ.get("STORSCALE_PLATFORMD_URL", "http://platformd:8080").rstrip("/")
+    r = requests.post(f"{url}/api/projects/{quote(project, safe='')}/sql", json={"sql": query, "limit": ROWS}, timeout=600,
+                      headers={"Authorization": f"Bearer {token()}", "X-Platform-Request": "1"})
+    try:
+        body = r.json()
+    except ValueError:
+        body = {"error": r.text[:300]}
+    if not r.ok:
+        why = body.get("error") if isinstance(body, dict) else None
+        if r.status_code == 401:
+            raise PermissionError(f"the platform refused the query on {project}: {why or 'the token was not accepted'}")
+        cls = PermissionError if r.status_code == 403 else RuntimeError
+        raise cls(f"the platform refused the query on {project} ({r.status_code}): {why or r.reason}")
+    df = pd.DataFrame(body["rows"], columns=body["columns"])
+    for i, kind in enumerate(t.split("(")[0].strip() for t in body.get("types") or []):
+        col = df.iloc[:, i]
+        if kind in _INTEGER:
+            df.isetitem(i, col.astype("int64" if col.notna().all() else "float64"))
+        elif kind in _REAL:
+            df.isetitem(i, col.astype("float64"))
+        elif kind == "boolean":
+            df.isetitem(i, col.astype("bool" if col.notna().all() else "boolean"))
+        elif kind in ("date", "timestamp"):
+            try:
+                df.isetitem(i, pd.to_datetime(col))
+            except (ValueError, TypeError):
+                pass   # a time zone pandas doesn't read: left as text
+    if len(df) == ROWS:
+        warnings.warn(f"the answer has {ROWS} rows, the most the platform's SQL route gives: there may be more", stacklevel=2)
+    return df
 
 
 # --- As an agent (use case 12.2): the MCP server, and the LLM gateway -------------------

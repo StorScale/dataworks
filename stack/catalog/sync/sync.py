@@ -17,7 +17,13 @@ Every round, it:
      their descriptions, their lineage and their tests' results;
   5. links each source's table a project copies (sources[].copy, use case
      8.1) to its copy, <source>_<table>, column by column; and each import's
-     pipeline (use case 8.2) to its tables, <import>_<resource>: their lineage.
+     pipeline (use case 8.2) to its tables, <import>_<resource>: their lineage;
+  6. puts each project's registered models (R15.6) in the ML model service
+     "storscale-mlflow", as <project>__<model>: their cards, approved
+     versions, who registered and approved them, and the catalog's commit
+     their training run read; each scoring's input upstream of its model and
+     its output downstream, the input's snapshot then on the edge. platformd
+     says what they are (only it reaches MLflow); models gone are removed.
 
 Once, it also makes the pipeline service "airflow", and has OpenMetadata file
 the pipelines it learns of from OpenLineage events under it.
@@ -415,6 +421,134 @@ def import_lineage():
                     log.warning("lineage of %s to %s: HTTP %d %s", dag, name, r.status_code, r.text[:200])
 
 
+PLATFORMD_URL = env.get("PLATFORMD_URL", "http://platformd:8080")
+# The platform as people reach it, for the models' links: PIPELINES_URL is <platform>/pipelines.
+PLATFORM_URL = env.get("PLATFORM_URL") or env.get("PIPELINES_URL", "").removesuffix("/pipelines")
+ML_SERVICE = "storscale-mlflow"
+
+
+def when(ms):
+    return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(ms / 1000)) if ms else "at a time not recorded"
+
+
+def model_description(project, m, scorings):
+    """A model's page: its card, then what the platform knows of it."""
+    v = m.get("approved")
+    out = [m.get("description") or "No card yet: it's written on the project's Models tab.", "", "---", "",
+           f"The registered model **{m['name']}** of the project **{project}** ({m.get('versions', 0)} versions), "
+           "kept in the catalog by the platform from its MLflow registry."]
+    if not v:
+        out.append("\nNo version is approved yet: nothing scores with it.")
+    else:
+        out.append(f"\n**Approved version {v['version']}**: registered by {v.get('registeredBy') or 'someone'}, "
+                   f"approved by {v.get('approvedBy') or 'someone'}" + (f" ({v['approvedAt']})." if v.get("approvedAt") else "."))
+        if v.get("runId"):
+            run = f"Trained by the run `{v['runId']}`" + (f" of {v['runBy']}" if v.get("runBy") else "") + f", started {when(v.get('started'))}"
+            if v.get("dataCommit"):
+                out.append(f"\n{run}, on the catalog at its Nessie commit `{v['dataCommit']}`: every table as it was then.")
+            else:
+                out.append(f"\n{run}; it recorded no data commit.")
+    for s in scorings:
+        out.append(f"\nScores `{s['table']}` into `{s['output']}` (the scoring {s['name']}, `{s['schedule']}`).")
+    return "\n".join(out)
+
+
+def sync_models():
+    """OpenMetadata's ML models as the projects' registered models (R15.6),
+    as platformd says them; each scoring's input table upstream of its model,
+    with the input's snapshot when the approved version was trained, and its
+    output downstream. Models gone (their project too) removed, and edges no
+    scoring draws; a project whose models platformd couldn't read keeps its."""
+    h = admin_headers()
+    r = requests.get(f"{PLATFORMD_URL}/internal/catalog/models", headers=h, timeout=120)
+    r.raise_for_status()
+    got = r.json()
+    if not got.get("available"):
+        return
+    wanted, unknown = {}, set()
+    for p in got.get("projects") or []:
+        if p.get("error"):
+            unknown.add(p["name"])
+            log.warning("models of %s: %s", p["name"], p["error"])
+        for m in p.get("models") or []:
+            wanted[f"{p['name']}__{m['name']}"] = (p, m)
+    if not wanted and requests.get(f"{OM}/v1/services/mlmodelServices/name/{ML_SERVICE}", headers=h, timeout=10).status_code == 404:
+        return
+    requests.put(f"{OM}/v1/services/mlmodelServices", headers=h, timeout=10, json={
+        "name": ML_SERVICE, "displayName": "StorScale MLflow", "serviceType": "Mlflow",
+        "description": "The projects' registered models, from the platform's MLflow (a workspace per project): kept by the platform."}).raise_for_status()
+    have = requests.get(f"{OM}/v1/mlmodels", headers=h, timeout=30, params={"service": ML_SERVICE, "limit": 1000})
+    have.raise_for_status()
+    for x in have.json().get("data", []):
+        if x["name"] not in wanted and x["name"].split("__", 1)[0] not in unknown:
+            requests.delete(f"{OM}/v1/mlmodels/{x['id']}", headers=h, timeout=30, params={"hardDelete": "true"})
+            log.info("model %s: no longer registered, removed", x["name"])
+
+    def table(p, name):
+        t = requests.get(f"{OM}/v1/tables/name/{SERVICE}.{p['catalog']}.{p['namespace']}.{name}", headers=h, timeout=30)
+        return t.json() if t.ok else None
+    for key, (p, m) in wanted.items():
+        project, v = p["name"], m.get("approved") or {}
+        scorings = [s for s in p.get("scorings") or [] if s["model"] == m["name"]]
+        body = {"name": key, "displayName": f"{m['name']} ({project})", "service": ML_SERVICE,
+                "algorithm": v.get("algorithm") or "mlmodel",   # as OpenMetadata's own MLflow ingestion says it, when the run doesn't
+                "description": model_description(project, m, scorings),
+                "mlHyperParameters": [{"name": k, "value": str(val)} for k, val in sorted((v.get("params") or {}).items())]}
+        if v.get("source"):
+            body["mlStore"] = {"storage": v["source"]}
+        if PLATFORM_URL:
+            body["sourceUrl"] = f"{PLATFORM_URL}/p/{project}/models"
+        r = requests.put(f"{OM}/v1/mlmodels", headers=h, timeout=30, json=body)
+        if not r.ok:
+            log.warning("model %s: HTTP %d %s", key, r.status_code, r.text[:200])
+            continue
+        model = r.json()
+        edges = set()
+        for s in scorings:
+            src, dst = table(p, s["table"]), table(p, s["output"])
+            if src:   # the input, at the snapshot the approved version was trained on
+                at = "No version is approved yet."
+                if v:
+                    at = f"Its approved version, {v['version']}, was trained on the catalog at Nessie commit `{v.get('dataCommit') or 'unrecorded'}` ({when(v.get('started'))})"
+                    at += f", when this table was Iceberg snapshot {s['inputSnapshot']}." if s.get("inputSnapshot") else (
+                        ", when this table's snapshot isn't known." if v.get("dataCommit") else ".")
+                columns = f" (its columns {', '.join(s['columns'])})" if s.get("columns") else ""
+                edges.add((src["id"], model["id"]))
+                r = requests.put(f"{OM}/v1/lineage", headers=h, timeout=30, json={"edge": {
+                    "fromEntity": {"id": src["id"], "type": "table"}, "toEntity": {"id": model["id"], "type": "mlmodel"},
+                    "lineageDetails": {"description": f"Scored by {m['name']}{columns}: the scoring {s['name']} ({s['schedule']}). {at}"}}})
+                if not r.ok:
+                    log.warning("lineage of %s to %s: HTTP %d %s", s["table"], key, r.status_code, r.text[:200])
+            if dst:
+                edges.add((model["id"], dst["id"]))
+                r = requests.put(f"{OM}/v1/lineage", headers=h, timeout=30, json={"edge": {
+                    "fromEntity": {"id": model["id"], "type": "mlmodel"}, "toEntity": {"id": dst["id"], "type": "table"},
+                    "lineageDetails": {"description": f"Its scores of {s['table']}, by the approved version: the scoring {s['name']} ({s['schedule']}), written afresh each run."}}})
+                if not r.ok:
+                    log.warning("lineage of %s to %s: HTTP %d %s", key, s["output"], r.status_code, r.text[:200])
+        if project not in unknown:
+            prune_model_lineage(h, model["id"], edges)
+
+
+def prune_model_lineage(h, model_id, keep):
+    """A model's edges to and from tables that no scoring draws any more, deleted."""
+    r = requests.get(f"{OM}/v1/lineage/mlmodel/{model_id}", headers=h, timeout=30, params={"upstreamDepth": 1, "downstreamDepth": 1})
+    if not r.ok:
+        return
+    lineage = r.json()
+    types = {n["id"]: n.get("type") for n in lineage.get("nodes") or []}
+    for e in (lineage.get("upstreamEdges") or []) + (lineage.get("downstreamEdges") or []):
+        a, b = (x.get("id") if isinstance(x, dict) else x for x in (e.get("fromEntity"), e.get("toEntity")))
+        if model_id not in (a, b) or (a, b) in keep:
+            continue
+        other = b if a == model_id else a
+        if types.get(other) != "table":
+            continue
+        ta, tb = ("mlmodel", "table") if a == model_id else ("table", "mlmodel")
+        d = requests.delete(f"{OM}/v1/lineage/{ta}/{a}/{tb}/{b}", headers=h, timeout=30)
+        log.info("lineage of model %s: an edge no scoring draws, removed (HTTP %d)", model_id, d.status_code)
+
+
 def q(name):
     return '"' + name.replace('"', '""') + '"'
 
@@ -625,6 +759,10 @@ def main():
                     sync_products()
                 except Exception as e:  # noqa: BLE001 (the next round tries again)
                     log.warning("data products: %s", e)
+                try:
+                    sync_models()
+                except Exception as e:  # noqa: BLE001 (the next round tries again)
+                    log.warning("models: %s", e)
                 last_metadata = time.time()
                 log.info("metadata: ingested trino")
             if time.time() - last_classified > CLASSIFY_EVERY:

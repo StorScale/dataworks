@@ -479,6 +479,9 @@ export type ScoringRun = { version: string; rows: number; drift: Record<string, 
 export type Scoring = { name: string; model: string; table: string; id: string; columns?: string[]; output: string; schedule: string;
   drift?: number; maxRows?: number; threshold: number; dag: string; runs: ScoringRun[] };
 export const getScorings = (name: string) => api<{ scoring: Scoring[] }>("GET", `/api/projects/${encodeURIComponent(name)}/scoring`);
+// A project's models answering as an API (R15.4): each serving, the version it serves now (or why none), where to call it.
+export type Serving = { name: string; model: string; memory?: string; maxRows: number; url: string; version?: string; error?: string };
+export const getServings = (name: string) => api<{ serving: Serving[] }>("GET", `/api/projects/${encodeURIComponent(name)}/serving`);
 // A model's card is its description in MLflow's registry, written through the project's MLflow.
 export const putModelCard = (name: string, model: string, description: string) =>
   api<unknown>("PATCH", `/mlflow/${encodeURIComponent(name)}/api/2.0/mlflow/registered-models/update`, { name: model, description });

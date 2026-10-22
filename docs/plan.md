@@ -198,7 +198,7 @@ Dataiku's product, as its own material lays it out in ten areas, checked item by
 
 | Capability | Today | Roadmap | Gap, and how to fill it |
 |---|---|---|---|
-| Visual AutoML | Nothing | — | **Decided: not visual.** Dataiku's visual ML workbench is years of work. The code path instead: FLAML in the notebook image, with a notebook template that trains, evaluates and logs to MLflow (15.1). If a team later wants it visual, a *train* step on the canvas over FLAML is the shape. |
+| Visual AutoML | Nothing | — | **Decided: not visual.** Dataiku's visual ML workbench is years of work. The code path instead: FLAML in the notebook image, with notebook templates (churn, propensity, forecast) that train, evaluate and register in MLflow (15.1; built, R15.7). If a team later wants it visual, a *train* step on the canvas over FLAML is the shape. |
 | Code-first ML | Partial: notebooks with pandas and pyarrow; no ML libraries in the image | MLflow (15.1); the libraries (R7.24) | None once the image has them |
 | Prediction, classification, regression, clustering, time-series forecasting, causal ML, computer vision | Nothing | 15.1 | All code-path on the libraries above (causal: dowhy or econml; vision: torch, optional, large); none as visual recipes |
 | Model comparison and evaluation, feature engineering, hyperparameter optimisation, explainability | Nothing | 15.1 (MLflow) | MLflow's experiments compare runs; FLAML tunes; shap explains. Libraries and a notebook template; no UI of the platform's beyond MLflow's. |
@@ -243,10 +243,10 @@ Dataiku's product, as its own material lays it out in ten areas, checked item by
 |---|---|---|---|
 | Model registry, versioning | Nothing | 15.1 (MLflow per project, a registry with approval; was 14.2) | Planned |
 | Model deployment: batch scoring | Nothing | 15.1 (a pipeline) | Planned |
-| Real-time / API deployment | Nothing | — | **Gap.** Fill: a registered, approved model served as an API in the project's namespace (MLflow's own serving image, behind the gateway, signed in through Keycloak, under the project's limits), with the audit naming the caller. Three days. |
+| Real-time / API deployment | Nothing | R15.4 | **Built** (serving): the approved version served by a server of the project's own (MLflow's pyfunc, in the scoring's environment rather than MLflow's serving image), reached only through platformd, signed in through Keycloak, a few calls at a time per project, each call in the audit log with the caller and the version. |
 | Deployment automation, dev/test/prod lifecycle | Built for projects: plan and apply with a target per install (7.4), data branches (7.3) | Models follow: a model's version in the project's spec, promoted by apply | With 15.1 |
 | Approval workflows | Built for agents, deliveries, products, project applies | 15.1 for models | Planned |
-| Model lineage | Nothing | R15.1: runs tied to the data's commit | Planned (R15.6): the model's inputs (tables, at their snapshots) in the catalog's lineage, so a model is a node like a table. |
+| Model lineage | Nothing | R15.1: runs tied to the data's commit | **Built** (R15.6): each model a node in the catalog's lineage, between the tables its scorings read (at their snapshots) and write, with its approved version's training commit. Not yet: the tables a training run read, which nothing records. |
 | Model performance monitoring, drift | Nothing | R15.3 (PSI per input column, Grafana) | **Built** (scoring): each scoring run's drift against the version's first run, an alert past the threshold, and a metric Grafana draws. Not yet: the scores' accuracy against outcomes, when they're known. |
 | Regulatory / model documentation | Nothing | — | **Gap.** Fill: a model card per registered model (purpose, data, metrics, owner, approvals, limits), kept with the registry and shown with the product-like page (R15.5). |
 | Monitoring of models on third-party ML platforms | Nothing | — | Not to fill. |
@@ -270,7 +270,7 @@ Dataiku's product, as its own material lays it out in ten areas, checked item by
 | AI governance | Built: agents' identity, approval, tools, budgets, audit; the guardrail; assistants registered | — | None |
 | Model governance, model registry | Nothing | 15.1 | Planned |
 | Data lineage | Built | — | None |
-| Model lineage | Nothing | 15.1 | Planned (area 6) |
+| Model lineage | Nothing | 15.1 | Built (R15.6) |
 | Approval workflows | Built: agents, deliveries, products' access, project applies; access requests (R6.4) | — | None |
 | Documentation | Built: terms with owners and definitions, products' contracts, a project's description | Model cards (area 6) | None beyond model cards |
 | Dataset certification | Built (10.3) | — | None |

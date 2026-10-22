@@ -387,6 +387,17 @@ spec:
                       schedule: {type: string}
                       drift: {type: number}
                       maxRows: {type: integer}
+                serving:
+                  description: "Its approved models answering as an API (15.1): the registered model's approved version, served by a server of the project's, called through the platform by its people, each call audited."
+                  type: array
+                  items:
+                    type: object
+                    required: [name, model]
+                    properties:
+                      name: {type: string, pattern: '^[a-z][a-z0-9-]{0,15}$'}
+                      model: {type: string}
+                      memory: {type: string}
+                      maxRows: {type: integer}
                 apps:
                   description: "Small pages of the project's data (14.1), declared: a metric by a dimension, a table's columns, or questions answered from a knowledge bank; with filters; fetched as whoever opens them."
                   type: array

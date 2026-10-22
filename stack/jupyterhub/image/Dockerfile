@@ -55,3 +55,27 @@ COPY schedule/storscale_schedule.py /opt/buckets/storscale_schedule.py
 RUN echo /opt/buckets > "$(python -c 'import site; print(site.getsitepackages()[0])')/buckets.pth"
 COPY --from=schedule /src/dist /opt/conda/share/jupyter/labextensions/storscale-schedule
 COPY schedule/jupyter_server_config.d/storscale_schedule.json /opt/conda/etc/jupyter/jupyter_server_config.d/storscale_schedule.json
+# Notebook templates for the common models (use case 15.1, R15.7): churn, propensity
+# and forecast, put in each person's work/templates/ as their server starts (a hook
+# of the image's start.sh). A template the person has changed, or deleted, is
+# theirs: only one still as last put there is updated with the image.
+COPY templates/ /opt/storscale/templates/
+COPY --chmod=0755 <<'SH' /usr/local/bin/before-notebook.d/50-storscale-templates.sh
+# Sourced by start.sh: in a subshell, so nothing here stops the server starting.
+(
+  dst="/home/${NB_USER:-jovyan}/work/templates"
+  kept="${dst}/.shipped"                       # each template as last put there
+  mkdir -p "${kept}" || exit 0
+  for f in /opt/storscale/templates/*.ipynb; do
+    n="$(basename "${f}")"
+    if [ -e "${dst}/${n}" ]; then
+      cmp -s "${dst}/${n}" "${kept}/${n}" || continue   # changed by the person
+      cmp -s "${f}" "${kept}/${n}" && continue          # as shipped already
+    elif [ -e "${kept}/${n}" ]; then
+      continue                                         # deleted by the person
+    fi
+    cp "${f}" "${dst}/${n}" && cp "${f}" "${kept}/${n}"
+  done
+  if [ "$(id -u)" = 0 ]; then chown -R "${NB_UID:-1000}:${NB_GID:-100}" "${dst}"; fi
+) || true
+SH

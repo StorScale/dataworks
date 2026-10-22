@@ -240,6 +240,11 @@ install:
 
 # Projects' sources copied into their tables by change capture (use case 8.1):
 # a pod per copying source, which the operator makes.
+# A project's models answering as an API (serving, use case 15.1): each a
+# server of its own, with this much memory when its serving names none.
+serving:
+  memory: 1Gi
+
 copy:
   memory: 1Gi
   commitEvery: 30   # seconds at most between a change and its commit to the table
