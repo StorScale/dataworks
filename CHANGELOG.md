@@ -4,6 +4,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-10-22
+
+The platform from a script: its API reference, made from its routes, and the `storscale` Python package, signed in as a person or a service account; a Keycloak token now signs in on every route.
+
+**Upgrading from 0.24.0:** `storscale upgrade --context <cluster> --version 0.25.0`, after a `--dry-run`. Nothing to set. A token (Bearer) is now accepted wherever the web app's session is. A new install's generated passwords always have a capital, a small letter and a digit; an existing install keeps its own. The package installs from the repo: `pip install "git+https://github.com/StorScale/storscale-platform@v0.25.0#subdirectory=stack/python"`.
+
 ### Added
 - **The API reference and the Python package** (14.3, R14.7, R14.8): `/api/openapi.json` is an OpenAPI 3.1 document of platformd's routes (97 of them), each with what it does: made from the routes in `server.go` and their handlers' comments by a test that fails when a route is added without it (`STORSCALE_UPDATE_OPENAPI=1` writes it), and served to anyone. The account menu's **API reference** page lists them by area, searchable. The `storscale` package (`stack/python`, `pip install "git+https://github.com/StorScale/storscale-platform#subdirectory=stack/python"`) signs in with a token, a service account's client credentials, or a person's name and password (or asks), renews the token, and gives the common calls by name (`projects()`, `sql()`, `start_run()`, `run_log()`, `wait_for_run()`, `search()`, `usage()`, and more) and any route by its operation ID (`call("get_projects_name_usage", name="sales")`); a refusal raises `storscale.Refused` with the platform's reason and request ID. A Keycloak token now counts as signing in on every route, as the web app's session does (the project list, Governance, Usage and the rest answered a token with 401). The `api` suite checks it. Not yet: `buckets_lake` folded into the package, and publishing it to PyPI with each release.
 

@@ -4,8 +4,8 @@ description: >-
   StorScale Platform on Kubernetes: projects, a lakehouse (Buckets, Nessie, Trino, Ranger),
   notebooks, dashboards, pipelines, a catalog and a semantic layer, with one sign-in.
 type: application
-version: 0.24.0
-appVersion: "0.24.0"
+version: 0.25.0
+appVersion: "0.25.0"
 home: https://storscale.io
 sources:
   - https://github.com/StorScale/storscale-platform
