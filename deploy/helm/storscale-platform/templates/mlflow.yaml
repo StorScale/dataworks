@@ -61,6 +61,8 @@ spec:
             periodSeconds: 5
             failureThreshold: 60
           {{- include "storscale.resources" (list "50m" "384Mi" "1Gi") | nindent 10 }}
+      volumes:
+        {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 8 }}   {{/* the wait for setup's */}}
 ---
 apiVersion: v1
 kind: Service
