@@ -106,10 +106,11 @@ def main():
     columns = s.get("columns") or [c for c in df.columns if c != s["id"]]
     log(f"{len(df)} rows of {s['table']}, columns {', '.join(columns)}")
     scores = model.predict(df[columns])
-    if hasattr(scores, "iloc"):   # a frame or series: its first column
-        scores = scores.iloc[:, 0] if scores.ndim == 2 else scores
-    elif getattr(scores, "ndim", 1) == 2:   # an array of one column
-        scores = scores[:, 0]
+    # A score per row: of several columns (a classifier's probabilities), the last, the positive class's of two.
+    if hasattr(scores, "iloc"):   # a frame or series
+        scores = scores.iloc[:, -1] if scores.ndim == 2 else scores
+    elif getattr(scores, "ndim", 1) == 2:   # an array
+        scores = scores[:, -1]
     scores = [v.item() if hasattr(v, "item") else v for v in scores]   # NumPy's numbers as Python's
 
     at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")

@@ -20,7 +20,7 @@ One company's quarter, told in 22 labs: Harbor Outfitters starts with four sprea
 |---|---|---|
 | I | **Trust the data:** the four files become governed tables, personal data finds its own protection, and a table says when it's wrong | 1–5 |
 | II | **One number:** revenue defined once, the same to the cent in SQL, dashboards and an assistant's answer | 6–8 |
-| III | **Decisions worth money:** which campaigns pay, built on a canvas and released as code; who to call, from a notebook on a schedule | 9–11 |
+| III | **Decisions worth money:** which campaigns pay, built on a canvas and released as code; who to call, from a notebook on a schedule, and who's likely to stop, scored each night | 9–11 |
 | IV | **Shared, and safe:** marketing reads retail's table in place, a partner gets a file every Monday, the privacy officer's day | 12–15 |
 | V | **AI on the same rules:** models through a gateway on a budget, an agent of the project's own, what customers say sorted by a model | 16–18 |
 | VI | **Keep it true:** last month's number reproduced, releases on purpose, who did what, the platform operated | 19–22 |
@@ -293,7 +293,7 @@ Wednesday. Six campaigns ran last quarter for 4,900 in budget. Which paid for th
 
 **Value:** an analyst builds a transformation from steps, sees each step's result on a sample before anything runs, and what she builds is code (dbt models) that engineers review and release like any other change. No parallel world of visual pipelines nobody can version.
 
-As **alice** (an editor of `retail`), open **Flows**, type `campaign_results` and press **New flow**. The canvas fills the window; every column, table, step and metric a step needs is picked from a dropdown, so what you can choose is what exists. The question: for each campaign, the revenue of the orders its converted responders placed in the thirty days after responding, against its budget.
+As **alice** (an editor of `retail`), open **Flows**; under **Start a flow**, name it `campaign_results` and press **New flow**. The canvas fills the window; every column, table, step and metric a step needs is picked from a dropdown, so what you can choose is what exists. The question: for each campaign, the revenue of the orders its converted responders placed in the thirty days after responding, against its budget.
 
 1. **Add a step → Input**, pick the table `uploads_campaign_responses` from the dropdown (the project's tables, and the products it reads). The node shows 5 columns: the canvas asked the catalog.
 2. With it selected, **Add a step → Filter**, condition `converted`. Press **Preview** to see the rows, read on a sample as alice.
@@ -360,10 +360,43 @@ calls.head(10)
 4. Within a minute the **Pipelines** tab lists `notebook_call_list`. Press **Run now**. The run goes as the project's pipelines, not as alice: it reads the landing area and writes the report there because the pipelines may (and only there). When it ends, the run has a **notebook** link: the executed notebook, its outputs in it, kept by the platform.
 5. Break it on purpose: change the cell to read a file that isn't there, schedule again, merge, run. The run fails, the project's alerts say so, and the kept notebook shows the cell and its error.
 
-6. **A model instead of a rule.** "Seven orders" is a rule; the team wants a churn score. In a new cell, `mlflow = buckets_lake.mlflow("retail")`, `mlflow.set_experiment("churn")`, then train (a FLAML or scikit-learn classifier on the customers' orders) inside `with mlflow.start_run():`, logging its AUC and `mlflow.sklearn.log_model(model, name="model", registered_model_name="churn")`. The run lands in `retail`'s own MLflow workspace (no other project sees it), stamped by the platform with alice and the catalog's commit, so the data it learned from can be read again exactly (Lab 19). On `retail` → **Models**, `churn` has version 1, registered by alice: write its card (purpose, data, metrics, limits), and have **bob** approve it, since alice can't approve her own. The alias `approved` now names it, and that's what a scoring pipeline loads (`models:/churn@approved`).
-7. **Score every customer, every night.** In `retail`'s spec (**Edit** → JSON), add `"scoring": [{"name": "churn-nightly", "model": "churn", "table": "customers", "id": "customer_id", "output": "customer_scores", "schedule": "0 3 * * *"}]`. The platform makes it one of the project's pipelines (`scoring_retail_churn_nightly`): each run loads the approved version, scores the table through Trino as the project's pipelines, and writes `customer_scores` afresh (each customer's score, the model's version, when). The first run of a version is its reference; each run after compares the inputs with it (the population stability index, per column), and past 0.2 (or the scoring's `drift`) the project is alerted. On **Models**, **Scoring** shows each run's rows and its worst-drifting column; Grafana draws `storscale_scoring_drift`.
+6. **A model instead of a rule.** "Seven orders" is a rule; the team wants a churn score: who's likely to stop ordering. First the table it will score, so the model learns from exactly what it'll be given: on the **SQL** tab, as alice,
 
-**Check:** the run's notebook shows the table with Viktor Schmidt first, and `landing/reports/call-list.csv` is in the `retail` bucket (read it from a notebook with `buckets_lake.s3().get_object`).
+   ```sql
+   CREATE TABLE customer_features AS
+   SELECT c.customer_id,
+          count(o.order_id) AS orders,
+          CAST(coalesce(sum(o.amount), 0) AS double) AS revenue,
+          date_diff('day', c.signed_up, DATE '2026-10-01') AS tenure_days
+   FROM uploads_customers c
+   LEFT JOIN uploads_orders o ON o.customer_id = c.customer_id AND NOT o.test AND NOT o.refunded
+   GROUP BY c.customer_id, c.signed_up
+   ```
+
+   Then, in a new cell of `call_list.ipynb` (it uses the first cell's `customers` and `real`), the same three columns, and who stopped (no order since 1 September), trained and logged in `retail`'s own MLflow workspace:
+
+   ```python
+   from sklearn.linear_model import LogisticRegression
+   from sklearn.metrics import roc_auc_score
+   per = real.groupby("customer_id").agg(orders=("order_id", "count"), revenue=("amount", "sum"), last=("ordered_on", "max"))
+   f = customers[["customer_id", "signed_up"]].join(per, on="customer_id")
+   X = pd.DataFrame({"orders": f.orders.fillna(0).astype(int), "revenue": f.revenue.fillna(0.0).astype(float),
+                     "tenure_days": (pd.Timestamp("2026-10-01") - pd.to_datetime(f.signed_up)).dt.days})
+   churned = (f["last"].isna() | (pd.to_datetime(f["last"]) < "2026-09-01")).astype(int)   # 14 of the 60
+   mlflow = buckets_lake.mlflow("retail")       # the project's workspace, as alice
+   mlflow.set_experiment("churn")
+   with mlflow.start_run():                     # stamped with alice and the catalog's commit
+       model = LogisticRegression(max_iter=1000).fit(X, churned)
+       mlflow.log_metric("auc", roc_auc_score(churned, model.predict_proba(X)[:, 1]))
+       mlflow.sklearn.log_model(model, name="model", registered_model_name="churn",
+                                pyfunc_predict_fn="predict_proba", input_example=X.head())
+   ```
+
+   No other project sees the run, and the commit it's stamped with means the data it learned from can be read again exactly (Lab 19). On `retail` → **Models**, `churn` has version 1, registered by alice: **Write its card** (purpose, data, metrics, limits), and have **bob** approve the version, since alice can't approve her own. The alias `approved` now names it, and that's what a scoring pipeline loads (`models:/churn@approved`).
+7. **Score every customer, every night.** In `retail`'s spec (**Edit** → JSON), add `"scoring": [{"name": "churn-nightly", "model": "churn", "table": "customer_features", "id": "customer_id", "output": "customer_scores", "schedule": "0 3 * * *"}]` and save. Within a minute the **Pipelines** tab lists `scoring_retail_churn_nightly`; press **Run now**. The run goes as the project's pipelines: it loads the approved version, reads `customer_features` through Trino and writes `customer_scores` afresh, each customer's `customer_id` (so it joins back), the chance they've stopped ordering, the model's version and when. On **Models**, the **Scoring** card shows the run: 60 rows, and no drift, since a version's first run is the reference every later run is compared with.
+8. **When the customers change.** Next month's customers won't look like September's. Stand in for that: on the SQL tab, `UPDATE customer_features SET revenue = revenue * 3`, and run the scoring again. The run compares each input column with the reference (the population stability index): `revenue` has moved far past 0.2 and `orders` hasn't, so the **Scoring** card shows `revenue` in red, and the project's alerts (Overview) say "churn-nightly: its inputs have drifted (revenue, …)". That's the cue to retrain on the new data, register a version, and have it approved: its first run becomes the new reference. Grafana draws the same numbers (`storscale_scoring_drift`). To put the table back, run the `CREATE TABLE` above again as `CREATE OR REPLACE TABLE`.
+
+**Check:** the run's notebook shows the table with Viktor Schmidt first, and `landing/reports/call-list.csv` is in the `retail` bucket (read it from a notebook with `buckets_lake.s3().get_object`); `SELECT * FROM customer_scores ORDER BY score DESC` lists the customers likeliest to have stopped, each with version `1` of `churn`.
 
 **What Part III gained:** the second and third questions answered: Store weekend pays back nearly eight times and runs again in December; Enterprise outreach is cut; and sales gets thirty names every Monday morning. Both answers are code in the repo, rebuilt on schedule, and a wrong change can't reach them without a review.
 
@@ -589,7 +622,7 @@ As **bob**, on `retail`:
 1. Open **Data** → `uploads_orders` → **History**: every change to the table so far (the import's load, Lab 5's insert and delete, Lab 15's erasure), who made it, when, and how many rows it added or removed. Each entry has **Read it as it was**.
 2. Change the data. On the **SQL** tab, run `INSERT INTO uploads_orders VALUES (306, 7, DATE '2026-10-01', 'EU', 'web', 88.0, false, false)`, then `UPDATE uploads_orders SET amount = 1.0 WHERE order_id = 1`. Back on **History**: two more entries, yours.
 3. On the first entry's **Read it as it was**: the SQL tab opens with the table named at that commit (`"uploads_orders#<hash>"`). `SELECT count(*), round(sum(amount), 2) FROM ...` gives the table as the import left it: 305 rows and the old amount. The same query without the suffix gives today's table: one row more than before your insert, customer 35's rows gone, and the changed amount.
-4. Any moment, not only a commit: on the SQL tab, type a date and time in **As of** and press Enter. The query's tables are rewritten to the commit current at that moment. `now` puts them back.
+4. Any moment, not only a commit: on the SQL tab, type a date and time in the **As of** box under the query and press **Read the tables then** (or Enter). The query's tables are rewritten to the commit current at that moment. `now` puts them back.
 5. **A close that's kept.** On the **Tags** tab, make a tag: name `close-2026-09`, at `now`, keep for `7y`, note "September's close". The tag names a commit; the platform keeps that commit's data however old it gets, where the rest of the history is kept for the install's window (the Data page says how long). On the SQL tab, **As of** `close-2026-09` reads every table of the project as it was at the close.
 6. Reports and files that must be reproducible use the same thing: a delivery records the commit it read (Lab 14), and the catalog's lineage names the commit each run read.
 
@@ -629,7 +662,7 @@ storscale/
 
 **Value:** "who read the customers' table last month" is a search, not an investigation. Every read in Trino, every refusal, every change to a project and every approval is in one log, with the person, and for an assistant's question, the assistant and the person.
 
-1. As **bob**, open `retail` → **Audit**. Search `uploads_customers`: every query that touched it, by whom, allowed or refused, and the query itself. Filter by person `alice`, then **Refused only**: the reads her rules refused.
+1. As **bob**, open `retail` → **Audit**. In **Search**, `uploads_customers`, and press **Show**: every query that touched it, by whom, allowed or refused, and the query itself. Then **Person** `alice` and **Result** **Refused only**: the reads her rules refused. **From** and **To** narrow it to the quarter; **Export CSV** (top right, for administrators) hands the auditor the same rows.
 2. Make a refusal: as **alice**, on the SQL tab, `SELECT * FROM uploads_campaign_responses` (Lab 13 took it from the readers' list); or, as **carol** (no project), any query. Back on bob's Audit tab, the refusal is there within a minute, with the reason Ranger gave.
 3. Filter by **Source**: Trino's reads (Ranger's log), the platform's own actions (projects saved, tags made, agents approved, classifications confirmed, uploads, deliveries approved, the erasure, the model asked), the assistants' questions (Lab 8: the agent and the person both named).
 4. Administration → **Audit** is the same log for every project, for the platform's administrators.
@@ -673,7 +706,7 @@ storscale/
 | 5 | A table that reports its own faults before a reader notices |
 | 6–8 | One revenue number, 22,168, in SQL, dashboards, apps and chat, each under the asker's rules; Revenue and Customer as the company's words |
 | 9–10 | Store weekend pays back 7.8 times and runs again; Enterprise outreach is cut; the answer is code, reviewed, rebuilt weekly |
-| 11 | Thirty customers to call, every Monday, from a notebook nobody runs by hand |
+| 11 | Thirty customers to call, every Monday, from a notebook nobody runs by hand; a churn score for every customer each night, from an approved model, that says when the customers stop looking like the ones it learned from |
 | 12 | Marketing reads retail's orders in place and builds on its definitions; a broken promise alerts the publisher |
 | 13 | Readers' rules in words, holding in every tool |
 | 14 | Acme gets two files a week, approved, logged, reproducible; nobody emails spreadsheets |
