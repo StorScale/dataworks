@@ -649,9 +649,9 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 3. sam's Home for `sales` lists its dashboards, products, apps and metrics, and the Q&A app over its knowledge bank (12.6).
 
 **Requirements**
-- R14.1 Simple data apps per project, built from metrics and tables, run as the person viewing them.
-- R14.5 A readers' Home per project: its dashboards, products, apps and metrics, as the person. (Added 2026-10-20.)
-- R14.6 A Q&A app over a knowledge bank and the semantic layer, one of the apps. (Added 2026-10-20.)
+- R14.1 Simple data apps per project, built from metrics and tables, run as the person viewing them. (Built 2026-10-22: `apps`, declared by the project's editors on its Apps tab: a metric by a dimension (bars, a line, a number or a table), a table's columns, with filters; fetched as the viewer.)
+- R14.5 A readers' Home per project: its dashboards, products, apps and metrics, as the person. (Added 2026-10-20. Home lists every app of the person's projects since 2026-10-22; dashboards and products stay on their tabs and the Data products page.)
+- R14.6 A Q&A app over a knowledge bank and the semantic layer, one of the apps. (Added 2026-10-20. Built 2026-10-22 over a knowledge bank: the closest passages, searched as the person, answered from by the model on the project's key, cited; the semantic layer in the answer left.)
 
 ### 14.3 A developer uses the API (added 2026-10-20)
 

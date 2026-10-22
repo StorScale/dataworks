@@ -14,6 +14,7 @@
   --accent: #1a56c4;
   --accent-dark: #123f92;
   --accent-soft: #e7effc;
+  --chart: #1a56c4;   /* a chart's one series: the accent, validated as a mark (L 0.48-0.67 dark: below) */
   --ok: #1e7d4f;
   --ok-ink: #155c39;
   --ok-soft: #e5f4ec;
@@ -50,6 +51,7 @@
     --accent: #5b9bf5;
     --accent-dark: #8cb9f8;
     --accent-soft: #1b2a42;
+    --chart: #4d8ef0;
     --ok: #3fb27a;
     --ok-ink: #6fd3a0;
     --ok-soft: #14301f;
@@ -274,3 +276,17 @@ ul.plain li:last-child { border-bottom: 0; }
 .flowside .rows .row { gap: 4px; }
 .flowside .rows input, .flowside .rows select { min-width: 0; flex: 1 1 80px; }
 .flowside .btn.small { font-size: 11px; padding: 3px 8px; }
+
+/* A project's apps (14.1): a chart's marks, its hover and its number. */
+.chart { width: 100%; height: auto; display: block; overflow: visible; }
+.chart .grid { stroke: var(--line-soft); stroke-width: 1; }
+.chart .axis { fill: var(--muted); font-size: 11px; }
+.chart .bar { fill: var(--chart); }
+.chart .bar.dim { opacity: 0.45; }
+.chart .line { fill: none; stroke: var(--chart); stroke-width: 2; }
+.chart .dot { fill: var(--chart); stroke: var(--panel); stroke-width: 2; }
+.chart .cross { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart .hit { fill: transparent; }
+.chart-tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px;
+  font-size: 12px; color: var(--ink); box-shadow: 0 2px 8px rgba(0,0,0,0.12); white-space: nowrap; transform: translate(-50%, -110%); }
+.hero-number { font-size: 40px; font-weight: 600; color: var(--ink); line-height: 1.1; font-variant-numeric: tabular-nums; }

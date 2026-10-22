@@ -17,7 +17,7 @@ var validators = []func(p *Project, bad func(format string, a ...any)){
 	(*Project).checkMembers, (*Project).checkTables, (*Project).checkFiles, (*Project).checkPipelines,
 	(*Project).productProblems, (*Project).agentProblems, (*Project).checkSemantic, (*Project).checkHistory, (*Project).checkNotify,
 	(*Project).checkSources, (*Project).checkImports, (*Project).checkDeliveries, (*Project).checkLimits, (*Project).checkLLM,
-	(*Project).checkKnowledge, (*Project).checkTools,
+	(*Project).checkKnowledge, (*Project).checkTools, (*Project).checkApps,
 }
 
 // Validate says what's wrong with a project, all at once.

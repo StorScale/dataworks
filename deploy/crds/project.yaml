@@ -371,6 +371,33 @@ spec:
                             table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                             column: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                             id: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                apps:
+                  description: "Small pages of the project's data (14.1), declared: a metric by a dimension, a table's columns, or questions answered from a knowledge bank; with filters; fetched as whoever opens them."
+                  type: array
+                  items:
+                    type: object
+                    required: [name, kind]
+                    properties:
+                      name: {type: string, pattern: '^[a-z][a-z0-9-]{0,40}$'}
+                      title: {type: string}
+                      description: {type: string}
+                      kind: {type: string, enum: [metric, table, qa]}
+                      metrics: {type: array, items: {type: string}}
+                      by: {type: string}
+                      table: {type: string}
+                      columns: {type: array, items: {type: string}}
+                      show: {type: string, enum: [table, bar, line, number]}
+                      bank: {type: string}
+                      limit: {type: integer}
+                      filters:
+                        type: array
+                        items:
+                          type: object
+                          required: [field]
+                          properties:
+                            field: {type: string}
+                            label: {type: string}
+                            values: {type: array, items: {type: string}}
                 cost:
                   description: "What the project may cost a month (13.1), priced by the install's rate card: alerted at 80% and 100%; nothing is stopped."
                   type: object

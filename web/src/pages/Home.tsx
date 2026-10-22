@@ -1,10 +1,10 @@
 import { Link } from "react-router-dom";
-import { ago, Flow, getFlow, getPipelines, getSemantic, listProjects, Pipeline, ProjectView, when } from "../api";
+import { ago, App, Flow, getApps, getFlow, getPipelines, getSemantic, listProjects, Pipeline, ProjectView, when } from "../api";
 import { Page } from "../components";
 import { HealthNotice } from "./Health";
 import { checkName, failing, lastProject, Phase, RolePill, Spinner, StateDot, usePlatform, usePoll } from "../lib";
 
-type Summary = { view: ProjectView; flow?: Flow; metrics?: number; pipelines?: Pipeline[] };
+type Summary = { view: ProjectView; flow?: Flow; metrics?: number; pipelines?: Pipeline[]; apps?: App[] };
 
 // Home: your projects, what needs attention in them, and what ran lately.
 export default function Home() {
@@ -19,12 +19,13 @@ export default function Home() {
     const mine = all.filter((p) => p.role || admin);
     return Promise.all(mine.map(async (view) => {
       const tables = !!view.spec?.spec.tables, piped = !!view.spec?.spec.pipelines;
-      const [f, s, ps] = await Promise.all([
+      const [f, s, ps, as] = await Promise.all([
         tables && flow ? getFlow(view.name).catch(() => undefined) : undefined,
         tables && semantic ? getSemantic(view.name).catch(() => undefined) : undefined,
         piped && pipelines ? getPipelines(view.name).catch(() => undefined) : undefined,
+        tables && semantic ? getApps(view.name).catch(() => undefined) : undefined,
       ]);
-      return { view, flow: f, metrics: s?.metrics.length, pipelines: ps?.pipelines };
+      return { view, flow: f, metrics: s?.metrics.length, pipelines: ps?.pipelines, apps: as?.apps };
     }));
   }, [projects, admin], 30_000);
 
@@ -87,6 +88,19 @@ export default function Home() {
                   })}
                 </div>
               )}
+            </section>
+          )}
+
+          {(data ?? []).some((d) => d.apps?.length) && (
+            <section data-testid="home-apps">
+              <p className="eyebrow">Apps</p>
+              <div className="grid cards">
+                {(data ?? []).flatMap(({ view, apps }) => (apps ?? []).map((a) => (
+                  <Link key={view.name + a.name} to={`/p/${view.name}/apps/${a.name}`} className="card">
+                    <div className="card-head" style={{ marginBottom: 6 }}><h2>{a.title || a.name}</h2><span className="small muted">{view.name}</span></div>
+                    <p className="muted small" style={{ margin: 0 }}>{a.description || (a.kind === "qa" ? "Ask what the project's documents say" : (a.metrics ?? [a.table]).join(", "))}</p>
+                  </Link>)))}
+              </div>
             </section>
           )}
 
