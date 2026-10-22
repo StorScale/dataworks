@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "storscale"
+version = "0.24.0"
+description = "StorScale Platform's API, as Python: projects, pipelines, flows, SQL, knowledge banks, usage, and any route by its operation ID."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+dependencies = ["requests>=2.31"]
+
+[project.urls]
+Source = "https://github.com/StorScale/storscale-platform"
+
+[tool.setuptools]
+packages = ["storscale"]

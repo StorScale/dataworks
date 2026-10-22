@@ -1,6 +1,6 @@
 {{/* The stack's own files (stack/, through the chart's files/ link), as
      ConfigMaps: Compose and Kubernetes run the same configuration. */}}
-{{- range $name := list "tools" "projects" "keycloak" "trino" "gateway" "superset" "airflow" "jupyterhub" "monitoring" "ranger" "tests" }}
+{{- range $name := list "tools" "projects" "keycloak" "trino" "gateway" "superset" "airflow" "jupyterhub" "monitoring" "ranger" "tests" "python" }}
 ---
 {{ include "storscale.filesConfigMap" (list $ $name $name) }}
 {{- end }}

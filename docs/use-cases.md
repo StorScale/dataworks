@@ -658,8 +658,8 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 1. A developer reads the platform's API reference (OpenAPI, from platformd's routes) and, with the `storscale` Python package, makes a project's flow, starts a run and reads its log, signed in as herself or as a service account.
 
 **Requirements**
-- R14.7 An OpenAPI document generated from platformd's routes, served at `/api/openapi.json` and as a page.
-- R14.8 A `storscale` Python package (the API as methods; `buckets_lake` folded in), published with each release.
+- R14.7 An OpenAPI document generated from platformd's routes, served at `/api/openapi.json` and as a page. (Built 2026-10-22: from the routes and their handlers' comments, kept current by a test; the account menu's API reference.)
+- R14.8 A `storscale` Python package (the API as methods; `buckets_lake` folded in), published with each release. (Built 2026-10-22 in `stack/python`, installed from the repo: the common calls by name, any route by its operation ID, signed in as a person or a service account. `buckets_lake` folded in and PyPI left.)
 
 ---
 

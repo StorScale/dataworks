@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **The API reference and the Python package** (14.3, R14.7, R14.8): `/api/openapi.json` is an OpenAPI 3.1 document of platformd's routes (97 of them), each with what it does: made from the routes in `server.go` and their handlers' comments by a test that fails when a route is added without it (`STORSCALE_UPDATE_OPENAPI=1` writes it), and served to anyone. The account menu's **API reference** page lists them by area, searchable. The `storscale` package (`stack/python`, `pip install "git+https://github.com/StorScale/storscale-platform#subdirectory=stack/python"`) signs in with a token, a service account's client credentials, or a person's name and password (or asks), renews the token, and gives the common calls by name (`projects()`, `sql()`, `start_run()`, `run_log()`, `wait_for_run()`, `search()`, `usage()`, and more) and any route by its operation ID (`call("get_projects_name_usage", name="sales")`); a refusal raises `storscale.Refused` with the platform's reason and request ID. A Keycloak token now counts as signing in on every route, as the web app's session does (the project list, Governance, Usage and the rest answered a token with 401). The `api` suite checks it. Not yet: `buckets_lake` folded into the package, and publishing it to PyPI with each release.
+
 ### Fixed
 - **A cost under a cent shows as one**: usage kept costs to the cent, so a small project's month, and its alert, read 0.00 of 0.00. Costs are kept to a millionth, and an amount under a cent is written to two significant digits (0.000042).
 

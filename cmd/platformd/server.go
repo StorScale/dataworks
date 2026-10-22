@@ -174,6 +174,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /auth/callback", s.handleCallback)
 	mux.HandleFunc("POST /auth/logout", s.handleLogout)
 	mux.HandleFunc("GET /api/session", s.handleSession)
+	mux.HandleFunc("GET /api/openapi.json", s.handleOpenAPI) // the API reference (14.3), to anyone: it says what exists, not what's in it
 	mux.HandleFunc("GET /brand/logo", s.handleBrandLogo)
 	mux.HandleFunc("GET /brand/icon", s.handleBrandIcon)
 	mux.HandleFunc("GET /brand/catalog-logo", s.handleBrandCatalogLogo)
@@ -391,7 +392,7 @@ func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 func (s *server) session(r *http.Request) *session {
 	c, err := r.Cookie(sessionCookie)
 	if err != nil {
-		return nil
+		return s.bearerSession(r)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -401,6 +402,43 @@ func (s *server) session(r *http.Request) *session {
 		return nil
 	}
 	return sess
+}
+
+// bearerSession is the session a request's Keycloak token (Bearer) stands
+// for, without the web app's cookie (14.3: the API from a script or the
+// Python package): the person, their groups and the token, as signing in
+// gives them; nil without a token, or with one that isn't the realm's.
+func (s *server) bearerSession(r *http.Request) *session {
+	raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !ok || raw == "" {
+		return nil
+	}
+	if s.tokenUser != nil { // the tests': who the token is, with their test session's groups
+		name, err := s.tokenUser(raw)
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if sess := s.sessions[name]; err == nil && sess != nil {
+			return &session{User: sess.User, Token: &oauth2.Token{AccessToken: raw}, Expires: sess.Expires}
+		}
+		return nil
+	}
+	if s.tokens == nil {
+		return nil
+	}
+	tok, err := s.tokens.Verify(r.Context(), raw)
+	if err != nil {
+		return nil
+	}
+	var claims struct {
+		Username string   `json:"preferred_username"`
+		Name     string   `json:"name"`
+		Email    string   `json:"email"`
+		Groups   []string `json:"groups"`
+	}
+	if tok.Claims(&claims) != nil || claims.Username == "" {
+		return nil
+	}
+	return &session{User: user{claims.Username, claims.Name, claims.Email, claims.Groups}, Token: &oauth2.Token{AccessToken: raw}, Expires: tok.Expiry}
 }
 
 func (s *server) allowed(groups []string) bool {

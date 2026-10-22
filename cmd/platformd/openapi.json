@@ -1,0 +1,3446 @@
+{
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "bearerFormat": "JWT (Keycloak, realm lakehouse)",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "session": {
+        "in": "cookie",
+        "name": "storscale_session",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "platformd's API, as the web app, the MCP server and the Python package (`storscale`) use it. Sign in with a Keycloak token of the realm `lakehouse` as `Authorization: Bearer \u003ctoken\u003e` (a person's, or a service account's), or with the web app's session, whose changes also send `X-Platform-Request: 1`. Every call runs as whoever signed in, under their projects' rules; a refusal says why, with a request ID.",
+    "title": "StorScale Platform API",
+    "version": "1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/access": {
+      "get": {
+        "description": "handleAccess is who has which role in which project (administrators only).",
+        "operationId": "get_access",
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Who has which role in which project (administrators only)",
+        "tags": [
+          "access"
+        ]
+      }
+    },
+    "/api/agent/projects/{name}/agents/{agent}/ask": {
+      "post": {
+        "description": "an agent as a tool: its members, the agents given it\n\nhandleAskAgent has an agent of the project's do a task, as itself, and answers with its report.",
+        "operationId": "post_agent_projects_name_agents_agent_ask",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agent",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Has an agent of the project's do a task, as itself, and answers with its report",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/api/agent/projects/{name}/alerts": {
+      "get": {
+        "description": "handleAgentAlerts are a project's issues now, to an agent: failed runs\nand checks, stale tables, products off their contracts, budgets.",
+        "operationId": "get_agent_projects_name_alerts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A project's issues now, to an agent: failed runs and checks, stale tables, products off their contracts, budgets",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/api/agent/projects/{name}/ask": {
+      "post": {
+        "description": "a question to the model, on the project's key (12.3's plain-language tests)\n\nhandleAgentAsk asks the gateway one question on the project's key, for a\nmember (its bearer token): semanticd's plain-language tests (12.3) ask\nthrough it, so the project's key stays with the platform. The gateway's\nguardrail and the project's budget apply; a refusal is said as it came.",
+        "operationId": "post_agent_projects_name_ask",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Asks the gateway one question on the project's key, for a member (its bearer token): semanticd's plain-language tests (12.3) ask through it, so the project's key stays with the platform",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/api/agent/projects/{name}/runs": {
+      "get": {
+        "description": "handleAgentRuns are a project's pipelines and their latest runs, newest\nfirst, to an agent: what ran, when, and how it ended.",
+        "operationId": "get_agent_projects_name_runs",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A project's pipelines and their latest runs, newest first, to an agent: what ran, when, and how it ended",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/api/agent/projects/{name}/tools": {
+      "get": {
+        "description": "what the caller may call and ask (12.7)\n\nhandleListTools is what the caller may call and ask in a project.",
+        "operationId": "get_agent_projects_name_tools",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "What the caller may call and ask in a project",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/api/agent/projects/{name}/tools/{tool}/call": {
+      "post": {
+        "description": "a tool of the project's: its editors, the agents given it\n\nhandleCallTool calls a tool of the project's with the arguments given, as the platform, signed in by its connection.",
+        "operationId": "post_agent_projects_name_tools_tool_call",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tool",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Calls a tool of the project's with the arguments given, as the platform, signed in by its connection",
+        "tags": [
+          "agent"
+        ]
+      }
+    },
+    "/api/assistants": {
+      "get": {
+        "description": "handleAssistants are the assistants registered to the MCP server (their\nKeycloak clients), for the administrators.",
+        "operationId": "get_assistants",
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "The assistants registered to the MCP server (their Keycloak clients), for the administrators",
+        "tags": [
+          "assistants"
+        ]
+      }
+    },
+    "/api/assistants/{name}": {
+      "delete": {
+        "description": "handleDeleteAssistant takes an assistant away: its client goes, and it\nsigns in no more. The administrators.",
+        "operationId": "delete_assistants_name",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Takes an assistant away: its client goes, and it signs in no more",
+        "tags": [
+          "assistants"
+        ]
+      },
+      "put": {
+        "description": "handlePutAssistant registers an assistant, or changes one: its Keycloak\nclient and where it may send people back to. The administrators.",
+        "operationId": "put_assistants_name",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Registers an assistant, or changes one: its Keycloak client and where it may send people back to",
+        "tags": [
+          "assistants"
+        ]
+      }
+    },
+    "/api/audit": {
+      "get": {
+        "description": "handleAudit is the whole platform's audit log, for its administrators;\n?project= narrows it to a project's, ?format=csv is for auditors.",
+        "operationId": "get_audit",
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "The whole platform's audit log, for its administrators; ?project= narrows it to a project's, ?format=csv is for auditors",
+        "tags": [
+          "audit"
+        ]
+      }
+    },
+    "/api/connectors": {
+      "get": {
+        "description": "handleConnectors are the platform's connectors, for the form: each one's\nsource, what it copies, and the connection kind it signs in with.",
+        "operationId": "get_connectors",
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "The platform's connectors, for the form: each one's source, what it copies, and the connection kind it signs in with",
+        "tags": [
+          "connectors"
+        ]
+      }
+    },
+    "/api/governance": {
+      "get": {
+        "description": "across projects (12.9): administrators, certifiers, data-protection approvers",
+        "operationId": "get_governance",
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Governance",
+        "tags": [
+          "governance"
+        ]
+      }
+    },
+    "/api/health": {
+      "get": {
+        "description": "handleHealth is the platform's health: in full for administrators; for\neveryone else, what they can't use just now.",
+        "operationId": "get_health",
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "The platform's health: in full for administrators; for everyone else, what they can't use just now",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/health/{action}": {
+      "post": {
+        "description": "handleHealthAction mutes a service's alerts, or sends a test alert:\nadministrators only.",
+        "operationId": "post_health_action",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Mutes a service's alerts, or sends a test alert: administrators only",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/notebooks/projects": {
+      "get": {
+        "description": "handleNotebookProjects are the projects the token's person may schedule a\nnotebook in: they're its editor, and it has a repo.",
+        "operationId": "get_notebooks_projects",
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "The projects the token's person may schedule a notebook in: they're its editor, and it has a repo",
+        "tags": [
+          "notebooks"
+        ]
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "description": "the API reference (14.3), to anyone: it says what exists, not what's in it\n\nhandleOpenAPI is the API reference: this document, as OpenAPI 3.1.",
+        "operationId": "get_openapi.json",
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "The API reference: this document, as OpenAPI 3.1",
+        "tags": [
+          "reference"
+        ]
+      }
+    },
+    "/api/products": {
+      "get": {
+        "description": "handleProducts are every project's products, to anyone signed in: what\nthey are is no secret, reading them is (Ranger's).",
+        "operationId": "get_products",
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Every project's products, to anyone signed in: what they are is no secret, reading them is (Ranger's)",
+        "tags": [
+          "products"
+        ]
+      }
+    },
+    "/api/products/{project}/{product}/certification": {
+      "delete": {
+        "description": "handleCertify certifies a product as it is now (POST), or takes its\ncertification away (DELETE): the governance group.",
+        "operationId": "delete_products_project_product_certification",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "product",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Certifies a product as it is now (POST), or takes its certification away (DELETE): the governance group",
+        "tags": [
+          "products"
+        ]
+      },
+      "post": {
+        "description": "handleCertify certifies a product as it is now (POST), or takes its\ncertification away (DELETE): the governance group.",
+        "operationId": "post_products_project_product_certification",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "product",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Certifies a product as it is now (POST), or takes its certification away (DELETE): the governance group",
+        "tags": [
+          "products"
+        ]
+      }
+    },
+    "/api/products/{project}/{product}/consumers/{consumer}": {
+      "delete": {
+        "description": "handleRemoveConsumer takes a project's reading of a product away: the producer's editors.",
+        "operationId": "delete_products_project_product_consumers_consumer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "product",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "consumer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Takes a project's reading of a product away: the producer's editors",
+        "tags": [
+          "products"
+        ]
+      }
+    },
+    "/api/products/{project}/{product}/requests": {
+      "post": {
+        "description": "handleRequestProduct asks for a product for a project (its editors).",
+        "operationId": "post_products_project_product_requests",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "product",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Asks for a product for a project (its editors)",
+        "tags": [
+          "products"
+        ]
+      }
+    },
+    "/api/products/{project}/{product}/requests/{consumer}/{answer}": {
+      "post": {
+        "description": "handleAnswerRequest approves (or declines) a request: the producer's editors.",
+        "operationId": "post_products_project_product_requests_consumer_answer",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "product",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "consumer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "answer",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Approves (or declines) a request: the producer's editors",
+        "tags": [
+          "products"
+        ]
+      }
+    },
+    "/api/projects": {
+      "get": {
+        "description": "handleProjects are the projects the person may see (an administrator's,\nevery one), each with its spec, its status and the person's role.",
+        "operationId": "get_projects",
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "The projects the person may see (an administrator's, every one), each with its spec, its status and the person's role",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/api/projects/{name}": {
+      "delete": {
+        "description": "handleDeleteProject removes a project (the administrators): its access,\nits pipelines and the credentials it kept go; its tables and files stay.",
+        "operationId": "delete_projects_name",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Removes a project (the administrators): its access, its pipelines and the credentials it kept go; its tables and files stay",
+        "tags": [
+          "projects"
+        ]
+      },
+      "get": {
+        "description": "handleProject is one project the person may see: its spec, its status\n(each part as the operator applied it) and the person's role.",
+        "operationId": "get_projects_name",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "One project the person may see: its spec, its status (each part as the operator applied it) and the person's role",
+        "tags": [
+          "projects"
+        ]
+      },
+      "put": {
+        "description": "handlePutProject creates or changes a project. The operator applies it.",
+        "operationId": "put_projects_name",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Creates or changes a project",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/api/projects/{name}/agents": {
+      "get": {
+        "description": "handleAgents lists a project's agents, to its members.",
+        "operationId": "get_projects_name_agents",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Lists a project's agents, to its members",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/api/projects/{name}/agents/{agent}": {
+      "delete": {
+        "description": "handleDeleteAgent revokes an agent: out of the spec, its secret gone; the\noperator removes its client at its next pass, and its token is refused.",
+        "operationId": "delete_projects_name_agents_agent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agent",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Revokes an agent: out of the spec, its secret gone; the operator removes its client at its next pass, and its token is refused",
+        "tags": [
+          "agents"
+        ]
+      },
+      "put": {
+        "description": "handlePutAgent registers an agent, or changes one (which takes its approval away if the change is to what approval covers).",
+        "operationId": "put_projects_name_agents_agent",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agent",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Registers an agent, or changes one (which takes its approval away if the change is to what approval covers)",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/api/projects/{name}/agents/{agent}/approve": {
+      "post": {
+        "description": "handleApproveAgent approves an agent: an editor other than the one who\nregistered it. The agent's secret is made here and shown once; the\noperator makes its client from the connection that keeps it.",
+        "operationId": "post_projects_name_agents_agent_approve",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agent",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Approves an agent: an editor other than the one who registered it",
+        "tags": [
+          "agents"
+        ]
+      }
+    },
+    "/api/projects/{name}/alerts": {
+      "get": {
+        "description": "handleProjectAlerts are a project's issues now, for its people; editors\n(and administrators) mute one for a while.",
+        "operationId": "get_projects_name_alerts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A project's issues now, for its people; editors (and administrators) mute one for a while",
+        "tags": [
+          "alerts"
+        ]
+      }
+    },
+    "/api/projects/{name}/alerts/mute": {
+      "post": {
+        "description": "handleProjectAlerts are a project's issues now, for its people; editors\n(and administrators) mute one for a while.",
+        "operationId": "post_projects_name_alerts_mute",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A project's issues now, for its people; editors (and administrators) mute one for a while",
+        "tags": [
+          "alerts"
+        ]
+      }
+    },
+    "/api/projects/{name}/asof": {
+      "get": {
+        "description": "handleAsOf is the commit a moment stands for, to read the tables at.",
+        "operationId": "get_projects_name_asof",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "The commit a moment stands for, to read the tables at",
+        "tags": [
+          "asof"
+        ]
+      }
+    },
+    "/api/projects/{name}/audit": {
+      "get": {
+        "description": "handleProjectAudit is a project's audit log, for its editors and the\nplatform's administrators: who changed it, and every access to its\ntables that Trino allowed or refused.",
+        "operationId": "get_projects_name_audit",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A project's audit log, for its editors and the platform's administrators: who changed it, and every access to its tables that Trino allowed or refused",
+        "tags": [
+          "audit"
+        ]
+      }
+    },
+    "/api/projects/{name}/classification": {
+      "get": {
+        "description": "handleClassification is a project's protected columns, to its members.",
+        "operationId": "get_projects_name_classification",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A project's protected columns, to its members",
+        "tags": [
+          "classification"
+        ]
+      },
+      "post": {
+        "description": "handleClassify confirms or removes a column's tag, in the catalog: an\neditor's word on what the catalog found. Confirmed, the tag stays whatever\nthe catalog finds later; removed, it isn't suggested again.",
+        "operationId": "post_projects_name_classification",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Confirms or removes a column's tag, in the catalog: an editor's word on what the catalog found",
+        "tags": [
+          "classification"
+        ]
+      }
+    },
+    "/api/projects/{name}/connections": {
+      "get": {
+        "description": "handleConnections is a project's connections, to its members.",
+        "operationId": "get_projects_name_connections",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A project's connections, to its members",
+        "tags": [
+          "connections"
+        ]
+      },
+      "post": {
+        "description": "handlePutConnection adds a connection (POST, a new name: the project's\nand a dash first) or gives an existing one new values (PUT: a value left\nempty stays as it was; rotating a token is pasting the new one).",
+        "operationId": "post_projects_name_connections",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Adds a connection (POST, a new name: the project's and a dash first) or gives an existing one new values (PUT: a value left empty stays as it was; rotating a token is pasting the new one)",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/api/projects/{name}/connections/{connection}": {
+      "delete": {
+        "description": "handleDeleteConnection removes a connection the project's spec doesn't name.",
+        "operationId": "delete_projects_name_connections_connection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "connection",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Removes a connection the project's spec doesn't name",
+        "tags": [
+          "connections"
+        ]
+      },
+      "put": {
+        "description": "handlePutConnection adds a connection (POST, a new name: the project's\nand a dash first) or gives an existing one new values (PUT: a value left\nempty stays as it was; rotating a token is pasting the new one).",
+        "operationId": "put_projects_name_connections_connection",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "connection",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Adds a connection (POST, a new name: the project's and a dash first) or gives an existing one new values (PUT: a value left empty stays as it was; rotating a token is pasting the new one)",
+        "tags": [
+          "connections"
+        ]
+      }
+    },
+    "/api/projects/{name}/copies": {
+      "get": {
+        "description": "handleCopies are a project's sources' copies (use case 8.1), each copied\ntable with when its last change was committed: how far behind its source\na copy is, when the source is changing.",
+        "operationId": "get_projects_name_copies",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A project's sources' copies (use case 8.1), each copied table with when its last change was committed: how far behind its source a copy is, when the source is changing",
+        "tags": [
+          "copies"
+        ]
+      }
+    },
+    "/api/projects/{name}/dbt/artifacts": {
+      "post": {
+        "description": "handleDbtArtifacts takes a project's dbt run's artifacts from its\npipelines (the platform's helper, storscale.dbt, posts them after each\nrun) and keeps them in the platform's bucket as dbt/\u003cproject\u003e/\u003cname\u003e.json,\nwhere catalog-sync reads them. Only the project's own pipelines account\nmay: a Keycloak token (its service account's), as Bearer.",
+        "operationId": "post_projects_name_dbt_artifacts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Takes a project's dbt run's artifacts from its pipelines (the platform's helper, storscale.dbt, posts them after each run) and keeps them in the platform's bucket as dbt/\u003cproject\u003e/\u003cname\u003e.json, where catalog-sync reads them",
+        "tags": [
+          "dbt"
+        ]
+      }
+    },
+    "/api/projects/{name}/dbt/artifacts/{artifact}": {
+      "get": {
+        "description": "handleDbtArtifact is one of a project's last dbt run's artifacts, to its\npipelines (a merge request's review compares its change with production's\nmanifest).",
+        "operationId": "get_projects_name_dbt_artifacts_artifact",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "artifact",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "One of a project's last dbt run's artifacts, to its pipelines (a merge request's review compares its change with production's manifest)",
+        "tags": [
+          "dbt"
+        ]
+      }
+    },
+    "/api/projects/{name}/deliveries": {
+      "get": {
+        "description": "handleDeliveries lists a project's deliveries (its members): each with\nwhether it's approved, the personal columns it sends, who has yet to\napprove, and its last runs (the delivery log).",
+        "operationId": "get_projects_name_deliveries",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Lists a project's deliveries (its members): each with whether it's approved, the personal columns it sends, who has yet to approve, and its last runs (the delivery log)",
+        "tags": [
+          "deliveries"
+        ]
+      }
+    },
+    "/api/projects/{name}/deliveries/search": {
+      "get": {
+        "description": "handleDeliverySearch: the runs of a project's deliveries that sent rows of\na person's ID, to the data-protection approvers (and administrators).",
+        "operationId": "get_projects_name_deliveries_search",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "HandleDeliverySearch: the runs of a project's deliveries that sent rows of a person's ID, to the data-protection approvers (and administrators)",
+        "tags": [
+          "deliveries"
+        ]
+      }
+    },
+    "/api/projects/{name}/deliveries/{delivery}/approve": {
+      "post": {
+        "description": "handleApproveDelivery records the signed-in person's approval of what a\ndelivery sends now; once everyone it needs has approved, it runs.",
+        "operationId": "post_projects_name_deliveries_delivery_approve",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "delivery",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Records the signed-in person's approval of what a delivery sends now; once everyone it needs has approved, it runs",
+        "tags": [
+          "deliveries"
+        ]
+      }
+    },
+    "/api/projects/{name}/deliveries/{delivery}/runs": {
+      "post": {
+        "description": "handleDeliveryLog takes a delivery's run from the project's pipelines\n(the platform's DAG, after sending): its files, sizes, checksums, target,\napproval and the tables' snapshots read. platformd keeps it in its bucket\n(deliveries/\u003cproject\u003e/\u003cdelivery\u003e/\u003ctime\u003e.json), with an audit record.",
+        "operationId": "post_projects_name_deliveries_delivery_runs",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "delivery",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Takes a delivery's run from the project's pipelines (the platform's DAG, after sending): its files, sizes, checksums, target, approval and the tables' snapshots read",
+        "tags": [
+          "deliveries"
+        ]
+      }
+    },
+    "/api/projects/{name}/erasures": {
+      "get": {
+        "description": "handleErasures lists a project's erasure records, to the approvers.",
+        "operationId": "get_projects_name_erasures",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Lists a project's erasure records, to the approvers",
+        "tags": [
+          "erasures"
+        ]
+      },
+      "post": {
+        "description": "handleErase deletes a person's rows from the project's tables of people's\ndata, and records it.",
+        "operationId": "post_projects_name_erasures",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Deletes a person's rows from the project's tables of people's data, and records it",
+        "tags": [
+          "erasures"
+        ]
+      }
+    },
+    "/api/projects/{name}/flow": {
+      "get": {
+        "description": "handleFlow is a project's tables, the lineage between them, and their\nchecks, from the catalog: for the project's members and administrators.",
+        "operationId": "get_projects_name_flow",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A project's tables, the lineage between them, and their checks, from the catalog: for the project's members and administrators",
+        "tags": [
+          "flow"
+        ]
+      }
+    },
+    "/api/projects/{name}/flows": {
+      "get": {
+        "description": "handleFlows lists the project's flows: the folders under models/flows on\nthe branch the pipelines follow, and those saved on branches of their own\nand not merged yet.",
+        "operationId": "get_projects_name_flows",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Lists the project's flows: the folders under models/flows on the branch the pipelines follow, and those saved on branches of their own and not merged yet",
+        "tags": [
+          "flows"
+        ]
+      }
+    },
+    "/api/projects/{name}/flows/compile": {
+      "post": {
+        "description": "handleFlowCompile compiles a flow as the canvas holds it: each step's\ncolumns and SQL, or why not. Nothing runs.",
+        "operationId": "post_projects_name_flows_compile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Compiles a flow as the canvas holds it: each step's columns and SQL, or why not",
+        "tags": [
+          "flows"
+        ]
+      }
+    },
+    "/api/projects/{name}/flows/preview": {
+      "post": {
+        "description": "handleFlowPreview runs a step's query, on a sample of each input, as the person.",
+        "operationId": "post_projects_name_flows_preview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Runs a step's query, on a sample of each input, as the person",
+        "tags": [
+          "flows"
+        ]
+      }
+    },
+    "/api/projects/{name}/flows/{flow}": {
+      "get": {
+        "description": "handleFlowView is one flow, read from the repo and compiled.",
+        "operationId": "get_projects_name_flows_flow",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "flow",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "One flow, read from the repo and compiled",
+        "tags": [
+          "flows"
+        ]
+      },
+      "put": {
+        "description": "handleSaveFlow writes the flow to the project's repo on a branch of its\nown, with a merge request into the branch the pipelines follow: its\nmodels (with their headers), sources and schema, the DAG that builds it,\nand a dbt project if the repo has none yet. Steps no longer in the flow\nlose their models. Editors only.",
+        "operationId": "put_projects_name_flows_flow",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "flow",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Writes the flow to the project's repo on a branch of its own, with a merge request into the branch the pipelines follow: its models (with their headers), sources and schema, the DAG that builds it, and a dbt project if the repo has none yet",
+        "tags": [
+          "flows"
+        ]
+      }
+    },
+    "/api/projects/{name}/flows/{flow}/steps/{step}/run": {
+      "post": {
+        "description": "the llm step's table, by the flow's DAG\n\nhandleFlowLLMRun asks the model about the step's input, every row up to\nthe step's limit, and writes the answers as the step's table: the flow's\nDAG calls it as the project's pipelines before dbt builds; an editor may too.",
+        "operationId": "post_projects_name_flows_flow_steps_step_run",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "flow",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "step",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Asks the model about the step's input, every row up to the step's limit, and writes the answers as the step's table: the flow's DAG calls it as the project's pipelines before dbt builds; an editor may too",
+        "tags": [
+          "flows"
+        ]
+      }
+    },
+    "/api/projects/{name}/history": {
+      "get": {
+        "description": "handleHistory is a table's changes, newest first.",
+        "operationId": "get_projects_name_history",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A table's changes, newest first",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/projects/{name}/imports/{import}": {
+      "delete": {
+        "description": "handleDeleteImport removes one of the project's imports (its tables stay, as data does).",
+        "operationId": "delete_projects_name_imports_import",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "import",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Removes one of the project's imports (its tables stay, as data does)",
+        "tags": [
+          "imports"
+        ]
+      },
+      "put": {
+        "description": "handlePutImport adds or replaces one of the project's imports.",
+        "operationId": "put_projects_name_imports_import",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "import",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Adds or replaces one of the project's imports",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/api/projects/{name}/imports/{import}/reset": {
+      "post": {
+        "description": "handleResetImport starts a run of one of a project's imports that copies\neverything again (its editors): dlt drops the import's tables and where\nits cursors got to, then copies from the start (use case 8.2).",
+        "operationId": "post_projects_name_imports_import_reset",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "import",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Starts a run of one of a project's imports that copies everything again (its editors): dlt drops the import's tables and where its cursors got to, then copies from the start (use case 8.2)",
+        "tags": [
+          "imports"
+        ]
+      }
+    },
+    "/api/projects/{name}/knowledge": {
+      "get": {
+        "description": "handleKnowledgeList is the project's banks, for its members: what each holds, and whether it's built.",
+        "operationId": "get_projects_name_knowledge",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "The project's banks, for its members: what each holds, and whether it's built",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/api/projects/{name}/knowledge/{bank}": {
+      "delete": {
+        "description": "and take one out (its table stays)\n\nhandleDeleteKnowledge takes a bank out of the project: its editors. Its\ntable stays, a table of the project's like any other, until they drop it.",
+        "operationId": "delete_projects_name_knowledge_bank",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "bank",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Takes a bank out of the project: its editors",
+        "tags": [
+          "knowledge"
+        ]
+      },
+      "put": {
+        "description": "its editors declare a bank\n\nhandlePutKnowledge declares a bank, or changes one: the project's editors,\nas they register its agents. Its table is made when it's first built.",
+        "operationId": "put_projects_name_knowledge_bank",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "bank",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Declares a bank, or changes one: the project's editors, as they register its agents",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/api/projects/{name}/knowledge/{bank}/build": {
+      "post": {
+        "description": "editors, the project's pipelines\n\nhandleKnowledgeBuild builds a bank afresh: its editors, administrators, and the project's pipelines.",
+        "operationId": "post_projects_name_knowledge_bank_build",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "bank",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Builds a bank afresh: its editors, administrators, and the project's pipelines",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/api/projects/{name}/knowledge/{bank}/search": {
+      "post": {
+        "description": "members, and agents by their own token\n\nhandleKnowledgeSearch is a bank's chunks closest in meaning to a question,\nas the person (or agent) asking: a member, under the project's rules on the bank's table.",
+        "operationId": "post_projects_name_knowledge_bank_search",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "bank",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A bank's chunks closest in meaning to a question, as the person (or agent) asking: a member, under the project's rules on the bank's table",
+        "tags": [
+          "knowledge"
+        ]
+      }
+    },
+    "/api/projects/{name}/llm": {
+      "get": {
+        "description": "handleLLM is a project's gateway use, to its members.",
+        "operationId": "get_projects_name_llm",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A project's gateway use, to its members",
+        "tags": [
+          "llm"
+        ]
+      }
+    },
+    "/api/projects/{name}/llm/calls": {
+      "get": {
+        "description": "its model calls (12.8), to its editors\n\nhandleLLMCalls are a project's calls of the gateway, by its keys, over the\nlast days (default 7, up to 31): each call's time, whose key, who asked,\nthe model, tokens, cost, time taken and outcome, and their totals by day,\nperson and model. To its editors and administrators: never the question or answer.",
+        "operationId": "get_projects_name_llm_calls",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A project's calls of the gateway, by its keys, over the last days (default 7, up to 31): each call's time, whose key, who asked, the model, tokens, cost, time taken and outcome, and their totals by day, person and model",
+        "tags": [
+          "llm"
+        ]
+      }
+    },
+    "/api/projects/{name}/maintenance": {
+      "get": {
+        "description": "handleMaintenance is a project's tables as maintenance keeps them, for its\npeople; its editors (and administrators) ask for it now.",
+        "operationId": "get_projects_name_maintenance",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A project's tables as maintenance keeps them, for its people; its editors (and administrators) ask for it now",
+        "tags": [
+          "maintenance"
+        ]
+      },
+      "post": {
+        "description": "handleMaintenance is a project's tables as maintenance keeps them, for its\npeople; its editors (and administrators) ask for it now.",
+        "operationId": "post_projects_name_maintenance",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A project's tables as maintenance keeps them, for its people; its editors (and administrators) ask for it now",
+        "tags": [
+          "maintenance"
+        ]
+      }
+    },
+    "/api/projects/{name}/notebooks/runs/{dag}/{run}": {
+      "get": {
+        "description": "handleNotebookRunView is a run's executed notebook, to the project's\nmembers: its HTML (format=html, the default: no script runs, its outputs\nas they were) or the notebook itself (format=ipynb, to open in JupyterLab).",
+        "operationId": "get_projects_name_notebooks_runs_dag_run",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "dag",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A run's executed notebook, to the project's members: its HTML (format=html, the default: no script runs, its outputs as they were) or the notebook itself (format=ipynb, to open in JupyterLab)",
+        "tags": [
+          "notebooks"
+        ]
+      },
+      "post": {
+        "description": "handleNotebookRun takes a run's executed notebook (and its HTML) from the\nproject's pipelines.",
+        "operationId": "post_projects_name_notebooks_runs_dag_run",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "dag",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Takes a run's executed notebook (and its HTML) from the project's pipelines",
+        "tags": [
+          "notebooks"
+        ]
+      }
+    },
+    "/api/projects/{name}/notebooks/schedules": {
+      "post": {
+        "description": "handleScheduleNotebook commits a notebook and the DAG that runs it on a\nbranch of the project's repo, and opens (or updates) a merge request.",
+        "operationId": "post_projects_name_notebooks_schedules",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Commits a notebook and the DAG that runs it on a branch of the project's repo, and opens (or updates) a merge request",
+        "tags": [
+          "notebooks"
+        ]
+      }
+    },
+    "/api/projects/{name}/pipelines": {
+      "get": {
+        "description": "handlePipelines is a project's pipelines, their recent runs, and the newest\nrun's tasks, from Airflow.",
+        "operationId": "get_projects_name_pipelines",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A project's pipelines, their recent runs, and the newest run's tasks, from Airflow",
+        "tags": [
+          "pipelines"
+        ]
+      }
+    },
+    "/api/projects/{name}/pipelines/{pipeline}/runs": {
+      "post": {
+        "description": "handleStartRun starts a run of one of the project's pipelines, for its\neditors (and administrators). The run itself goes as the pipelines'\nservice account, whoever starts it.",
+        "operationId": "post_projects_name_pipelines_pipeline_runs",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Starts a run of one of the project's pipelines, for its editors (and administrators)",
+        "tags": [
+          "pipelines"
+        ]
+      }
+    },
+    "/api/projects/{name}/pipelines/{pipeline}/runs/{run}/log": {
+      "get": {
+        "description": "handleRunLog is what a run's tasks logged, to the project's members: why\nit failed, in the words of what ran.",
+        "operationId": "get_projects_name_pipelines_pipeline_runs_run_log",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "pipeline",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "run",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "What a run's tasks logged, to the project's members: why it failed, in the words of what ran",
+        "tags": [
+          "pipelines"
+        ]
+      }
+    },
+    "/api/projects/{name}/plans": {
+      "get": {
+        "description": "handlePlans is a project's plans, newest first, and its release (the last\none applied), to its members.",
+        "operationId": "get_projects_name_plans",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A project's plans, newest first, and its release (the last one applied), to its members",
+        "tags": [
+          "plans"
+        ]
+      },
+      "post": {
+        "description": "handlePlan plans a ref of the project's repo (its editors, administrators):\nthe platform's DAG checks it out and sends storscale/ back (handlePlanFiles).",
+        "operationId": "post_projects_name_plans",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Plans a ref of the project's repo (its editors, administrators): the platform's DAG checks it out and sends storscale/ back (handlePlanFiles)",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/projects/{name}/plans/{plan}/apply": {
+      "post": {
+        "description": "handleApplyPlan applies a ready plan (an administrator other than who\nplanned it): the spec saved (deliveries' approvals kept; one whose sending\nchanged, approved again), the semantic model saved, the release recorded.",
+        "operationId": "post_projects_name_plans_plan_apply",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "plan",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Applies a ready plan (an administrator other than who planned it): the spec saved (deliveries' approvals kept; one whose sending changed, approved again), the semantic model saved, the release recorded",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/projects/{name}/plans/{plan}/files": {
+      "post": {
+        "description": "handlePlanFiles takes the repo's storscale/ folder at a plan's ref from the\nplatform's DAG (the project's pipelines account): the spec composed for this\ninstall's target, checked, and what it would change.",
+        "operationId": "post_projects_name_plans_plan_files",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "plan",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Takes the repo's storscale/ folder at a plan's ref from the platform's DAG (the project's pipelines account): the spec composed for this install's target, checked, and what it would change",
+        "tags": [
+          "plans"
+        ]
+      }
+    },
+    "/api/projects/{name}/semantic": {
+      "get": {
+        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them.",
+        "operationId": "get_projects_name_semantic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Passes a project's semantic-layer requests (its model, and queries of its metrics) to semanticd, as the signed-in person: with their own access token, refreshed when it has expired",
+        "tags": [
+          "semantic"
+        ]
+      },
+      "put": {
+        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them.",
+        "operationId": "put_projects_name_semantic",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Passes a project's semantic-layer requests (its model, and queries of its metrics) to semanticd, as the signed-in person: with their own access token, refreshed when it has expired",
+        "tags": [
+          "semantic"
+        ]
+      }
+    },
+    "/api/projects/{name}/semantic/query": {
+      "post": {
+        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them.",
+        "operationId": "post_projects_name_semantic_query",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Passes a project's semantic-layer requests (its model, and queries of its metrics) to semanticd, as the signed-in person: with their own access token, refreshed when it has expired",
+        "tags": [
+          "semantic"
+        ]
+      }
+    },
+    "/api/projects/{name}/semantic/tests": {
+      "post": {
+        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them.",
+        "operationId": "post_projects_name_semantic_tests",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Passes a project's semantic-layer requests (its model, and queries of its metrics) to semanticd, as the signed-in person: with their own access token, refreshed when it has expired",
+        "tags": [
+          "semantic"
+        ]
+      }
+    },
+    "/api/projects/{name}/sql": {
+      "post": {
+        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them.",
+        "operationId": "post_projects_name_sql",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Passes a project's semantic-layer requests (its model, and queries of its metrics) to semanticd, as the signed-in person: with their own access token, refreshed when it has expired",
+        "tags": [
+          "sql"
+        ]
+      }
+    },
+    "/api/projects/{name}/tags": {
+      "get": {
+        "description": "handleTags lists a project's tags (its members); its editors make and\nremove them.",
+        "operationId": "get_projects_name_tags",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Lists a project's tags (its members); its editors make and remove them",
+        "tags": [
+          "tags"
+        ]
+      },
+      "post": {
+        "description": "handleTags lists a project's tags (its members); its editors make and\nremove them.",
+        "operationId": "post_projects_name_tags",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Lists a project's tags (its members); its editors make and remove them",
+        "tags": [
+          "tags"
+        ]
+      }
+    },
+    "/api/projects/{name}/tags/{tag}": {
+      "delete": {
+        "description": "handleTags lists a project's tags (its members); its editors make and\nremove them.",
+        "operationId": "delete_projects_name_tags_tag",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tag",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Lists a project's tags (its members); its editors make and remove them",
+        "tags": [
+          "tags"
+        ]
+      }
+    },
+    "/api/projects/{name}/uploads": {
+      "get": {
+        "description": "handleUploads lists a project's uploads, as the person.",
+        "operationId": "get_projects_name_uploads",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Lists a project's uploads, as the person",
+        "tags": [
+          "uploads"
+        ]
+      },
+      "post": {
+        "description": "handleUpload puts a file in the project's landing area, as the person\n(an editor: the bucket refuses a reader), and answers with its preview.",
+        "operationId": "post_projects_name_uploads",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Puts a file in the project's landing area, as the person (an editor: the bucket refuses a reader), and answers with its preview",
+        "tags": [
+          "uploads"
+        ]
+      }
+    },
+    "/api/projects/{name}/uploads/{file}": {
+      "delete": {
+        "description": "handleDeleteUpload removes an upload, as the person.",
+        "operationId": "delete_projects_name_uploads_file",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Removes an upload, as the person",
+        "tags": [
+          "uploads"
+        ]
+      },
+      "get": {
+        "description": "handleUploadPreview is an upload's first rows, read again as the person.",
+        "operationId": "get_projects_name_uploads_file",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "An upload's first rows, read again as the person",
+        "tags": [
+          "uploads"
+        ]
+      }
+    },
+    "/api/projects/{name}/usage": {
+      "get": {
+        "description": "a project's: its editors too\n\nhandleProjectUsage is a project's month, beside the month before.",
+        "operationId": "get_projects_name_usage",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A project's month, beside the month before",
+        "tags": [
+          "usage"
+        ]
+      }
+    },
+    "/api/session": {
+      "get": {
+        "description": "handleSession says who's signed in, and what they may open.",
+        "operationId": "get_session",
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Says who's signed in, and what they may open",
+        "tags": [
+          "session"
+        ]
+      }
+    },
+    "/api/terms": {
+      "get": {
+        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them.",
+        "operationId": "get_terms",
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Passes a project's semantic-layer requests (its model, and queries of its metrics) to semanticd, as the signed-in person: with their own access token, refreshed when it has expired",
+        "tags": [
+          "terms"
+        ]
+      }
+    },
+    "/api/usage": {
+      "get": {
+        "description": "every project's month: usage viewers, administrators\n\nhandleUsage is every project's month, for the install's usage viewers and administrators.",
+        "operationId": "get_usage",
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Every project's month, for the install's usage viewers and administrators",
+        "tags": [
+          "usage"
+        ]
+      }
+    },
+    "/api/webhooks/gitlab/{name}": {
+      "post": {
+        "description": "handleGitLabHook takes a GitLab webhook's merge request event for a\nproject (use case 7.3): with the token its repo's connection holds\n(webhookToken), it asks the operator to look at the project's merge\nrequests now, not at its next pass. Polling goes on, so a lost event\nonly waits for it.",
+        "operationId": "post_webhooks_gitlab_name",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Takes a GitLab webhook's merge request event for a project (use case 7.3): with the token its repo's connection holds (webhookToken), it asks the operator to look at the project's merge requests now, not at its next pass",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    }
+  },
+  "security": [
+    {
+      "bearer": []
+    },
+    {
+      "session": []
+    }
+  ],
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "tags": [
+    {
+      "name": "access"
+    },
+    {
+      "name": "agent"
+    },
+    {
+      "name": "agents"
+    },
+    {
+      "name": "alerts"
+    },
+    {
+      "name": "asof"
+    },
+    {
+      "name": "assistants"
+    },
+    {
+      "name": "audit"
+    },
+    {
+      "name": "classification"
+    },
+    {
+      "name": "connections"
+    },
+    {
+      "name": "connectors"
+    },
+    {
+      "name": "copies"
+    },
+    {
+      "name": "dbt"
+    },
+    {
+      "name": "deliveries"
+    },
+    {
+      "name": "erasures"
+    },
+    {
+      "name": "flow"
+    },
+    {
+      "name": "flows"
+    },
+    {
+      "name": "governance"
+    },
+    {
+      "name": "health"
+    },
+    {
+      "name": "history"
+    },
+    {
+      "name": "imports"
+    },
+    {
+      "name": "knowledge"
+    },
+    {
+      "name": "llm"
+    },
+    {
+      "name": "maintenance"
+    },
+    {
+      "name": "notebooks"
+    },
+    {
+      "name": "pipelines"
+    },
+    {
+      "name": "plans"
+    },
+    {
+      "name": "products"
+    },
+    {
+      "name": "projects"
+    },
+    {
+      "name": "reference"
+    },
+    {
+      "name": "semantic"
+    },
+    {
+      "name": "session"
+    },
+    {
+      "name": "sql"
+    },
+    {
+      "name": "tags"
+    },
+    {
+      "name": "terms"
+    },
+    {
+      "name": "uploads"
+    },
+    {
+      "name": "usage"
+    },
+    {
+      "name": "webhooks"
+    }
+  ]
+}

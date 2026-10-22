@@ -45,6 +45,7 @@ export function TopBar() {
           {admin && <Link to="/admin" onClick={() => account.setOpen(false)} data-testid="nav-admin">Administration</Link>}
           {!admin && usage && <Link to="/usage" onClick={() => account.setOpen(false)} data-testid="nav-usage">Usage and cost</Link>}
           {!admin && governance && <Link to="/governance" onClick={() => account.setOpen(false)} data-testid="nav-governance">Governance</Link>}
+          <Link to="/reference" onClick={() => account.setOpen(false)} data-testid="nav-reference">API reference</Link>
           <button onClick={signOut} data-testid="sign-out">Sign out</button>
         </div>
       </div>

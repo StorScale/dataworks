@@ -60,6 +60,8 @@ func (s *server) assistants(r *http.Request) ([]project.Assistant, error) {
 	return out, nil
 }
 
+// handleAssistants are the assistants registered to the MCP server (their
+// Keycloak clients), for the administrators.
 func (s *server) handleAssistants(w http.ResponseWriter, r *http.Request) {
 	if s.administrator(w, r, "see the registered assistants") == nil {
 		return
@@ -80,6 +82,8 @@ func (s *server) handleAssistants(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"assistants": out, "available": true})
 }
 
+// handlePutAssistant registers an assistant, or changes one: its Keycloak
+// client and where it may send people back to. The administrators.
 func (s *server) handlePutAssistant(w http.ResponseWriter, r *http.Request) {
 	sess := s.administrator(w, r, "register assistants")
 	if sess == nil {
@@ -115,6 +119,8 @@ func (s *server) handlePutAssistant(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.assistantView(a))
 }
 
+// handleDeleteAssistant takes an assistant away: its client goes, and it
+// signs in no more. The administrators.
 func (s *server) handleDeleteAssistant(w http.ResponseWriter, r *http.Request) {
 	sess := s.administrator(w, r, "remove assistants")
 	if sess == nil {
