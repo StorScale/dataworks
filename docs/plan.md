@@ -314,7 +314,7 @@ In all, some six weeks of additions, none of them a new system except Langfuse a
 
 ## Phases
 
-Each phase ends with a gate: an end-to-end test like the examples' `test.py`, run in CI. The use cases and storyboards behind phases 6 to 12, and the requirements they set, are in [use-cases.md](use-cases.md).
+Each phase ends with a gate: an end-to-end test like the examples' `test.py`, run in CI. The use cases and storyboards behind phases 6 to 16, and the requirements they set, are in [use-cases.md](use-cases.md).
 
 | Phase | Deliverable | Gate |
 |---|---|---|
@@ -334,6 +334,7 @@ Each phase ends with a gate: an end-to-end test like the examples' `test.py`, ru
 | 13 | Usage and cost per project: Trino, Spark and storage use attributed to projects, with budgets and alerts in Grafana | A project's usage and cost show, and crossing its budget alerts |
 | 14 | Data apps and the API: simple data apps, a readers' Home per project, a Q&A app over the knowledge bank; the OpenAPI reference and the `storscale` Python package (14.3) | An app shared with sam that shows what he may see; a developer makes a project's flow from the package alone |
 | 15 | ML and MLOps (added 2026-10-20, from 14's second half): MLflow per project, a registry with approvals, batch scoring, drift, a model served as an API under the person's sign-in, model cards, models in the catalog's lineage | A model approved before a pipeline uses it, its drift watched; the same model answers as an API, audited, and refused to someone outside the project |
+| 16 | Roles of the company's own (added 2026-10-22): an Administration → Roles page where administrators define roles beyond editor and reader (a steward, an analyst, an ML engineer) from the platform's permissions; the built-in roles expressed as the same permissions; custom roles given per project to people and groups, and platform-wide to groups (the governance group and usage viewers become such roles); each permission applied in Ranger, Buckets, Keycloak, Airflow, Superset, MLflow and platformd from one mapping; changes carried to every project and audited | A steward defined by an administrator reads every table unmasked in Trino and confirms tags, but can't write a table, run a pipeline or change the spec; taking a permission away reaches every project within a minute; a role in use can't be deleted |
 
 **Not yet placed:**
 - **Templates and reuse:** project templates, shared libraries and recipes.
