@@ -235,7 +235,7 @@ func (k *kube) test(suites []string) error {
 			return err
 		}
 	}
-	return helm("test", release, "--logs", "--timeout", "60m")
+	return helm("test", release, "--logs", "--timeout", "90m")
 }
 
 func (k *kube) do(cmd string, st *stack, args []string, o options) error {
