@@ -15,7 +15,8 @@ table of customers. These check (use case 15.1, R15.3):
      records the drift of that column past the threshold, the project is
      alerted, and the Models tab lists the scoring with its runs.
 
-The project is removed after.
+The project is removed after, and its MLflow workspace with it: the next run's
+model is version 1 again.
 """
 import json
 import os
@@ -86,6 +87,7 @@ def main():
         models = (bob.get(f"{url}/models", timeout=60).json() or {}).get("models", [])
         check("bob trains churn and registers it through the platform's MLflow; alice approves the version",
               ok.ok and next((m.get("approved") for m in models if m["name"] == "churn"), None) == version, (version, ok.status_code, ok.text[:200]))
+        check("... version 1: a project made again starts with an empty workspace (the last run's went with its project)", version == "1", version)
 
         # 2. A scoring, run as the project's pipelines.
         spec = dict(SPEC, spec=dict(SPEC["spec"], scoring=[SCORING]))

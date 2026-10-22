@@ -100,7 +100,7 @@ func (m *mlflowProxy) call(ctx context.Context, workspace, method, path string, 
 	}
 	defer resp.Body.Close()
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
-	if resp.StatusCode != 200 {
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		var e struct {
 			Code    string `json:"error_code"`
 			Message string `json:"message"`
@@ -136,6 +136,57 @@ func (m *mlflowProxy) workspace(ctx context.Context, name string) error {
 	}
 	m.mu.Lock()
 	m.created[name] = true
+	m.mu.Unlock()
+	return nil
+}
+
+// removeWorkspace deletes a project's workspace with the project: its
+// experiments' artifacts in the bucket first (MLflow deletes each prefix),
+// then the workspace with its experiments, runs and models (CASCADE, which
+// leaves the artifacts). A workspace that was never made is nothing to do.
+func (m *mlflowProxy) removeWorkspace(ctx context.Context, name string) error {
+	var token string
+	for {
+		var page struct {
+			Experiments []struct {
+				ID       string `json:"experiment_id"`
+				Location string `json:"artifact_location"`
+			} `json:"experiments"`
+			Next string `json:"next_page_token"`
+		}
+		body := map[string]any{"max_results": 1000, "view_type": "ALL"}
+		if token != "" {
+			body["page_token"] = token
+		}
+		err := m.call(ctx, name, "POST", "/api/2.0/mlflow/experiments/search", body, &page)
+		var me *mlflowError
+		if asMLflow(err, &me) && (me.code == "RESOURCE_DOES_NOT_EXIST" || me.status == 404) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		for _, e := range page.Experiments {
+			// mlflow-artifacts:/workspaces/<name>/<id>: the path MLflow scopes to the workspace again.
+			rel, ok := strings.CutPrefix(e.Location, "mlflow-artifacts:/workspaces/"+name+"/")
+			if !ok || rel == "" || strings.Contains(rel, "..") {
+				continue
+			}
+			if err := m.call(ctx, name, "DELETE", "/api/2.0/mlflow-artifacts/artifacts/"+rel, nil, nil); err != nil {
+				return fmt.Errorf("experiment %s's artifacts: %w", e.ID, err)
+			}
+		}
+		if token = page.Next; token == "" {
+			break
+		}
+	}
+	err := m.call(ctx, "", "DELETE", "/api/3.0/mlflow/workspaces/"+url.PathEscape(name)+"?mode=CASCADE", nil, nil)
+	var me *mlflowError
+	if err != nil && !(asMLflow(err, &me) && (me.code == "RESOURCE_DOES_NOT_EXIST" || me.status == 404)) {
+		return err
+	}
+	m.mu.Lock()
+	delete(m.created, name)
 	m.mu.Unlock()
 	return nil
 }

@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/StorScale/storscale-platform/internal/pipelines"
 	"github.com/StorScale/storscale-platform/internal/project"
@@ -177,7 +178,8 @@ func (s *server) handlePutProject(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleDeleteProject removes a project (the administrators): its access,
-// its pipelines and the credentials it kept go; its tables and files stay.
+// its pipelines, the credentials it kept and its MLflow workspace (its
+// experiments, runs, models and their artifacts) go; its tables and files stay.
 func (s *server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 	sess := s.admin(w, r)
 	if sess == nil {
@@ -197,6 +199,17 @@ func (s *server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Info("project deleted", "project", name, "by", sess.User.Username)
+	if m := s.mlflow(); m != nil {
+		go func() { // MLflow's workspace, after: the project is gone whether or not this is quick
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
+			if err := m.removeWorkspace(ctx, name); err != nil {
+				s.log.Warn("the project's MLflow workspace wasn't removed", "project", name, "error", err)
+				return
+			}
+			s.log.Info("the project's MLflow workspace removed", "project", name)
+		}()
+	}
 	s.record(r, sess.User.Username, "project.deleted", "project:"+name, "")
 	w.WriteHeader(http.StatusNoContent)
 }
