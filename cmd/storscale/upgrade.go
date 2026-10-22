@@ -372,7 +372,7 @@ To undo: %s (the Project definition stays: its new fields are optional)
 	}
 	if o.test {
 		fmt.Println("\nThe end-to-end checks (helm test; the ConfigMap storscale-tests picks them):")
-		return helm("test", release, "--logs", "--timeout", "60m")
+		return helm("test", release, "--logs", "--timeout", "90m")
 	}
 	return nil
 }

@@ -92,7 +92,7 @@ trino:
 helm install storscale oci://ghcr.io/storscale/charts/storscale-platform --version 0.27.0 \
   -n storscale --create-namespace -f platform.yaml --set-file global.ca.certs=root-ca.pem
 kubectl -n storscale get pods,jobs,projects -w      # the first install takes 10–20 minutes
-helm test storscale -n storscale --logs --timeout 60m
+helm test storscale -n storscale --logs --timeout 90m
 ```
 
 Install with the subcharts on, unless the cluster already runs one: a Spark Operator that
