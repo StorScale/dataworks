@@ -45,6 +45,7 @@ images:
   opensearch: platform-opensearch
   semanticd: platform-semanticd
   catalogSync: platform-catalog-sync
+  mlflow: platform-mlflow
 
 # Everything else comes from its project's own image.
 upstream:

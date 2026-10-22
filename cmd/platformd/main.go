@@ -119,6 +119,9 @@ type config struct {
 	// default the administrators).
 	Rates       rates
 	UsageGroups []string
+	// MLflowURL is the platform's MLflow (15.1), reached only through
+	// platformd; empty: none.
+	MLflowURL string
 	// ErasureDeadlineDays is how long the company has to answer a request
 	// to delete a person's data (use case 6.9): the CCPA's 45, by default.
 	ErasureDeadlineDays int
@@ -202,6 +205,7 @@ func configFromEnv(get func(string) string) (config, error) {
 		return c, fmt.Errorf("USAGE_RATES: %w", err)
 	}
 	c.UsageGroups = list("USAGE_VIEWER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers"))
+	c.MLflowURL = strings.TrimRight(get("MLFLOW_URL"), "/")
 	var missing []string
 	for k, v := range map[string]string{"PLATFORM_URL": c.PlatformURL, "KEYCLOAK_URL": c.KeycloakURL, "OIDC_CLIENT_SECRET": c.ClientSecret} {
 		if v == "" {

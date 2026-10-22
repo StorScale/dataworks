@@ -71,3 +71,22 @@ def s3():
     """A boto3 S3 client for Buckets, as the signed-in person."""
     return session().client("s3", endpoint_url=ENDPOINT, config=Config(s3={"addressing_style": "path"}))
 
+def mlflow(project):
+    """MLflow, in the project's workspace, as you (use case 15.1): the
+    platform's MLflow, reached through platformd, which signs you in with
+    the token below (renewed every two minutes) and keeps everything in the
+    project. Returns the mlflow module, ready: mlflow.set_experiment("churn"),
+    mlflow.sklearn.autolog(), mlflow.register_model(...)."""
+    import threading
+
+    import mlflow as _mlflow
+    os.environ["MLFLOW_TRACKING_URI"] = os.environ.get("STORSCALE_PLATFORMD_URL", "http://platformd:8080").rstrip("/") + "/mlflow/" + project
+
+    def renew():
+        os.environ["MLFLOW_TRACKING_TOKEN"] = token()
+        t = threading.Timer(120, renew)
+        t.daemon = True
+        t.start()
+    renew()
+    _mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
+    return _mlflow

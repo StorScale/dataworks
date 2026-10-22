@@ -4,7 +4,7 @@
 #   ghcr.io/storscale/platformd           platformd and the platform's web app
 #   ghcr.io/storscale/platform-<name>     the chart's images of stack/'s services: tools,
 #                                         airflow, superset, jupyterhub, notebook, opensearch,
-#                                         semanticd, catalog-sync
+#                                         semanticd, catalog-sync, mlflow
 #
 # Tags pushed:
 #   - pushes to main:   <short sha (8)> and main
@@ -48,7 +48,7 @@ jobs:
       fail-fast: false
       matrix:
         name: [platformd, platform-tools, platform-airflow, platform-superset, platform-jupyterhub,
-               platform-notebook, platform-opensearch, platform-semanticd, platform-catalog-sync]
+               platform-notebook, platform-opensearch, platform-semanticd, platform-catalog-sync, platform-mlflow]
         arch: [amd64, arm64]
         include:
           - arch: amd64
@@ -65,6 +65,7 @@ jobs:
           - {name: platform-opensearch, context: stack/catalog/opensearch}
           - {name: platform-semanticd, context: stack/semantic}
           - {name: platform-catalog-sync, context: stack/catalog/sync}
+          - {name: platform-mlflow, context: stack/mlflow}
     steps:
       - uses: actions/checkout@v4
 
@@ -116,7 +117,7 @@ jobs:
       fail-fast: false
       matrix:
         name: [platformd, platform-tools, platform-airflow, platform-superset, platform-jupyterhub,
-               platform-notebook, platform-opensearch, platform-semanticd, platform-catalog-sync]
+               platform-notebook, platform-opensearch, platform-semanticd, platform-catalog-sync, platform-mlflow]
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -174,7 +175,7 @@ jobs:
       fail-fast: false
       matrix:
         name: [platformd, platform-tools, platform-airflow, platform-superset, platform-jupyterhub,
-               platform-notebook, platform-opensearch, platform-semanticd, platform-catalog-sync]
+               platform-notebook, platform-opensearch, platform-semanticd, platform-catalog-sync, platform-mlflow]
     steps:
       - name: Scan
         run: |

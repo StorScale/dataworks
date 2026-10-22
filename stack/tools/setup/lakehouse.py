@@ -79,14 +79,16 @@ POLICIES = [{**p, "policyItems": p["policyItems"] + ([allow(["execute"], groups=
 
 if __name__ == "__main__":
     setup_buckets(
-        buckets=["warehouse", "scratch", "storscale-platform", "storscale-backups"],
+        buckets=["warehouse", "scratch", "storscale-platform", "storscale-backups", "mlflow"],
         policies={"lakehouse-engine": bucket_rw("warehouse"), "platform-store": bucket_rw("storscale-platform"),
                   "backup-store": bucket_rw("storscale-backups"),  # the backups' own account: that bucket alone
+                  "mlflow-store": bucket_rw("mlflow"),  # MLflow's artifacts, a workspace (project) a folder
                   "analysts": bucket_rw("scratch"), "engineers": bucket_rw("scratch")},
         accounts=[(env["TRINO_S3_ACCESS_KEY"], env["TRINO_S3_SECRET_KEY"], "lakehouse-engine"),
                   (env["NESSIE_S3_ACCESS_KEY"], env["NESSIE_S3_SECRET_KEY"], "lakehouse-engine"),
                   (env["PLATFORM_STORE_ACCESS_KEY"], env["PLATFORM_STORE_SECRET_KEY"], "platform-store"),
                   (env["BACKUP_S3_ACCESS_KEY"], env["BACKUP_S3_SECRET_KEY"], "backup-store"),
+                  (env["MLFLOW_S3_ACCESS_KEY"], env["MLFLOW_S3_SECRET_KEY"], "mlflow-store"),
                   # The projects' sources' copies (change capture) write their tables.
                   (env["COPY_S3_ACCESS_KEY"], env["COPY_S3_SECRET_KEY"], "lakehouse-engine")])
     ensure_buckets_identity()

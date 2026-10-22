@@ -80,6 +80,7 @@ type server struct {
 	projectAlerts   *projectAlerts // nil: no project alerts (HEALTH isn't on)
 	maintainer      *maintainer    // nil: no table maintenance (no MAINTENANCE_TRINO_PASSWORD)
 	usage           *usageCounter  // Trino's queries counted by project (13.1); nil without the platform's bucket
+	mlflowProxy     *mlflowProxy   // MLflow, for the projects' people (15.1); made on first use, nil without MLFLOW_URL
 	nsCache         map[string]string
 	nsCacheAt       time.Time
 	audit           *audit.Log // nil: no audit log (no AUDIT_URL)
@@ -243,12 +244,15 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("PUT /api/projects/{name}/flows/{flow}", s.handleSaveFlow)
 	mux.HandleFunc("POST /api/projects/{name}/flows/compile", s.handleFlowCompile)
 	mux.HandleFunc("POST /api/projects/{name}/flows/preview", s.handleFlowPreview)
-	mux.HandleFunc("POST /api/projects/{name}/flows/{flow}/steps/{step}/run", s.handleFlowLLMRun) // the llm step's table, by the flow's DAG
-	mux.HandleFunc("GET /api/projects/{name}/apps", s.handleApps)                                 // its apps (14.1), to its members
-	mux.HandleFunc("PUT /api/projects/{name}/apps/{app}", s.handlePutApp)                         // its editors make one
-	mux.HandleFunc("DELETE /api/projects/{name}/apps/{app}", s.handleDeleteApp)                   // and take one out
-	mux.HandleFunc("POST /api/projects/{name}/apps/{app}/data", s.handleAppData)                  // an app's rows, as whoever opens it
-	mux.HandleFunc("POST /api/projects/{name}/apps/{app}/ask", s.handleAppAsk)                    // a question app's answer, as whoever asks
+	mux.HandleFunc("POST /api/projects/{name}/flows/{flow}/steps/{step}/run", s.handleFlowLLMRun)               // the llm step's table, by the flow's DAG
+	mux.HandleFunc("/mlflow/{name}/{rest...}", s.handleMLflow)                                                  // MLflow, in the project's workspace (15.1)
+	mux.HandleFunc("GET /api/projects/{name}/models", s.handleModels)                                           // its models and experiments
+	mux.HandleFunc("POST /api/projects/{name}/models/{model}/versions/{version}/approve", s.handleApproveModel) // an editor other than who registered it
+	mux.HandleFunc("GET /api/projects/{name}/apps", s.handleApps)                                               // its apps (14.1), to its members
+	mux.HandleFunc("PUT /api/projects/{name}/apps/{app}", s.handlePutApp)                                       // its editors make one
+	mux.HandleFunc("DELETE /api/projects/{name}/apps/{app}", s.handleDeleteApp)                                 // and take one out
+	mux.HandleFunc("POST /api/projects/{name}/apps/{app}/data", s.handleAppData)                                // an app's rows, as whoever opens it
+	mux.HandleFunc("POST /api/projects/{name}/apps/{app}/ask", s.handleAppAsk)                                  // a question app's answer, as whoever asks
 	mux.HandleFunc("GET /api/projects/{name}/knowledge", s.handleKnowledgeList)
 	mux.HandleFunc("PUT /api/projects/{name}/knowledge/{bank}", s.handlePutKnowledge)            // its editors declare a bank
 	mux.HandleFunc("DELETE /api/projects/{name}/knowledge/{bank}", s.handleDeleteKnowledge)      // and take one out (its table stays)

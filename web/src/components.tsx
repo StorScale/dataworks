@@ -248,6 +248,7 @@ export function ProjectFrame() {
     ["flows", "Flows", !!spec?.tables && semantic],
     ["agents", "Agents", !!spec?.tables && semantic],
     ["apps", "Apps", !!spec?.tables && semantic],
+    ["models", "Models", true],
     ["dashboards", "Dashboards", has("dashboards")],
     ["tags", "Tags", !!spec?.tables],
     ["deliveries", "Deliveries", !!spec?.deliveries?.length],

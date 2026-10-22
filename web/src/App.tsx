@@ -24,6 +24,7 @@ import Governance from "./pages/Governance";
 import Usage, { ProjectUsage } from "./pages/Usage";
 import Reference from "./pages/Reference";
 import Apps, { AppPage } from "./pages/Apps";
+import Models from "./pages/Models";
 import Agents from "./pages/Agents"; // React Flow is loaded only when the canvas is
 import ProjectAccess from "./pages/ProjectAccess";
 import ProjectEditor from "./pages/ProjectEditor";
@@ -80,6 +81,7 @@ function Shell() {
           <Route path="agents" element={<Agents />} />
           <Route path="apps" element={<Apps />} />
           <Route path="apps/:app" element={<AppPage />} />
+          <Route path="models" element={<Models />} />
           <Route path="notebooks" element={null} />
           <Route path="dashboards" element={null} />
           <Route path="access" element={<ProjectAccess />} />

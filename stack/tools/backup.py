@@ -143,7 +143,7 @@ def fetch(name):
 # Each database role, and the storscale-env key holding its password.
 PLATFORM_ROLES = {"postgres": "POSTGRES_ADMIN_PASSWORD", "airflow": "AIRFLOW_DB_PASSWORD", "superset": "SUPERSET_DB_PASSWORD",
                   "openmetadata_user": "OPENMETADATA_DB_PASSWORD", "keycloak": "KEYCLOAK_DB_PASSWORD",
-                  "nessie": "NESSIE_DB_PASSWORD", "trino": "TRINO_DB_PASSWORD"}
+                  "nessie": "NESSIE_DB_PASSWORD", "trino": "TRINO_DB_PASSWORD", "mlflow": "MLFLOW_DB_PASSWORD"}
 RANGER_ROLES = {"postgres": "RANGER_PASSWORD", "rangeradmin": "RANGER_PASSWORD"}
 
 
