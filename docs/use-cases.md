@@ -683,6 +683,23 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 
 ---
 
+## Phase 16: roles of the company's own (added 2026-10-22)
+
+### 16.1 A role of the company's own
+
+A project's members are editors or readers, and its pipelines a service account; across the platform, the administrators, the usage viewers (finance) and the governance group are settings. The company needs roles in between: a data steward who reads every table unmasked and confirms tags but changes nothing; an analyst who reads and writes SQL and runs pipelines but doesn't change the spec; an ML engineer who registers and approves models but doesn't touch deliveries.
+
+1. An administrator opens **Administration → Roles** and defines `steward`: what it may do, picked from the platform's permissions (read tables, read unmasked columns, write tables, run pipelines, change metrics, manage connections, approve agents, models or deliveries, see usage), each with what it reaches (a project's tables, its bucket, its pipelines, its models). The built-in roles are listed beside it, read-only, as the same permissions.
+2. On a project's **Edit**, `steward` is offered beside editor and reader, given to a person or a Keycloak group. Platform-wide, it's given to a group (the governance group becomes one such role).
+3. The platform applies it everywhere the built-in roles reach: Ranger's policies (unmasked columns, row filters lifted or not), Buckets' policies, Keycloak's groups, Airflow's and Superset's roles, MLflow's access, and platformd's own checks. The project's **Access** tab and the Overview's "What you can do here" show it in words, as they show editor and reader.
+4. The administrator changes the role (takes away "read unmasked columns"); every project using it follows within a minute, and the audit log records who changed it and what. A role in use can't be deleted until no project or group holds it.
+
+**Requirements**
+- R16.1 Roles defined by administrators: a name, a description and a set of the platform's permissions, kept by the platform (not per project), the built-in roles expressed as the same permissions.
+- R16.2 Custom roles given per project to people and Keycloak groups, and platform-wide to groups; the project spec names them (`members[].role`).
+- R16.3 Each permission applied in every system the built-in roles reach (Ranger, Buckets, Keycloak, Airflow, Superset, MLflow, platformd), from one mapping, so a new permission is added in one place.
+- R16.4 Changes to a role carried to every project using it, audited; a role in use not deleted; the separation rules kept (who registers a model, agent or delivery change still can't approve it, whatever their role).
+
 ## Not yet placed
 
 ### U.2 A new team, from a template
@@ -693,6 +710,7 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 **Requirements**
 - R-U.3 Project templates: a spec and a repo to copy, kept by the platform's administrators.
 - R-U.4 Shared libraries (code, recipes, checks) that projects use without copying.
+
 
 ## To decide, with the first teams
 
@@ -718,5 +736,6 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 | 13 | 13.1 | 13.1: usage and cost show per project, and a budget alerts |
 | 14 | 14.1, 14.3 | 14.1: an app shared with sam shows what he may see; 14.3: a developer makes a project's flow from the package alone |
 | 15 | 15.1 | 15.1: a model approved before a pipeline uses it, its drift watched; the same model answers as an API, audited, and refuses someone outside the project |
+| 16 | 16.1 | 16.1: a role an administrator defines (a steward who reads unmasked but changes nothing) gives exactly its permissions in Trino, Buckets, Airflow, Superset, MLflow and the platform; changed, every project follows; in use, it can't be deleted |
 
 Each storyboard becomes an end-to-end suite, as the phases before did: the people and agents above, against a real install, in CI.
