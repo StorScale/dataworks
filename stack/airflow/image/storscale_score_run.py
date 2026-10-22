@@ -9,10 +9,11 @@ Keycloak token.
 In order: the model's approved version (models:/<model>@approved), through
 the platform's MLflow (/mlflow/<project>, the token as MLflow's own); the
 input's rows, read through Trino; their scores, written afresh as the output
-table, with the model's version and the time; each input column's drift from
-the reference (the first run's of that version, kept by the platform: the
-population stability index over ten bins, or its categories), and the run
-recorded with the platform, which alerts the project past the threshold.
+table (each row under the input's id column, so it joins back), with the
+model's version and the time; each input column's drift from the reference
+(the first run's of that version, kept by the platform: the population
+stability index over ten bins, or its categories), and the run recorded with
+the platform, which alerts the project past the threshold.
 """
 import datetime
 import json
@@ -114,7 +115,7 @@ def main():
     at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     numeric = all(isinstance(v, numbers.Number) and not isinstance(v, bool) for v in scores)
     out = q(s["output"])
-    cur.execute(f"CREATE OR REPLACE TABLE {out} (id varchar, score {'double' if numeric else 'varchar'}, model_version varchar, scored_at timestamp(3))")
+    cur.execute(f"CREATE OR REPLACE TABLE {out} ({q(s['id'])} varchar, score {'double' if numeric else 'varchar'}, model_version varchar, scored_at timestamp(3))")
     cur.fetchall()
     for start in range(0, len(df), 500):
         rows = [f"({literal(str(i))}, {literal(float(v) if numeric else str(v))}, {literal(str(version))}, TIMESTAMP '{at}')"
