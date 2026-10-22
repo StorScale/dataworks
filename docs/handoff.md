@@ -6,7 +6,7 @@ the target cluster. Read this, then [plan.md](plan.md) and the
 
 ## Where things stand (2026-10-19)
 
-- **Release 0.23.0** is phases 0–5 of the plan (the platform, its web app, projects, the
+- **Release 0.24.0** is phases 0–5 of the plan (the platform, its web app, projects, the
   catalog, the semantic layer with MCP for agents, and the Helm chart), ready for a real
   cluster: behind an ingress that ends TLS, with a private CA, on Buckets 1.19.0. It adds
   phase 7's first part: each project's pipelines from its own git repo, in an Airflow of
@@ -39,7 +39,8 @@ the target cluster. Read this, then [plan.md](plan.md) and the
   from phase 6, what a table holds (profiling, eight kinds of check, 6.11) and Slack (6.7); from phase 7, the notebook's
   analysis and ML libraries and VS Code (7.8); and from phase 12, knowledge banks (12.6), agents
   from a prompt (12.7), each model call (12.8) and the Governance page (12.9); agents as tools and a
-  project's own tools (12.7), knowledge from files, on a schedule and on the canvas (12.6).
+  project's own tools (12.7), knowledge from files, on a schedule and on the canvas (12.6); and phase 13,
+  usage and cost per project with a rate card and budgets (13.1).
 - **CI passes on every way of running it:**
   - **`platform`** runs the Compose stack and every suite (`stack/tests/run.py`: the suites that
     share `sales` in a chain, those with projects of their own alongside).
@@ -48,8 +49,8 @@ the target cluster. Read this, then [plan.md](plan.md) and the
   - **`kubernetes-https`** does the same behind HTTPS with a private CA, as on a real cluster
     (`deploy/kind/https.sh`, `https.yaml`): every suite but the browser's.
 - **What's published, and signed:**
-  - The images: `ghcr.io/storscale/platformd:0.23.0` and `ghcr.io/storscale/platform-*:0.23.0`.
-  - The chart: `oci://ghcr.io/storscale/charts/storscale-platform` at version 0.23.0.
+  - The images: `ghcr.io/storscale/platformd:0.24.0` and `ghcr.io/storscale/platform-*:0.24.0`.
+  - The chart: `oci://ghcr.io/storscale/charts/storscale-platform` at version 0.24.0.
 - **Installed on a real cluster:** Kubernetes 1.27, shared with other teams, with
   ingress-nginx and a certificate from a corporate Vault PKI (through cert-manager).
   Every suite but the browser's passes there. That install found the three bugs the
@@ -86,7 +87,7 @@ trino:
 ```
 
 ```bash
-helm install storscale oci://ghcr.io/storscale/charts/storscale-platform --version 0.23.0 \
+helm install storscale oci://ghcr.io/storscale/charts/storscale-platform --version 0.24.0 \
   -n storscale --create-namespace -f platform.yaml --set-file global.ca.certs=root-ca.pem
 kubectl -n storscale get pods,jobs,projects -w      # the first install takes 10–20 minutes
 helm test storscale -n storscale --logs --timeout 60m
@@ -106,8 +107,8 @@ service. It first checks the release isn't mid-upgrade, isn't going backwards, a
 release's images are published; it says what it will do, and asks:
 
 ```bash
-storscale upgrade --context <cluster> --version 0.23.0 --dry-run   # check; show the CRD's changes
-storscale upgrade --context <cluster> --version 0.23.0             # then do it
+storscale upgrade --context <cluster> --version 0.24.0 --dry-run   # check; show the CRD's changes
+storscale upgrade --context <cluster> --version 0.24.0             # then do it
 ```
 
 `-f`, `--set` and `--set-file` change settings over those it was installed with. If it fails,

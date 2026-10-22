@@ -4,6 +4,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-21
+
+What each project costs: its queries' CPU time, what it keeps and its model calls, priced by the install's rate card, against a monthly budget that alerts the project at 80% and 100%, on a Usage tab for its editors and a page of every project's for finance.
+
+**Upgrading from 0.23.0:** `storscale upgrade --context <cluster> --version 0.24.0`, after a `--dry-run`. The Project CRD gains `cost` (the upgrade applies it). Trino gains an event listener (`usage-events.properties`) that posts each finished query to platformd with Trino's shared secret, which platformd now reads too; Trino restarts. New settings whose defaults need no change: `usage.rates` (0.05 a CPU-hour, 0.023 a GB-month, USD) and `usage.viewerGroups` (none: the administrators). On Compose, nothing to set.
+
 ### Added
 - **Usage and cost per project** (13.1, R13.1–R13.3): what each project's queries, storage and model calls cost a month, by the install's rate card (`usage.rates`: a CPU-hour of Trino's, a GB-month kept; the model calls are priced by the gateway). Trino tells platformd of each finished query (its HTTP event listener, `usage-events.properties`, with Trino's shared secret), and the query counts for the projects whose tables it read, split evenly between several: its CPU time, the bytes it read, who ran it, and the costliest queries with their SQL. Storage is sampled once a day: each table's data files (Iceberg's `$files`, as the maintenance account) and the project's bucket (Buckets' count, through the operator's new `/buckets/sizes`). A project's new **Usage** tab, for its editors, shows the month against last month, who ran the queries, the costliest ones and the largest tables; **Usage** under Administration, and in the account menu for the install's usage viewers (`usage.viewerGroups`: finance), lists every project's. A project's `cost.budget` is a project alert at 80% and at 100%; nothing is stopped (6.8's limits cap use). Not yet: Spark. The account menu also links the Governance page for its non-administrator viewers.
 
