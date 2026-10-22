@@ -260,6 +260,16 @@ func main() {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(as)
 		})
+		// Every Airflow makes a DAG of each scoring (storscale_scoring.py, the bundle storscale).
+		mux.HandleFunc("GET /airflow/scoring", func(w http.ResponseWriter, req *http.Request) {
+			ss, err := r.Scorings(req.Context())
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(ss)
+		})
 		// Every Airflow makes a DAG of each knowledge bank it builds on a schedule (storscale_knowledge.py, the bundle storscale).
 		mux.HandleFunc("GET /airflow/knowledge", func(w http.ResponseWriter, req *http.Request) {
 			bs, err := r.KnowledgeBanks(req.Context())

@@ -371,6 +371,22 @@ spec:
                             table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                             column: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
                             id: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                scoring:
+                  description: "Its approved models scoring its tables on a schedule (15.1): the registered model's approved version, a table's rows in, a table of scores out, as its pipelines; each run's drift against the first's."
+                  type: array
+                  items:
+                    type: object
+                    required: [name, model, table, id, output, schedule]
+                    properties:
+                      name: {type: string, pattern: '^[a-z][a-z0-9-]{0,40}$'}
+                      model: {type: string}
+                      table: {type: string}
+                      id: {type: string}
+                      columns: {type: array, items: {type: string}}
+                      output: {type: string}
+                      schedule: {type: string}
+                      drift: {type: number}
+                      maxRows: {type: integer}
                 apps:
                   description: "Small pages of the project's data (14.1), declared: a metric by a dimension, a table's columns, or questions answered from a knowledge bank; with filters; fetched as whoever opens them."
                   type: array

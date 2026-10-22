@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getConnections, getConnectors, putImport, removeImport, resetImport, type Connection, type Connector, type Import } from "../api";
+import { Empty, Intro } from "../components";
 import { ErrorBanner, Spinner, usePlatform, useProject } from "../lib";
 
 const sourceLabel: Record<Import["source"], string> = { rest_api: "a REST API", sql_database: "a database", salesforce: "Salesforce", files: "uploaded files" };
@@ -21,26 +22,21 @@ export default function Imports() {
   const act = async (f: () => Promise<unknown>) => { setError(undefined); try { await f(); reload(); } catch (e) { setError((e as Error).message); } };
   return (
     <div className="page stack" data-testid="imports">
-      <p className="lead" style={{ margin: 0 }}>
+      <Intro actions={canEdit && !adding && connectors && connectors.map((c) => <button key={c.source} className="btn primary" onClick={() => setAdding(c)} data-testid={`add-${c.source}`}>Add {c.label}</button>)}>
         Data copied into the project's tables on a schedule, each object into its own table, only what changed after the first run.
         A connector signs in with one of the project's <Link to={`/p/${name}/connections`}>connections</Link>.
-      </p>
+      </Intro>
       <ErrorBanner error={error} />
-      {canEdit && !adding && connectors && (
-        <div className="row">
-          {connectors.map((c) => <button key={c.source} className="btn primary" onClick={() => setAdding(c)} data-testid={`add-${c.source}`}>Add {c.label}</button>)}
-        </div>
-      )}
       {adding && <ConnectorForm project={name} connector={adding} taken={imports.map((i) => i.name)} onDone={() => { setAdding(undefined); reload(); }} />}
-      {imports.length === 0 && <p className="muted">No imports yet.</p>}
+      {imports.length === 0 && !adding && <Empty>No imports yet.</Empty>}
       {imports.map((im) => (
         <div key={im.name} className="card stack" style={{ gap: 6 }} data-testid={`import-${im.name}`}>
-          <div className="row">
-            <h3 style={{ margin: 0 }} className="mono">{im.name}</h3>
-            <span className="pill">{sourceLabel[im.source]}</span>
-            <span className="grow" />
+          <div className="card-head">
+            <h2 className="mono">{im.name}<span className="pill">{sourceLabel[im.source]}</span></h2>
+            <div className="row">
             {canEdit && <button className="btn small" onClick={() => act(() => resetImport(name, im.name))}>Copy all again</button>}
-            {canEdit && <button className="btn small" onClick={() => { if (confirm(`Remove ${im.name}? Its tables stay.`)) act(() => removeImport(name, im.name)); }}>Remove</button>}
+            {canEdit && <button className="btn small danger" onClick={() => { if (confirm(`Remove ${im.name}? Its tables stay.`)) act(() => removeImport(name, im.name)); }}>Remove</button>}
+            </div>
           </div>
           <div className="small">
             {im.salesforce && <>Objects: <span className="mono">{im.salesforce.objects.join(", ")}</span>{im.salesforce.since ? `, from ${im.salesforce.since}` : ""}. </>}
@@ -83,33 +79,31 @@ function ConnectorForm({ project, connector, taken, onDone }: { project: string;
   };
   if (!conns) return <Spinner />;
   return (
-    <form className="card stack" style={{ gap: 10 }} onSubmit={(e) => { e.preventDefault(); save(); }} data-testid="connector-form">
-      <strong>{connector.label}</strong>
-      <div className="row">
-        <label>Name <input className="mono" value={imName} onChange={(e) => setName(e.target.value)} /></label>
-        {taken.includes(imName) && <span className="small muted">Saving replaces the import of that name.</span>}
+    <form className="card stack" onSubmit={(e) => { e.preventDefault(); save(); }} data-testid="connector-form">
+      <h2>Add {connector.label}</h2>
+      <div className="fields">
+        <label>Name<input className="mono" value={imName} onChange={(e) => setName(e.target.value)} />
+          {taken.includes(imName) && <span className="field-help">Saving replaces the import of that name.</span>}</label>
+        {conns.length > 0 && <label>Sign in with<select value={connection} onChange={(e) => setConnection(e.target.value)}>{conns.map((c) => <option key={c.name}>{c.name}</option>)}</select></label>}
       </div>
-      {conns.length === 0 ? (
-        <p className="small">No {connector.label} connection yet: add one on the <Link to={`/p/${project}/connections`}>Connections tab</Link> (kind “A Salesforce org”), then come back.</p>
-      ) : (
-        <label>Sign in with <select value={connection} onChange={(e) => setConnection(e.target.value)}>{conns.map((c) => <option key={c.name}>{c.name}</option>)}</select></label>
+      {conns.length === 0 && (
+        <div className="banner warn">No {connector.label} connection yet: add one on the <Link to={`/p/${project}/connections`}>Connections tab</Link> (kind “A Salesforce org”), then come back.</div>
       )}
-      <div className="stack" style={{ gap: 4 }}>
-        <span className="small">What to copy (each into {imName}_<i>object</i>; those marked ↻ copy only what changed):</span>
-        <div className="row" style={{ flexWrap: "wrap", gap: 12 }}>
+      <div className="stack" style={{ gap: 8 }}>
+        <span className="field-label">What to copy (each into {imName}_<i>object</i>; those marked ↻ copy only what changed)</span>
+        <div className="checks">
           {connector.objects.map((o) => (
-            <label key={o} className="small"><input type="checkbox" checked={objects.includes(o)}
-              onChange={(e) => setObjects(e.target.checked ? [...objects, o] : objects.filter((x) => x !== o))} /> <span className="mono">{o}</span>{connector.incremental.includes(o) ? " ↻" : ""}</label>
+            <label key={o} className="check"><input type="checkbox" checked={objects.includes(o)}
+              onChange={(e) => setObjects(e.target.checked ? [...objects, o] : objects.filter((x) => x !== o))} /><span className="mono">{o}</span>{connector.incremental.includes(o) ? " ↻" : ""}</label>
           ))}
         </div>
       </div>
-      <div className="row">
-        <label>When (cron, UTC) <input className="mono" value={schedule} onChange={(e) => setSchedule(e.target.value)} /></label>
-        <label>History from <input type="date" value={since} onChange={(e) => setSince(e.target.value)} /></label>
-        <span className="small muted">Empty: all of it.</span>
+      <div className="fields">
+        <label>When (cron, UTC)<input className="mono" value={schedule} onChange={(e) => setSchedule(e.target.value)} /></label>
+        <label>History from<input type="date" value={since} onChange={(e) => setSince(e.target.value)} /><span className="field-help">Empty: all of it.</span></label>
       </div>
       <ErrorBanner error={error} />
-      <div className="row">
+      <div className="form-actions">
         <button className="btn primary" disabled={busy || !connection || objects.length === 0} data-testid="save-import">{busy ? "Saving…" : "Add"}</button>
         <button type="button" className="btn" onClick={onDone}>Cancel</button>
       </div>

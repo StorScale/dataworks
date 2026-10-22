@@ -60,6 +60,7 @@ type Spec struct {
 	Tools       []ConnectorTool `json:"tools,omitempty"`     // its own tools for its agents: an API's operations, signed in by a connection (12.7)
 	Cost        *Cost           `json:"cost,omitempty"`      // what it may cost a month, by the install's rate card (13.1)
 	Apps        []App           `json:"apps,omitempty"`      // small pages of its data, shown as whoever opens them (14.1)
+	Scoring     []Scoring       `json:"scoring,omitempty"`   // its approved models scoring its tables on a schedule (15.1)
 }
 
 // Semantic is how the project's semantic model stands among the others'

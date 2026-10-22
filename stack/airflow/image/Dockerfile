@@ -26,6 +26,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends gnupg && rm -rf
 USER airflow
 RUN /opt/deliver/bin/pip install --no-cache-dir trino==0.340.0 pyarrow==25.0.1 paramiko==5.0.0 boto3==1.43.108 requests==2.34.2
 COPY storscale_delivery_run.py /opt/deliver/storscale_delivery_run.py
+# Scorings (use case 15.1): a project's approved model over its table, in a
+# virtualenv of their own with MLflow and the model libraries the notebooks
+# train with (the same versions, so a model loads as it was saved); the run in it.
+USER root
+RUN python -m venv /opt/score && chown -R airflow:0 /opt/score
+USER airflow
+RUN /opt/score/bin/pip install --no-cache-dir mlflow-skinny==3.17.2 scikit-learn==1.9.1 lightgbm==4.7.0 xgboost==3.4.1 \
+      pandas==3.0.6 trino==0.340.0 requests==2.34.2
+COPY storscale_score_run.py /opt/score/storscale_score_run.py
 # Notebooks on a schedule (use case 7.7): papermill runs them in a virtualenv
 # with the notebook image's packages (storscale.notebook starts it), and
 # buckets_lake signed in as the project's pipelines.

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { approveDelivery, erasePerson, getDeliveries, getErasures, searchDeliveries, type Erasure, type SearchHit } from "../api";
 import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
+import { Empty, Intro } from "../components";
 
 // Deliveries send files to clients and partners on a schedule (SFTP, S3).
 // Each runs only once approved by someone other than who changed what it
@@ -22,22 +23,18 @@ export default function Deliveries() {
   if (!data) return <div className="page"><Spinner /></div>;
   return (
     <div className="page stack" data-testid="deliveries">
-      <p className="lead" style={{ margin: 0 }}>
+      <Intro>
         Files sent to clients and partners on a schedule. A delivery runs once someone other than who changed what it sends has approved it;
         one that sends personal columns needs a data-protection approver too. Each run is kept here: its files, their checksums, where they went.
-      </p>
+      </Intro>
       <ErrorBanner error={actionError} />
-      {data.canSearch && <PersonSearch project={name} />}
-      {data.canSearch && <Erasures project={name} />}
-      {data.deliveries.length === 0 && <p className="muted">No deliveries. The project's spec names them (deliveries).</p>}
+      {data.deliveries.length === 0 && <Empty>No deliveries. The project's spec names them (deliveries).</Empty>}
       {data.deliveries.map((d) => (
         <div key={d.name} className="card stack" style={{ gap: 8 }} data-testid={`delivery-${d.name}`}>
-          <div className="row">
-            <h3 style={{ margin: 0 }} className="mono">{d.name}</h3>
-            <span className={`pill ${d.approved ? "green" : "amber"}`}>{d.approved ? "approved" : "not approved"}</span>
-            <span className="grow" />
+          <div className="card-head">
+            <h2 className="mono">{d.name}<span className={`pill ${d.approved ? "green" : "amber"}`}>{d.approved ? "approved" : "not approved"}</span></h2>
             {!d.approved && mayApprove && (
-              <button className="btn primary" disabled={busy === d.name} onClick={() => approve(d.name)} data-testid={`approve-${d.name}`}>
+              <button className="btn small primary" disabled={busy === d.name} onClick={() => approve(d.name)} data-testid={`approve-${d.name}`}>
                 {busy === d.name ? "Approving…" : "Approve"}
               </button>
             )}
@@ -47,7 +44,7 @@ export default function Deliveries() {
             {d.splitBy ? <>, a file per <span className="mono">{d.splitBy}</span></> : null} to <span className="mono">{d.target}</span>,
             {" "}on <span className="mono">{d.schedule}</span>, as <span className="mono">{d.files}</span>.
           </div>
-          {d.query && <pre className="mono small" style={{ margin: 0, whiteSpace: "pre-wrap" }}>{d.query}</pre>}
+          {d.query && <pre className="code">{d.query}</pre>}
           {d.personal.length > 0 && <div className="small">Personal columns: <span className="pill amber">{d.personal.join(", ")}</span></div>}
           <div className="small muted">
             Changed by {d.changedBy || "?"}.
@@ -55,7 +52,7 @@ export default function Deliveries() {
             {d.needs.length > 0 && ` Needs: ${d.needs.join("; ")}.`}
           </div>
           {d.runs.length > 0 && (
-            <table className="t">
+            <div className="scroll-x"><table className="t">
               <thead><tr><th>Run</th><th>Rows</th><th>Files</th><th>Where</th></tr></thead>
               <tbody>
                 {d.runs.map((r) => (
@@ -67,10 +64,12 @@ export default function Deliveries() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
       ))}
+      {data.canSearch && <PersonSearch project={name} />}
+      {data.canSearch && <Erasures project={name} />}
     </div>
   );
 }
@@ -85,9 +84,9 @@ function Erasures({ project }: { project: string }) {
   if (!list.data || list.data.erasures.length === 0) return null;
   return (
     <div className="card stack" style={{ gap: 8 }} data-testid="erasures">
-      <strong>Erasures</strong>
+      <h2>Erasures</h2>
       <div className="small muted">Each answered within {list.data.deadlineDays} days of the request, as the law sets; the records are kept, without anyone's ID.</div>
-      <table className="t">
+      <div className="scroll-x"><table className="t">
         <thead><tr><th>When</th><th>Asked on</th><th>Due by</th><th>Deleted</th><th>Deliveries</th><th>By</th><th>Verified by</th></tr></thead>
         <tbody>
           {list.data.erasures.map((e) => (
@@ -102,7 +101,7 @@ function Erasures({ project }: { project: string }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     </div>
   );
 }
@@ -129,11 +128,11 @@ function PersonSearch({ project }: { project: string }) {
   };
   return (
     <div className="card stack" style={{ gap: 8 }} data-testid="person-search">
-      <form className="row" onSubmit={(e) => { e.preventDefault(); if (person.trim()) search(); }}>
-        <strong>What was sent about a person</strong>
-        <input className="mono" placeholder="Their ID, as C-1042" value={person} onChange={(e) => setPerson(e.target.value)} aria-label="A person's ID" />
-        <button className="btn" disabled={busy || !person.trim()}>{busy ? "Searching…" : "Search"}</button>
-        <button className="btn" type="button" disabled={busy || !person.trim()} onClick={erase} data-testid="erase">Erase this person</button>
+      <h2>What was sent about a person</h2>
+      <form className="fields" onSubmit={(e) => { e.preventDefault(); if (person.trim()) search(); }}>
+        <label>Their ID<input className="mono" placeholder="C-1042" value={person} onChange={(e) => setPerson(e.target.value)} /></label>
+        <button className="btn primary" disabled={busy || !person.trim()}>{busy ? "Searching…" : "Search"}</button>
+        <button className="btn danger" type="button" disabled={busy || !person.trim()} onClick={erase} data-testid="erase">Erase this person</button>
       </form>
       {erased && (
         <div className="banner info" data-testid="erased">
@@ -155,7 +154,7 @@ function PersonSearch({ project }: { project: string }) {
             {result.notKept > 0 ? `; ${result.notKept} not checkable (not personal, or from before reads were kept)` : ""}.
           </div>
           {result.runs.length > 0 && (
-            <table className="t">
+            <div className="scroll-x"><table className="t">
               <thead><tr><th>Delivery</th><th>Sent</th><th>To</th><th>Their rows</th><th>Approved by</th></tr></thead>
               <tbody>
                 {result.runs.map((r) => (
@@ -168,7 +167,7 @@ function PersonSearch({ project }: { project: string }) {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </>
       )}

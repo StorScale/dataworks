@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { approveAgent, buildKnowledge, deleteKnowledge, getAgents, getKnowledge, getLLM, getLLMCalls, putAgent, putKnowledge, removeAgent, searchKnowledge, type KnowledgeHit, type LLMUse } from "../api";
+import { Empty, Intro } from "../components";
 import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
 
 // Agents are programs of the project's own (use case 12.2): each with an
@@ -22,10 +23,10 @@ export default function Agents() {
   const act = async (f: () => Promise<unknown>) => { setError(undefined); try { await f(); list.reload(); } catch (e) { setError((e as Error).message); } };
   return (
     <div className="page stack" data-testid="agents">
-      <p className="lead" style={{ margin: 0 }}>
+      <Intro actions={canEdit && !adding && <button className="btn primary" onClick={() => setAdding(true)} data-testid="add-agent">Register an agent</button>}>
         Programs of the project's own that read its data through the MCP server, each with an identity of its own and only the tools it was given.
         An agent is approved by an editor other than the one who registered it, and revoked at once.
-      </p>
+      </Intro>
       <ErrorBanner error={error} />
       {secret && (
         <div className="banner info" data-testid="agent-secret">
@@ -34,11 +35,34 @@ export default function Agents() {
           <div><button className="btn small" onClick={() => setSecret(undefined)}>Done</button></div>
         </div>
       )}
+      {adding && <AgentForm project={name} tools={[...list.data.tools, ...(list.data.grants ?? [])]} taken={list.data.agents.map((a) => a.name)} owner={user.username} onDone={() => { setAdding(false); list.reload(); }} />}
+      {list.data.agents.length === 0 && !adding && <Empty>No agents yet.{canEdit ? " Register one: its tools, and a schedule with a prompt or a notebook." : ""}</Empty>}
+      {list.data.agents.map((a) => (
+        <div key={a.name} className="card stack" style={{ gap: 8 }} data-testid={`agent-${a.name}`}>
+          <div className="card-head">
+            <h2 className="mono">{a.name}<span className={"pill " + (a.approved ? "green" : "amber")}>{a.approved ? `approved by ${a.approvedBy}` : "awaiting approval"}</span></h2>
+            <div className="row">
+            {canEdit && !a.approved && a.registeredBy !== user.username && (
+              <button className="btn small primary" data-testid={`approve-${a.name}`}
+                onClick={() => act(async () => { const r = await approveAgent(name, a.name); if (r.secret) setSecret({ agent: a.name, clientId: r.clientId, secret: r.secret, mcpUrl: r.mcpUrl }); })}>Approve</button>
+            )}
+            {canEdit && <button className="btn small danger" onClick={() => { if (confirm(`Revoke ${a.name}? It signs in no more.`)) act(() => removeAgent(name, a.name)); }} data-testid={`revoke-${a.name}`}>Revoke</button>}
+            </div>
+          </div>
+          <div className="small">
+            {a.description && <>{a.description} </>}
+            Owner <span className="mono">{a.owner}</span>; client <span className="mono">{a.clientId}</span>; tools: <span className="mono">{(a.tools ?? []).join(", ") || "every tool a reader may use"}</span>
+            {a.schedule && <>; runs <span className="mono">{a.notebook || "its prompt"}</span> at <span className="mono">{a.schedule}</span> (UTC){a.dag ? <> as the pipeline <Link to={`/projects/${encodeURIComponent(name)}/pipelines`} className="mono">{a.dag}</Link></> : ", once approved"}</>}
+            {a.budget ? <>; {useOf(a.name)?.key ? `${useOf(a.name)!.spend.toFixed(2)} of` : "a budget of"} {a.budget} USD a month at the gateway</> : null}.
+            {a.registeredBy && <> Registered by {a.registeredBy}.</>}
+          </div>
+        </div>
+      ))}
       {canEdit && llm.data?.gateway && llm.data.uses.some((u) => u.key) && <ModelCalls project={name} />}
       {knowledge.data && <Knowledge project={name} info={knowledge.data} canBuild={knowledge.data.canBuild || admin} reload={knowledge.reload} />}
       {llm.data?.gateway && (
-        <div className="card stack" style={{ gap: 4 }} data-testid="llm">
-          <strong>The LLM gateway</strong>
+        <div className="card stack" style={{ gap: 8 }} data-testid="llm">
+          <h2>The LLM gateway</h2>
           <div className="small muted">Models are reached through the platform's gateway at <span className="mono">{llm.data.gateway}</span>, with a key per project and per agent, each with a monthly budget (USD). A key at its budget gets no more answers this month, and the project is alerted.</div>
           {llm.data.uses.length === 0 && <div className="small muted">No budget set: give the project one (its settings, <span className="mono">llm.budget</span>) or an agent one, and the operator makes the key, kept as a connection the pipelines and notebooks read.</div>}
           {llm.data.uses.map((u) => (
@@ -51,30 +75,6 @@ export default function Agents() {
           ))}
         </div>
       )}
-      {canEdit && !adding && <div className="row"><button className="btn primary" onClick={() => setAdding(true)} data-testid="add-agent">Register an agent</button></div>}
-      {adding && <AgentForm project={name} tools={[...list.data.tools, ...(list.data.grants ?? [])]} taken={list.data.agents.map((a) => a.name)} owner={user.username} onDone={() => { setAdding(false); list.reload(); }} />}
-      {list.data.agents.length === 0 && <p className="muted">No agents yet.</p>}
-      {list.data.agents.map((a) => (
-        <div key={a.name} className="card stack" style={{ gap: 6 }} data-testid={`agent-${a.name}`}>
-          <div className="row">
-            <h3 style={{ margin: 0 }} className="mono">{a.name}</h3>
-            <span className={"pill " + (a.approved ? "green" : "amber")}>{a.approved ? `approved by ${a.approvedBy}` : "awaiting approval"}</span>
-            <span className="grow" />
-            {canEdit && !a.approved && a.registeredBy !== user.username && (
-              <button className="btn small primary" data-testid={`approve-${a.name}`}
-                onClick={() => act(async () => { const r = await approveAgent(name, a.name); if (r.secret) setSecret({ agent: a.name, clientId: r.clientId, secret: r.secret, mcpUrl: r.mcpUrl }); })}>Approve</button>
-            )}
-            {canEdit && <button className="btn small" onClick={() => { if (confirm(`Revoke ${a.name}? It signs in no more.`)) act(() => removeAgent(name, a.name)); }} data-testid={`revoke-${a.name}`}>Revoke</button>}
-          </div>
-          <div className="small">
-            {a.description && <>{a.description} </>}
-            Owner <span className="mono">{a.owner}</span>; client <span className="mono">{a.clientId}</span>; tools: <span className="mono">{(a.tools ?? []).join(", ") || "every tool a reader may use"}</span>
-            {a.schedule && <>; runs <span className="mono">{a.notebook || "its prompt"}</span> at <span className="mono">{a.schedule}</span> (UTC){a.dag ? <> as the pipeline <Link to={`/projects/${encodeURIComponent(name)}/pipelines`} className="mono">{a.dag}</Link></> : ", once approved"}</>}
-            {a.budget ? <>; {useOf(a.name)?.key ? `${useOf(a.name)!.spend.toFixed(2)} of` : "a budget of"} {a.budget} USD a month at the gateway</> : null}.
-            {a.registeredBy && <> Registered by {a.registeredBy}.</>}
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
@@ -99,28 +99,30 @@ function AgentForm({ project, tools, taken, owner, onDone }: { project: string; 
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
   return (
-    <form className="card stack" style={{ gap: 10 }} onSubmit={(e) => { e.preventDefault(); save(); }} data-testid="agent-form">
-      <strong>A new agent</strong>
+    <form className="card stack" onSubmit={(e) => { e.preventDefault(); save(); }} data-testid="agent-form">
+      <h2>Register an agent</h2>
       <ErrorBanner error={error} />
-      <div className="row">
-        <label>Name <input className="mono" value={agentName} onChange={(e) => setName(e.target.value)} placeholder="nightly-summary" data-testid="agent-name" /></label>
-        <label>What it's for <input value={description} onChange={(e) => setDescription(e.target.value)} style={{ width: 320 }} /></label>
-        <label>Schedule <input className="mono" value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="0 6 * * * (UTC), or none" data-testid="agent-schedule" /></label>
-        <label>Notebook <input className="mono" value={notebook} onChange={(e) => setNotebook(e.target.value)} placeholder="notebooks/nightly.ipynb, in the repo" style={{ width: 240 }} data-testid="agent-notebook" /></label>
-        <label>LLM budget (USD a month) <input className="mono" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="none" style={{ width: 90 }} data-testid="agent-budget" /></label>
+      <div className="fields">
+        <label>Name<input className="mono" value={agentName} onChange={(e) => setName(e.target.value)} placeholder="nightly-summary" data-testid="agent-name" /></label>
+        <label className="grow">What it's for<input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="A morning summary of the open alerts" /></label>
       </div>
-      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>Or, in place of a notebook, what it's to do <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={10}
-        style={{ width: "100%", minHeight: 200, resize: "vertical", boxSizing: "border-box" }}
+      <div className="fields">
+        <label>Schedule<input className="mono" value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder="0 6 * * * (UTC), or none" data-testid="agent-schedule" /></label>
+        <label className="grow">Notebook<input className="mono" value={notebook} onChange={(e) => setNotebook(e.target.value)} placeholder="notebooks/nightly.ipynb, in the repo" data-testid="agent-notebook" /></label>
+        <label>LLM budget (USD a month)<input className="mono" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="none" data-testid="agent-budget" /></label>
+      </div>
+      <label className="grow">Or, in place of a notebook, what it's to do<textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={8}
+        style={{ resize: "vertical" }}
         placeholder="Each morning, read the open alerts and the failed runs, and write a two-sentence summary for the team." data-testid="agent-prompt" /></label>
-      <div className="small muted">Tools it may use (of the MCP server's); none picked means every tool a reader may use. <span className="mono">tool:</span> is one of the project's own tools (an API's operation, signed in by the project's connection, which the agent never sees); <span className="mono">agent:</span> is another agent with a prompt, which it may ask to do a task (that agent does it as itself, and isn't given agents in turn). With a schedule and a prompt (and a budget), the platform's runner does the prompt as the agent: the model is given its tools, each tool it asks for is called as the agent, and the run's record is the transcript. With a schedule and a notebook (an .ipynb in the project's repo, under the pipelines' path), the platform runs the notebook as the agent: <span className="mono">buckets_lake.agent()</span> is the MCP server, <span className="mono">buckets_lake.ask()</span> the gateway, on its budget.</div>
+      <div className="field-help"><strong>Tools it may use</strong> (of the MCP server's); none picked means every tool a reader may use. <span className="mono">tool:</span> is one of the project's own tools (an API's operation, signed in by the project's connection, which the agent never sees); <span className="mono">agent:</span> is another agent with a prompt, which it may ask to do a task (that agent does it as itself, and isn't given agents in turn). With a schedule and a prompt (and a budget), the platform's runner does the prompt as the agent: the model is given its tools, each tool it asks for is called as the agent, and the run's record is the transcript. With a schedule and a notebook (an .ipynb in the project's repo, under the pipelines' path), the platform runs the notebook as the agent: <span className="mono">buckets_lake.agent()</span> is the MCP server, <span className="mono">buckets_lake.ask()</span> the gateway, on its budget.</div>
       <div className="chips">
         {tools.map((t) => <button key={t} type="button" className={`chip${picked.includes(t) ? " on" : ""}`} aria-pressed={picked.includes(t)}
           onClick={() => setPicked(picked.includes(t) ? picked.filter((x) => x !== t) : [...picked, t])} data-testid={`tool-${t}`}>{t}</button>)}
       </div>
-      <div className="row">
+      <div className="form-actions">
         <button className="btn primary" type="submit" disabled={!ok || busy} data-testid="register-agent">{busy ? "Saving…" : "Register"}</button>
         <button className="btn" type="button" onClick={onDone}>Cancel</button>
-        <span className="small muted">Owner: {owner}. Another editor approves it before it may sign in.</span>
+        <span className="field-help">Owner: {owner}. Another editor approves it before it may sign in.</span>
       </div>
     </form>
   );
@@ -155,15 +157,15 @@ function Knowledge({ project, info, canBuild, reload }: { project: string; info:
     try { setHits((await searchKnowledge(project, bank || banks[0].name, query)).hits); } catch (e) { setError((e as Error).message); } finally { setBusy(undefined); }
   };
   return (
-    <div className="card stack" style={{ gap: 6 }} data-testid="knowledge">
-      <div className="row"><strong>Knowledge banks</strong><span className="grow" />
+    <div className="card stack" style={{ gap: 8 }} data-testid="knowledge">
+      <div className="card-head"><h2>Knowledge banks</h2>
         {canBuild && !adding && <button className="btn small" onClick={() => setAdding(true)} data-testid="add-bank">Add a bank</button>}</div>
       <div className="small muted">The project's text (a table's text column, or the files in a folder of its bucket), embedded through the gateway on its key and kept as a table of the project's; searched by meaning, as you, by agents with the tool <span className="mono">search_documents</span>, and on the canvas (Ask a model, nearest passage).</div>
       <ErrorBanner error={error} />
       {note && <div className="small">{note}</div>}
       {!info.hasBudget && <div className="small muted">A bank is embedded on the project's gateway key: the project needs an LLM budget first (an administrator sets it on Edit).</div>}
       {adding && <BankForm project={project} info={info} taken={banks.map((b) => b.name)} onDone={() => { setAdding(false); reload(); }} />}
-      {banks.length === 0 && !adding && <div className="small muted">No banks yet.{canBuild ? " Add one: its sources, and whether to build it on a schedule." : ""}</div>}
+      {banks.length === 0 && !adding && <Empty inline>No banks yet.{canBuild ? " Add one: its sources, and whether to build it on a schedule." : ""}</Empty>}
       {banks.map((b) => (
         <div key={b.name} className="row small" data-testid={`bank-${b.name}`}>
           <span className="mono">{b.name}</span>
@@ -177,7 +179,7 @@ function Knowledge({ project, info, canBuild, reload }: { project: string; info:
       {banks.length > 0 && <div className="row">
         <select value={bank || banks[0].name} onChange={(e) => setBank(e.target.value)} aria-label="Bank">{banks.map((b) => <option key={b.name}>{b.name}</option>)}</select>
         <input className="grow" value={query} placeholder="Search by meaning: early termination terms" onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && query && search()} data-testid="knowledge-query" />
-        <button className="btn small" disabled={!query || !!busy} onClick={search}>Search</button>
+        <button className="btn" disabled={!query || !!busy} onClick={search}>Search</button>
       </div>}
       {hits && (hits.length === 0 ? <div className="small muted">Nothing found.</div> : (
         <table className="t" data-testid="knowledge-hits">
@@ -210,31 +212,35 @@ function BankForm({ project, info, taken, onDone }: { project: string; info: Awa
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
   return (
-    <form className="card stack" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); save(); }} data-testid="bank-form">
-      <strong>A new knowledge bank</strong>
+    <form className="subcard stack" onSubmit={(e) => { e.preventDefault(); save(); }} data-testid="bank-form">
+      <h2>Add a knowledge bank</h2>
       <ErrorBanner error={error} />
-      <div className="row">
-        <label>Name <input className="mono" value={bankName} onChange={(e) => setName(e.target.value)} placeholder="reviews" data-testid="bank-name" /></label>
-        <label className="grow">What it holds <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What customers wrote" style={{ width: "100%" }} /></label>
+      <div className="fields">
+        <label>Name<input className="mono" value={bankName} onChange={(e) => setName(e.target.value)} placeholder="reviews" data-testid="bank-name" /></label>
+        <label className="grow">What it holds<input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What customers wrote" /></label>
       </div>
-      <div className="small muted">A table's text column, and the column that names each row (cited with each passage):</div>
+      <div className="stack" style={{ gap: 8 }}>
+      <div className="field-label">Tables: a text column, and the column that names each row (cited with each passage)</div>
       {tables.map((t, i) => (
-        <div key={i} className="row">
+        <div key={i} className="fields">
           <input className="mono" value={t.table} placeholder="table" onChange={(e) => setTables(tables.map((x, j) => j === i ? { ...x, table: e.target.value } : x))} aria-label="Table" />
           <input className="mono" value={t.column} placeholder="text column" onChange={(e) => setTables(tables.map((x, j) => j === i ? { ...x, column: e.target.value } : x))} aria-label="Text column" />
           <input className="mono" value={t.id} placeholder="id column" onChange={(e) => setTables(tables.map((x, j) => j === i ? { ...x, id: e.target.value } : x))} aria-label="Id column" />
-          {tables.length > 1 && <button type="button" className="btn small" onClick={() => setTables(tables.filter((_, j) => j !== i))}>Remove</button>}
+          {tables.length > 1 && <button type="button" className="btn" onClick={() => setTables(tables.filter((_, j) => j !== i))}>Remove</button>}
         </div>
       ))}
       <div><button type="button" className="btn small" onClick={() => setTables([...tables, { table: "", column: "", id: "" }])}>Add a table</button></div>
-      <label>And/or a folder of the project's bucket: its .txt, .md and .html files
+      </div>
+      <div className="fields">
+      <label className="grow">And/or a folder of the project's bucket (its .txt, .md and .html files)
         <input className="mono" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder={info.hasFiles ? "landing/uploads/" : "the project has no bucket (files)"} disabled={!info.hasFiles} data-testid="bank-folder" /></label>
-      <label>Build it afresh on a schedule
+      <label className="grow">Build it afresh on a schedule
         <input className="mono" value={schedule} onChange={(e) => setSchedule(e.target.value)} placeholder={info.hasPipelines ? "0 3 * * * (UTC), or by hand" : "by hand (a schedule needs the project's pipelines)"} disabled={!info.hasPipelines} data-testid="bank-schedule" /></label>
-      <div className="row">
+      </div>
+      <div className="form-actions">
         <button className="btn primary" type="submit" disabled={!ok || busy} data-testid="save-bank">{busy ? "Saving…" : "Add"}</button>
         <button className="btn" type="button" onClick={onDone}>Cancel</button>
-        <span className="small muted">Then press Build: nothing is embedded until it's built.</span>
+        <span className="field-help">Then press Build: nothing is embedded until it's built.</span>
       </div>
     </form>
   );
@@ -249,8 +255,8 @@ function ModelCalls({ project }: { project: string }) {
   const money = (x: number) => x < 0.01 ? x.toFixed(4) : x.toFixed(2);
   const top = (m?: Record<string, { calls: number; cost: number }>) => Object.entries(m ?? {}).sort((a, b) => b[1].cost - a[1].cost).slice(0, 5);
   return (
-    <div className="card stack" style={{ gap: 6 }} data-testid="llm-calls">
-      <div className="row"><strong>Model calls</strong><span className="grow" />
+    <div className="card stack" style={{ gap: 8 }} data-testid="llm-calls">
+      <div className="card-head"><h2>Model calls</h2>
         <select value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="Days">{[1, 7, 31].map((n) => <option key={n} value={n}>last {n} day{n > 1 ? "s" : ""}</option>)}</select></div>
       {calls.error && <ErrorBanner error={calls.error} />}
       {!d ? <Spinner /> : <>

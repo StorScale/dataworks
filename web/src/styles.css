@@ -116,8 +116,11 @@ code, .mono { font-family: var(--mono); font-size: 13px; }
 
 .page { max-width: 1240px; margin: 0 auto; padding: 24px 24px 64px; }
 .page.wide { max-width: none; padding: 12px 16px 16px; }
-.page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
-.lead { margin: 6px 0 0; color: var(--muted); font-size: 15px; max-width: 70ch; }
+.page-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.lead { margin: 0; color: var(--muted); font-size: 15px; max-width: 70ch; }
+h1 + .lead { margin-top: 6px; }
+.stack > .page-head { margin-bottom: 4px; }
+.page-head > .row { flex: none; }
 .grid { display: grid; gap: 20px; align-items: start; }
 .grid.main-side { grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); }
 .grid.cards { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
@@ -129,9 +132,19 @@ code, .mono { font-family: var(--mono); font-size: 13px; }
 
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; min-width: 0; }
 .card.flush { padding: 0; overflow: hidden; }
+.card.flush > .card-head { padding: 16px 20px 0; margin-bottom: 8px; }
+.card.flush > .card-note { padding: 0 20px 12px; margin: 0; }
+.card.flush > .empty.inline { padding: 0 20px 18px; }
+.card.flush > .card-foot { padding: 10px 20px 14px; border-top: 1px solid var(--line-soft); }
 .card.alert { border-color: var(--bad-line); }
 .card > h2 + * { margin-top: 10px; }
-.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.card.stack > h2 + * { margin-top: 0; }
+.card-head > h2, .card-head > h3 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.subcard { border: 1px solid var(--line); border-radius: 10px; padding: 16px; background: var(--panel); }
+.card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-bottom: 12px; }
+.stack > .card-head { margin-bottom: 0; }
+.card-head > .row { gap: 8px; }
+.card-head h2 .pill { font-family: var(--sans); }
 a.card { display: block; color: var(--ink); }
 a.card:hover { border-color: var(--accent); text-decoration: none; }
 .eyebrow { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); margin: 0 0 10px; }
@@ -168,6 +181,7 @@ a.card:hover { border-color: var(--accent); text-decoration: none; }
 .banner.warn { background: var(--warn-soft); color: var(--warn-ink); }
 .banner.info { background: var(--accent-soft); color: var(--accent-dark); }
 .empty { border: 1.5px dashed var(--line); border-radius: var(--radius); padding: 24px; color: var(--muted); text-align: center; }
+.empty.inline { border: 0; padding: 4px 0; text-align: left; font-size: 13px; }
 
 table.t { width: 100%; border-collapse: collapse; font-size: 14px; }
 table.t th { text-align: left; color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; padding: 10px 16px; border-bottom: 1px solid var(--line-soft); }
@@ -176,6 +190,9 @@ table.t tr:last-child td { border-bottom: 0; }
 table.t.data td, table.t.data th { font-family: var(--mono); font-size: 13px; text-transform: none; letter-spacing: 0; font-weight: 400; padding: 8px 14px; }
 table.t.data th { font-weight: 500; }
 .scroll-x { overflow-x: auto; }
+.card:not(.flush) table.t :is(th, td):first-child { padding-left: 0; }
+.card:not(.flush) table.t :is(th, td):last-child { padding-right: 0; }
+.clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 
 .subtabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); }
 .subtabs button { border: 0; background: none; padding: 10px 14px; min-height: 44px; font: inherit; color: var(--muted); border-bottom: 2px solid transparent; cursor: pointer; }
@@ -233,15 +250,44 @@ textarea.yaml { width: 100%; min-height: 360px; font-family: var(--mono); font-s
 .tool-frame { flex: 1; width: 100%; min-height: 0; border: 0; background: #fff; }
 .tool-frame[hidden] { display: none; }
 
-.form label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; max-width: 640px; }
+/* Forms, everywhere the same: a field's label above it, 13px and medium;
+   a checkbox's or radio's beside it (label.check, or any label holding one);
+   every control 40px high, so a row of fields and its buttons line up on
+   their bottom edge; help under the field (.field-help); the actions last,
+   the primary one first (.form-actions). */
+input, select, textarea { font-family: inherit; font-size: 14px; font-weight: 400; line-height: 1.45; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+input:not([type="checkbox"], [type="radio"], [type="file"]), select { min-height: 40px; }
+input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); flex: none; }
+.page label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 500; color: var(--ink-2); max-width: 640px; min-width: 0; }
+.page label.grow { max-width: none; }
+.page label > input:not([type="checkbox"], [type="radio"]), .page label > select, .page label > textarea { width: 100%; }
+.page label.check, .page label:has(> input[type="checkbox"], > input[type="radio"]) { flex-direction: row; align-items: center; gap: 8px; font-size: 14px; font-weight: 400; color: var(--ink); }
+.page label.btn { display: inline-flex; flex-direction: row; font-size: 14px; font-weight: 600; color: var(--ink); max-width: none; }
+.page label.btn.small { font-size: 13px; }
+.row:has(> label:not(.check, .btn)) { align-items: flex-end; }
+.search input { min-height: 0; padding: 0; }
+.fields { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-start; }
+.fields > .btn { margin-top: 25px; } /* level with the fields' inputs, under their labels */
+.checks { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.form label { margin-bottom: 14px; }
+.form > h2 { margin: 28px 0 12px; padding-top: 20px; border-top: 1px solid var(--line-soft); }
+.form > h2:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.form h3 { font-size: 14px; margin: 16px 0 8px; }
+.form p.field-help { margin: -4px 0 12px; max-width: 80ch; }
+.form h2 > label.check { font-size: 16px; font-weight: 600; margin: 0; }
+.form label.check, .form label:has(> input[type="checkbox"]) { margin-bottom: 8px; }
 .form .row { margin-bottom: 8px; }
-input, select, textarea { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
-.field-help { color: var(--muted); font-size: 12px; }
+.form .row > label { margin-bottom: 0; }
+.field-help { color: var(--muted); font-size: 12px; font-weight: 400; }
+.field-label { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.form-actions .field-help, .form-actions .hint { margin-left: 8px; }
+.page-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 24px 0 0; padding-top: 16px; border-top: 1px solid var(--line); }
 .segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .segmented button { border: 0; border-radius: 0; background: var(--panel); padding: 0 14px; min-height: 36px; font: inherit; cursor: pointer; }
 .segmented button + button { border-left: 1px solid var(--line); }
 .segmented button.selected { background: var(--accent); color: #fff; }
-.form-actions { display: flex; gap: 8px; justify-content: flex-end; margin: 20px 0; }
 
 .center { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 16px; }
 .spinner { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
@@ -270,8 +316,9 @@ ul.plain li:last-child { border-bottom: 0; }
 .stepnode .name { font-family: var(--mono); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stepnode .cols { font-size: 9px; color: var(--muted); margin-top: 1px; }
 .flowside { flex: 1 1 300px; max-width: 380px; font-size: 12px; overflow-y: auto; max-height: max(520px, calc(100vh - 230px)); }
-.flowside label { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; font-size: 12px; }
-.flowside input, .flowside select, .flowside textarea { font: inherit; font-size: 12px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); }
+.flowside label { gap: 4px; margin-bottom: 8px; font-size: 12px; max-width: none; }
+.flowside label.check, .flowside label:has(> input[type="checkbox"]) { margin-bottom: 8px; font-size: 12px; }
+.flowside input, .flowside select, .flowside textarea { font: inherit; font-size: 12px; font-weight: 400; min-height: 28px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); }
 .flowside .rows { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
 .flowside .rows .row { gap: 4px; }
 .flowside .rows input, .flowside .rows select { min-width: 0; flex: 1 1 80px; }

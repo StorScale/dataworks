@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { getProjectUsage, getUsage, type UsageMonth } from "../api";
+import { Empty, Intro } from "../components";
 import { ErrorBanner, Spinner, usePoll, useProject } from "../lib";
 
 // Usage and cost (use case 13.1): what a project's Trino time, storage and
@@ -41,14 +42,13 @@ export function ProjectUsage() {
   const u = data?.usage;
   return (
     <div className="page stack" data-testid="usage">
-      <div className="row">
-        <p className="lead grow" style={{ margin: 0 }}>What the project used and what it cost, by the install's rate card: its queries' CPU time, what it keeps, and its model calls.</p>
-        <MonthPick month={month} setMonth={setMonth} />
-      </div>
+      <Intro actions={<MonthPick month={month} setMonth={setMonth} />}>
+        What the project used and what it cost, by the install's rate card: its queries' CPU time, what it keeps, and its model calls.
+      </Intro>
       <ErrorBanner error={error} />
       {!data || !u ? (!error && <Spinner />) : <>
-        <div className="card stack" style={{ gap: 4 }} data-testid="usage-total">
-          <div className="row"><strong style={{ fontSize: 20 }}>{money(u.cost.total, u.currency)}</strong><Budget u={u} />
+        <div className="card stack" style={{ gap: 8 }} data-testid="usage-total">
+          <div className="row" style={{ alignItems: "baseline" }}><span className="hero-number" style={{ fontSize: 28 }}>{money(u.cost.total, u.currency)}</span><Budget u={u} />
             <span className="muted small">{change(u.cost.total, data.before.cost.total ?? 0)}</span></div>
           <table className="t">
             <thead><tr><th>What</th><th>Used</th><th>Cost</th><th>Rate</th></tr></thead>
@@ -64,9 +64,9 @@ export function ProjectUsage() {
           </table>
           <div className="small muted">Spark isn't counted yet. A budget is set on the project (cost.budget); at 80% and at 100% the project is alerted; nothing is stopped.</div>
         </div>
-        <div className="card stack" style={{ gap: 4 }}>
-          <strong>Who ran the queries</strong>
-          {Object.keys(u.trino.byUser ?? {}).length === 0 ? <div className="small muted">No queries this month.</div> : (
+        <div className="card stack" style={{ gap: 8 }}>
+          <h2>Who ran the queries</h2>
+          {Object.keys(u.trino.byUser ?? {}).length === 0 ? <Empty inline>No queries this month.</Empty> : (
             <table className="t" data-testid="usage-users">
               <thead><tr><th>Who</th><th>Queries</th><th>CPU</th><th>Cost</th></tr></thead>
               <tbody>{Object.entries(u.trino.byUser ?? {}).sort((a, b) => b[1].cpuSeconds - a[1].cpuSeconds).slice(0, 15).map(([who, x]) => (
@@ -75,18 +75,18 @@ export function ProjectUsage() {
             </table>)}
         </div>
         {(u.trino.top ?? []).length > 0 && (
-          <div className="card stack" style={{ gap: 4 }}>
-            <strong>The costliest queries</strong>
-            <table className="t" data-testid="usage-top">
+          <div className="card stack" style={{ gap: 8 }}>
+            <h2>The costliest queries</h2>
+            <div className="scroll-x"><table className="t" data-testid="usage-top">
               <thead><tr><th>When</th><th>Who</th><th>CPU</th><th>Read</th><th>Query</th></tr></thead>
               <tbody>{(u.trino.top ?? []).map((q) => (
                 <tr key={q.id}><td className="small">{new Date(q.at).toLocaleString()}</td><td className="mono small">{q.user}</td><td>{hours(q.cpuSeconds)}</td>
-                  <td>{bytes(q.readBytes)}</td><td className="mono small" style={{ maxWidth: 480, overflowWrap: "anywhere" }}>{q.sql}</td></tr>))}</tbody>
-            </table>
+                  <td>{bytes(q.readBytes)}</td><td className="mono small" style={{ maxWidth: 520 }}><div className="clamp" title={q.sql}>{q.sql}</div></td></tr>))}</tbody>
+            </table></div>
           </div>)}
         {u.storage && Object.keys(u.storage.tables).length > 0 && (
-          <div className="card stack" style={{ gap: 4 }}>
-            <strong>The largest tables</strong>
+          <div className="card stack" style={{ gap: 8 }}>
+            <h2>The largest tables</h2>
             <table className="t" data-testid="usage-tables">
               <thead><tr><th>Table</th><th>Size</th></tr></thead>
               <tbody>{Object.entries(u.storage.tables).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([t, b]) => (
@@ -103,13 +103,12 @@ export default function Usage() {
   const { data, error } = usePoll(() => getUsage(month), [month], 60_000);
   return (
     <div className="page stack" data-testid="usage-all">
-      <div className="row">
-        <p className="lead grow" style={{ margin: 0 }}>What each project cost this month, by the install's rate card ({data ? `${data.rates.cpuHour} a CPU-hour, ${data.rates.storageGBMonth} a GB-month` : "…"}), against its budget and last month.</p>
-        <MonthPick month={month} setMonth={setMonth} />
-      </div>
+      <Intro actions={<MonthPick month={month} setMonth={setMonth} />}>
+        What each project cost this month, by the install's rate card ({data ? `${data.rates.cpuHour} a CPU-hour, ${data.rates.storageGBMonth} a GB-month` : "…"}), against its budget and last month.
+      </Intro>
       <ErrorBanner error={error} />
-      {!data ? (!error && <Spinner />) : data.projects.length === 0 ? <div className="empty">No projects.</div> : (
-        <table className="t" data-testid="usage-projects">
+      {!data ? (!error && <Spinner />) : data.projects.length === 0 ? <Empty>No projects.</Empty> : (
+        <div className="card flush scroll-x"><table className="t" data-testid="usage-projects">
           <thead><tr><th>Project</th><th>Total</th><th>Queries</th><th>Storage</th><th>Model calls</th><th>Budget</th><th>Last month</th></tr></thead>
           <tbody>{data.projects.map((u) => (
             <tr key={u.project}>
@@ -121,7 +120,7 @@ export default function Usage() {
               <td><Budget u={u} /></td>
               <td className="small">{money(u.before, u.currency)} <span className="muted">{change(u.cost.total, u.before)}</span></td>
             </tr>))}</tbody>
-        </table>
+        </table></div>
       )}
     </div>
   );

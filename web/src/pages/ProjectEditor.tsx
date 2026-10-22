@@ -92,7 +92,7 @@ export default function ProjectEditor() {
             <input value={spec.description ?? ""} onChange={(e) => set({ description: e.target.value })} />
           </label>
 
-          <h2 style={{ marginTop: 8 }}>Members</h2>
+          <h2>Members</h2>
           {spec.members.map((m, i) => (
             <div className="row" key={i}>
               <select value={m.user !== undefined ? "user" : "group"} onChange={(e) =>
@@ -106,13 +106,13 @@ export default function ProjectEditor() {
                 <option value="editor">editor</option>
                 <option value="reader">reader</option>
               </select>
-              <button className="linkish" onClick={() => set({ members: spec.members.filter((_, j) => j !== i) })}>Remove</button>
+              <button className="btn" onClick={() => set({ members: spec.members.filter((_, j) => j !== i) })}>Remove</button>
             </div>
           ))}
           <button className="btn" onClick={() => set({ members: [...spec.members, { group: "", role: "reader" }] })}>Add a member</button>
 
-          <h2 style={{ marginTop: 20 }}>
-            <label className="row" style={{ flexDirection: "row", gap: 8 }}><input type="checkbox" checked={!!spec.tables} onChange={(e) => set({ tables: e.target.checked ? {} : undefined })} /> Tables</label>
+          <h2>
+            <label className="check"><input type="checkbox" checked={!!spec.tables} onChange={(e) => set({ tables: e.target.checked ? {} : undefined })} />Tables</label>
           </h2>
           {spec.tables && (
             <>
@@ -130,7 +130,7 @@ export default function ProjectEditor() {
                 <div className="row" key={i}>
                   <input value={f.table} placeholder="table" onChange={(e) => setReaders({ ...readers, rowFilters: readers.rowFilters!.map((x, j) => (j === i ? { ...x, table: e.target.value } : x)) })} />
                   <input className="grow" value={f.filter} placeholder="region = 'EU'" onChange={(e) => setReaders({ ...readers, rowFilters: readers.rowFilters!.map((x, j) => (j === i ? { ...x, filter: e.target.value } : x)) })} />
-                  <button className="linkish" onClick={() => setReaders({ ...readers, rowFilters: readers.rowFilters!.filter((_, j) => j !== i) })}>Remove</button>
+                  <button className="btn" onClick={() => setReaders({ ...readers, rowFilters: readers.rowFilters!.filter((_, j) => j !== i) })}>Remove</button>
                 </div>
               ))}
               <button className="btn" onClick={() => setReaders({ ...readers, rowFilters: [...(readers.rowFilters ?? []), { table: "", filter: "" }] })}>Add a row filter</button>
@@ -142,15 +142,15 @@ export default function ProjectEditor() {
                   <select value={m.type} onChange={(e) => setReaders({ ...readers, masks: readers.masks!.map((x, j) => (j === i ? { ...x, type: e.target.value } : x)) })}>
                     {MASK_TYPES.map((t) => <option key={t}>{t}</option>)}
                   </select>
-                  <button className="linkish" onClick={() => setReaders({ ...readers, masks: readers.masks!.filter((_, j) => j !== i) })}>Remove</button>
+                  <button className="btn" onClick={() => setReaders({ ...readers, masks: readers.masks!.filter((_, j) => j !== i) })}>Remove</button>
                 </div>
               ))}
               <button className="btn" onClick={() => setReaders({ ...readers, masks: [...(readers.masks ?? []), { table: "", column: "", type: "MASK" }] })}>Add a mask</button>
             </>
           )}
 
-          <h2 style={{ marginTop: 20 }}>
-            <label className="row" style={{ flexDirection: "row", gap: 8 }}><input type="checkbox" checked={!!spec.files} onChange={(e) => set({ files: e.target.checked ? {} : undefined })} /> Files</label>
+          <h2>
+            <label className="check"><input type="checkbox" checked={!!spec.files} onChange={(e) => set({ files: e.target.checked ? {} : undefined })} />Files</label>
           </h2>
           {spec.files && (
             <label>Bucket
@@ -158,8 +158,8 @@ export default function ProjectEditor() {
             </label>
           )}
 
-          <h2 style={{ marginTop: 20 }}>
-            <label className="row" style={{ flexDirection: "row", gap: 8 }}><input type="checkbox" checked={!!spec.pipelines} onChange={(e) => set({ pipelines: e.target.checked ? { serviceAccount: "" } : undefined })} /> Pipelines</label>
+          <h2>
+            <label className="check"><input type="checkbox" checked={!!spec.pipelines} onChange={(e) => set({ pipelines: e.target.checked ? { serviceAccount: "" } : undefined })} />Pipelines</label>
           </h2>
           {spec.pipelines && (() => {
             const pl = spec.pipelines!;
@@ -174,7 +174,7 @@ export default function ProjectEditor() {
                 <label>Keycloak client whose service account runs them
                   <input value={pl.serviceAccount} placeholder="airflow-pipelines" onChange={(e) => setPl({ serviceAccount: e.target.value })} />
                 </label>
-                <p className="muted small" style={{ margin: "8px 0 4px" }}>
+                <p className="field-help">
                   Their git repo (use case 7.1): the DAGs come from it, and on Kubernetes the project gets an Airflow of its own. A private repo signs in with
                   one of the project's connections (a git token or an SSH key, given on its Connections tab; a GitLab token needs the api scope and the Developer role). The canvas saves its flows there.
                 </p>
@@ -188,7 +188,7 @@ export default function ProjectEditor() {
                     <input className="mono" value={pl.credentials?.secretRef ?? ""} placeholder={`${p.metadata.name}-git`} onChange={(e) => setPl({ credentials: e.target.value ? { secretRef: e.target.value } : undefined })} data-testid="pipelines-credentials" />
                   </label>
                 </div>
-                <p className="muted small" style={{ margin: "8px 0 4px" }}>
+                <p className="field-help">
                   Merge-request reviews (7.3), for a GitLab repo: each open merge request's dbt change is built on a data branch of its own, and the merge request told.
                 </p>
                 <div className="row">
@@ -200,8 +200,8 @@ export default function ProjectEditor() {
             );
           })()}
 
-          <h2 style={{ marginTop: 20 }}>Alerts</h2>
-          <p className="muted small" style={{ margin: "4px 0 8px" }}>
+          <h2>Alerts</h2>
+          <p className="field-help">
             Where the project is told when a pipeline's run fails, a check fails, or a table isn't changed in time.
           </p>
           <label>Teams channel: the name of a connection of the project's, holding the channel's webhook
@@ -215,7 +215,7 @@ export default function ProjectEditor() {
           </label>
           {spec.tables && (
             <>
-              <div className="small" style={{ marginTop: 8 }}>Tables that must change in time</div>
+              <div className="field-label" style={{ marginBottom: 6 }}>Tables that must change in time</div>
               {(spec.tables.freshness ?? []).map((f, i) => (
                 <div key={i} className="row">
                   <input value={f.table} placeholder="table" onChange={(e) => setFreshness(i, { table: e.target.value })} />
@@ -229,8 +229,8 @@ export default function ProjectEditor() {
 
           {spec.tables && (
             <>
-              <h2 style={{ marginTop: 20 }}>Imports</h2>
-              <p className="muted small" style={{ margin: "4px 0 8px" }}>
+              <h2>Imports</h2>
+              <p className="field-help">
                 An application's data (any REST API), or a database's by a column that grows, copied into the project's tables on a
                 schedule: each as &lt;import&gt;_&lt;name&gt;, merged on its primary key or appended to, each run copying only what's past its cursor.
                 They're the project's pipelines. The connection holds the API's token (key token), or the database's account.
@@ -267,7 +267,7 @@ export default function ProjectEditor() {
                           <input value={r.cursor ?? ""} placeholder="cursor: updated_at" style={{ width: 150 }} aria-label="Cursor" onChange={(e) => setResource(i, k, { cursor: e.target.value || undefined })} />
                           <input value={r.cursorParam ?? ""} placeholder="its parameter: since" style={{ width: 150 }} aria-label="Cursor parameter" onChange={(e) => setResource(i, k, { cursorParam: e.target.value || undefined })} />
                           <input value={r.cursorStart ?? ""} placeholder="from: 2026-01-01" style={{ width: 140 }} aria-label="Cursor start" onChange={(e) => setResource(i, k, { cursorStart: e.target.value || undefined })} />
-                          <button className="linkish" onClick={() => setImport(i, { api: { ...im.api!, resources: im.api!.resources.filter((_, j) => j !== k) } })}>Remove</button>
+                          <button className="btn" onClick={() => setImport(i, { api: { ...im.api!, resources: im.api!.resources.filter((_, j) => j !== k) } })}>Remove</button>
                         </div>
                       ))}
                       <button className="btn" onClick={() => setImport(i, { api: { ...im.api!, resources: [...im.api!.resources, { name: "", path: "" }] } })}>Add a resource</button>
@@ -284,7 +284,7 @@ export default function ProjectEditor() {
                           <input value={t.table} placeholder="schema.table" aria-label="Table" onChange={(e) => setDBTable(i, k, { table: e.target.value })} />
                           <input value={t.cursor ?? ""} placeholder="cursor: updated_at" aria-label="Cursor column" onChange={(e) => setDBTable(i, k, { cursor: e.target.value || undefined })} />
                           <input value={t.primaryKey ?? ""} placeholder="primary key: id" aria-label="Primary key column" onChange={(e) => setDBTable(i, k, { primaryKey: e.target.value || undefined })} />
-                          <button className="linkish" onClick={() => setImport(i, { database: { ...im.database!, tables: im.database!.tables.filter((_, j) => j !== k) } })}>Remove</button>
+                          <button className="btn" onClick={() => setImport(i, { database: { ...im.database!, tables: im.database!.tables.filter((_, j) => j !== k) } })}>Remove</button>
                         </div>
                       ))}
                       <button className="btn" onClick={() => setImport(i, { database: { ...im.database!, tables: [...im.database!.tables, { table: "" }] } })}>Add a table</button>
@@ -296,8 +296,8 @@ export default function ProjectEditor() {
             </>
           )}
 
-          <h2 style={{ marginTop: 20 }}>Sources</h2>
-          <p className="muted small" style={{ margin: "4px 0 8px" }}>
+          <h2>Sources</h2>
+          <p className="field-help">
             The company's databases, queried where they are: each a read-only catalog the project's editors and pipelines may read
             (its readers too, where ticked). The connection is one of the project's, with the database's read-only account.
             Tables to copy come into the project's own as &lt;source&gt;_&lt;table&gt;, every change within minutes; their account then needs
@@ -319,8 +319,8 @@ export default function ProjectEditor() {
                   title="Copied into the project's tables by change capture, as <source>_<table>: every change within minutes (Kubernetes)"
                   onChange={(e) => setSource(i, { copy: list(e.target.value).length ? { tables: list(e.target.value) } : undefined })} />
               )}
-              <label className="row small" style={{ flexDirection: "row", gap: 6 }}>
-                <input type="checkbox" checked={!!s.readers} onChange={(e) => setSource(i, e.target.checked ? { readers: true } : { readers: undefined, masks: undefined, rowFilters: undefined })} /> Readers
+              <label className="check">
+                <input type="checkbox" checked={!!s.readers} onChange={(e) => setSource(i, e.target.checked ? { readers: true } : { readers: undefined, masks: undefined, rowFilters: undefined })} />Readers
               </label>
               {s.name && <span className="small muted mono">{sourceCatalog(p.metadata.name || "project", s)}</span>}
               <button className="btn" onClick={() => set({ sources: (spec.sources ?? []).filter((_, j) => j !== i).length ? spec.sources!.filter((_, j) => j !== i) : undefined })}>Remove</button>
@@ -332,7 +332,7 @@ export default function ProjectEditor() {
                   <div key={`f${k}`} className="row">
                     <input value={f.table} placeholder="schema.table" aria-label="Row filter table" onChange={(e) => setSource(i, { rowFilters: s.rowFilters!.map((x, j) => (j === k ? { ...x, table: e.target.value } : x)) })} />
                     <input className="grow" value={f.filter} placeholder="region = 'EU'" aria-label="Row filter" onChange={(e) => setSource(i, { rowFilters: s.rowFilters!.map((x, j) => (j === k ? { ...x, filter: e.target.value } : x)) })} />
-                    <button className="linkish" onClick={() => setSource(i, { rowFilters: s.rowFilters!.filter((_, j) => j !== k).length ? s.rowFilters!.filter((_, j) => j !== k) : undefined })}>Remove</button>
+                    <button className="btn" onClick={() => setSource(i, { rowFilters: s.rowFilters!.filter((_, j) => j !== k).length ? s.rowFilters!.filter((_, j) => j !== k) : undefined })}>Remove</button>
                   </div>
                 ))}
                 {(s.masks ?? []).map((m, k) => (
@@ -342,7 +342,7 @@ export default function ProjectEditor() {
                     <select value={m.type} aria-label="Mask type" onChange={(e) => setSource(i, { masks: s.masks!.map((x, j) => (j === k ? { ...x, type: e.target.value } : x)) })}>
                       {MASK_TYPES.map((t) => <option key={t}>{t}</option>)}
                     </select>
-                    <button className="linkish" onClick={() => setSource(i, { masks: s.masks!.filter((_, j) => j !== k).length ? s.masks!.filter((_, j) => j !== k) : undefined })}>Remove</button>
+                    <button className="btn" onClick={() => setSource(i, { masks: s.masks!.filter((_, j) => j !== k).length ? s.masks!.filter((_, j) => j !== k) : undefined })}>Remove</button>
                   </div>
                 ))}
                 <div className="row">
@@ -357,10 +357,10 @@ export default function ProjectEditor() {
 
           {spec.tables && (
             <>
-              <h2 style={{ marginTop: 20 }}>Table maintenance</h2>
-              <p className="muted small" style={{ margin: "4px 0 8px" }}>Each night, the tables' small files are compacted into larger ones.</p>
-              <label className="row" style={{ flexDirection: "row", gap: 8 }}>
-                <input type="checkbox" checked={!!spec.tables.maintenance?.paused} onChange={(e) => setMaintenance({ paused: e.target.checked || undefined })} /> Paused
+              <h2>Table maintenance</h2>
+              <p className="field-help">Each night, the tables' small files are compacted into larger ones.</p>
+              <label className="check">
+                <input type="checkbox" checked={!!spec.tables.maintenance?.paused} onChange={(e) => setMaintenance({ paused: e.target.checked || undefined })} />Paused
               </label>
             </>
           )}
@@ -369,17 +369,17 @@ export default function ProjectEditor() {
 
       {p.metadata.name && (
         <>
-          <h2 style={{ margin: "24px 0 12px" }}>What each role will get</h2>
+          <h2 style={{ margin: "28px 0 12px" }}>What each role will get</h2>
           <div className="grid cards">
             {grants(p.metadata.name, p.spec).map((g) => (
-              <div key={g.role} className="card"><h3>{g.role} <span className="pill">{g.group}</span></h3><ul>{g.items.map((i) => <li key={i}>{i}</li>)}</ul></div>
+              <div key={g.role} className="card"><div className="card-head" style={{ marginBottom: 4 }}><h2>{g.role}</h2><span className="pill mono">{g.group}</span></div><ul>{g.items.map((i) => <li key={i}>{i}</li>)}</ul></div>
             ))}
           </div>
         </>
       )}
-      <div className="form-actions">
-        <button className="btn" onClick={() => navigate(-1)}>Cancel</button>
+      <div className="page-foot">
         <button className="btn primary" onClick={save} disabled={saving} data-testid="save-project">{saving ? "Saving…" : "Save"}</button>
+        <button className="btn" onClick={() => navigate(-1)}>Cancel</button>
       </div>
     </div>
   );

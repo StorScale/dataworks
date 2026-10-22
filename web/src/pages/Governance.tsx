@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { getGovernance } from "../api";
+import { Empty, Intro } from "../components";
 import { ErrorBanner, Spinner, usePoll } from "../lib";
 
 // Governance is every project at once (use case 12.9): what awaits someone's
@@ -10,61 +11,70 @@ export default function Governance() {
   const { data, error } = usePoll(getGovernance, [], 30_000);
   return (
     <div className="page stack" data-testid="governance">
-      <p className="lead" style={{ margin: 0 }}>
+      <Intro>
         Across every project: what waits for an approval, the agents and their spend, what readers may see, the data products, and the erasures owed.
-      </p>
+      </Intro>
       <ErrorBanner error={error} />
       {!data ? (!error && <Spinner />) : (
         <>
-          <p className="muted" data-testid="governance-summary">{data.summary}.</p>
+          <p className="muted" style={{ margin: 0 }} data-testid="governance-summary">{data.summary}.</p>
 
-          <h2>Awaiting approval</h2>
-          {data.pending.length === 0 ? <p className="muted">Nothing waits.</p> : (
-            <table className="t" data-testid="governance-pending">
-              <thead><tr><th>Project</th><th>What</th><th>Waits for</th><th>Since</th></tr></thead>
-              <tbody>
-                {data.pending.map((p, i) => (
-                  <tr key={i}>
-                    <td><Link to={`/p/${p.project}`}>{p.project}</Link></td>
-                    <td><span className="pill">{p.kind}</span> <Link to={p.link}>{p.name}</Link></td>
-                    <td className="small">{p.waits}</td>
-                    <td className="small muted">{p.since ? new Date(p.since).toLocaleDateString() : ""}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          <section className="card flush">
+            <div className="card-head"><h2>Awaiting approval</h2></div>
+            {data.pending.length === 0 ? <Empty inline>Nothing waits.</Empty> : (
+              <div className="scroll-x"><table className="t" data-testid="governance-pending">
+                <thead><tr><th>Project</th><th>What</th><th>Waits for</th><th>Since</th></tr></thead>
+                <tbody>
+                  {data.pending.map((p, i) => (
+                    <tr key={i}>
+                      <td><Link to={`/p/${p.project}`}>{p.project}</Link></td>
+                      <td><span className="pill">{p.kind}</span> <Link to={p.link}>{p.name}</Link></td>
+                      <td className="small">{p.waits}</td>
+                      <td className="small muted">{p.since ? new Date(p.since).toLocaleDateString() : ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table></div>
+            )}
+          </section>
 
-          <h2>Agents</h2>
-          {data.agents.length === 0 ? <p className="muted">No project has an agent.</p> : (
-            <table className="t" data-testid="governance-agents">
-              <thead><tr><th>Project</th><th>Agent</th><th>Owner</th><th>Tools</th><th>Runs</th><th>Last run</th><th>Spend</th></tr></thead>
-              <tbody>
-                {data.agents.map((a) => (
-                  <tr key={a.project + "/" + a.name}>
-                    <td><Link to={`/p/${a.project}/agents`}>{a.project}</Link></td>
-                    <td><strong>{a.name}</strong> {!a.approved && <span className="pill amber">not approved</span>}</td>
-                    <td>{a.owner}</td>
-                    <td className="small mono">{a.tools.join(", ")}</td>
-                    <td className="small">{a.runs ?? <span className="muted">when asked</span>}</td>
-                    <td className="small">{a.lastRun ? <><span className={`pill ${a.lastRun.state === "failed" ? "red" : ""}`}>{a.lastRun.state}</span> {a.lastRun.started && new Date(a.lastRun.started).toLocaleString()}</> : <span className="muted">–</span>}</td>
-                    <td className="small">${a.spend.toFixed(2)}{a.budget > 0 && <span className="muted"> of ${a.budget.toFixed(2)}</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          <section className="card flush">
+            <div className="card-head"><h2>Agents</h2></div>
+            {data.agents.length === 0 ? <Empty inline>No project has an agent.</Empty> : (
+              <div className="scroll-x"><table className="t" data-testid="governance-agents">
+                <thead><tr><th>Project</th><th>Agent</th><th>Owner</th><th>Tools</th><th>Runs</th><th>Last run</th><th>Spend</th></tr></thead>
+                <tbody>
+                  {data.agents.map((a) => (
+                    <tr key={a.project + "/" + a.name}>
+                      <td><Link to={`/p/${a.project}/agents`}>{a.project}</Link></td>
+                      <td><strong>{a.name}</strong> {!a.approved && <span className="pill amber">not approved</span>}</td>
+                      <td>{a.owner}</td>
+                      <td className="small mono">{a.tools.join(", ")}</td>
+                      <td className="small">{a.runs ?? <span className="muted">when asked</span>}</td>
+                      <td className="small">{a.lastRun ? <><span className={`pill ${a.lastRun.state === "failed" ? "red" : ""}`}>{a.lastRun.state}</span> {a.lastRun.started && new Date(a.lastRun.started).toLocaleString()}</> : <span className="muted">–</span>}</td>
+                      <td className="small">${a.spend.toFixed(2)}{a.budget > 0 && <span className="muted"> of ${a.budget.toFixed(2)}</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table></div>
+            )}
+          </section>
 
-          <h2>What readers see</h2>
-          <p className="small muted" style={{ margin: 0 }}>
+          <section className="card flush">
+          <div className="card-head"><h2>What readers see</h2></div>
+          <p className="small muted card-note">
             Across the platform, a column the catalog tags is masked by the install's rule for the tag{data.suggestedApplied ? ", suggested or confirmed" : ", once a person confirms it"}:
           </p>
-          <table className="t" data-testid="governance-tag-rules">
+          <div className="scroll-x"><table className="t" data-testid="governance-tag-rules">
             <thead><tr><th>Tag</th><th>Mask</th><th>Who sees it as it is</th></tr></thead>
             <tbody>{data.tagRules.map((t) => <tr key={t.tag}><td><span className="pill">{t.tag}</span></td><td className="mono small">{t.mask}</td>
               <td className="small">{t.except.join(", ") || <span className="muted">no one</span>}</td></tr>)}</tbody>
-          </table>
-          <table className="t" data-testid="governance-rules">
+          </table></div>
+          </section>
+
+          <section className="card flush">
+          <div className="card-head"><h2>Readers' rules, by project</h2></div>
+          <div className="scroll-x"><table className="t" data-testid="governance-rules">
             <thead><tr><th>Project</th><th>Readers</th><th>Only these tables</th><th>Rows</th><th>Masked</th><th>Tagged</th><th>People's data</th></tr></thead>
             <tbody>
               {data.rules.map((r) => (
@@ -79,43 +89,48 @@ export default function Governance() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
+          </section>
 
-          <h2>Data products</h2>
-          {data.products.length === 0 ? <p className="muted">No project offers a data product.</p> : (
-            <table className="t" data-testid="governance-products">
-              <thead><tr><th>Project</th><th>Product</th><th>Owner</th><th>Certified</th><th>Consumers</th></tr></thead>
-              <tbody>
-                {data.products.map((p) => (
-                  <tr key={p.project + "/" + p.name}>
-                    <td><Link to={`/p/${p.project}`}>{p.project}</Link></td>
-                    <td><Link to="/products">{p.name}</Link></td>
-                    <td>{p.owner}</td>
-                    <td>{p.certified ? <span className="pill">certified</span> : <span className="pill amber">not yet</span>}</td>
-                    <td className="small">{p.consumers.join(", ") || <span className="muted">none</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          <section className="card flush">
+            <div className="card-head"><h2>Data products</h2></div>
+            {data.products.length === 0 ? <Empty inline>No project offers a data product.</Empty> : (
+              <div className="scroll-x"><table className="t" data-testid="governance-products">
+                <thead><tr><th>Project</th><th>Product</th><th>Owner</th><th>Certified</th><th>Consumers</th></tr></thead>
+                <tbody>
+                  {data.products.map((p) => (
+                    <tr key={p.project + "/" + p.name}>
+                      <td><Link to={`/p/${p.project}`}>{p.project}</Link></td>
+                      <td><Link to="/products">{p.name}</Link></td>
+                      <td>{p.owner}</td>
+                      <td>{p.certified ? <span className="pill">certified</span> : <span className="pill amber">not yet</span>}</td>
+                      <td className="small">{p.consumers.join(", ") || <span className="muted">none</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table></div>
+            )}
+          </section>
 
-          <h2>Erasures</h2>
-          {data.erasures.length === 0 ? <p className="muted">None recorded, or none you may see.</p> : (
-            <table className="t" data-testid="governance-erasures">
-              <thead><tr><th>Project</th><th>Recorded</th><th>Due by</th><th>By</th><th>Result</th></tr></thead>
-              <tbody>
-                {data.erasures.map((e) => (
-                  <tr key={e.project + "/" + e.id}>
-                    <td><Link to={`/p/${e.project}/deliveries`}>{e.project}</Link></td>
-                    <td className="small">{new Date(e.at).toLocaleString()}</td>
-                    <td className="small">{e.dueBy}</td>
-                    <td>{e.by}</td>
-                    <td>{e.errors === 0 ? <span className="pill">erased</span> : <span className="pill red">{e.errors} tables left</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+          <section className="card flush">
+            <div className="card-head"><h2>Erasures</h2></div>
+            {data.erasures.length === 0 ? <Empty inline>None recorded, or none you may see.</Empty> : (
+              <div className="scroll-x"><table className="t" data-testid="governance-erasures">
+                <thead><tr><th>Project</th><th>Recorded</th><th>Due by</th><th>By</th><th>Result</th></tr></thead>
+                <tbody>
+                  {data.erasures.map((e) => (
+                    <tr key={e.project + "/" + e.id}>
+                      <td><Link to={`/p/${e.project}/deliveries`}>{e.project}</Link></td>
+                      <td className="small">{new Date(e.at).toLocaleString()}</td>
+                      <td className="small">{e.dueBy}</td>
+                      <td>{e.by}</td>
+                      <td>{e.errors === 0 ? <span className="pill">erased</span> : <span className="pill red">{e.errors} tables left</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table></div>
+            )}
+          </section>
         </>
       )}
     </div>

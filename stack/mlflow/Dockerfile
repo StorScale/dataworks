@@ -10,9 +10,6 @@ RUN pip install --no-cache-dir mlflow==3.17.2 psycopg2-binary==2.9.10 boto3==1.4
 # queue in /dev/shm took MLflow past its memory limit at idle.
 ENV MLFLOW_SERVER_ENABLE_JOB_EXECUTION=false
 RUN useradd --uid 10001 --create-home mlflow
-# Its job runner (huey workers, for MLflow's GenAI scorers and trace rollups) is
-# off: the platform uses none of it, and it alone took the pod past its memory.
-ENV MLFLOW_SERVER_ENABLE_JOB_EXECUTION=false
 USER 10001
 WORKDIR /home/mlflow
 EXPOSE 5000
