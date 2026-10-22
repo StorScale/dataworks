@@ -85,6 +85,7 @@ spec:
       volumeMounts:
         - {name: files-tools, mountPath: /tools}
         - {name: files-tests, mountPath: /tests}
+        - {name: files-python, mountPath: /python}   # the storscale package, as the api suite uses it
         - {name: files-projects, mountPath: /projects}
         - {name: files-keycloak, mountPath: /keycloak}
         - {name: files-monitoring, mountPath: /dashboards, subPath: dashboards}
@@ -95,6 +96,7 @@ spec:
   volumes:
     {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 4 }}
     {{- include "storscale.filesVolume" (list . "tests" "tests") | nindent 4 }}
+    {{- include "storscale.filesVolume" (list . "python" "python") | nindent 4 }}
     {{- include "storscale.filesVolume" (list . "projects" "projects") | nindent 4 }}
     {{- include "storscale.filesVolume" (list . "keycloak" "keycloak") | nindent 4 }}
     {{- include "storscale.filesVolume" (list . "monitoring" "monitoring") | nindent 4 }}

@@ -100,6 +100,8 @@ func (s *server) views(r *http.Request, u user) ([]projectView, error) {
 	return out, nil
 }
 
+// handleProjects are the projects the person may see (an administrator's,
+// every one), each with its spec, its status and the person's role.
 func (s *server) handleProjects(w http.ResponseWriter, r *http.Request) {
 	sess := s.signedIn(w, r)
 	if sess == nil {
@@ -114,6 +116,8 @@ func (s *server) handleProjects(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"projects": views, "admin": s.isAdmin(sess.User)})
 }
 
+// handleProject is one project the person may see: its spec, its status
+// (each part as the operator applied it) and the person's role.
 func (s *server) handleProject(w http.ResponseWriter, r *http.Request) {
 	sess := s.signedIn(w, r)
 	if sess == nil {
@@ -172,6 +176,8 @@ func (s *server) handlePutProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, projectView{Name: p.Metadata.Name, Spec: p})
 }
 
+// handleDeleteProject removes a project (the administrators): its access,
+// its pipelines and the credentials it kept go; its tables and files stay.
 func (s *server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 	sess := s.admin(w, r)
 	if sess == nil {
@@ -393,9 +399,6 @@ func (s *server) airflowFor(ctx context.Context, v *projectView, dag string) (*p
 	return af, err
 }
 
-// handleStartRun starts a run of one of the project's pipelines, for its
-// editors (and administrators). The run itself goes as the pipelines'
-// service account, whoever starts it.
 // handleRunLog is what a run's tasks logged, to the project's members: why
 // it failed, in the words of what ran.
 func (s *server) handleRunLog(w http.ResponseWriter, r *http.Request) {
@@ -424,6 +427,9 @@ func (s *server) handleRunLog(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"log": text})
 }
 
+// handleStartRun starts a run of one of the project's pipelines, for its
+// editors (and administrators). The run itself goes as the pipelines'
+// service account, whoever starts it.
 func (s *server) handleStartRun(w http.ResponseWriter, r *http.Request) {
 	sess := s.signedIn(w, r)
 	if sess == nil {

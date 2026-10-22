@@ -985,6 +985,7 @@ services:
     volumes:
       - ./tools:/tools:ro
       - ./tests:/tests:ro
+      - ./python:/python:ro   # the storscale package, as the api suite uses it
       - ./projects:/projects:ro
       - ./keycloak:/keycloak:ro
       - ./monitoring/dashboards:/dashboards:ro

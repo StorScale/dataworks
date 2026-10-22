@@ -22,6 +22,7 @@ import Pipelines from "./pages/Pipelines";
 const Flows = lazy(() => import("./pages/Flows"));
 import Governance from "./pages/Governance";
 import Usage, { ProjectUsage } from "./pages/Usage";
+import Reference from "./pages/Reference";
 import Agents from "./pages/Agents"; // React Flow is loaded only when the canvas is
 import ProjectAccess from "./pages/ProjectAccess";
 import ProjectEditor from "./pages/ProjectEditor";
@@ -102,6 +103,7 @@ function Shell() {
         </Route>
         <Route path="/governance" element={<Governance />} />
         <Route path="/usage" element={<Usage />} />
+        <Route path="/reference" element={<Reference />} />
         <Route path="/tools/:id" element={null} />
         {/* Addresses from before the redesign. */}
         <Route path="/projects" element={<Navigate to={admin ? "/admin/projects" : "/"} replace />} />
