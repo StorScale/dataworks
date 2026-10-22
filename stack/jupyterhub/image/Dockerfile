@@ -26,7 +26,7 @@ RUN npm install --no-audit --no-fund && /opt/lab/bin/jupyter labextension build 
 # (code-server, opened from JupyterLab's launcher through jupyter-server-proxy).
 FROM quay.io/jupyter/base-notebook:hub-6.0.1 AS notebook
 RUN pip install --no-cache-dir jupyterlab==4.5.10 boto3==1.43.108 requests==2.34.2 pandas==3.0.6 pyarrow==25.0.1 \
-      scikit-learn==1.9.1 statsmodels==0.15.0 scipy==1.18.1 lightgbm==4.7.0 xgboost==3.4.1 flaml==2.7.0 mlflow-skinny==3.17.2 \
+      scikit-learn==1.9.1 statsmodels==0.15.0 scipy==1.18.1 lightgbm==4.7.0 xgboost==3.4.1 flaml==2.7.0 mlflow-skinny==3.17.2 skops==0.16.0 \
       geopandas==1.2.0 networkx==3.7 \
       jupyter-server-proxy==4.6.0
 # code-server for the image's architecture (the image has Python, not curl).

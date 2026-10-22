@@ -38,7 +38,7 @@ SPEC = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "meta
         "spec": {"description": "Scoring: the scoring suite's.", "members": [{"group": "engineers", "role": "editor"}, {"user": "alice", "role": "editor"}],
                  "tables": {}, "pipelines": {"serviceAccount": "airflow-pipelines"}}}
 # The versions the platform's scoring runs with (stack/airflow/image/Dockerfile, /opt/score).
-PACKAGES = ["mlflow-skinny==3.17.2", "scikit-learn==1.9.1", "pandas==3.0.6"]
+PACKAGES = ["mlflow-skinny==3.17.2", "scikit-learn==1.9.1", "skops==0.16.0", "pandas==3.0.6"]
 
 
 def customers():
