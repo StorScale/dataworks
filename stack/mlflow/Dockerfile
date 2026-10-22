@@ -5,6 +5,10 @@
 # proxied by the server (--serve-artifacts), so clients never hold the keys.
 FROM python:3.12-slim
 RUN pip install --no-cache-dir mlflow==3.17.2 psycopg2-binary==2.9.10 boto3==1.43.108
+# No background job runner: it serves MLflow's GenAI features (scorers, trace
+# rollups), which the platform doesn't use, and its worker processes and their
+# queue in /dev/shm took MLflow past its memory limit at idle.
+ENV MLFLOW_SERVER_ENABLE_JOB_EXECUTION=false
 RUN useradd --uid 10001 --create-home mlflow
 USER 10001
 WORKDIR /home/mlflow
