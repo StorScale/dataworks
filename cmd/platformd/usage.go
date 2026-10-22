@@ -547,7 +547,7 @@ func (s *server) usageOf(ctx context.Context, p *project.Project, month string) 
 	}
 	trinoCost, storageCost := u.Trino.CPUSeconds/3600*s.cfg.Rates.CPUHour, u.AvgGB*part*s.cfg.Rates.StorageGBMonth
 	total := trinoCost + storageCost + u.LLMSpend
-	u.Cost["trino"], u.Cost["storage"], u.Cost["llm"], u.Cost["total"] = round2(trinoCost), round2(storageCost), round2(u.LLMSpend), round2(total)
+	u.Cost["trino"], u.Cost["storage"], u.Cost["llm"], u.Cost["total"] = roundCost(trinoCost), roundCost(storageCost), roundCost(u.LLMSpend), roundCost(total)
 	if c := p.Spec.Cost; c != nil && c.Budget > 0 {
 		share := total / c.Budget // unrounded: a small project's share of a small budget counts
 		u.Budget, u.Share = c.Budget, &share
@@ -555,7 +555,18 @@ func (s *server) usageOf(ctx context.Context, p *project.Project, month string) 
 	return u
 }
 
-func round2(x float64) float64 { return math.Round(x*100) / 100 }
+// roundCost keeps a cost to a millionth: a small project's month is less than a cent, and still something.
+func roundCost(x float64) float64 { return math.Round(x*1e6) / 1e6 }
+
+// money is an amount in words: to the cent, or, under a cent, rounded to two
+// significant digits and written out (0.000042), as the Usage page writes it.
+func money(x float64) string {
+	if x == 0 || math.Abs(x) >= 0.01 {
+		return strconv.FormatFloat(x, 'f', 2, 64)
+	}
+	digits := min(20, 1-int(math.Floor(math.Log10(math.Abs(x)))))
+	return strings.TrimRight(strconv.FormatFloat(x, 'f', digits, 64), "0")
+}
 
 // mayViewUsage: the project's editors, administrators and the install's usage viewers.
 func (s *server) mayViewUsage(r *http.Request, role string) bool {
@@ -660,11 +671,11 @@ func (s *server) usageIssues(ctx context.Context, p *project.Project, link strin
 	switch share := *u.Share; {
 	case share >= 1:
 		return []issue{{Key: "cost/" + p.Metadata.Name + "/" + u.Month, Kind: "cost", Link: link + "/usage",
-			Title:  fmt.Sprintf("the project has cost %.2f %s this month, past its budget of %.2f", total, cur, c.Budget),
+			Title:  fmt.Sprintf("the project has cost %s %s this month, past its budget of %s", money(total), cur, money(c.Budget)),
 			Detail: "Nothing is stopped: see what drives it on the Usage tab."}}
 	case share >= 0.8:
 		return []issue{{Key: "cost/" + p.Metadata.Name + "/" + u.Month + "/near", Kind: "cost", Link: link + "/usage",
-			Title: fmt.Sprintf("the project has used %.0f%% of its monthly budget (%.2f of %.2f %s)", share*100, total, c.Budget, cur)}}
+			Title: fmt.Sprintf("the project has used %.0f%% of its monthly budget (%s of %s %s)", share*100, money(total), money(c.Budget), cur)}}
 	}
 	return nil
 }

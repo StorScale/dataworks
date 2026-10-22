@@ -17,7 +17,9 @@ const months = (): string[] => {
   }
   return out;
 };
-const money = (x: number, cur: string) => `${x.toFixed(2)} ${cur}`;
+// to the cent, or, under a cent, to two significant digits: a small project's month is still something
+const money = (x: number, cur: string) =>
+  `${x !== 0 && Math.abs(x) < 0.01 ? x.toFixed(Math.min(20, 1 - Math.floor(Math.log10(Math.abs(x))))).replace(/0+$/, "") : x.toFixed(2)} ${cur}`;
 const hours = (s: number) => (s / 3600 < 0.1 ? `${s.toFixed(1)} s` : `${(s / 3600).toFixed(2)} h`);
 const bytes = (b: number) => (b >= 1e12 ? `${(b / 1e12).toFixed(2)} TB` : b >= 1e9 ? `${(b / 1e9).toFixed(2)} GB` : `${(b / 1e6).toFixed(1)} MB`);
 const change = (now: number, before: number) => (before > 0 ? `${now >= before ? "+" : ""}${(((now - before) / before) * 100).toFixed(0)}% on last month` : "nothing last month");
