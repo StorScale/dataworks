@@ -53,7 +53,8 @@ FRAMED_BY = {"Content-Security-Policy": "frame-ancestors 'self'"}  # the platfor
 c.JupyterHub.tornado_settings = {"headers": FRAMED_BY}
 
 # --- Notebooks: a container per person (Compose), or a pod per person (Kubernetes) ----
-NOTEBOOK_ENV = {"BUCKETS_ENDPOINT": "http://buckets:9000", "BUCKETS_REGION": "us-east-1"}
+NOTEBOOK_ENV = {"BUCKETS_ENDPOINT": "http://buckets:9000", "BUCKETS_REGION": "us-east-1",
+                "STORSCALE_PLATFORMD_URL": "http://platformd:8080"}   # MLflow (15.1), through the platform: buckets_lake.mlflow()
 NOTEBOOK_ARGS = ["--ServerApp.tornado_settings=" + json.dumps({"headers": FRAMED_BY})]
 c.Spawner.start_timeout = 120
 c.Spawner.http_timeout = 120  # a notebook server's first start can be slow on a busy machine

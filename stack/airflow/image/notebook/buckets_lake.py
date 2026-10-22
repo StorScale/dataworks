@@ -124,3 +124,23 @@ def ask(prompt, model="default", system=None):
         raise RuntimeError(f"the gateway refused the question: {why}")
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"]
+
+def mlflow(project):
+    """MLflow, in the project's workspace, as the project's pipelines (or the agent) (use case 15.1): the
+    platform's MLflow, reached through platformd, which signs them in with
+    the token below (renewed every two minutes) and keeps everything in the
+    project. Returns the mlflow module, ready: mlflow.set_experiment("churn"),
+    mlflow.sklearn.autolog(), mlflow.register_model(...)."""
+    import threading
+
+    import mlflow as _mlflow
+    os.environ["MLFLOW_TRACKING_URI"] = os.environ.get("STORSCALE_PLATFORMD_URL", "http://platformd:8080").rstrip("/") + "/mlflow/" + project
+
+    def renew():
+        os.environ["MLFLOW_TRACKING_TOKEN"] = token()
+        t = threading.Timer(120, renew)
+        t.daemon = True
+        t.start()
+    renew()
+    _mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
+    return _mlflow

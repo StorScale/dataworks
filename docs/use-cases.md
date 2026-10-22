@@ -673,11 +673,11 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 4. The web team calls it as an API, signed in; carol, outside the project, is refused. Each call is audited.
 
 **Requirements**
-- R15.1 MLflow per project, its runs tied to the data's commit.
-- R15.2 A model registry with approval before use.
+- R15.1 MLflow per project, its runs tied to the data's commit. (Built 2026-10-22: one MLflow, a workspace per project, reached only through platformd at /mlflow/<project>/, which signs people in, names the workspace and stamps each run with its person and the catalog's commit; `buckets_lake.mlflow(project)` in notebooks.)
+- R15.2 A model registry with approval before use. (Built 2026-10-22: a version approved on the Models tab by an editor other than who registered it, as the alias `approved` and the platform's tags, which nobody sets through MLflow.)
 - R15.3 Batch scoring as a pipeline; drift monitored in Grafana.
 - R15.4 A registered, approved model served as an API in the project's namespace (MLflow's serving image behind the gateway), signed in through Keycloak, under the project's limits, audited.
-- R15.5 A model card per registered model, kept with the registry.
+- R15.5 A model card per registered model, kept with the registry. (Built 2026-10-22: the registered model's description, written on the Models tab.)
 - R15.6 Models in the catalog's lineage, with their inputs at their snapshots.
 - R15.7 The code path for the common cases: FLAML and the libraries of R7.24, and notebook templates (churn, forecast, propensity) with U.2's project template.
 

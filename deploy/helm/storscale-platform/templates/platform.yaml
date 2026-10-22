@@ -32,6 +32,7 @@ spec:
             - {name: OIDC_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: storscale-env, key: PLATFORM_OAUTH_SECRET}}}
             - {name: PROTECTION_TAGS, value: {{ .Values.protection.tags | toJson | quote }}}   # shown on the Governance page (12.9)
             - {name: TRINO_SHARED_SECRET, valueFrom: {secretKeyRef: {name: storscale-env, key: TRINO_SHARED_SECRET}}}   # Trino's finished queries come with it (13.1)
+            - {name: MLFLOW_URL, value: "http://mlflow:5000"}   # the projects' experiments and models (15.1), through platformd alone
             - {name: USAGE_RATES, value: {{ .Values.usage.rates | toJson | quote }}}
             {{- with .Values.usage.viewerGroups }}
             - {name: USAGE_VIEWER_GROUPS, value: {{ join "," . | quote }}}

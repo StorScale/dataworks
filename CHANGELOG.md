@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **Models: MLflow, a workspace per project** (15.1, R15.1, R15.2, R15.5): the platform runs one MLflow 3.17 (a new image, `platform-mlflow`; its runs and models in Postgres, its artifacts in the bucket `mlflow`, served through it), with MLflow's workspaces on: each project is a workspace of its own, so its experiments, runs, models and artifacts are nobody else's. Only platformd reaches it (a network policy), at `/mlflow/<project>/`: it signs the caller in (the web app's session, or a Keycloak token as `MLFLOW_TRACKING_TOKEN`), lets a project's readers read and its editors and pipelines write, names the project's workspace on every request whatever the caller sent, and serves MLflow's tracking, registry and artifact routes alone. Each run is stamped with who ran it (`storscale.user`) and the catalog's commit (`storscale.data_commit`); each model version with who registered it. A version is approved on the project's new **Models** tab by an editor other than who registered it: the alias `approved` and the `storscale.approved_*` tags, which no one can set through MLflow. The Models tab also writes each model's card (its description). In a notebook, `mlflow = buckets_lake.mlflow("<project>")`. The `ml` suite checks it. Next: batch scoring and drift (R15.3), a model as an API (R15.4), models in the catalog (R15.6), notebook templates (R15.7).
+
 ## [0.26.0] - 2026-10-22
 
 A project's apps: small pages of its data, declared by its editors (a metric by a dimension, a table's rows, or questions answered from a knowledge bank, cited), fetched as whoever opens them, so each reader sees their rows; listed on Home.

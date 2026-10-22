@@ -6,7 +6,7 @@
      the workloads that use them; every other service, from the namespace's
      own pods. Egress is open. */}}
 {{- if .Values.networkPolicies.enabled }}
-{{- $protected := list "postgres" "ranger-db" "ranger-solr" "openmetadata-search" "keycloak" }}
+{{- $protected := list "postgres" "ranger-db" "ranger-solr" "openmetadata-search" "keycloak" "mlflow" }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -75,7 +75,7 @@ spec:
         {{- include "storscale.np.from" (list "keycloak" "nessie" "trino" "platform-operator" "platformd"
               "airflow" "airflow-scheduler" "airflow-dag-processor" "airflow-init" "project-airflow"
               "superset" "superset-init" "superset-sync" "openmetadata" "openmetadata-migrate" "storscale-backup" "storscale-restore"
-              "trino-worker" "storscale-copy" "storscale-test" "llm") | nindent 8 }}
+              "trino-worker" "storscale-copy" "storscale-test" "llm" "mlflow") | nindent 8 }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -140,4 +140,20 @@ spec:
     # Its own pods, when there are more than one: their shared caches (JGroups).
     - from:
         {{- include "storscale.np.from" (list "keycloak") | nindent 8 }}
+---
+# MLflow: from platformd alone, which signs people in and names each
+# project's workspace (15.1); nothing reaches it around that.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: storscale-mlflow
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "storscale.selector" (list .Release.Name "mlflow") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{port: 5000}]
+      from:
+        {{- include "storscale.np.from" (list "platformd") | nindent 8 }}
 {{- end }}

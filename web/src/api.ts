@@ -466,6 +466,18 @@ export const appData = (name: string, app: string, filters: Record<string, strin
 export const askApp = (name: string, app: string, question: string) =>
   api<{ answer: string; passages: KnowledgeHit[]; cost: number }>("POST", `${appsPath(name)}/${encodeURIComponent(app)}/ask`, { question });
 
+// --- A project's models (use case 15.1) --------------------------------------------------
+export type ModelVersion = { version: string; runId?: string; source?: string; status?: string; created: number; registeredBy?: string; approvedBy?: string; approvedAt?: string };
+export type RegisteredModel = { name: string; description?: string; updated: number; approved?: string; versions: ModelVersion[] };
+export const getModels = (name: string) =>
+  api<{ available: boolean; models: RegisteredModel[]; experiments: { id: string; name: string; updated: number }[]; canApprove?: boolean; trackingUri?: string }>(
+    "GET", `/api/projects/${encodeURIComponent(name)}/models`);
+export const approveModel = (name: string, model: string, version: string) =>
+  api<{ approved: boolean; by: string; at: string }>("POST", `/api/projects/${encodeURIComponent(name)}/models/${encodeURIComponent(model)}/versions/${encodeURIComponent(version)}/approve`, {});
+// A model's card is its description in MLflow's registry, written through the project's MLflow.
+export const putModelCard = (name: string, model: string, description: string) =>
+  api<unknown>("PATCH", `/mlflow/${encodeURIComponent(name)}/api/2.0/mlflow/registered-models/update`, { name: model, description });
+
 // --- Usage and cost per project (use case 13.1) ---------------------------------------
 export type UsageShare = { queries: number; cpuSeconds: number };
 export type UsageMonth = {
