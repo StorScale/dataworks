@@ -60,7 +60,7 @@ spec:
             httpGet: {path: /health, port: http}
             periodSeconds: 5
             failureThreshold: 60
-          {{- include "storscale.resources" (list "50m" "384Mi" "1Gi") | nindent 10 }}
+          {{- include "storscale.resources" (list "50m" "512Mi" "1536Mi") | nindent 10 }}   {{/* a fresh install migrates its database as it starts */}}
       volumes:
         {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 8 }}   {{/* the wait for setup's */}}
 ---

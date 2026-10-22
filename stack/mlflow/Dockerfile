@@ -9,4 +9,4 @@ RUN useradd --uid 10001 --create-home mlflow
 USER 10001
 WORKDIR /home/mlflow
 EXPOSE 5000
-CMD ["sh", "-c", "exec mlflow server --host 0.0.0.0 --port 5000 --workers 2 --backend-store-uri \"postgresql+psycopg2://mlflow:${MLFLOW_DB_PASSWORD}@${MLFLOW_DB_HOST:-mlflow-db}:5432/mlflow\" --serve-artifacts --artifacts-destination s3://mlflow"]
+CMD ["sh", "-c", "exec mlflow server --host 0.0.0.0 --port 5000 --workers 1 --backend-store-uri \"postgresql+psycopg2://mlflow:${MLFLOW_DB_PASSWORD}@${MLFLOW_DB_HOST:-mlflow-db}:5432/mlflow\" --serve-artifacts --artifacts-destination s3://mlflow"]
