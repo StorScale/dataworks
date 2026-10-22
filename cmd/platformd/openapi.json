@@ -750,7 +750,7 @@
     },
     "/api/projects/{name}": {
       "delete": {
-        "description": "handleDeleteProject removes a project (the administrators): its access,\nits pipelines and the credentials it kept go; its tables and files stay.",
+        "description": "handleDeleteProject removes a project (the administrators): its access,\nits pipelines, the credentials it kept and its MLflow workspace (its\nexperiments, runs, models and their artifacts) go; its tables and files stay.",
         "operationId": "delete_projects_name",
         "parameters": [
           {
@@ -770,7 +770,7 @@
             "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
           }
         },
-        "summary": "Removes a project (the administrators): its access, its pipelines and the credentials it kept go; its tables and files stay",
+        "summary": "Removes a project (the administrators): its access, its pipelines, the credentials it kept and its MLflow workspace (its experiments, runs, models and their artifacts) go; its tables and files stay",
         "tags": [
           "projects"
         ]
