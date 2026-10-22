@@ -185,12 +185,18 @@ function Rows({ cols, rows }: { cols: string[]; rows: unknown[][] }) {
   return (
     <div className="scroll-x"><table className="t" data-testid="app-rows">
       <thead><tr>{cols.map((c) => <th key={c}>{c}</th>)}</tr></thead>
-      <tbody>{rows.map((r, i) => <tr key={i}>{r.map((v, j) => <td key={j} className={typeof v === "number" ? "mono" : ""}>{fmt(v)}</td>)}</tr>)}</tbody>
+      <tbody>{rows.map((r, i) => <tr key={i}>{r.map((v, j) => <td key={j} className={typeof v === "number" || (typeof v === "string" && numeric.test(v)) ? "mono" : ""}>{fmt(v)}</td>)}</tr>)}</tbody>
     </table></div>
   );
 }
 
-const fmt = (v: unknown) => (typeof v === "number" ? v.toLocaleString(undefined, { maximumFractionDigits: 2 }) : v == null ? "" : String(v));
+// A value as shown: a number (or a decimal the semantic layer sends as text, "10.0") to two places; text as it is
+// (one with a leading zero, an ID or a postcode, stays text).
+const numeric = /^-?(0|[1-9]\d*)(\.\d+)?([eE][-+]?\d+)?$/;
+const fmt = (v: unknown) =>
+  typeof v === "number" ? v.toLocaleString(undefined, { maximumFractionDigits: 2 })
+    : typeof v === "string" && numeric.test(v) ? Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })
+      : v == null ? "" : String(v);
 
 // Bars, one series: a category's bar from the axis at 0, its value on hover (and at the bar's end when there are few).
 function BarChart({ points }: { points: { label: string; value: number }[] }) {
