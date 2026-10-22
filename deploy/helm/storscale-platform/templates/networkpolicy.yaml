@@ -6,7 +6,7 @@
      the workloads that use them; every other service, from the namespace's
      own pods. Egress is open. */}}
 {{- if .Values.networkPolicies.enabled }}
-{{- $protected := list "postgres" "ranger-db" "ranger-solr" "openmetadata-search" "keycloak" "mlflow" }}
+{{- $protected := list "postgres" "ranger-db" "ranger-solr" "openmetadata-search" "keycloak" "mlflow" "model-serving" }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -154,6 +154,22 @@ spec:
   policyTypes: [Ingress]
   ingress:
     - ports: [{port: 5000}]
+      from:
+        {{- include "storscale.np.from" (list "platformd") | nindent 8 }}
+---
+# The projects' model servers (serving.yaml): from platformd alone, which
+# signs callers in, checks they're the project's and records each call.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: storscale-model-serving
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/name: model-serving}
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{port: 8080}]
       from:
         {{- include "storscale.np.from" (list "platformd") | nindent 8 }}
 {{- end }}

@@ -373,7 +373,7 @@ calls.head(10)
    GROUP BY c.customer_id, c.signed_up
    ```
 
-   Then, in a new cell of `call_list.ipynb` (it uses the first cell's `customers` and `real`), the same three columns, and who stopped (no order since 1 September), trained and logged in `retail`'s own MLflow workspace:
+   (`work/templates/churn.ipynb` in her notebooks does the same with FLAML choosing the model; this is the plain version, to see each part.) Then, in a new cell of `call_list.ipynb` (it uses the first cell's `customers` and `real`), the same three columns, and who stopped (no order since 1 September), trained and logged in `retail`'s own MLflow workspace:
 
    ```python
    from sklearn.linear_model import LogisticRegression
@@ -395,6 +395,15 @@ calls.head(10)
    No other project sees the run, and the commit it's stamped with means the data it learned from can be read again exactly (Lab 19). On `retail` → **Models**, `churn` has version 1, registered by alice: **Write its card** (purpose, data, metrics, limits), and have **bob** approve the version, since alice can't approve her own. The alias `approved` now names it, and that's what a scoring pipeline loads (`models:/churn@approved`).
 7. **Score every customer, every night.** In `retail`'s spec (**Edit** → JSON), add `"scoring": [{"name": "churn-nightly", "model": "churn", "table": "customer_features", "id": "customer_id", "output": "customer_scores", "schedule": "0 3 * * *"}]` and save. Within a minute the **Pipelines** tab lists `scoring_retail_churn_nightly`; press **Run now**. The run goes as the project's pipelines: it loads the approved version, reads `customer_features` through Trino and writes `customer_scores` afresh, each customer's `customer_id` (so it joins back), the chance they've stopped ordering, the model's version and when. On **Models**, the **Scoring** card shows the run: 60 rows, and no drift, since a version's first run is the reference every later run is compared with.
 8. **When the customers change.** Next month's customers won't look like September's. Stand in for that: on the SQL tab, `UPDATE customer_features SET revenue = revenue * 3`, and run the scoring again. The run compares each input column with the reference (the population stability index): `revenue` has moved far past 0.2 and `orders` hasn't, so the **Scoring** card shows `revenue` in red, and the project's alerts (Overview) say "churn-nightly: its inputs have drifted (revenue, …)". That's the cue to retrain on the new data, register a version, and have it approved: its first run becomes the new reference. Grafana draws the same numbers (`storscale_scoring_drift`). To put the table back, run the `CREATE TABLE` above again as `CREATE OR REPLACE TABLE`.
+9. **The web shop asks too.** The site wants the score as a customer signs in, not overnight. In the spec, add `"serving": [{"name": "churn", "model": "churn"}]` and save: the platform starts a server of `retail`'s own that loads the approved version, and **Models** → **Serving** shows it answering with version 1, and the address to call. As the web team's service would, with a Keycloak token (bob's here), post a customer's three columns:
+
+   ```bash
+   curl -s https://<platform>/api/projects/retail/serving/churn/predict -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" -d '{"dataframe_records": [{"orders": 1, "revenue": 40.0, "tenure_days": 300}]}'
+   ```
+
+   The answer is each class's chance, the second the chance they've stopped, and the version that answered. As **carol**, the same call is refused; on **Audit**, bob's call is there (`model.called`, the version, one row: never the row itself) and carol's refusal beside it. Retrain, register version 2 and have it approved: within a minute the same address answers with version 2, nobody restarting anything.
+10. **Where it sits in the catalog.** In the catalog (**Tools → Catalog**), search `churn`: the model `retail__churn` is a node between `customer_features` and `customer_scores` in their lineage, its card as its description, with the approved version, who registered and approved it, and the catalog's commit its training run started from: the data it learned from, findable again (Lab 19).
 
 **Check:** the run's notebook shows the table with Viktor Schmidt first, and `landing/reports/call-list.csv` is in the `retail` bucket (read it from a notebook with `buckets_lake.s3().get_object`); `SELECT * FROM customer_scores ORDER BY score DESC` lists the customers likeliest to have stopped, each with version `1` of `churn`.
 
@@ -706,7 +715,7 @@ storscale/
 | 5 | A table that reports its own faults before a reader notices |
 | 6–8 | One revenue number, 22,168, in SQL, dashboards, apps and chat, each under the asker's rules; Revenue and Customer as the company's words |
 | 9–10 | Store weekend pays back 7.8 times and runs again; Enterprise outreach is cut; the answer is code, reviewed, rebuilt weekly |
-| 11 | Thirty customers to call, every Monday, from a notebook nobody runs by hand; a churn score for every customer each night, from an approved model, that says when the customers stop looking like the ones it learned from |
+| 11 | Thirty customers to call, every Monday, from a notebook nobody runs by hand; a churn score for every customer each night, and for the web shop as it asks, from an approved model, that says when the customers stop looking like the ones it learned from |
 | 12 | Marketing reads retail's orders in place and builds on its definitions; a broken promise alerts the publisher |
 | 13 | Readers' rules in words, holding in every tool |
 | 14 | Acme gets two files a week, approved, logged, reproducible; nobody emails spreadsheets |

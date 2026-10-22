@@ -145,6 +145,23 @@ func main() {
 		r.ProjectAirflows = &reconcile.ProjectAirflows{Kube: kube, Postgres: &reconcile.Postgres{URL: pg.String()}, Template: t,
 			DefaultMemory: env("PIPELINES_DEFAULT_MEMORY", "3Gi"), PlatformURL: os.Getenv("PLATFORM_URL")}
 	}
+	// A project's models answering as an API (R15.4): on Kubernetes a server
+	// for each, from the chart's template (SERVING_TEMPLATE); in Compose the
+	// shared one, signed in as SERVING_ACCOUNT's service account.
+	if tpl := os.Getenv("SERVING_TEMPLATE"); tpl != "" {
+		t, err := reconcile.LoadTemplate(tpl)
+		if err != nil {
+			log.Error("serving template", "error", err)
+			os.Exit(2)
+		}
+		kube, err := reconcile.NewKube()
+		if err != nil {
+			log.Error("kubernetes", "error", err)
+			os.Exit(2)
+		}
+		r.ProjectServings = &reconcile.ProjectServings{Kube: kube, Template: t, DefaultMemory: env("SERVING_DEFAULT_MEMORY", "1Gi")}
+	}
+	r.ServingAccount = os.Getenv("SERVING_ACCOUNT")
 	num := func(k string, def int) int {
 		n, err := strconv.Atoi(os.Getenv(k))
 		if err != nil || n <= 0 {
@@ -263,6 +280,16 @@ func main() {
 		// Every Airflow makes a DAG of each scoring (storscale_scoring.py, the bundle storscale).
 		mux.HandleFunc("GET /airflow/scoring", func(w http.ResponseWriter, req *http.Request) {
 			ss, err := r.Scorings(req.Context())
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusServiceUnavailable)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(ss)
+		})
+		// The shared model server (Compose) serves each project's servings.
+		mux.HandleFunc("GET /serving", func(w http.ResponseWriter, req *http.Request) {
+			ss, err := r.Servings(req.Context())
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusServiceUnavailable)
 				return

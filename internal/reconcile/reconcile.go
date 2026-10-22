@@ -48,6 +48,11 @@ type Reconciler struct {
 	// Airflow of its own; nil (Compose): projects' repos are bundles in the
 	// shared Airflow.
 	ProjectAirflows *ProjectAirflows
+	// ProjectServings, on Kubernetes, gives each serving a server of its own;
+	// nil (Compose): one shared server, signed in as ServingAccount (a Keycloak
+	// client with a service account), loads every project's.
+	ProjectServings *ProjectServings
+	ServingAccount  string
 	Store           store.Store
 	Log             *slog.Logger
 	// Files reads the store's files, for the assistants platformd registers
@@ -124,6 +129,9 @@ func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Sta
 	}
 	if r.Gateway != nil {
 		part("llm", r.applyLLM(ctx, p))
+	}
+	if err := r.applyServing(ctx, p); err != nil || len(p.Spec.Serving) > 0 { // shown when it has servings (or failed removing them)
+		part("serving", err)
 	}
 	copying := slices.ContainsFunc(p.Spec.Sources, func(s project.Source) bool { return s.Copy != nil })
 	switch {
@@ -217,6 +225,7 @@ func (r *Reconciler) Delete(ctx context.Context, p *project.Project) error {
 	keep(r.removeLLM(ctx, p))                                                    // its keys at the LLM gateway
 	keep(r.removeAgents(ctx, p))                                                 // its scheduled agents\' connections
 	keep(r.Keycloak.deleteClientsExcept(ctx, "agent-"+p.Metadata.Name+"-", nil)) // its agents' clients
+	keep(r.teardownServing(ctx, p))                                              // its models' servers and their clients
 	if r.Reviewer != nil {                                                       // its merge requests' branches and catalogs
 		if prev, _ := r.Store.Status(ctx, p.Metadata.Name); prev != nil {
 			keep(r.applyReviews(ctx, p, nil, nil, prev.Reviews))
@@ -357,6 +366,22 @@ func (r *Reconciler) members(ctx context.Context, p *project.Project) (people, e
 	}
 	if err := r.Keycloak.deleteClientsExcept(ctx, "agent-"+p.Metadata.Name+"-", agents); err != nil {
 		return out, err
+	}
+	// Its servings' servers (R15.4) read its models as its readers do.
+	served, err := r.servingIdentities(ctx, p)
+	if err != nil {
+		return out, fmt.Errorf("the servings' accounts: %w", err)
+	}
+	for _, sa := range served {
+		member := false
+		for _, g := range wanted {
+			_, in := g[sa.ID]
+			member = member || in
+		}
+		if !member { // the shared account may be the project's pipelines already: it reads as they do
+			wanted[p.Group(project.Reader)][sa.ID] = sa
+			out.list = append(out.list, project.Person{Username: sa.Username, Role: "serving"})
+		}
 	}
 	for name, want := range wanted {
 		g, err := r.Keycloak.ensureGroup(ctx, name)

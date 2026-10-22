@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -148,6 +149,25 @@ func (k *Kube) Apply(ctx context.Context, kind string, obj map[string]any) error
 	_, err := k.do(ctx, "PATCH", k.path(kind, name)+"?fieldManager=platform-operator&force=true",
 		"application/apply-patch+yaml", obj, nil) // JSON is YAML
 	return err
+}
+
+// Names are the objects of a kind whose labels match the selector (as app=x,y=z).
+func (k *Kube) Names(ctx context.Context, kind, selector string) ([]string, error) {
+	var list struct {
+		Items []struct {
+			Metadata struct {
+				Name string `json:"name"`
+			} `json:"metadata"`
+		} `json:"items"`
+	}
+	if _, err := k.do(ctx, "GET", k.path(kind, "")+"?labelSelector="+url.QueryEscape(selector), "", nil, &list); err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(list.Items))
+	for _, it := range list.Items {
+		out = append(out, it.Metadata.Name)
+	}
+	return out, nil
 }
 
 // Delete removes an object; one that's already gone is no error.

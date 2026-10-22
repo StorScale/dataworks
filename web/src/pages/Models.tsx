@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { approveModel, getModels, getScorings, putModelCard, type RegisteredModel, type Scoring } from "../api";
+import { approveModel, getModels, getScorings, getServings, putModelCard, type RegisteredModel, type Scoring } from "../api";
 import { Empty, Intro } from "../components";
 import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
 
@@ -33,6 +33,7 @@ export default function Models() {
         <ModelCard key={m.name} project={name} model={m} canEdit={!!d.canApprove} me={user.username} onApprove={approve} reload={list.reload} />
       ))}
       <Scorings project={name} />
+      <Servings project={name} />
       <section className="card flush">
         <div className="card-head"><h2>Experiments</h2></div>
         {d.experiments.length === 0 ? <Empty inline>None yet.</Empty> : (
@@ -131,5 +132,44 @@ function ScoringRow({ sc }: { sc: Scoring }) {
         ? <><span className={`pill ${past ? "red" : "green"}`}>{worst[1].toFixed(2)}</span> <span className="mono">{worst[0]}</span><div className="muted">past {sc.threshold.toFixed(2)} is drift</div></>
         : <span className="muted">–</span>}</td>
     </tr>
+  );
+}
+
+// Servings (R15.4): the project's approved models answering as an API, through the platform: signed in, the project's
+// people and agents only, each call in the audit log.
+function Servings({ project }: { project: string }) {
+  const list = usePoll(() => getServings(project), [project], 30_000);
+  const servings = list.data?.serving ?? [];
+  const first = servings[0];
+  return (
+    <section className="card flush" data-testid="servings">
+      <div className="card-head"><h2>Serving</h2></div>
+      <p className="small muted card-note">
+        A model's approved version answers as an API, from a server of the project's that only the platform reaches. A caller signs in
+        (a Keycloak token, as the API reference says) and must be one of the project's people or agents; each call is recorded in the audit log,
+        with the version that answered. A newly approved version answers within a minute.
+      </p>
+      {list.error && <div style={{ padding: "0 20px 12px" }}><ErrorBanner error={list.error} /></div>}
+      {servings.length === 0 ? <Empty inline>None yet: the project's spec names them (serving).</Empty> : <>
+        <div className="scroll-x"><table className="t">
+          <thead><tr><th>Serving</th><th>Model</th><th>Answering with</th><th>Rows a call</th><th>Call it at</th></tr></thead>
+          <tbody>{servings.map((sv) => (
+            <tr key={sv.name} data-testid={`serving-${sv.name}`}>
+              <td className="mono">{sv.name}</td>
+              <td className="mono small">{sv.model}</td>
+              <td className="small">{sv.version ? <span className="pill green">version {sv.version}</span> : <span className="pill amber">{sv.error || "starting"}</span>}</td>
+              <td className="small">{sv.maxRows}</td>
+              <td className="mono small" style={{ overflowWrap: "anywhere" }}>POST {sv.url}</td>
+            </tr>))}</tbody>
+        </table></div>
+        {first && <div className="card-foot stack" style={{ gap: 6 }}>
+          <span className="field-label">From a script</span>
+          <pre className="code">{`curl -s ${first.url} \\
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \\
+  -d '{"dataframe_records": [{"<column>": <value>, ...}]}'
+# {"predictions": [...], "model": "${first.model}", "version": "..."}`}</pre>
+        </div>}
+      </>}
+    </section>
   );
 }

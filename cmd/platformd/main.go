@@ -122,6 +122,10 @@ type config struct {
 	// MLflowURL is the platform's MLflow (15.1), reached only through
 	// platformd; empty: none.
 	MLflowURL string
+	// ServingURL is where the projects' model servers answer (15.1): on
+	// Kubernetes with {server} for a serving's own (http://{server}:8080),
+	// in Compose the shared one; empty: models aren't served.
+	ServingURL string
 	// ErasureDeadlineDays is how long the company has to answer a request
 	// to delete a person's data (use case 6.9): the CCPA's 45, by default.
 	ErasureDeadlineDays int
@@ -206,6 +210,7 @@ func configFromEnv(get func(string) string) (config, error) {
 	}
 	c.UsageGroups = list("USAGE_VIEWER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers"))
 	c.MLflowURL = strings.TrimRight(get("MLFLOW_URL"), "/")
+	c.ServingURL = strings.TrimRight(get("SERVING_URL"), "/")
 	var missing []string
 	for k, v := range map[string]string{"PLATFORM_URL": c.PlatformURL, "KEYCLOAK_URL": c.KeycloakURL, "OIDC_CLIENT_SECRET": c.ClientSecret} {
 		if v == "" {

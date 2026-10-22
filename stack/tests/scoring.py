@@ -25,6 +25,7 @@ import subprocess
 import sys
 import tempfile
 
+from catalog import OM, catalog
 from ml import token
 
 from lakekit import check, finish, sql
@@ -47,15 +48,23 @@ def customers():
     return [(f"C-{i:04d}", round(rnd.uniform(1, 60), 1), round(rnd.uniform(10, 400), 2)) for i in range(300)]
 
 
-def train_and_register(rows):
-    """A churn model on the customers (short tenure, low spend: likelier to leave), logged and registered as bob."""
+def install():
+    """scikit-learn and MLflow's client, for this suite's process alone (once)."""
+    if getattr(install, "done", False):
+        return
     libs = tempfile.mkdtemp(prefix="scoring-libs-")
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "--disable-pip-version-check", "--target", libs, *PACKAGES], check=True)
     sys.path.insert(0, libs)
+    install.done = True
+
+
+def train_and_register(rows, project=NAME, model_name="churn"):
+    """A churn model on the customers (short tenure, low spend: likelier to leave), logged and registered as bob."""
+    install()
     import mlflow
     import pandas as pd
     from sklearn.linear_model import LogisticRegression
-    os.environ["MLFLOW_TRACKING_URI"] = f"{PLATFORM}/mlflow/{NAME}"
+    os.environ["MLFLOW_TRACKING_URI"] = f"{PLATFORM}/mlflow/{project}"
     os.environ["MLFLOW_TRACKING_TOKEN"] = token("bob")
     df = pd.DataFrame(rows, columns=["customer_id", "tenure", "spend"])
     left = ((df.tenure < 12) & (df.spend < 150)).astype(int)
@@ -64,7 +73,8 @@ def train_and_register(rows):
     with mlflow.start_run():
         model = LogisticRegression().fit(df[["tenure", "spend"]], left)
         mlflow.log_metric("accuracy", float(model.score(df[["tenure", "spend"]], left)))
-        info = mlflow.sklearn.log_model(model, name="model", registered_model_name="churn", pyfunc_predict_fn="predict_proba")
+        info = mlflow.sklearn.log_model(model, name="model", registered_model_name=model_name, pyfunc_predict_fn="predict_proba",
+                                        input_example=df[["tenure", "spend"]].head())
     return str(info.registered_model_version)
 
 
@@ -132,6 +142,27 @@ def main():
         check("the Models tab lists the scoring, its DAG, threshold and runs, to the project's people",
               seen.ok and any(s["name"] == SCORING["name"] and s["dag"] == dag and s["threshold"] == SCORING["drift"] and len(s["runs"]) >= 2
                               for s in seen.json().get("scoring", [])), seen.text[:300])
+
+        # The catalog: the model between the tables it scores, its approved version's data commit with it (R15.6).
+        om, fqn = catalog(), f"storscale-mlflow.{NAME}__churn"
+
+        def drawn():
+            r = om.get(f"{OM}/lineage/mlmodel/name/{fqn}", params={"upstreamDepth": 1, "downstreamDepth": 1}, timeout=30)
+            if not r.ok:
+                return None
+            j = r.json()
+            names = {n["id"]: n.get("fullyQualifiedName", "") for n in j.get("nodes", [])}
+            ref = lambda e: e if isinstance(e, str) else (e or {}).get("id")   # an id, or an entity with one
+            up = [(names.get(ref(e.get("fromEntity")), ""), (e.get("lineageDetails") or {}).get("description", "")) for e in j.get("upstreamEdges", [])]
+            down = [names.get(ref(e.get("toEntity")), "") for e in j.get("downstreamEdges", [])]
+            if any(u.endswith(f".{NAME}.customers") for u, _ in up) and any(d.endswith(f".{NAME}.customer_scores") for d in down):
+                return up, down
+            return None
+        lineage = wait(drawn, 900, every=15)
+        model = om.get(f"{OM}/mlmodels/name/{fqn}", timeout=30)
+        described = model.json().get("description", "") if model.ok else ""
+        check("the catalog shows churn between customers and customer_scores, the approved version and its data's commit with it",
+              lineage is not None and f"version {version}".lower() in described.lower() and "alice" in described, (lineage, described[:400]))
     finally:
         bob.delete(url, headers=H, timeout=30)
         wait(lambda: NAME not in (projects(bob) or {}), 300)

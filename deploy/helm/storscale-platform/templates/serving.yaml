@@ -1,0 +1,80 @@
+{{/* A project's model answering as an API (use case 15.1, R15.4), as a
+     template the operator fills in for each serving (internal/reconcile/serving.go):
+     storscale_serve.py in Airflow's image, in the virtualenv the scorings
+     run in, loading the model's approved version through platformd's MLflow,
+     signed in as the serving's own Keycloak client, whose secret is in its
+     Secret (made by the operator). Only platformd reaches it (networkpolicy.yaml).
+     Placeholders, in strings: @SERVER@ (model-<project>-<serving>: the
+     Deployment, Service and Secret), @PROJECT@, @SERVING@, @MODEL@, @CLIENT@,
+     @MAX_ROWS@, @MEMORY@ and @REQUEST@. It has none of the platform's keys
+     and no Kubernetes token. */}}
+{{- define "storscale.serving" -}}
+{{- $labels := dict "app.kubernetes.io/part-of" "storscale-platform" "app.kubernetes.io/managed-by" "platform-operator" "app.kubernetes.io/name" "model-serving" "platform.storscale.io/project" "@PROJECT@" "platform.storscale.io/serving" "@SERVING@" }}
+{{- $selector := dict "app.kubernetes.io/name" "model-serving" "platform.storscale.io/project" "@PROJECT@" "platform.storscale.io/serving" "@SERVING@" }}
+deployment:
+  apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: "@SERVER@"
+    labels: {{ toJson $labels }}
+  spec:
+    replicas: 1
+    progressDeadlineSeconds: {{ .Values.progressDeadlineSeconds }}
+    selector: {matchLabels: {{ toJson $selector }}}
+    template:
+      metadata:
+        labels: {{ toJson $labels }}
+      spec:
+        enableServiceLinks: false
+        automountServiceAccountToken: false
+        {{- if include "storscale.ca.enabled" . }}
+        initContainers:
+          {{- include "storscale.ca.init" . | nindent 10 }}
+        {{- end }}
+        containers:
+          - name: server
+            image: {{ include "storscale.image" (list . "airflow") }}
+            imagePullPolicy: {{ .Values.images.pullPolicy }}
+            securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 50000, runAsGroup: 50000, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+            command: ["/opt/score/bin/python", "/opt/score/storscale_serve.py"]
+            env:
+              - {name: STORSCALE_PLATFORMD_URL, value: "http://platformd:8080"}
+              - {name: KEYCLOAK_URL, value: "{{ include "storscale.url" . }}/sso"}
+              - {name: SERVING_CLIENT_ID, value: "@CLIENT@"}
+              - {name: SERVING_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: "@SERVER@", key: CLIENT_SECRET}}}
+              - {name: STORSCALE_SERVING, value: '{"project": "@PROJECT@", "serving": {"name": "@SERVING@", "model": "@MODEL@", "maxRows": @MAX_ROWS@}}'}
+              - {name: HOME, value: /tmp}
+              {{- include "storscale.ca.env" . | nindent 14 }}
+            ports:
+              - {name: http, containerPort: 8080}
+            readinessProbe:
+              httpGet: {path: /healthz, port: http}
+              periodSeconds: 5
+              failureThreshold: 120
+            volumeMounts:
+              - {name: tmp, mountPath: /tmp}
+              {{- include "storscale.ca.mount" . | nindent 14 }}
+            resources: {requests: {cpu: 50m, memory: "@REQUEST@"}, limits: {memory: "@MEMORY@"}}
+        volumes:
+          - {name: tmp, emptyDir: {}}
+          {{- include "storscale.ca.volumes" . | nindent 10 }}
+service:
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: "@SERVER@"
+    labels: {{ toJson $labels }}
+  spec:
+    selector: {{ toJson $selector }}
+    ports:
+      - {name: http, port: 8080, targetPort: http}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: storscale-serving
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+data:
+  {{- $t := include "storscale.serving" . | fromYaml }}
+  {{- if hasKey $t "Error" }}{{ fail (printf "the serving template: %s" $t.Error) }}{{ end }}
+  template.json: {{ toJson $t | quote }}
