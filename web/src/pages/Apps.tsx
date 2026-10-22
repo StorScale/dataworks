@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { appData, askApp, deleteApp, getApps, getSemantic, putApp, type App, type AppFilter, type KnowledgeHit } from "../api";
+import { Empty, Intro } from "../components";
 import { ErrorBanner, Spinner, usePoll, useProject } from "../lib";
 
 // A project's apps (use case 14.1): small pages of its data, declared by its
@@ -26,23 +27,20 @@ export default function Apps() {
   };
   return (
     <div className="page stack" data-testid="apps">
-      <div className="row">
-        <p className="lead grow" style={{ margin: 0 }}>
+      <Intro actions={d.canEdit && !adding && <button className="btn primary" onClick={() => setAdding(true)} data-testid="add-app">Make an app</button>}>
           Small pages of the project's data for the people who read it: a metric by a dimension, a table's rows, or questions answered from its documents.
           Each shows whoever opens it what their rules let them see.
-        </p>
-        {d.canEdit && !adding && <button className="btn primary" onClick={() => setAdding(true)} data-testid="add-app">Make an app</button>}
-      </div>
+      </Intro>
       <ErrorBanner error={error} />
       {adding && <AppForm project={name} banks={d.banks ?? []} hasBudget={d.hasBudget} taken={d.apps.map((a) => a.name)} onDone={() => { setAdding(false); list.reload(); }} />}
-      {d.apps.length === 0 && !adding ? <div className="empty">No apps yet.{d.canEdit ? " Make one from a metric, a table or a knowledge bank." : ""}</div> : (
-        <div className="grid-cards" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
+      {d.apps.length === 0 && !adding ? <Empty>No apps yet.{d.canEdit ? " Make one from a metric, a table or a knowledge bank." : ""}</Empty> : (
+        <div className="grid cards">
           {d.apps.map((a) => (
-            <div key={a.name} className="card stack" style={{ gap: 4 }} data-testid={`app-${a.name}`}>
-              <Link to={`/p/${name}/apps/${a.name}`}><strong>{a.title || a.name}</strong></Link>
+            <div key={a.name} className="card stack" style={{ gap: 6 }} data-testid={`app-${a.name}`}>
+              <h2><Link to={`/p/${name}/apps/${a.name}`}>{a.title || a.name}</Link></h2>
               <span className="small muted">{a.description || KINDS.find(([k]) => k === a.kind)?.[1]}</span>
               <span className="small muted mono">{a.kind === "metric" ? `${(a.metrics ?? []).join(", ")}${a.by ? ` by ${a.by}` : ""}` : a.kind === "table" ? a.table : `bank ${a.bank}`}</span>
-              {(view?.role === "editor") && <div><button className="btn small" onClick={() => remove(a.name)}>Remove</button></div>}
+              {(view?.role === "editor") && <div style={{ marginTop: 6 }}><button className="btn small danger" onClick={() => remove(a.name)}>Remove</button></div>}
             </div>
           ))}
         </div>
@@ -72,52 +70,52 @@ function AppForm({ project, banks, hasBudget, taken, onDone }: { project: string
   };
   const setFilter = (i: number, f: AppFilter) => set({ filters: (a.filters ?? []).map((x, j) => (j === i ? f : x)) });
   return (
-    <form className="card stack" style={{ gap: 10 }} onSubmit={(e) => { e.preventDefault(); save(); }} data-testid="app-form">
-      <strong>A new app</strong>
+    <form className="card stack" onSubmit={(e) => { e.preventDefault(); save(); }} data-testid="app-form">
+      <h2>Make an app</h2>
       <ErrorBanner error={error ?? model.error} />
-      <div className="row">
-        <label>Name <input className="mono" value={a.name} onChange={(e) => set({ name: e.target.value })} placeholder="revenue-by-region" data-testid="app-name" /></label>
-        <label className="grow">Title <input value={a.title ?? ""} onChange={(e) => set({ title: e.target.value || undefined })} placeholder="Revenue by region" style={{ width: "100%" }} /></label>
+      <div className="fields">
+        <label>Name<input className="mono" value={a.name} onChange={(e) => set({ name: e.target.value })} placeholder="revenue-by-region" data-testid="app-name" /></label>
+        <label className="grow">Title<input value={a.title ?? ""} onChange={(e) => set({ title: e.target.value || undefined })} placeholder="Revenue by region" /></label>
       </div>
-      <label>What it's for <input value={a.description ?? ""} onChange={(e) => set({ description: e.target.value || undefined })} placeholder="This quarter's revenue, by region, for the regional leads" /></label>
-      <label>What it shows <select value={a.kind} onChange={(e) => set({ kind: e.target.value as App["kind"] })} data-testid="app-kind">
+      <label>What it's for<input value={a.description ?? ""} onChange={(e) => set({ description: e.target.value || undefined })} placeholder="This quarter's revenue, by region, for the regional leads" /></label>
+      <label>What it shows<select value={a.kind} onChange={(e) => set({ kind: e.target.value as App["kind"] })} data-testid="app-kind">
         {KINDS.map(([k, l]) => <option key={k} value={k} disabled={k === "qa" && (!banks.length || !hasBudget)}>{l}{k === "qa" && !banks.length ? " (the project has no knowledge bank)" : ""}</option>)}</select></label>
       {a.kind === "metric" && <>
-        <div className="small muted">Metrics (each its own chart, on its own scale):</div>
+        <div className="field-label">Metrics <span className="field-help">each its own chart, on its own scale</span></div>
         <div className="chips">{metrics.map((m) => <button key={m.name} type="button" className={`chip${(a.metrics ?? []).includes(m.name) ? " on" : ""}`} aria-pressed={(a.metrics ?? []).includes(m.name)}
           onClick={() => set({ metrics: (a.metrics ?? []).includes(m.name) ? (a.metrics ?? []).filter((x) => x !== m.name) : [...(a.metrics ?? []), m.name] })}>{m.name}</button>)}
           {model.data && metrics.length === 0 && <span className="small muted">The project has no metrics yet (the Metrics tab).</span>}</div>
-        <div className="row">
-          <label>By <select value={a.by ?? ""} onChange={(e) => set({ by: e.target.value || undefined })} data-testid="app-by">
+        <div className="fields">
+          <label>By<select value={a.by ?? ""} onChange={(e) => set({ by: e.target.value || undefined })} data-testid="app-by">
             <option value="">nothing (the total)</option>{dims.map((d) => <option key={d}>{d}</option>)}</select></label>
-          <label>As <select value={a.show} onChange={(e) => set({ show: e.target.value as App["show"] })}>{SHOWS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+          <label>As<select value={a.show} onChange={(e) => set({ show: e.target.value as App["show"] })}>{SHOWS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
         </div>
       </>}
-      {a.kind === "table" && <div className="row">
-        <label>Table <select value={a.table ?? ""} onChange={(e) => set({ table: e.target.value || undefined })} data-testid="app-table">
+      {a.kind === "table" && <div className="fields">
+        <label>Table<select value={a.table ?? ""} onChange={(e) => set({ table: e.target.value || undefined })} data-testid="app-table">
           <option value="">table…</option>{(model.data?.tables ?? []).map((t) => <option key={t}>{t}</option>)}</select></label>
-        <label className="grow">Columns (none: all) <input className="mono" value={(a.columns ?? []).join(", ")} style={{ width: "100%" }}
+        <label className="grow">Columns (none: all)<input className="mono" value={(a.columns ?? []).join(", ")}
           onChange={(e) => set({ columns: e.target.value.split(",").map((c) => c.trim()).filter(Boolean) })} placeholder="order_id, region, amount" /></label>
       </div>}
-      {a.kind === "qa" && <label>Knowledge bank <select value={a.bank ?? ""} onChange={(e) => set({ bank: e.target.value || undefined })} data-testid="app-bank">
+      {a.kind === "qa" && <label>Knowledge bank<select value={a.bank ?? ""} onChange={(e) => set({ bank: e.target.value || undefined })} data-testid="app-bank">
         <option value="">bank…</option>{banks.map((b) => <option key={b}>{b}</option>)}</select>
-        <span className="small muted">A question is answered by the model from the bank's closest passages alone, citing them, as the person asking; on the project's key.</span></label>}
+        <span className="field-help">A question is answered by the model from the bank's closest passages alone, citing them, as the person asking; on the project's key.</span></label>}
       {a.kind !== "qa" && <>
-        <div className="small muted">Filters the viewer picks: a {a.kind === "metric" ? "dimension" : "column"} equal to a value, from a list or typed.</div>
+        <div className="field-label">Filters <span className="field-help">the viewer picks: a {a.kind === "metric" ? "dimension" : "column"} equal to a value, from a list or typed</span></div>
         {(a.filters ?? []).map((f, i) => (
-          <div key={i} className="row">
+          <div key={i} className="fields">
             {a.kind === "metric"
               ? <select value={f.field} onChange={(e) => setFilter(i, { ...f, field: e.target.value })} aria-label="Dimension"><option value="">dimension…</option>{dims.map((d) => <option key={d}>{d}</option>)}</select>
               : <input className="mono" value={f.field} onChange={(e) => setFilter(i, { ...f, field: e.target.value })} placeholder="column" aria-label="Column" />}
             <input value={f.label ?? ""} onChange={(e) => setFilter(i, { ...f, label: e.target.value || undefined })} placeholder="label: Region" aria-label="Label" />
             <input className="grow" value={(f.values ?? []).join(", ")} onChange={(e) => setFilter(i, { ...f, values: e.target.value.split(",").map((v) => v.trim()).filter(Boolean) })}
               placeholder="values (none: typed): EU, US, APAC" aria-label="Values" />
-            <button type="button" className="btn small" onClick={() => set({ filters: (a.filters ?? []).filter((_, j) => j !== i) })}>Remove</button>
+            <button type="button" className="btn" onClick={() => set({ filters: (a.filters ?? []).filter((_, j) => j !== i) })}>Remove</button>
           </div>
         ))}
         <div><button type="button" className="btn small" onClick={() => set({ filters: [...(a.filters ?? []), { field: "" }] })}>Add a filter</button></div>
       </>}
-      <div className="row">
+      <div className="form-actions">
         <button className="btn primary" type="submit" disabled={!ok || busy} data-testid="save-app">{busy ? "Saving…" : "Make it"}</button>
         <button className="btn" type="button" onClick={onDone}>Cancel</button>
       </div>
@@ -133,12 +131,14 @@ export function AppPage() {
   const a = list.data?.apps.find((x) => x.name === app);
   if (list.error && !list.data) return <div className="page"><ErrorBanner error={list.error} /></div>;
   if (!list.data) return <div className="page"><Spinner /></div>;
-  if (!a) return <div className="page"><div className="empty">No app {app}. <Link to={`/p/${name}/apps`}>The project's apps</Link></div></div>;
+  if (!a) return <div className="page"><Empty>No app {app}. <Link to={`/p/${name}/apps`}>The project's apps</Link></Empty></div>;
   return (
     <div className="page stack" data-testid={`app-page-${a.name}`}>
       <div><Link to={`/p/${name}/apps`} className="small">← Apps</Link></div>
-      <h2 style={{ margin: 0 }}>{a.title || a.name}</h2>
-      {a.description && <p className="lead" style={{ margin: 0 }}>{a.description}</p>}
+      <div>
+        <h1>{a.title || a.name}</h1>
+        {a.description && <p className="lead">{a.description}</p>}
+      </div>
       {a.kind === "qa" ? <Questions project={name} app={a} /> : <AppData project={name} app={a} />}
     </div>
   );
@@ -154,26 +154,26 @@ function AppData({ project, app }: { project: string; app: App }) {
   return (
     <>
       {(app.filters ?? []).length > 0 && (
-        <form className="row" onSubmit={(e) => { e.preventDefault(); setApplied({ ...picked }); }} data-testid="app-filters">
+        <form className="fields" onSubmit={(e) => { e.preventDefault(); setApplied({ ...picked }); }} data-testid="app-filters">
           {(app.filters ?? []).map((f) => (
-            <label key={f.field} className="row small" style={{ flexDirection: "row", gap: 4 }}>{f.label || f.field}
+            <label key={f.field}>{f.label || f.field}
               {f.values?.length
                 ? <select value={picked[f.field] ?? ""} onChange={(e) => setPicked({ ...picked, [f.field]: e.target.value })}><option value="">all</option>{f.values.map((v) => <option key={v}>{v}</option>)}</select>
-                : <input value={picked[f.field] ?? ""} onChange={(e) => setPicked({ ...picked, [f.field]: e.target.value })} placeholder="all" style={{ width: 120 }} />}
+                : <input value={picked[f.field] ?? ""} onChange={(e) => setPicked({ ...picked, [f.field]: e.target.value })} placeholder="all" style={{ width: 160 }} />}
             </label>))}
-          <button className="btn small" type="submit">Show</button>
+          <button className="btn" type="submit">Show</button>
         </form>)}
       <ErrorBanner error={data.error} />
-      {!data.data ? (!data.error && <Spinner />) : rows.length === 0 ? <div className="empty">Nothing to show{Object.keys(applied).length ? " for these filters" : ""}.</div> : (
+      {!data.data ? (!data.error && <Spinner />) : rows.length === 0 ? <Empty>Nothing to show{Object.keys(applied).length ? " for these filters" : ""}.</Empty> : (
         <div className="card stack" style={{ gap: 8 }}>
           {app.kind === "metric" && app.show !== "table" && (
-            <div className="row"><span className="grow" /><button className="btn small" onClick={() => setAsTable(!asTable)}>{asTable ? "As a chart" : "As a table"}</button></div>)}
+            <div className="row" style={{ justifyContent: "flex-end" }}><button className="btn small" onClick={() => setAsTable(!asTable)}>{asTable ? "As a chart" : "As a table"}</button></div>)}
           {asTable ? <Rows cols={cols} rows={rows} /> : app.show === "number"
             ? <div data-testid="app-number"><div className="hero-number">{fmt(rows[0]?.[cols.length - 1])}</div><div className="small muted">{(app.metrics ?? [])[0]}</div></div>
             : (app.metrics ?? []).map((m, i) => {
               const at = cols.indexOf(m) >= 0 ? cols.indexOf(m) : i + 1;
               const points = rows.map((r) => ({ label: String(r[0] ?? ""), value: Number(r[at] ?? 0) }));
-              return <div key={m}><div className="small" style={{ fontWeight: 600 }}>{m}{app.by ? <span className="muted"> by {app.by}</span> : null}</div>
+              return <div key={m}><h2>{m}{app.by ? <span className="muted" style={{ fontWeight: 400 }}> by {app.by}</span> : null}</h2>
                 {app.show === "line" ? <LineChart points={points} /> : <BarChart points={points} />}</div>;
             })}
         </div>)}

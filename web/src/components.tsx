@@ -302,4 +302,19 @@ export function Page({ title, lead, actions, children, testid }: { title?: React
   );
 }
 
+// Intro is a page's opening: what the page is for, and its one primary action, on the right.
+export function Intro({ children, actions }: { children: ReactNode; actions?: ReactNode }) {
+  return (
+    <div className="page-head">
+      <p className="lead">{children}</p>
+      {actions && <div className="row">{actions}</div>}
+    </div>
+  );
+}
+
+// Empty says a list has nothing in it yet, the same way on every page.
+export function Empty({ children, inline, testid }: { children: ReactNode; inline?: boolean; testid?: string }) {
+  return <div className={inline ? "empty inline" : "empty"} data-testid={testid}>{children}</div>;
+}
+
 export const isNotFound = (e: unknown) => e instanceof ApiError && e.status === 404;

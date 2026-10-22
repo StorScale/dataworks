@@ -132,7 +132,7 @@ export default function SQL() {
         <section className="main stack">
           <div className="card flush">
             <div className="row" style={{ padding: "10px 16px", borderBottom: "1px solid var(--line-soft)" }}>
-              <strong>Query</strong>
+              <h2>Query</h2>
               <span className="small muted">runs in Trino as you{reader ? ", with readers' filters and masks" : ""}</span>
               <span className="grow" />
               <Link className="small" to="/tools/sql">Open SQL Lab</Link>
@@ -156,9 +156,7 @@ export default function SQL() {
             </div>
             <form className="row" style={{ padding: "8px 16px", borderTop: "1px solid var(--line-soft)", gap: 8, flexWrap: "wrap" }}
               onSubmit={(e) => { e.preventDefault(); readAsOf(); }} data-testid="as-of">
-              <label className="row small" style={{ flexDirection: "row", gap: 6 }}>As of
-                <input value={at} onChange={(e) => setAt(e.target.value)} placeholder="now, a tag, 2026-09-30, a commit" style={{ width: 260 }} aria-label="As of" />
-              </label>
+              <input value={at} onChange={(e) => setAt(e.target.value)} placeholder="As of: now, a tag, 2026-09-30, a commit" style={{ width: 300 }} aria-label="As of" />
               <button className="btn" type="submit">Read the tables then</button>
               {moment && <span className="small muted">as of {moment.label}: commit <span className="mono">{moment.commit.slice(0, 12)}</span>{moment.time ? `, ${new Date(moment.time).toLocaleString()}` : ""}</span>}
             </form>

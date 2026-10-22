@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getSemantic, MetricAnswer, putSemantic, queryMetrics, runSemanticTests, type SemanticTest } from "../api";
 import { ErrorBanner, Spinner, usePoll, useProject } from "../lib";
+import { Empty } from "../components";
 
 // Metrics is a project's semantic layer: its metrics, defined once, a way to
 // ask for them, how agents use them, and (for editors) their definitions.
@@ -70,7 +71,7 @@ export default function Metrics() {
               <h2>Ask for metrics</h2>
               <span className="small muted">runs as you, so your filters and masks apply</span>
             </div>
-            {m.metrics.length === 0 ? <p className="muted">No metrics yet.{editor ? " Define some below." : ""}</p> : (
+            {m.metrics.length === 0 ? <Empty inline>No metrics yet.{editor ? " Define some below." : ""}</Empty> : (
               <>
                 <p className="eyebrow" style={{ marginTop: 4 }}>Metrics</p>
                 <div className="chips" data-testid="metric-chips">
@@ -91,7 +92,7 @@ export default function Metrics() {
                 )}
                 <div className="row" style={{ marginTop: 16 }}>
                   <button className="btn primary" onClick={ask} disabled={asking || picked.length === 0} data-testid="ask">{asking ? "Asking…" : "Ask"}</button>
-                  {picked.length === 0 && <span className="small muted">Pick a metric.</span>}
+                  {picked.length === 0 && <span className="field-help">Pick a metric.</span>}
                 </div>
               </>
             )}
@@ -101,7 +102,7 @@ export default function Metrics() {
           {answer?.rows && <Answer answer={answer} />}
 
           <section className="card flush">
-            <div className="card-head" style={{ padding: "16px 20px 0" }}>
+            <div className="card-head">
               <h2>The metrics</h2>
               <span className="small muted">over {m.tables.join(", ") || "no tables yet"}</span>
             </div>
@@ -122,8 +123,10 @@ export default function Metrics() {
           <section className="card">
             <div className="card-head">
               <h2>Definitions</h2>
-              <button className="linkish" onClick={() => setDefsOpen(!defsOpen)} aria-expanded={defsOpen} data-testid="definitions-toggle">{defsOpen ? "Hide" : editor ? "Edit" : "Show"}</button>
-              {(m.tests?.length ?? 0) > 0 && <button className="btn small" style={{ marginLeft: 8 }} onClick={runTests} disabled={testing} data-testid="run-tests">{testing ? "Running…" : `Run the ${m.tests!.length} tests`}</button>}
+              <div className="row">
+                {(m.tests?.length ?? 0) > 0 && <button className="btn small" onClick={runTests} disabled={testing} data-testid="run-tests">{testing ? "Running…" : `Run the ${m.tests!.length} tests`}</button>}
+                <button className="btn small" onClick={() => setDefsOpen(!defsOpen)} aria-expanded={defsOpen} data-testid="definitions-toggle">{defsOpen ? "Hide" : editor ? "Edit" : "Show"}</button>
+              </div>
             </div>
             <p className="small muted" style={{ margin: 0 }}>
               MetricFlow's YAML: semantic models over the project's tables, and the metrics made from them.{" "}
@@ -143,9 +146,9 @@ export default function Metrics() {
                 <textarea className="yaml" spellCheck={false} value={draft ?? m.yaml} readOnly={!editor} onChange={(e) => setDraft(e.target.value)} aria-label="Definitions" data-testid="semantic-yaml" />
                 <ErrorBanner error={saveError} />
                 {editor && (
-                  <div className="form-actions" style={{ margin: "12px 0 0" }}>
-                    {draft !== undefined && <button className="btn" onClick={() => setDraft(undefined)}>Discard</button>}
+                  <div className="form-actions" style={{ marginTop: 12 }}>
                     <button className="btn primary" onClick={save} disabled={saving || draft === undefined} data-testid="save-semantic">{saving ? "Checking…" : "Save"}</button>
+                    {draft !== undefined && <button className="btn" onClick={() => setDraft(undefined)}>Discard</button>}
                   </div>
                 )}
               </div>

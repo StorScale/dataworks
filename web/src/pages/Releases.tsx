@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { applyPlan, getPlans, makePlan, type Plan } from "../api";
 import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
+import { Empty, Intro } from "../components";
 
 const pill: Record<Plan["state"], string> = { fetching: "", ready: "amber", failed: "red", applied: "green" };
 
@@ -24,32 +25,30 @@ export default function Releases() {
   const r = data.release;
   return (
     <div className="page stack" data-testid="releases">
-      <p className="lead" style={{ margin: 0 }}>
+      <Intro>
         The project's spec and metrics, from its repo's <span className="mono">storscale/</span> folder: <span className="mono">project.yaml</span>,{" "}
         <span className="mono">semantic.yaml</span>, and <span className="mono">targets/{data.target}.yaml</span> for this install ({data.target}).
         Plan a tag, a branch or a commit; someone other than who planned it applies it. To roll back, plan an earlier release: the tables keep the data written since (their history reads them as they were).
-      </p>
+      </Intro>
       <div className="card small" data-testid="release">
         {r ? <>Released: <span className="mono">{r.ref}</span> ({r.commit?.slice(0, 12)}), planned by {r.by}, applied by {r.appliedBy}{" "}
           {r.appliedAt && new Date(r.appliedAt).toLocaleString()}.</> : <span className="muted">No release applied yet: the spec is as administrators last saved it.</span>}
       </div>
       {data.canPlan && (
-        <form className="row" onSubmit={(e) => { e.preventDefault(); if (ref.trim()) act("plan", () => makePlan(name, ref.trim()).then(() => setRef(""))); }}>
-          <input className="mono" placeholder="v1.3, main, or a commit" value={ref} onChange={(e) => setRef(e.target.value)} data-testid="plan-ref" aria-label="Ref to plan" />
+        <form className="fields" onSubmit={(e) => { e.preventDefault(); if (ref.trim()) act("plan", () => makePlan(name, ref.trim()).then(() => setRef(""))); }}>
+          <label>A release to plan<input className="mono" placeholder="v1.3, main, or a commit" value={ref} onChange={(e) => setRef(e.target.value)} data-testid="plan-ref" /></label>
           <button className="btn primary" disabled={!ref.trim() || busy === "plan"} data-testid="plan">{busy === "plan" ? "Planning…" : "Plan"}</button>
         </form>
       )}
       <ErrorBanner error={actionError} />
-      {data.plans.length === 0 && <p className="muted">No plans yet.</p>}
+      {data.plans.length === 0 && <Empty>No plans yet.</Empty>}
       {data.plans.map((p) => (
         <div key={p.id} className="card stack" style={{ gap: 8 }} data-testid={`plan-${p.ref}`}>
-          <div className="row">
-            <h3 style={{ margin: 0 }} className="mono">{p.ref}</h3>
-            {p.commit && <span className="mono small muted">{p.commit.slice(0, 12)}</span>}
-            <span className={`pill ${pill[p.state]}`}>{p.state === "fetching" ? "checking out…" : p.state}</span>
-            <span className="grow" />
+          <div className="card-head">
+            <h2 className="mono">{p.ref}{p.commit && <span className="mono small muted" style={{ fontWeight: 400 }}>{p.commit.slice(0, 12)}</span>}
+              <span className={`pill ${pill[p.state]}`}>{p.state === "fetching" ? "checking out…" : p.state}</span></h2>
             {p.state === "ready" && data.canApply && p.by !== user?.username && (
-              <button className="btn primary" disabled={busy === p.id} data-testid={`apply-${p.ref}`}
+              <button className="btn small primary" disabled={busy === p.id} data-testid={`apply-${p.ref}`}
                 onClick={() => act(p.id, () => applyPlan(name, p.id).then(() => reloadProject()))}>
                 {busy === p.id ? "Applying…" : "Apply"}
               </button>

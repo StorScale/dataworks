@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getTags, makeTag, removeTag } from "../api";
+import { Empty, Intro } from "../components";
 import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
 
 // Tags are moments of the project's tables kept (a month-end close, a
@@ -22,13 +23,13 @@ export default function Tags() {
   if (!data) return <div className="page"><Spinner /></div>;
   return (
     <div className="page stack" data-testid="tags">
-      <p className="lead" style={{ margin: 0 }}>
+      <Intro>
         A tag keeps every table of the project as it was at a moment, for as long as you say: a month-end close, a delivery.
         Read a table at a tag on the SQL page (As of), or from its History.
-      </p>
+      </Intro>
       <ErrorBanner error={actionError} />
-      {data.tags.length === 0 ? <p className="muted">No tags yet.</p> : (
-        <table className="t" data-testid="tag-list">
+      {data.tags.length === 0 ? <Empty>No tags yet.</Empty> : (
+        <div className="card flush scroll-x"><table className="t" data-testid="tag-list">
           <thead><tr><th>Tag</th><th>At</th><th>Kept until</th><th>Note</th><th>By</th><th></th></tr></thead>
           <tbody>
             {data.tags.map((t) => (
@@ -38,22 +39,22 @@ export default function Tags() {
                 <td className="small">{t.keepUntil}</td>
                 <td className="small">{t.note}</td>
                 <td className="small">{t.by}</td>
-                <td>{canEdit && <button className="linkish small" disabled={busy} onClick={() => act(() => removeTag(name, t.name))}>Remove</button>}</td>
+                <td>{canEdit && <button className="btn small danger" disabled={busy} onClick={() => act(() => removeTag(name, t.name))}>Remove</button>}</td>
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
       {canEdit && (
         <form className="card stack" onSubmit={(e) => { e.preventDefault(); act(() => makeTag(name, form)); }} data-testid="make-tag">
           <h2>Make a tag</h2>
-          <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>
+          <div className="fields">
             <label>Name<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="close-2026-09" required /></label>
             <label>At<input value={form.at} onChange={(e) => setForm({ ...form, at: e.target.value })} placeholder="now, 2026-09-30, a commit" /></label>
-            <label>Keep for<input value={form.keep} onChange={(e) => setForm({ ...form, keep: e.target.value })} placeholder="7y or 90d" style={{ width: 90 }} /></label>
+            <label>Keep for<input value={form.keep} onChange={(e) => setForm({ ...form, keep: e.target.value })} placeholder="7y or 90d" style={{ width: 110 }} /></label>
+            <label className="grow">Note<input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="September's close, signed off by Finance" /></label>
           </div>
-          <label>Note<input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="September's close, signed off by Finance" /></label>
-          <div><button className="btn primary" type="submit" disabled={busy || !form.name}>Make the tag</button></div>
+          <div className="form-actions"><button className="btn primary" type="submit" disabled={busy || !form.name}>Make the tag</button></div>
         </form>
       )}
     </div>

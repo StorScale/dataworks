@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { AccessPerson, getAccess, listProjects } from "../api";
 import { ErrorBanner, Phase, Spinner, usePlatform, usePoll } from "../lib";
+import { Empty } from "../components";
 
 // Admin is the platform's administration: projects, who has access, monitoring,
 // and the administrators' own tools.
@@ -38,13 +39,13 @@ export function AdminProjects() {
   return (
     <div className="page">
       <div className="page-head">
-        <p className="lead" style={{ margin: 0 }}>
+        <p className="lead">
           A project is a team's tables, files and pipelines, and who may use them. The platform applies it to Keycloak, Ranger, Buckets and Nessie, and keeps them that way.
         </p>
         <Link className="btn primary" to="/admin/projects/new" data-testid="new-project">New project</Link>
       </div>
       <ErrorBanner error={error} />
-      {!data ? <Spinner /> : data.projects.length === 0 ? <div className="empty">No projects yet.</div> : (
+      {!data ? <Spinner /> : data.projects.length === 0 ? <Empty>No projects yet.</Empty> : (
         <div className="card flush">
           <table className="t">
             <thead><tr><th>Project</th><th>Members</th><th>Has</th><th>Status</th></tr></thead>
@@ -74,7 +75,7 @@ export function AdminAccess() {
   return (
     <div className="page">
       <div className="page-head">
-        <p className="lead" style={{ margin: 0 }}>
+        <p className="lead">
           Who's in which project, and how. To change someone's access, change the project, or their groups in Keycloak.
         </p>
         <input placeholder="Find a person" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Find a person" />

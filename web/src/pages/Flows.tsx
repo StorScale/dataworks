@@ -8,6 +8,7 @@ import {
   compileFlow, getFlow, getFlowView, getFlows, getSemantic, getUploadPreview, getUploads, previewFlow, putImport, removeUpload, saveFlow, uploadFile,
   type CanvasFlow, type StepColumn, type FlowItem, type FlowPreview, type FlowProcessorDef, type FlowStep, type FlowTable, type FlowView, type SemanticMetric, type Upload, type UploadPreview,
 } from "../api";
+import { Empty, Intro } from "../components";
 import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
 import { Results } from "./Data";
 
@@ -63,25 +64,33 @@ export default function Flows() {
   const flows = list.data.flows;
   return (
     <div className="page stack" data-testid="flows">
-      <p className="lead" style={{ margin: 0 }}>
+      <Intro>
         Pipelines built on a canvas: each step a dbt model in the project's repo, previewed on a sample as you, saved as a merge request.
-      </p>
-      {list.data.why && <div className="banner" data-testid="flows-why">Flows can be built and previewed here; saving one needs the project's pipelines repo ({list.data.why}).</div>}
+      </Intro>
+      {list.data.why && <div className="banner info" data-testid="flows-why">Flows can be built and previewed here; saving one needs the project's pipelines repo ({list.data.why}).</div>}
       {canEdit && (
-        <form className="row" onSubmit={(e) => { e.preventDefault(); if (/^[a-z][a-z0-9_]{0,40}$/.test(newName)) setParams({ flow: newName, new: "1" }); }}>
-          <input placeholder="a new flow's name (weekly_revenue)" value={newName} onChange={(e) => setNewName(e.target.value)} data-testid="new-flow-name" />
-          <button className="btn primary" type="submit" disabled={!/^[a-z][a-z0-9_]{0,40}$/.test(newName)} data-testid="new-flow">New flow</button>
-          <span className="small muted">{newName && !/^[a-z][a-z0-9_]{0,40}$/.test(newName) ? "A flow's name is a dbt model's: lowercase letters, digits and underscores, starting with a letter (weekly_revenue)." : "The name becomes the dbt model, and the table it makes."}</span>
+        <form className="card stack" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); if (/^[a-z][a-z0-9_]{0,40}$/.test(newName)) setParams({ flow: newName, new: "1" }); }}>
+          <h2>Start a flow</h2>
+          <div className="fields">
+            <label>Name<input className="mono" placeholder="weekly_revenue" value={newName} onChange={(e) => setNewName(e.target.value)} data-testid="new-flow-name" /></label>
+            <button className="btn primary" type="submit" disabled={!/^[a-z][a-z0-9_]{0,40}$/.test(newName)} data-testid="new-flow">New flow</button>
+          </div>
+          <span className="field-help">{newName && !/^[a-z][a-z0-9_]{0,40}$/.test(newName) ? "A flow's name is a dbt model's: lowercase letters, digits and underscores, starting with a letter (weekly_revenue)." : "The name becomes the dbt model, and the table it makes."}</span>
         </form>
       )}
-      {flows.length === 0 && <p className="muted">No flows yet.</p>}
-      {flows.map((f: FlowItem) => (
-        <div key={f.name} className="card row" data-testid={`flow-${f.name}`}>
-          <Link to={`?flow=${f.name}`} className="mono">{f.name}</Link>
-          {f.branch && <span className="pill">on {f.branch}</span>}
-          {f.mergeRequest && <a href={f.mergeRequest} target="_blank" rel="noreferrer" className="small">merge request</a>}
+      {flows.length === 0 ? <Empty>No flows yet.</Empty> : (
+        <div className="card flush">
+          <table className="t">
+            <thead><tr><th>Flow</th><th>Branch</th><th>Review</th></tr></thead>
+            <tbody>{flows.map((f: FlowItem) => (
+              <tr key={f.name} data-testid={`flow-${f.name}`}>
+                <td><Link to={`?flow=${f.name}`} className="mono">{f.name}</Link></td>
+                <td>{f.branch ? <span className="pill">on {f.branch}</span> : <span className="muted">–</span>}</td>
+                <td>{f.mergeRequest ? <a href={f.mergeRequest} target="_blank" rel="noreferrer" className="small">merge request</a> : <span className="muted">–</span>}</td>
+              </tr>))}</tbody>
+          </table>
         </div>
-      ))}
+      )}
       <Uploads project={name} canEdit={canEdit} />
     </div>
   );
@@ -113,17 +122,16 @@ function Uploads({ project, canEdit }: { project: string; canEdit: boolean }) {
   });
   return (
     <div className="card stack" style={{ gap: 8 }} data-testid="uploads">
-      <div className="row">
-        <strong>Uploads</strong>
-        <span className="small muted">Files in the project's landing area; a CSV or Excel file imported becomes a table a flow can read.</span>
-        <span className="grow" />
+      <div className="card-head">
+        <h2>Uploads</h2>
         {canEdit && <label className="btn small">{busy ? "…" : "Upload a file"}
           <input type="file" accept=".csv,.xlsx,.xls,.jsonl,.parquet" style={{ display: "none" }} disabled={busy} data-testid="upload-file"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = ""; }} />
         </label>}
       </div>
+      <div className="small muted">Files in the project's landing area; a CSV or Excel file imported becomes a table a flow can read.</div>
       <ErrorBanner error={error ?? list.error} />
-      {list.data?.uploads.length === 0 && <p className="small muted" style={{ margin: 0 }}>No uploads yet.</p>}
+      {list.data?.uploads.length === 0 && <Empty inline>No uploads yet.</Empty>}
       {list.data?.uploads.map((u: Upload) => (
         <div key={u.name} className="row small" data-testid={`upload-${u.name}`}>
           <button className="linkish mono" onClick={() => act(async () => setShown(await getUploadPreview(project, u.name)))}>{u.name}</button>
@@ -132,7 +140,7 @@ function Uploads({ project, canEdit }: { project: string; canEdit: boolean }) {
           <span className="grow" />
           {canEdit && u.format && !tableOf(u.name) && <button className="btn small" disabled={busy} data-testid={`import-${u.name}`}
             onClick={() => { const t = prompt("The table's name (uploads_<name>):", (shown?.name === u.name && shown.table) || u.name.replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9_]+/g, "_")); if (t) importAs(u.name, t); }}>Import as a table</button>}
-          {canEdit && <button className="btn small" disabled={busy} onClick={() => { if (confirm(`Remove ${u.name}?`)) act(() => removeUpload(project, u.name)); }}>Remove</button>}
+          {canEdit && <button className="btn small danger" disabled={busy} onClick={() => { if (confirm(`Remove ${u.name}?`)) act(() => removeUpload(project, u.name)); }}>Remove</button>}
         </div>
       ))}
       {shown && (
@@ -303,9 +311,9 @@ function Canvas({ project, flowName, canEdit, noRepo, onClose }: { project: stri
   const inputColumns = (s: FlowStep) => (s.inputs ?? []).map((i) => compiled?.steps[i]?.columns ?? []);
   return (
     <div className="page stack" data-testid="canvas">
+      <div><button className="linkish small" onClick={onClose}>← Flows</button></div>
       <div className="row">
-        <button className="btn small" onClick={onClose}>← Flows</button>
-        <h2 className="mono" style={{ margin: 0 }}>{flow.name}</h2>
+        <h1 className="mono">{flow.name}</h1>
         {saved?.branch && <span className="pill">on {saved.branch}</span>}
         {saved?.mergeRequest && <a href={saved.mergeRequest} target="_blank" rel="noreferrer" className="small" data-testid="merge-request">merge request</a>}
         <span className="grow" />
@@ -316,9 +324,8 @@ function Canvas({ project, flowName, canEdit, noRepo, onClose }: { project: stri
           </select>
         )}
         {canEdit && (
-          <label className="row small" style={{ gap: 6 }}>Schedule
-            <input value={flow.schedule ?? ""} placeholder="0 6 * * 1 (UTC), or none" style={{ width: 170 }} onChange={(e) => change({ ...flow, schedule: e.target.value })} data-testid="schedule" />
-          </label>
+          <input className="mono" value={flow.schedule ?? ""} placeholder="schedule: 0 6 * * 1 (UTC)" title="Its schedule (cron, UTC), or none" aria-label="Schedule" style={{ width: 220 }}
+            onChange={(e) => change({ ...flow, schedule: e.target.value })} data-testid="schedule" />
         )}
         {canEdit && <button className="btn primary" onClick={save} disabled={saving || errors.length > 0 || steps.length === 0 || !!noRepo} data-testid="save-flow"
           title={noRepo ? `Saving needs the project's pipelines repo: ${noRepo}` : undefined}>{saving ? "Saving…" : "Save as merge request"}</button>}
@@ -489,12 +496,12 @@ function Settings({ step, steps, inputs, canEdit, update, remove, tables, metric
         <Rows items={step.on ?? []} blank={{ left: "", right: "" }} onChange={(on) => set({ on })} add="Add a pair"
           render={(p, s) => <><ColumnPick value={p.left} onChange={(left) => s({ ...p, left })} /><ColumnPick value={p.right} allow={(inputs[1] ?? []).map((c) => c.name)} onChange={(right) => s({ ...p, right })} /></>} />
       </>}
-      {step.kind === "union" && <label className="row" style={{ flexDirection: "row", gap: 8 }}><input type="checkbox" checked={!!step.distinct} disabled={ro} onChange={(e) => set({ distinct: e.target.checked })} />Drop duplicate rows (union, not union all)</label>}
+      {step.kind === "union" && <label className="check"><input type="checkbox" checked={!!step.distinct} disabled={ro} onChange={(e) => set({ distinct: e.target.checked })} />Drop duplicate rows (union, not union all)</label>}
       {step.kind === "dedupe" && <>
         <label>Same when these columns are equal (none: whole rows)<ColumnList value={step.by} add="Add a column" onChange={(by) => set({ by })} /></label>
         <span className="small muted">Keep the first by:</span>
         <Rows items={step.order ?? []} blank={{ column: "" }} onChange={(order) => set({ order })} add="Order by"
-          render={(o, s) => <><ColumnPick value={o.column} onChange={(column) => s({ ...o, column })} /><label className="row" style={{ flexDirection: "row", margin: 0 }}><input type="checkbox" checked={!!o.desc} disabled={ro} onChange={(e) => s({ ...o, desc: e.target.checked })} />desc</label></>} />
+          render={(o, s) => <><ColumnPick value={o.column} onChange={(column) => s({ ...o, column })} /><label className="check" style={{ margin: 0 }}><input type="checkbox" checked={!!o.desc} disabled={ro} onChange={(e) => s({ ...o, desc: e.target.checked })} />desc</label></>} />
       </>}
       {step.kind === "group" && <>
         <label>Group by<ColumnList value={step.by} add="Add a column" testid="group-by" onChange={(by) => set({ by })} /></label>
@@ -520,7 +527,7 @@ function Settings({ step, steps, inputs, canEdit, update, remove, tables, metric
       {step.kind === "window" && <>
         <label>Partition by<ColumnList value={step.partition} add="Add a column" onChange={(partition) => set({ partition })} /></label>
         <Rows items={step.order ?? []} blank={{ column: "" }} onChange={(order) => set({ order })} add="Order by"
-          render={(o, s) => <><ColumnPick value={o.column} onChange={(column) => s({ ...o, column })} /><label className="row" style={{ flexDirection: "row", margin: 0 }}><input type="checkbox" checked={!!o.desc} disabled={ro} onChange={(e) => s({ ...o, desc: e.target.checked })} />desc</label></>} />
+          render={(o, s) => <><ColumnPick value={o.column} onChange={(column) => s({ ...o, column })} /><label className="check" style={{ margin: 0 }}><input type="checkbox" checked={!!o.desc} disabled={ro} onChange={(e) => s({ ...o, desc: e.target.checked })} />desc</label></>} />
         <Rows items={step.windows ?? []} blank={{ function: "rank", as: "" }} onChange={(windows) => set({ windows })} add="Add a column"
           render={(w, s) => <>
             <select value={w.function} disabled={ro} onChange={(e) => s({ ...w, function: e.target.value })}>{WINDOWS.map((f) => <option key={f}>{f}</option>)}</select>

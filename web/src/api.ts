@@ -474,6 +474,11 @@ export const getModels = (name: string) =>
     "GET", `/api/projects/${encodeURIComponent(name)}/models`);
 export const approveModel = (name: string, model: string, version: string) =>
   api<{ approved: boolean; by: string; at: string }>("POST", `/api/projects/${encodeURIComponent(name)}/models/${encodeURIComponent(model)}/versions/${encodeURIComponent(version)}/approve`, {});
+// A project's scorings (R15.3): an approved model scoring a table on a schedule, with each run's drift.
+export type ScoringRun = { version: string; rows: number; drift: Record<string, number>; scoreMean?: number; at: string; run?: string };
+export type Scoring = { name: string; model: string; table: string; id: string; columns?: string[]; output: string; schedule: string;
+  drift?: number; maxRows?: number; threshold: number; dag: string; runs: ScoringRun[] };
+export const getScorings = (name: string) => api<{ scoring: Scoring[] }>("GET", `/api/projects/${encodeURIComponent(name)}/scoring`);
 // A model's card is its description in MLflow's registry, written through the project's MLflow.
 export const putModelCard = (name: string, model: string, description: string) =>
   api<unknown>("PATCH", `/mlflow/${encodeURIComponent(name)}/api/2.0/mlflow/registered-models/update`, { name: model, description });

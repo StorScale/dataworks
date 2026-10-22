@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { addConnection, changeConnection, getConnections, removeConnection, type Connection, type ConnectionKind } from "../api";
+import { Empty, Intro } from "../components";
 import { ErrorBanner, Spinner, usePoll, useProject } from "../lib";
 
 // The credentials the project's editors give the platform: kept as the
@@ -21,25 +22,24 @@ export default function Connections() {
   };
   return (
     <div className="page stack" data-testid="connections">
-      <p className="lead" style={{ margin: 0 }}>
+      <Intro actions={data.canEdit && !adding && <button className="btn primary" onClick={() => setAdding(true)} data-testid="add-connection">Add a connection</button>}>
         Credentials the project's pipelines, sources, imports and deliveries use, given to the platform once and kept as the project's own.
         The spec names them. A password, token or key is never shown again: to rotate one, paste the new value.
-      </p>
+      </Intro>
       <ErrorBanner error={actionError} />
-      {data.canEdit && !adding && <div><button className="btn primary" onClick={() => setAdding(true)} data-testid="add-connection">Add a connection</button></div>}
       {adding && <ConnectionForm project={name} kinds={data.kinds} onDone={() => { setAdding(false); reload(); }} />}
-      {data.connections.length === 0 && <p className="muted">No connections yet.</p>}
+      {data.connections.length === 0 && !adding && <Empty>No connections yet.</Empty>}
       {data.connections.map((c) => (
         <div key={c.name} className="card stack" style={{ gap: 8 }} data-testid={`connection-${c.name}`}>
-          <div className="row">
-            <h3 style={{ margin: 0 }} className="mono">{c.name}</h3>
-            <span className="pill">{kindOf(c.kind)?.label ?? "made outside the platform"}</span>
-            <span className="grow" />
+          <div className="card-head">
+            <h2 className="mono">{c.name}<span className="pill">{kindOf(c.kind)?.label ?? "made outside the platform"}</span></h2>
+            <div className="row">
             {data.canEdit && editing !== c.name && <button className="btn small" onClick={() => setEditing(c.name)}>New values</button>}
             {data.canEdit && (
-              <button className="btn small" disabled={c.usedBy.length > 0} title={c.usedBy.length ? `Used by ${c.usedBy.join(", ")}` : undefined}
+              <button className="btn small danger" disabled={c.usedBy.length > 0} title={c.usedBy.length ? `Used by ${c.usedBy.join(", ")}` : undefined}
                 onClick={() => { if (confirm(`Remove ${c.name}?`)) remove(c.name); }}>Remove</button>
             )}
+            </div>
           </div>
           <Values c={c} kind={kindOf(c.kind)} />
           <div className="small muted">
@@ -86,28 +86,28 @@ function ConnectionForm({ project, kinds, existing, onDone }: { project: string;
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
   return (
-    <form className="card stack" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); save(); }} data-testid="connection-form">
-      <div className="row">
-        {!existing && <label>Name <input className="mono" value={cname} onChange={(e) => setName(e.target.value)} data-testid="connection-name" /></label>}
+    <form className={(existing ? "subcard" : "card") + " stack"} onSubmit={(e) => { e.preventDefault(); save(); }} data-testid="connection-form">
+      {!existing && <h2>Add a connection</h2>}
+      <div className="fields">
+        {!existing && <label>Name<input className="mono" value={cname} onChange={(e) => setName(e.target.value)} data-testid="connection-name" /></label>}
         {!existing?.kind && (
-          <label>Kind <select value={kind} onChange={(e) => { setKind(e.target.value); setValues({}); }} data-testid="connection-kind">
+          <label>Kind<select value={kind} onChange={(e) => { setKind(e.target.value); setValues({}); }} data-testid="connection-kind">
             {kinds.map((x) => <option key={x.kind} value={x.kind}>{x.label}</option>)}
-          </select></label>
+          </select><span className="field-help">For {k.for}.</span></label>
         )}
-        <span className="small muted">For {k.for}.</span>
       </div>
       {k.fields.map((f) => (
-        <label key={f.key} className="stack" style={{ gap: 2 }}>
-          <span className="small">{f.label}{f.required ? " *" : ""}{f.secret && existing ? " (empty: as it is)" : ""}</span>
+        <label key={f.key}>
+          <span>{f.label}{f.required ? " *" : ""}{f.secret && existing ? " (empty: as it is)" : ""}</span>
           {f.multiline
             ? <textarea className="mono" rows={4} value={values[f.key] ?? ""} onChange={(e) => setValues({ ...values, [f.key]: e.target.value })} spellCheck={false} />
             : <input className="mono" type={f.secret ? "password" : "text"} autoComplete="off" value={values[f.key] ?? ""}
                 onChange={(e) => setValues({ ...values, [f.key]: e.target.value })} data-testid={`field-${f.key}`} />}
         </label>
       ))}
-      {k.oneOf && <div className="small muted">One of {k.oneOf.join(", ")} at least.</div>}
+      {k.oneOf && <div className="field-help">One of {k.oneOf.join(", ")} at least.</div>}
       <ErrorBanner error={err} />
-      <div className="row">
+      <div className="form-actions">
         <button className="btn primary" disabled={busy} data-testid="save-connection">{busy ? "Saving…" : existing ? "Save new values" : "Add"}</button>
         <button type="button" className="btn" onClick={onDone}>Cancel</button>
       </div>

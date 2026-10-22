@@ -247,7 +247,7 @@ Dataiku's product, as its own material lays it out in ten areas, checked item by
 | Deployment automation, dev/test/prod lifecycle | Built for projects: plan and apply with a target per install (7.4), data branches (7.3) | Models follow: a model's version in the project's spec, promoted by apply | With 15.1 |
 | Approval workflows | Built for agents, deliveries, products, project applies | 15.1 for models | Planned |
 | Model lineage | Nothing | R15.1: runs tied to the data's commit | Planned (R15.6): the model's inputs (tables, at their snapshots) in the catalog's lineage, so a model is a node like a table. |
-| Model performance monitoring, drift | Nothing | R15.3 (Evidently, Grafana) | Planned |
+| Model performance monitoring, drift | Nothing | R15.3 (PSI per input column, Grafana) | **Built** (scoring): each scoring run's drift against the version's first run, an alert past the threshold, and a metric Grafana draws. Not yet: the scores' accuracy against outcomes, when they're known. |
 | Regulatory / model documentation | Nothing | — | **Gap.** Fill: a model card per registered model (purpose, data, metrics, owner, approvals, limits), kept with the registry and shown with the product-like page (R15.5). |
 | Monitoring of models on third-party ML platforms | Nothing | — | Not to fill. |
 

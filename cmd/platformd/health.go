@@ -311,6 +311,7 @@ func (s *server) serveMetrics(ctx context.Context, addr string) {
 		if s.maintainer != nil {
 			fmt.Fprint(w, s.maintainer.metrics())
 		}
+		fmt.Fprint(w, scoringMetrics()) // each scoring's latest drift (15.1), for Grafana
 	})
 	hs := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() { <-ctx.Done(); hs.Close() }()

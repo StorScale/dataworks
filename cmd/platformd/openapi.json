@@ -2578,7 +2578,7 @@
     },
     "/api/projects/{name}/models": {
       "get": {
-        "description": "its models and experiments\n\nhandleModels are the project's registered models, their versions and approvals, and its experiments: its members.",
+        "description": "handleModels are the project's registered models, their versions and approvals, and its experiments: its members.",
         "operationId": "get_projects_name_models",
         "parameters": [
           {
@@ -3063,6 +3063,160 @@
         "summary": "Takes the repo's storscale/ folder at a plan's ref from the platform's DAG (the project's pipelines account): the spec composed for this install's target, checked, and what it would change",
         "tags": [
           "plans"
+        ]
+      }
+    },
+    "/api/projects/{name}/scoring": {
+      "get": {
+        "description": "its scorings and their recent runs\n\nhandleScorings are the project's scorings with their recent runs: its members.",
+        "operationId": "get_projects_name_scoring",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "The project's scorings with their recent runs: its members",
+        "tags": [
+          "scoring"
+        ]
+      }
+    },
+    "/api/projects/{name}/scoring/{scoring}/reference": {
+      "get": {
+        "description": "a version's drift reference\n\nhandleScoringReference is a model version's drift reference (GET; null\nwhen there's none yet), or the first run's, kept once a version (PUT: the\nproject's pipelines or editors).",
+        "operationId": "get_projects_name_scoring_scoring_reference",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scoring",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A model version's drift reference (GET; null when there's none yet), or the first run's, kept once a version (PUT: the project's pipelines or editors)",
+        "tags": [
+          "scoring"
+        ]
+      },
+      "put": {
+        "description": "the first run's, once (its pipelines)\n\nhandleScoringReference is a model version's drift reference (GET; null\nwhen there's none yet), or the first run's, kept once a version (PUT: the\nproject's pipelines or editors).",
+        "operationId": "put_projects_name_scoring_scoring_reference",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scoring",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A model version's drift reference (GET; null when there's none yet), or the first run's, kept once a version (PUT: the project's pipelines or editors)",
+        "tags": [
+          "scoring"
+        ]
+      }
+    },
+    "/api/projects/{name}/scoring/{scoring}/runs": {
+      "post": {
+        "description": "a run's drift (its pipelines)                                           // its models and experiments\n\nhandleScoringRun records a run (the project's pipelines, or an editor).",
+        "operationId": "post_projects_name_scoring_scoring_runs",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scoring",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Records a run (the project's pipelines, or an editor)",
+        "tags": [
+          "scoring"
         ]
       }
     },
@@ -3705,6 +3859,9 @@
     },
     {
       "name": "reference"
+    },
+    {
+      "name": "scoring"
     },
     {
       "name": "semantic"

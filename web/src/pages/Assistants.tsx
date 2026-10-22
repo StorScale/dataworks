@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ago, Assistant, getAssistants, putAssistant, removeAssistant, when } from "../api";
 import { ErrorBanner, Spinner, usePoll } from "../lib";
+import { Empty, Intro } from "../components";
 
 // AdminAssistants registers the assistants the company approves to use the
 // platform over MCP as the person who signs in (use case 10.4): each gets a
@@ -32,29 +33,29 @@ export default function AdminAssistants() {
   });
   return (
     <div className="page stack" data-testid="assistants">
-      <div className="page-head">
-        <p className="lead" style={{ margin: 0 }}>
+      <Intro>
           An assistant the company approves (DevAssist, say) signs people in through Keycloak and asks the platform's MCP server for the
           business terms, metrics and data products, as them: each answer is theirs to see, and the audit log names the assistant and the person.
           Claude and IDEs use the built-in client, <code>storscale-agent</code>.
-        </p>
-      </div>
-      {!data.available && <p className="muted">This install has no file store, so assistants can't be registered here.</p>}
-      <div className="card stack" style={{ gap: 8 }}>
-        <h3 style={{ margin: 0 }}>Register an assistant</h3>
-        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
-          <input placeholder="Name, as devassist" value={name} onChange={(e) => setName(e.target.value)} aria-label="Name" style={{ width: 180 }} data-testid="assistant-name" />
-          <input placeholder="What it is (optional)" value={description} onChange={(e) => setDescription(e.target.value)} aria-label="Description" style={{ width: 260 }} />
-          <input placeholder="Redirect URIs, space-separated: https://assistant.example.com/callback" value={uris} onChange={(e) => setUris(e.target.value)} aria-label="Redirect URIs" style={{ flex: 1, minWidth: 320 }} data-testid="assistant-uris" />
-          <button className="btn" onClick={register} disabled={busy || !data.available || !name.trim() || !uris.trim()} data-testid="assistant-register">Register</button>
+      </Intro>
+      {!data.available && <div className="banner warn">This install has no file store, so assistants can't be registered here.</div>}
+      <div className="card stack">
+        <h2>Register an assistant</h2>
+        <div className="fields">
+          <label>Name<input placeholder="devassist" value={name} onChange={(e) => setName(e.target.value)} style={{ width: 180 }} data-testid="assistant-name" /></label>
+          <label>What it is (optional)<input placeholder="The company's coding assistant" value={description} onChange={(e) => setDescription(e.target.value)} style={{ width: 260 }} /></label>
+          <label className="grow">Redirect URIs, space-separated<input placeholder="https://assistant.example.com/callback" value={uris} onChange={(e) => setUris(e.target.value)} style={{ minWidth: 300 }} data-testid="assistant-uris" /></label>
         </div>
-        <p className="small muted" style={{ margin: 0 }}>
+        <p className="field-help" style={{ margin: 0 }}>
           The assistant signs in with OAuth (authorization code with PKCE, a public client) and asks for the MCP server at its address below.
           Keycloak sends the person back only to a redirect URI listed here; <code>http://localhost:*</code> is for one running on the person's own machine.
         </p>
         {problem && <ErrorBanner error={problem} />}
+        <div className="form-actions">
+          <button className="btn primary" onClick={register} disabled={busy || !data.available || !name.trim() || !uris.trim()} data-testid="assistant-register">Register</button>
+        </div>
       </div>
-      {data.assistants.length === 0 ? <p className="muted">No assistant is registered yet.</p> : (
+      {data.assistants.length === 0 ? <Empty>No assistant is registered yet.</Empty> : (
         <div className="card flush scroll-x">
           <table className="t">
             <thead><tr><th>Assistant</th><th>Client ID</th><th>MCP server</th><th>Redirect URIs</th><th>Registered</th><th></th></tr></thead>
@@ -66,7 +67,7 @@ export default function AdminAssistants() {
                   <td className="mono small">{a.mcpUrl}</td>
                   <td className="mono small" style={{ overflowWrap: "anywhere" }}>{a.redirectUris.join(" ")}</td>
                   <td className="small muted">{a.addedBy} {a.addedAt && ago(when(a.addedAt))}</td>
-                  <td><button className="btn small" onClick={() => act(() => removeAssistant(a.name))} disabled={busy} data-testid={`assistant-remove-${a.name}`}>Remove</button></td>
+                  <td><button className="btn small danger" onClick={() => act(() => removeAssistant(a.name))} disabled={busy} data-testid={`assistant-remove-${a.name}`}>Remove</button></td>
                 </tr>
               ))}
             </tbody>

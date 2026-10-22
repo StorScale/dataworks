@@ -105,7 +105,7 @@ export default function Home() {
           )}
 
           <section className="card flush">
-            <div className="card-head" style={{ padding: "16px 20px 0" }}><h2>Recent pipeline runs</h2></div>
+            <div className="card-head"><h2>Recent pipeline runs</h2></div>
             {!data ? <div style={{ padding: 20 }}><Spinner /></div> : runs.length === 0 ? (
               <p className="muted" style={{ padding: "0 20px 16px" }}>No runs in your projects yet.</p>
             ) : (

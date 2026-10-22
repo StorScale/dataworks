@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { answerRequest, askForProduct, certify, getProducts, listProjects, removeConsumer, type Product } from "../api";
+import { Empty } from "../components";
 import { ErrorBanner, Spinner, usePoll } from "../lib";
 
 // Data products (use case 10.3): tables projects publish for others, with an
@@ -19,13 +20,15 @@ export default function Products() {
   const act = async (f: () => Promise<unknown>) => { setActionError(undefined); try { await f(); reload(); } catch (e) { setActionError((e as Error).message); } };
   return (
     <div className="page stack" data-testid="products">
-      <h1 style={{ margin: 0 }}>Data products</h1>
-      <p className="lead" style={{ margin: 0 }}>
+      <div>
+      <h1>Data products</h1>
+      <p className="lead">
         Tables a project publishes for others, with an owner, a version and a promise (its contract). Ask for one for a project you edit;
         once its producers approve, your project reads it in place, under their rules: no copy. Certified ones the governance group has checked.
       </p>
+      </div>
       <ErrorBanner error={actionError} />
-      {data.products.length === 0 && <p className="muted">No data products yet: a project publishes one in its spec (products).</p>}
+      {data.products.length === 0 && <Empty>No data products yet: a project publishes one in its spec (products).</Empty>}
       {data.products.map((p) => (
         <ProductCard key={p.project + "/" + p.name} p={p} open={focus === p.project + "/" + p.name} edits={edits.filter((e) => e !== p.project)}
           canCertify={data.canCertify} act={act} />
@@ -43,13 +46,14 @@ function ProductCard({ p, open, edits, canCertify, act }: {
   const asked = edits.filter((e) => !(p.consumers ?? []).includes(e));
   return (
     <div className="card stack" style={{ gap: 8, outline: open ? "2px solid var(--accent)" : undefined }} data-testid={`product-${p.project}-${p.name}`}>
-      <div className="row">
-        <h3 style={{ margin: 0 }}><span className="mono">{p.name}</span> <span className="small muted">from <Link to={`/p/${p.project}`}>{p.project}</Link></span></h3>
-        <span className={`pill ${p.certified ? "green" : ""}`}>{p.certified ? "certified" : "not certified"}</span>
-        <span className="pill">version {p.version}</span>
-        <span className="grow" />
+      <div className="card-head">
+        <h2><span className="mono">{p.name}</span><span className="small muted" style={{ fontWeight: 400 }}>from <Link to={`/p/${p.project}`}>{p.project}</Link></span>
+          <span className={`pill ${p.certified ? "green" : ""}`}>{p.certified ? "certified" : "not certified"}</span>
+          <span className="pill">version {p.version}</span></h2>
+        <div className="row">
         {asked.length > 0 && !asking && <button className="btn small" onClick={() => { setConsumer(asked[0]); setAsking(true); }} data-testid={`ask-${p.name}`}>Ask for it</button>}
         {canCertify && <button className="btn small" onClick={() => act(() => certify(p, !p.certified))}>{p.certified ? "Take certification away" : "Certify"}</button>}
+        </div>
       </div>
       {p.description && <div>{p.description}</div>}
       <div className="small">
@@ -72,7 +76,7 @@ function ProductCard({ p, open, edits, canCertify, act }: {
       )}
       {p.canApprove && p.requests.length > 0 && (
         <div className="stack" style={{ gap: 6 }} data-testid={`requests-${p.name}`}>
-          <strong className="small">Asked for</strong>
+          <span className="field-label">Asked for</span>
           {p.requests.map((q) => (
             <div key={q.consumer} className="row small">
               <span><span className="mono">{q.consumer}</span>, by {q.by}{q.why ? `: “${q.why}”` : ""}</span>
@@ -84,11 +88,15 @@ function ProductCard({ p, open, edits, canCertify, act }: {
         </div>
       )}
       {asking && (
-        <form className="row small" onSubmit={(e) => { e.preventDefault(); act(() => askForProduct(p, consumer, why)); setAsking(false); }}>
-          <label>For <select value={consumer} onChange={(e) => setConsumer(e.target.value)}>{asked.map((e) => <option key={e}>{e}</option>)}</select></label>
-          <input placeholder="What it's for" value={why} onChange={(e) => setWhy(e.target.value)} style={{ minWidth: 240 }} />
-          <button className="btn primary small">Ask</button>
-          <button type="button" className="btn small" onClick={() => setAsking(false)}>Cancel</button>
+        <form className="subcard stack" onSubmit={(e) => { e.preventDefault(); act(() => askForProduct(p, consumer, why)); setAsking(false); }}>
+          <div className="fields">
+            <label>For the project<select value={consumer} onChange={(e) => setConsumer(e.target.value)}>{asked.map((e) => <option key={e}>{e}</option>)}</select></label>
+            <label className="grow">What it's for<input value={why} onChange={(e) => setWhy(e.target.value)} placeholder="The regional forecast" /></label>
+          </div>
+          <div className="form-actions">
+            <button className="btn primary">Ask</button>
+            <button type="button" className="btn" onClick={() => setAsking(false)}>Cancel</button>
+          </div>
         </form>
       )}
     </div>

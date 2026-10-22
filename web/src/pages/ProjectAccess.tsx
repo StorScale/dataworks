@@ -13,7 +13,7 @@ export default function ProjectAccess() {
       <div className="grid main-side">
         <div className="stack">
           <section className="card flush">
-            <div className="card-head" style={{ padding: "16px 20px 0" }}>
+            <div className="card-head">
               <h2>Members</h2>
               {admin && <Link className="btn small" to="../edit" relative="path">Change members</Link>}
             </div>
@@ -41,7 +41,7 @@ export default function ProjectAccess() {
 
           {spec && (r?.rowFilters?.length || r?.masks?.length || r?.tables?.length) ? (
             <section className="card flush" data-testid="reader-limits">
-              <div className="card-head" style={{ padding: "16px 20px 0" }}><h2>What readers don't see</h2></div>
+              <div className="card-head"><h2>What readers don't see</h2></div>
               <table className="t">
                 <thead><tr><th>Table</th><th>Limit</th></tr></thead>
                 <tbody>

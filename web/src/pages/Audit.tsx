@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { AuditEvent, auditCSV, AuditFilter, getAudit, getProjectAudit } from "../api";
+import { Empty, Intro } from "../components";
 import { ErrorBanner, Spinner, usePlatform, useProject } from "../lib";
 
 // AuditLog is who did what: in the platform (a project changed, an alert
@@ -26,40 +27,39 @@ export function AuditLog({ project }: { project?: string }) {
   };
   useEffect(() => { load(applied, false); }, [project, applied]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!enabled) return <div className="page"><div className="empty">The audit log isn't set up on this install (no AUDIT_URL).</div></div>;
+  if (!enabled) return <div className="page"><Empty>The audit log isn't set up on this install (no AUDIT_URL).</Empty></div>;
   const csv = auditCSV({ ...applied, project });
   return (
     <div className="page stack" data-testid="audit">
-      <p className="lead" style={{ margin: 0 }}>
+      <Intro actions={admin && <a className="btn" href={csv} data-testid="audit-csv">Export CSV</a>}>
         {project
           ? <>Who changed this project, and every access to its tables that Trino allowed or refused, as Ranger decided it.</>
           : <>What people did in the platform, and every access Trino allowed or refused, as Ranger decided it.</>}
-      </p>
-      <form className="row" style={{ flexWrap: "wrap", gap: 8 }} onSubmit={(e) => { e.preventDefault(); setApplied({ ...filter }); }}>
-        <input placeholder="Person" value={filter.user ?? ""} onChange={(e) => setFilter({ ...filter, user: e.target.value })} style={{ width: 140 }} aria-label="Person" />
-        <input placeholder="Table, action or query" value={filter.q ?? ""} onChange={(e) => setFilter({ ...filter, q: e.target.value })} style={{ width: 220 }} aria-label="Search" />
-        <select value={filter.result ?? ""} onChange={(e) => setFilter({ ...filter, result: e.target.value as AuditFilter["result"] })} aria-label="Result">
+      </Intro>
+      <form className="fields" onSubmit={(e) => { e.preventDefault(); setApplied({ ...filter }); }}>
+        <label>Person<input placeholder="anyone" value={filter.user ?? ""} onChange={(e) => setFilter({ ...filter, user: e.target.value })} style={{ width: 140 }} /></label>
+        <label>Search<input placeholder="Table, action or query" value={filter.q ?? ""} onChange={(e) => setFilter({ ...filter, q: e.target.value })} style={{ width: 220 }} /></label>
+        <label>Result<select value={filter.result ?? ""} onChange={(e) => setFilter({ ...filter, result: e.target.value as AuditFilter["result"] })}>
           <option value="">Allowed and refused</option>
           <option value="denied">Refused only</option>
           <option value="allowed">Allowed only</option>
-        </select>
-        <select value={filter.source ?? ""} onChange={(e) => setFilter({ ...filter, source: e.target.value })} aria-label="Source">
+        </select></label>
+        <label>Source<select value={filter.source ?? ""} onChange={(e) => setFilter({ ...filter, source: e.target.value })}>
           <option value="">The platform and Trino</option>
           <option value="platform">The platform's</option>
           <option value="trino">Trino's</option>
-        </select>
-        <label className="row small" style={{ flexDirection: "row", gap: 4 }}>From
+        </select></label>
+        <label>From
           <input type="date" value={day(filter.since)} onChange={(e) => setFilter({ ...filter, since: e.target.value ? new Date(e.target.value).toISOString() : undefined })} />
         </label>
-        <label className="row small" style={{ flexDirection: "row", gap: 4 }}>to
+        <label>To
           <input type="date" value={day(filter.before, -1)} onChange={(e) => setFilter({ ...filter, before: e.target.value ? new Date(new Date(e.target.value).getTime() + 86_400_000).toISOString() : undefined })} />
         </label>
-        <button className="btn" type="submit">Show</button>
-        {admin && <a className="btn" href={csv} data-testid="audit-csv">Export CSV</a>}
+        <button className="btn primary" type="submit">Show</button>
       </form>
       <ErrorBanner error={error} />
-      {!events ? <Spinner /> : events.length === 0 ? <p className="muted">Nothing recorded that matches.</p> : (
-        <table className="t" data-testid="audit-events">
+      {!events ? <Spinner /> : events.length === 0 ? <Empty>Nothing recorded that matches.</Empty> : (
+        <div className="card flush scroll-x"><table className="t" data-testid="audit-events">
           <thead><tr><th>When</th><th>Who</th><th>What</th><th>On</th><th>Result</th></tr></thead>
           <tbody>
             {events.map((e, i) => (
@@ -76,10 +76,10 @@ export function AuditLog({ project }: { project?: string }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
       {more && events && (
-        <button className="btn" onClick={() => load({ ...applied, before: events[events.length - 1].time }, true)}>Older</button>
+        <div><button className="btn" onClick={() => load({ ...applied, before: events[events.length - 1].time }, true)}>Older</button></div>
       )}
     </div>
   );
