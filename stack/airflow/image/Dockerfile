@@ -32,7 +32,7 @@ COPY storscale_delivery_run.py /opt/deliver/storscale_delivery_run.py
 USER root
 RUN python -m venv /opt/score && chown -R airflow:0 /opt/score
 USER airflow
-RUN /opt/score/bin/pip install --no-cache-dir mlflow-skinny==3.17.2 scikit-learn==1.9.1 lightgbm==4.7.0 xgboost==3.4.1 \
+RUN /opt/score/bin/pip install --no-cache-dir mlflow-skinny==3.17.2 scikit-learn==1.9.1 skops==0.16.0 lightgbm==4.7.0 xgboost==3.4.1 \
       pandas==3.0.6 trino==0.340.0 requests==2.34.2
 COPY storscale_score_run.py /opt/score/storscale_score_run.py
 # Notebooks on a schedule (use case 7.7): papermill runs them in a virtualenv
