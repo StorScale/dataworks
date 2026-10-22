@@ -59,6 +59,7 @@ type Spec struct {
 	Knowledge   []KnowledgeBank `json:"knowledge,omitempty"` // text the project's people and agents search by meaning (12.6)
 	Tools       []ConnectorTool `json:"tools,omitempty"`     // its own tools for its agents: an API's operations, signed in by a connection (12.7)
 	Cost        *Cost           `json:"cost,omitempty"`      // what it may cost a month, by the install's rate card (13.1)
+	Apps        []App           `json:"apps,omitempty"`      // small pages of its data, shown as whoever opens them (14.1)
 }
 
 // Semantic is how the project's semantic model stands among the others'

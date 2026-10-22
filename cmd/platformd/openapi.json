@@ -1058,6 +1058,206 @@
         ]
       }
     },
+    "/api/projects/{name}/apps": {
+      "get": {
+        "description": "its apps (14.1), to its members\n\nhandleApps are the project's apps, to its members.",
+        "operationId": "get_projects_name_apps",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "The project's apps, to its members",
+        "tags": [
+          "apps"
+        ]
+      }
+    },
+    "/api/projects/{name}/apps/{app}": {
+      "delete": {
+        "description": "and take one out\n\nhandleDeleteApp takes an app out of the project: its editors.",
+        "operationId": "delete_projects_name_apps_app",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "app",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Takes an app out of the project: its editors",
+        "tags": [
+          "apps"
+        ]
+      },
+      "put": {
+        "description": "its editors make one\n\nhandlePutApp makes an app of the project's, or changes one: its editors.",
+        "operationId": "put_projects_name_apps_app",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "app",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Makes an app of the project's, or changes one: its editors",
+        "tags": [
+          "apps"
+        ]
+      }
+    },
+    "/api/projects/{name}/apps/{app}/ask": {
+      "post": {
+        "description": "a question app's answer, as whoever asks\n\nhandleAppAsk answers a question app's question: its bank searched as the\nperson, the closest passages given to the model (on the project's key,\nunder the guardrail), which answers from them alone, citing them.",
+        "operationId": "post_projects_name_apps_app_ask",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "app",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Answers a question app's question: its bank searched as the person, the closest passages given to the model (on the project's key, under the guardrail), which answers from them alone, citing them",
+        "tags": [
+          "apps"
+        ]
+      }
+    },
+    "/api/projects/{name}/apps/{app}/data": {
+      "post": {
+        "description": "an app's rows, as whoever opens it\n\nhandleAppData is an app's rows, as the person opening it, with the filters they picked.",
+        "operationId": "post_projects_name_apps_app_data",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "app",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "An app's rows, as the person opening it, with the filters they picked",
+        "tags": [
+          "apps"
+        ]
+      }
+    },
     "/api/projects/{name}/asof": {
       "get": {
         "description": "handleAsOf is the commit a moment stands for, to read the tables at.",
@@ -3342,6 +3542,9 @@
     },
     {
       "name": "alerts"
+    },
+    {
+      "name": "apps"
     },
     {
       "name": "asof"

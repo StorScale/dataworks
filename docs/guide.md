@@ -250,6 +250,7 @@ tests:
 1. Open `retail` → **Dashboards**. Superset opens in the platform, signed in as you. Under **Datasets**, find the dataset the platform made from the model `orders` of `retail`, within a minute of saving it: its dimensions as the model names them (`order__region`, `order__channel`, `orders__ordered_on`) and its metrics (`revenue`, `order_count`, `refund_count`, `customer_count`).
 2. Make a chart on it: revenue by `order__region`, bar chart. Save it to a new dashboard, "Harbor Outfitters".
 3. As **alice**, open the dashboard: EU only, because the chart's query ran as her.
+4. **Or an app, without Superset.** For the regional leads who only need the one number: `retail` → **Apps** → **Make an app**: name `revenue-by-region`, metric `revenue`, by `order__region`, as bars, with a filter on `order__region` (values `EU, US, APAC`). Open it: bars by region, the filter above them, a table view a click away. As **alice** it's on her **Home** under **Apps**, and it shows her the EU alone: an app is fetched as whoever opens it. An app can also be a table's rows, or (after Lab 18's knowledge bank) questions answered from what customers wrote, each answer with the reviews it's from.
 
 The dataset is the platform's: when the model changes, the dataset follows; charts people make on it are theirs and are never touched. A metric a dataset can't express (a ratio across models) stays the semantic layer's and the dataset's description says so.
 
@@ -667,7 +668,7 @@ storscale/
 | 3 | Four files as tables, the ERP queried in place, in an afternoon |
 | 4 | Email addresses masked for everyone but the privacy team, without a policy written |
 | 5 | A table that reports its own faults before a reader notices |
-| 6–8 | One revenue number, 22,168, in SQL, dashboards and chat, each under the asker's rules; Revenue and Customer as the company's words |
+| 6–8 | One revenue number, 22,168, in SQL, dashboards, apps and chat, each under the asker's rules; Revenue and Customer as the company's words |
 | 9–10 | Store weekend pays back 7.8 times and runs again; Enterprise outreach is cut; the answer is code, reviewed, rebuilt weekly |
 | 11 | Thirty customers to call, every Monday, from a notebook nobody runs by hand |
 | 12 | Marketing reads retail's orders in place and builds on its definitions; a broken promise alerts the publisher |

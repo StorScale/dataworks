@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **A project's apps** (14.1, R14.1, R14.5, R14.6): small pages of a project's data, declared rather than coded (`apps`): a metric (or a few, each its own chart) by a dimension, as bars, a line, one number or a table; a table's columns; or questions answered from a knowledge bank, each answer with the passages it's from. Filters the viewer picks (a dimension or column, from listed values or typed). Its editors make them on the new **Apps** tab (`PUT`/`DELETE /api/projects/{name}/apps/{app}`); its members open them, and **Home** lists every app of the person's projects. Every app's data is fetched as whoever opens it (`POST .../apps/{app}/data`, `.../ask`), so a reader under a row filter sees their rows and no others: one app for every audience. A question app searches its bank as the person and asks the model on the project's key, under the guardrail, to answer from the passages alone. The `apps` suite checks it, a reader's row filter included.
+
 ## [0.25.0] - 2026-10-22
 
 The platform from a script: its API reference, made from its routes, and the `storscale` Python package, signed in as a person or a service account; a Keycloak token now signs in on every route.

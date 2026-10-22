@@ -453,6 +453,19 @@ export const approveAgent = (name: string, agent: string) =>
   api<{ approved: boolean; by: string; clientId: string; secret?: string; mcpUrl: string }>("POST", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(agent)}/approve`, {});
 export const removeAgent = (name: string, agent: string) => api<void>("DELETE", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(agent)}`);
 
+// --- A project's apps (use case 14.1) ---------------------------------------------------
+export type AppFilter = { field: string; label?: string; values?: string[] };
+export type App = { name: string; title?: string; description?: string; kind: "metric" | "table" | "qa"; metrics?: string[]; by?: string;
+  table?: string; columns?: string[]; show?: "table" | "bar" | "line" | "number"; filters?: AppFilter[]; bank?: string; limit?: number };
+const appsPath = (name: string) => `/api/projects/${encodeURIComponent(name)}/apps`;
+export const getApps = (name: string) => api<{ apps: App[]; canEdit: boolean; banks?: string[]; hasTables: boolean; hasBudget: boolean }>("GET", appsPath(name));
+export const putApp = (name: string, a: App) => api<App>("PUT", `${appsPath(name)}/${encodeURIComponent(a.name)}`, a);
+export const deleteApp = (name: string, app: string) => api<void>("DELETE", `${appsPath(name)}/${encodeURIComponent(app)}`);
+export const appData = (name: string, app: string, filters: Record<string, string>) =>
+  api<{ columns?: string[]; rows?: unknown[][]; sql?: string }>("POST", `${appsPath(name)}/${encodeURIComponent(app)}/data`, { filters });
+export const askApp = (name: string, app: string, question: string) =>
+  api<{ answer: string; passages: KnowledgeHit[]; cost: number }>("POST", `${appsPath(name)}/${encodeURIComponent(app)}/ask`, { question });
+
 // --- Usage and cost per project (use case 13.1) ---------------------------------------
 export type UsageShare = { queries: number; cpuSeconds: number };
 export type UsageMonth = {
