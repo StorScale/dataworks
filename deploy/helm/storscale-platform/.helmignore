@@ -3,3 +3,13 @@ files/.env
 __pycache__/
 *.pyc
 .DS_Store
+# What the stack's images are built from, and Compose's own, are no part of
+# the chart: Helm keeps each release (the chart's files with it) in a Secret
+# of at most 1 MiB.
+files/compose.yaml
+files/README.md
+files/catalog/
+files/semantic/
+files/mlflow/
+files/airflow/image/
+files/jupyterhub/image/
