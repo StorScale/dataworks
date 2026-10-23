@@ -461,7 +461,7 @@ Thursday. Marketing wants the orders for its own models. Acme Outdoors, a partne
 
    Press **Publish it**. The page lists `orders`: its owner, version, contract, the term **Revenue** it holds, no consumers yet, not certified; its card has **Change** and **Remove** for retail's editors. (The same product is `retail`'s spec's `products`, which the form writes: `"products": [{"name": "orders", "table": "uploads_orders", ...}]`; a project kept as code (Lab 10) has it in its repo.) (Lab 6 shared retail's metrics, so other projects may build on them.)
 2. **A second team asks.** Make a project `marketing` (Administration → Projects → New: `analysts` as editors, tick Tables, and in the JSON box `"semantic": {"uses": ["retail"]}`). As **alice** (an editor of `marketing`), open **Data products** and press **Ask for it** on `orders`, for `marketing`, with a reason.
-3. **The publisher approves.** As **bob**, the product's card shows the request; approve it. Within a minute `marketing`'s people may read `iceberg.retail.uploads_orders` in place: as alice, on `marketing`'s SQL tab, `SELECT region, count(*) FROM iceberg.retail.uploads_orders GROUP BY 1` works, and gives EU only: retail's row filter holds for consumers too. Nothing was copied; there's one table.
+3. **The publisher approves.** As **bob**, the product's card shows the request; approve it. Within a minute `marketing`'s people may read `iceberg.retail.uploads_orders` in place: as alice, on `marketing`'s SQL tab, `SELECT region, count(*) FROM iceberg.retail.uploads_orders GROUP BY 1` works. She sees every region because she's an editor of `retail` too (Lab 9); a consumer who isn't sees what retail's readers see, the EU rows: retail's rules hold for consumers. Nothing was copied; there's one table.
 4. **On the publisher's definitions.** As alice, on `marketing` → **Metrics** → **Edit**, paste a model of marketing's own that builds on retail's:
 
    ```yaml
@@ -478,7 +478,7 @@ Thursday. Marketing wants the orders for its own models. Acme Outdoors, a partne
 7. **A promise broken.** Rename a contracted column: `ALTER TABLE uploads_orders RENAME COLUMN region TO country`. Within a minute `retail`'s Overview lists the broken contract, naming `marketing` as the consumer that depends on it; a merge request that would drop the column fails its status (Lab 10) saying the same. Rename it back.
 8. **Taking it away** is the publisher's too: remove `marketing` from the product's consumers, and its reads are refused at once. Put it back.
 
-**Check:** `marketing`'s alice reads `iceberg.retail.uploads_orders` with EU rows only, asks for `revenue_per_customer` and gets an answer, and the Data products page shows `orders` certified with `marketing` as its consumer.
+**Check:** `marketing`'s alice reads `iceberg.retail.uploads_orders` in place (every region, as retail's editor too), asks for `revenue_per_customer` and gets an answer, and the Data products page shows `orders` certified with `marketing` as its consumer.
 
 ---
 
@@ -661,12 +661,12 @@ As **bob**, on `retail`:
 
 1. Open **Data** → `uploads_orders` → **History**: every change to the table so far (the import's load, Lab 5's insert and delete, Lab 15's erasure), who made it, when, and how many rows it added or removed. Each entry has **Read it as it was**.
 2. Change the data. On the **SQL** tab, run `INSERT INTO uploads_orders VALUES (306, 7, DATE '2026-10-01', 'EU', 'web', 88.0, false, false, 'by-hand', 'by-hand-306')` (the last two are the import's own columns, Lab 5), then `UPDATE uploads_orders SET amount = 1.0 WHERE order_id = 1`. Back on **History**: two more entries, yours.
-3. On the first entry's **Read it as it was**: the SQL tab opens with the table named at that commit (`"uploads_orders#<hash>"`). `SELECT count(*), round(sum(amount), 2) FROM ...` gives the table as the import left it: 305 rows and the old amount. The same query without the suffix gives today's table: one row more than before your insert, customer 35's rows gone, and the changed amount.
+3. On the import's first load (the entry just after the table's creation, which holds no rows), **Read it as it was**: the SQL tab opens with the table named at that commit (`"uploads_orders#<hash>"`). `SELECT count(*), round(sum(amount), 2) FROM ...` gives the table as the import left it: 305 rows and the old amount. The same query without the suffix gives today's table: one row more than before your insert, customer 35's rows gone, and the changed amount.
 4. Any moment, not only a commit: on the SQL tab, type a date and time in the **As of** box under the query and press **Read the tables then** (or Enter). The query's tables are rewritten to the commit current at that moment. `now` puts them back.
 5. **A close that's kept.** On the **Tags** tab, make a tag: name `close-2026-09`, at `now`, keep for `7y`, note "September's close". The tag names a commit; the platform keeps that commit's data however old it gets, where the rest of the history is kept for the install's window (the Data page says how long). On the SQL tab, **As of** `close-2026-09` reads every table of the project as it was at the close.
 6. Reports and files that must be reproducible use the same thing: a delivery records the commit it read (Lab 14), and the catalog's lineage names the commit each run read.
 
-**Check:** `SELECT count(*) FROM uploads_orders` as of `close-2026-09` counts your inserted row (the close came after it); as of the first history entry it gives 305.
+**Check:** `SELECT count(*) FROM uploads_orders` as of `close-2026-09` counts your inserted row (the close came after it); as of the import's first load it gives 305.
 
 ---
 
