@@ -186,8 +186,12 @@ func (r Role) Has(perm string) bool {
 
 // Granted are the permissions the role gives, implied ones with them, in the platform's order.
 func (r Role) Granted() []string {
-	var out []string
-	for _, p := range Permissions {
+	out := []string{} // never null: the Roles page lists it
+	from := Permissions
+	if r.Scope == ScopePlatform {
+		from = PlatformPermissions
+	}
+	for _, p := range from {
 		if r.Has(p.Name) {
 			out = append(out, p.Name)
 		}
