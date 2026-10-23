@@ -1,6 +1,8 @@
 """S3 traffic for the monitoring example's dashboards, forever, of a bounded
 size: uploads of several sizes, downloads, listings, overwrites and deletes, requests for
-objects that don't exist, and now and then a request with bad credentials."""
+objects that don't exist, and now and then a request with bad credentials. (photos is
+versioned: its old versions expire after a day, setup/monitoring.py's rule, which is what
+keeps the overwrites bounded.)"""
 import os
 import random
 import time

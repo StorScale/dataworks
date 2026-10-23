@@ -23,7 +23,7 @@ import k8s
 import requests
 from botocore.exceptions import ClientError
 
-from lakekit import check, env, finish, s3
+from lakekit import check, env, finish, s3, s3_root
 
 
 def drive(mode):
@@ -106,12 +106,27 @@ def main():
     check("... and the platform's services, as its Health page checks them",
           len(services) > 20 and all(x["value"][1] == "1" for x in services),
           f"{sum(x['value'][1] == '1' for x in services)} of {len(services)} up")
+    # The monitoring example's sample buckets are there with its sample traffic (monitoring.sampleTraffic: Compose's, CI's).
     try:
-        s3(aws_access_key_id=env["PROMETHEUS_USER"], aws_secret_access_key=env["PROMETHEUS_SECRET"]).list_objects_v2(Bucket="photos")
+        s3_root().head_bucket(Bucket="photos")
+        sample = True
+    except ClientError:
+        sample = False
+    try:
+        s3(aws_access_key_id=env["PROMETHEUS_USER"], aws_secret_access_key=env["PROMETHEUS_SECRET"]).list_objects_v2(Bucket="photos" if sample else "storscale-platform")
         denied = "allowed"
     except ClientError as e:
         denied = e.response["Error"]["Code"]
     check("... as a metrics-only user, which can read no data", denied == "AccessDenied", f"ListObjects: {denied}")
+    rules = []
+    try:
+        if sample:
+            rules = s3_root().get_bucket_lifecycle_configuration(Bucket="photos").get("Rules", [])
+    except ClientError as e:
+        rules = [e.response["Error"]["Code"]]
+    if sample:
+        check("the sample photos' old versions expire after a day, so the traffic's overwrites stay bounded",
+              any(isinstance(r, dict) and r.get("NoncurrentVersionExpiration", {}).get("NoncurrentDays") == 1 for r in rules), rules)
 
     # 2. The alert rules.
     rules = [r for g in requests.get(f"{PROM}/rules", timeout=30).json()["data"]["groups"] for r in g["rules"]]
