@@ -331,6 +331,13 @@ export const answerRequest = (p: Product, consumer: string, approve: boolean) =>
   api<void>("POST", `${prod(p)}/requests/${encodeURIComponent(consumer)}/${approve ? "approve" : "decline"}`);
 export const removeConsumer = (p: Product, consumer: string) => api<void>("DELETE", `${prod(p)}/consumers/${encodeURIComponent(consumer)}`);
 export const certify = (p: Product, on: boolean) => api<void>(on ? "POST" : "DELETE", `${prod(p)}/certification`);
+// A project's table published as a data product, or its promise changed; or taken back (its editors who write its tables).
+export type ProductPromise = { table: string; description?: string; owner: string; version: string; terms?: string[];
+  contract?: { columns?: string[]; within?: string; checks?: boolean } };
+export const putProduct = (project: string, name: string, pr: ProductPromise) =>
+  api<Product>("PUT", `/api/projects/${encodeURIComponent(project)}/products/${encodeURIComponent(name)}`, pr);
+export const deleteProduct = (project: string, name: string) =>
+  api<void>("DELETE", `/api/projects/${encodeURIComponent(project)}/products/${encodeURIComponent(name)}`);
 
 // --- A project's connections (7.6): credentials given once, never shown again
 export type ConnectionField = { key: string; label: string; secret?: boolean; required?: boolean; multiline?: boolean };

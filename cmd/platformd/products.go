@@ -262,3 +262,72 @@ func (s *server) handleCertify(w http.ResponseWriter, r *http.Request) {
 		"project:"+p.Metadata.Name+"/product:"+pr.Name, fmt.Sprintf("version %s, table %s", pr.Version, pr.Table))
 	writeJSON(w, http.StatusOK, map[string]any{"certified": pr.Certified(), "certification": pr.Certification})
 }
+
+// handlePutProduct publishes one of the project's tables as a data product,
+// or changes its promise (those who may write its tables): its table,
+// description, owner, version, the terms it holds and its contract. Who
+// reads it and its certification stay as they were (a changed promise
+// lapses the certification, as on any save).
+func (s *server) handlePutProduct(w http.ResponseWriter, r *http.Request) {
+	sess, v := s.editorOf(w, r, project.PermWriteTables, "publish its data products")
+	if sess == nil {
+		return
+	}
+	var pr project.Product
+	dec := json.NewDecoder(io.LimitReader(r.Body, 64<<10))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&pr); err != nil {
+		s.fail(w, r, http.StatusBadRequest, "a data product, as JSON: "+err.Error())
+		return
+	}
+	pr.Name, pr.Consumers, pr.Certification = r.PathValue("product"), nil, nil
+	p := *v.Spec
+	p.Spec.Products = slices.Clone(p.Spec.Products)
+	i := slices.IndexFunc(p.Spec.Products, func(x project.Product) bool { return x.Name == pr.Name })
+	added := i < 0
+	if added {
+		p.Spec.Products = append(p.Spec.Products, pr)
+	} else {
+		p.Spec.Products[i] = pr
+	}
+	project.KeepProductState(v.Spec, &p)
+	if err := s.saveSpec(r.Context(), &p); err != nil {
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	saved := p.ProductOf(pr.Name)
+	what := map[bool]string{true: "published", false: "changed"}[added] + ": table " + pr.Table + ", version " + pr.Version
+	if !added && v.Spec.ProductOf(pr.Name).Certified() && !saved.Certified() {
+		what += "; its certification lapsed (the promise changed)"
+	}
+	s.record(r, sess.User.Username, "product.saved", "project:"+v.Name+"/product:"+pr.Name, what)
+	s.kick(r.Context(), v.Name)
+	writeJSON(w, http.StatusOK, saved)
+}
+
+// handleDeleteProduct takes a product back, once no other project reads it.
+func (s *server) handleDeleteProduct(w http.ResponseWriter, r *http.Request) {
+	sess, v := s.editorOf(w, r, project.PermWriteTables, "publish its data products")
+	if sess == nil {
+		return
+	}
+	name := r.PathValue("product")
+	pr := v.Spec.ProductOf(name)
+	if pr == nil {
+		s.fail(w, r, http.StatusNotFound, "no such data product")
+		return
+	}
+	if len(pr.Consumers) > 0 {
+		s.fail(w, r, http.StatusConflict, strings.Join(pr.Consumers, ", ")+" read it: take them off its consumers first")
+		return
+	}
+	p := *v.Spec
+	p.Spec.Products = slices.DeleteFunc(slices.Clone(p.Spec.Products), func(x project.Product) bool { return x.Name == name })
+	if err := s.saveSpec(r.Context(), &p); err != nil {
+		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	s.record(r, sess.User.Username, "product.removed", "project:"+v.Name+"/product:"+name, "")
+	s.kick(r.Context(), v.Name)
+	w.WriteHeader(http.StatusNoContent)
+}

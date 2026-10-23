@@ -85,3 +85,63 @@ func TestAProductIsAskedForApprovedAndCertified(t *testing.T) {
 		t.Errorf("removed: %d", code)
 	}
 }
+
+func TestAProjectsEditorPublishesAProduct(t *testing.T) {
+	retail, err := project.Parse([]byte(`{"metadata":{"name":"retail"},"spec":{"members":[{"user":"bob","role":"editor"},{"user":"alice","role":"reader"}],"tables":{},
+		"products":[{"name":"orders","table":"uploads_orders","owner":"bob","version":"1","consumers":["marketing"],
+		"contract":{"columns":["order_id"]},"certification":{"by":"priya","at":"2026-10-01T00:00:00Z","hash":"x"}}]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	retail.Spec.Products[0].Certification.Hash = retail.Spec.Products[0].PromiseHash()
+	st := &projectsKept{statuses: statuses{list: []*project.Status{{Name: "retail", Members: []project.Person{
+		{Username: "bob", Role: "editor"}, {Username: "alice", Role: "reader"}}}}}, specs: map[string]*project.Project{"retail": retail}}
+	hour := time.Now().Add(time.Hour)
+	s := &server{cfg: config{Groups: []string{"analysts"}, AdminGroups: []string{"engineers"}},
+		store: st, files: kept{}, now: time.Now, log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		sessions: map[string]*session{
+			"bob":   {User: user{Username: "bob", Groups: []string{"analysts"}}, Expires: hour},
+			"alice": {User: user{Username: "alice", Groups: []string{"analysts"}}, Expires: hour},
+		}}
+	h := s.routes()
+	call := func(who, method, path, body string) (int, string) {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Header.Set("X-Platform-Request", "1")
+		r.AddCookie(&http.Cookie{Name: sessionCookie, Value: who})
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code, w.Body.String()
+	}
+	const customers = `{"table":"uploads_customers","description":"Harbor's customers","owner":"bob","version":"1","terms":["customer"],
+		"contract":{"columns":["customer_id","region"],"within":"24h","checks":true}}`
+	for _, c := range []struct {
+		who, method, path, body string
+		want                    int
+	}{
+		{"alice", "PUT", "/api/projects/retail/products/customers", customers, http.StatusForbidden}, // a reader
+		{"bob", "PUT", "/api/projects/retail/products/customers", `{"table":"uploads_customers","owner":"bob"}`, http.StatusUnprocessableEntity},
+		{"bob", "PUT", "/api/projects/retail/products/customers", `{"table":"x","owner":"bob","version":"1","consumers":["eve"]}`, http.StatusOK}, // consumers forged: dropped
+		{"bob", "PUT", "/api/projects/retail/products/customers", `{"table":"x","owner":"bob","version":"1","colour":"red"}`, http.StatusBadRequest},
+		{"bob", "PUT", "/api/projects/retail/products/customers", customers, http.StatusOK},
+		{"bob", "DELETE", "/api/projects/retail/products/orders", "", http.StatusConflict}, // marketing reads it
+		{"bob", "DELETE", "/api/projects/retail/products/none", "", http.StatusNotFound},
+	} {
+		if code, body := call(c.who, c.method, c.path, c.body); code != c.want {
+			t.Errorf("%s %s %s: %d %s, want %d", c.who, c.method, c.path, code, body, c.want)
+		}
+	}
+	got := st.specs["retail"]
+	if pr := got.ProductOf("customers"); pr == nil || pr.Contract.Within != "24h" || pr.Terms[0] != "customer" || len(pr.Consumers) != 0 {
+		t.Fatalf("published: %+v", pr)
+	}
+	// A changed promise keeps who reads it, and lapses the certification.
+	if code, body := call("bob", "PUT", "/api/projects/retail/products/orders", `{"table":"uploads_orders","owner":"bob","version":"2","contract":{"columns":["order_id"]}}`); code != 200 {
+		t.Fatalf("changed: %d %s", code, body)
+	}
+	if pr := st.specs["retail"].ProductOf("orders"); pr.Version != "2" || len(pr.Consumers) != 1 || pr.Certification == nil || pr.Certified() {
+		t.Errorf("after the change: %+v %+v", pr, pr.Certification)
+	}
+	if code, _ := call("bob", "DELETE", "/api/projects/retail/products/customers", ""); code != http.StatusNoContent || st.specs["retail"].ProductOf("customers") != nil {
+		t.Errorf("taken back: %d", code)
+	}
+}

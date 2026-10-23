@@ -450,14 +450,13 @@ Thursday. Marketing wants the orders for its own models. Acme Outdoors, a partne
 
 **Value:** one team publishes a table with a promise (its columns, how fresh it stays, the checks it passes); another team reads it where it is, under the publisher's rules, with no copy to go stale, and builds its own metrics on the publisher's definitions. The governance group certifies what it has checked, and a broken promise is the publisher's alert, naming who depends on it.
 
-1. **Publish.** As **bob**, on `retail` → **Edit**, add in the JSON box:
+1. **Publish.** As **bob**, open **Data products** (the Tools menu) and press **Publish a data product** (anyone who may write a project's tables may). Fill it in:
+   - **From the project** `retail`, **Its table** `uploads_orders`, **Name** `orders`, **Version** `1`;
+   - **What it is**: "Harbor Outfitters' orders, net of test rows"; **Who answers for it**: `bob`;
+   - **The business terms it holds**: tick **Revenue** (Lab 6);
+   - **What it promises**: tick the columns `order_id`, `customer_id`, `ordered_on`, `region` and `amount`, and **Changed at least every** `24h`.
 
-   ```json
-   "products": [{"name": "orders", "table": "uploads_orders", "description": "Harbor Outfitters' orders, net of test rows", "owner": "bob", "version": "1",
-                 "terms": ["revenue"], "contract": {"columns": ["order_id", "customer_id", "ordered_on", "region", "amount"], "within": "24h"}}]
-   ```
-
-   and, so that other projects may build on retail's metrics, `"semantic": {"shared": true}`. Save. The **Data products** page (the Tools menu) lists `orders`: its owner, version, contract, the term **Revenue** it holds, no consumers yet, not certified.
+   Press **Publish it**. The page lists `orders`: its owner, version, contract, the term **Revenue** it holds, no consumers yet, not certified; its card has **Change** and **Remove** for retail's editors. (The same product is `retail`'s spec's `products`, which the form writes: `"products": [{"name": "orders", "table": "uploads_orders", ...}]`; a project kept as code (Lab 10) has it in its repo.) So that other projects may build on retail's metrics, also add `"semantic": {"shared": true}` on `retail` → **Edit**, and save.
 2. **A second team asks.** Make a project `marketing` (Administration → Projects → New: `analysts` as editors, tick Tables, and in the JSON box `"semantic": {"uses": ["retail"]}`). As **alice** (an editor of `marketing`), open **Data products** and press **Ask for it** on `orders`, for `marketing`, with a reason.
 3. **The publisher approves.** As **bob**, the product's card shows the request; approve it. Within a minute `marketing`'s people may read `iceberg.retail.uploads_orders` in place: as alice, on `marketing`'s SQL tab, `SELECT region, count(*) FROM iceberg.retail.uploads_orders GROUP BY 1` works, and gives EU only: retail's row filter holds for consumers too. Nothing was copied; there's one table.
 4. **On the publisher's definitions.** As alice, on `marketing` → **Metrics** → **Edit**, paste a model of marketing's own that builds on retail's:
@@ -472,7 +471,7 @@ Thursday. Marketing wants the orders for its own models. Acme Outdoors, a partne
 
    Save, and ask for `revenue_per_customer` by `order__region`: the answer uses retail's `revenue` and `customer_count`, not defined again here, so marketing's revenue per customer is the company's revenue divided by the company's customers. A change to retail's model that would break marketing's is refused on save, naming `marketing`.
 5. **Certify.** As **bob** (the install's certifiers are its administrators unless set otherwise), press **Certify** on the card: the product is marked certified, first in the list, and the catalog shows it as a data product with its table marked Gold. The certification records what it certified: the table, the version and the contract.
-6. **A promise changed.** Edit the product's contract (drop `amount` from its columns) and save: the certification lapses, because what was checked isn't what's promised now. Put it back and certify again.
+6. **A promise changed.** On the product's card, **Change**: untick `amount`, save. The certification lapses, because what was checked isn't what's promised now; `marketing` still reads it. Tick it back, save, and certify again. (**Remove** stays off while another project reads the product.)
 7. **A promise broken.** Rename a contracted column: `ALTER TABLE uploads_orders RENAME COLUMN region TO country`. Within a minute `retail`'s Overview lists the broken contract, naming `marketing` as the consumer that depends on it; a merge request that would drop the column fails its status (Lab 10) saying the same. Rename it back.
 8. **Taking it away** is the publisher's too: remove `marketing` from the product's consumers, and its reads are refused at once. Put it back.
 
