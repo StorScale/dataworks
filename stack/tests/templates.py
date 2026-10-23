@@ -302,6 +302,9 @@ def main():
         k8s.put_secret(SECRET, {"token": INSTALL_TOKEN})
 
     bob, alice = platform("bob"), platform("alice")
+    if NAME in (projects(bob) or {}):   # a run stopped before its end left it
+        bob.delete(f"{PLATFORM}/api/projects/{NAME}", timeout=30)
+        wait(lambda: NAME not in (projects(bob) or {}), 300)
     ready = wait(lambda: (lambda r: r.json() if r.ok and r.json().get("repos") and r.json().get("gitlab") == BASE else None)(
         bob.get(f"{PLATFORM}/api/templates", timeout=30)), 180, every=5)
     if not ready:
@@ -356,21 +359,21 @@ def main():
                              capture_output=True, text=True).stdout
         check("... its files made the project's: {project} in them is fresh, in one commit",
               f'project="{NAME}"' in dag and [c[2] for c in GitLab.commits] == [["dags/starter.py"]], GitLab.commits)
+        # 3. Day one: its pipeline, with the company's libraries.
+        p = wait(lambda: (lambda x: x if x and (x.get("status") or {}).get("phase") == "Ready" else None)((projects(alice) or {}).get(NAME)),
+                 900 if OWN else 300, every=10)
+        check("the project is ready, for alice", p is not None, ((projects(alice) or {}).get(NAME) or {}).get("status"))
         token = GitLab.tokens.get(f"{GROUP}/{NAME}")
         conns = alice.get(f"{PLATFORM}/api/projects/{NAME}/connections", timeout=30)
         repo_conn = next((c for c in (conns.json().get("connections") or []) if c["name"] == f"{NAME}-repo"), None) if conns.ok else None
-        check("... a token of the repo's own, kept as the project's connection (never shown), named in its pipelines",
+        check("its repo's own token is the project's connection (never shown), named in its pipelines",
               token and pl.get("repo") == f"{BASE}/{GROUP}/{NAME}.git" and pl.get("credentials", {}).get("secretRef") == f"{NAME}-repo"
               and repo_conn is not None and token not in made.text and token not in conns.text
               and all(a for _, _, a in GitLab.calls),
               f"connection {repo_conn and repo_conn.get('kind')}, pipelines {pl}")
 
-        # 3. Day one: its pipeline, with the company's libraries.
-        p = wait(lambda: (lambda x: x if x and (x.get("status") or {}).get("phase") == "Ready" else None)((projects(alice) or {}).get(NAME)),
-                 900 if OWN else 300, every=10)
-        check("the project is ready, for alice", p is not None, ((projects(alice) or {}).get(NAME) or {}).get("status"))
         loaded = wait(lambda: next((x for x in pipelines(alice).get("pipelines", []) if x["id"] == "starter"), None), 900, every=10)
-        clones = sorted({w for path, w in GitLab.clones if path == f"{GROUP}/{NAME}"})
+        clones = sorted({w for path, w in GitLab.clones if path == f"{GROUP}/{NAME}"} - {"none"})   # git asks first without, then with
         check("Airflow loads the new repo's pipeline, cloning it with the repo's own token", loaded is not None and clones == ["repo"],
               f"{'loaded' if loaded else 'not loaded'}; clones signed in with {clones}")
         state, log = run(alice) if loaded else ("not loaded", "")
@@ -394,7 +397,7 @@ def main():
               f"HTTP {moved.status_code}, run {state}: {rows}")
     finally:
         try:
-            sql("bob", "DROP TABLE IF EXISTS orders", "iceberg", NAME)
+            sql("alice", "DROP TABLE IF EXISTS orders", "iceberg", NAME)   # bob isn't one of fresh's
         except Exception as e:  # noqa: BLE001
             print(f"  (dropping orders: {e})")
         bob.delete(f"{PLATFORM}/api/projects/{NAME}", timeout=30)

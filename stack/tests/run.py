@@ -25,11 +25,13 @@ SUITES = CHAIN + OWN
 FRESH_TABLES = {"superset", "airflow"}
 # Run only when named, in this order, around storscale backup and restore (restore.py).
 ON_REQUEST = ["restore_mark", "restore_damage", "restore_check"]
+# Run only when named, and leave what they make: the lab guide, against an install (guide.py).
+BY_NAME = ["guide"]
 
 wanted = sys.argv[1:] or SUITES
-unknown = set(wanted) - set(SUITES) - set(ON_REQUEST)
+unknown = set(wanted) - set(SUITES) - set(ON_REQUEST) - set(BY_NAME)
 if unknown:
-    sys.exit(f"unknown suites: {', '.join(sorted(unknown))}; the suites are {', '.join(SUITES + ON_REQUEST)}")
+    sys.exit(f"unknown suites: {', '.join(sorted(unknown))}; the suites are {', '.join(SUITES + ON_REQUEST + BY_NAME)}")
 
 results = {}
 printing = threading.Lock()
@@ -53,7 +55,7 @@ def run_suite(suite, capture):
     results[suite] = (code == 0, time.time() - started)
 
 
-chain = [s for s in CHAIN + ON_REQUEST if s in wanted]
+chain = [s for s in CHAIN + ON_REQUEST + BY_NAME if s in wanted]
 own = [s for s in OWN if s in wanted]
 alongside = None
 
@@ -78,7 +80,7 @@ if alongside:
     alongside.join()
 
 print("\n=== summary")
-for suite in [s for s in SUITES + ON_REQUEST if s in results]:
+for suite in [s for s in SUITES + ON_REQUEST + BY_NAME if s in results]:
     ok, took = results[suite]
     print(f"{'ok  ' if ok else 'FAIL'} {suite}  ({took:.0f}s)")
 failed = [s for s in results if not results[s][0]]

@@ -22,6 +22,9 @@ type Assistant struct {
 // NameOK says whether a name is one the platform gives things (a project's, an assistant's).
 func NameOK(s string) bool { return nameRE.MatchString(s) }
 
+// IdentifierOK says whether a string is a table's, a column's or a tag's name: lowercase letters, digits and underscores.
+func IdentifierOK(s string) bool { return identifierRE.MatchString(s) }
+
 // ClientID is the assistant's Keycloak client: what Ranger's audit and the
 // platform's name as the agent.
 func (a Assistant) ClientID() string { return "assistant-" + a.Name }

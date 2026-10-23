@@ -44,6 +44,13 @@ func (s *server) handlePutImport(w http.ResponseWriter, r *http.Request) {
 	p.Spec.Imports = slices.Clone(p.Spec.Imports)
 	i := slices.IndexFunc(p.Spec.Imports, func(x project.Import) bool { return x.Name == im.Name })
 	added := i < 0
+	// An import runs as the project's pipelines (they read its landing area
+	// and write its tables): a project without them gets them, as the shared
+	// Airflow's, rather than an import that's refused when it runs.
+	gavePipelines := p.Spec.Pipelines == nil
+	if gavePipelines {
+		p.Spec.Pipelines = &project.Pipelines{ServiceAccount: "airflow-pipelines"}
+	}
 	if added {
 		p.Spec.Imports = append(p.Spec.Imports, im)
 	} else {
@@ -54,6 +61,9 @@ func (s *server) handlePutImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	what := map[bool]string{true: "added", false: "changed"}[added] + ": " + im.Source
+	if gavePipelines {
+		what += "; the project runs pipelines now (airflow-pipelines), as imports need"
+	}
 	if sf := im.Salesforce; sf != nil {
 		what += " (" + strings.Join(sf.Objects, ", ") + ")"
 	}

@@ -50,6 +50,9 @@ func TestEditorsAddAConnectorsImport(t *testing.T) {
 			t.Errorf("%s %s: %d %s, want %d", c.who, c.body, code, body, c.want)
 		}
 	}
+	if pl := st.specs["sales"].Spec.Pipelines; pl == nil || pl.ServiceAccount != "airflow-pipelines" {
+		t.Errorf("an import runs as the project's pipelines, which it gets: %+v", pl)
+	}
 	got := st.specs["sales"].Spec.Imports
 	if len(got) != 1 || got[0].Name != "crm" || got[0].Salesforce == nil || len(got[0].Salesforce.Objects) != 2 {
 		t.Fatalf("saved: %+v", got)

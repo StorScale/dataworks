@@ -952,6 +952,16 @@ type RangerMask struct {
 func maskInfo(maskType, colType string) *RangerMask {
 	switch maskType {
 	case "MASK_HASH":
+		// A number hashed stays a number of its type, so the masked column
+		// keeps its nulls, its duplicates and its joins (a customer_id hashed
+		// the same in two tables still joins), and the catalog's checks on it
+		// (not null, unique, references) still answer truly; its values don't show.
+		switch strings.ToLower(colType) {
+		case "bigint":
+			return &RangerMask{DataMaskType: "CUSTOM", ValueExpr: "from_big_endian_64(substr(sha256(to_utf8(cast({col} as varchar))), 1, 8))"}
+		case "integer", "int":
+			return &RangerMask{DataMaskType: "CUSTOM", ValueExpr: "from_big_endian_32(substr(sha256(to_utf8(cast({col} as varchar))), 1, 4))"}
+		}
 		if !textType(colType) {
 			return &RangerMask{DataMaskType: "MASK_NULL"}
 		}
