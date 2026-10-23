@@ -3202,6 +3202,86 @@
         ]
       }
     },
+    "/api/projects/{name}/products/{product}": {
+      "delete": {
+        "description": "... or taken back, once no project reads it\n\nhandleDeleteProduct takes a product back, once no other project reads it.",
+        "operationId": "delete_projects_name_products_product",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "product",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Takes a product back, once no other project reads it",
+        "tags": [
+          "products"
+        ]
+      },
+      "put": {
+        "description": "a table published as a data product, or its promise changed\n\nhandlePutProduct publishes one of the project's tables as a data product,\nor changes its promise (those who may write its tables): its table,\ndescription, owner, version, the terms it holds and its contract. Who\nreads it and its certification stay as they were (a changed promise\nlapses the certification, as on any save).",
+        "operationId": "put_projects_name_products_product",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "product",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Publishes one of the project's tables as a data product, or changes its promise (those who may write its tables): its table, description, owner, version, the terms it holds and its contract",
+        "tags": [
+          "products"
+        ]
+      }
+    },
     "/api/projects/{name}/scoring": {
       "get": {
         "description": "its scorings and their recent runs\n\nhandleScorings are the project's scorings with their recent runs: its members.",

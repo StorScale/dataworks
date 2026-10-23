@@ -208,6 +208,8 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/assistants", s.handleAssistants)
 	mux.HandleFunc("PUT /api/assistants/{name}", s.handlePutAssistant)
 	mux.HandleFunc("DELETE /api/assistants/{name}", s.handleDeleteAssistant)
+	mux.HandleFunc("PUT /api/projects/{name}/products/{product}", s.handlePutProduct)       // a table published as a data product, or its promise changed
+	mux.HandleFunc("DELETE /api/projects/{name}/products/{product}", s.handleDeleteProduct) // ... or taken back, once no project reads it
 	mux.HandleFunc("POST /api/products/{project}/{product}/requests", s.handleRequestProduct)
 	mux.HandleFunc("POST /api/products/{project}/{product}/requests/{consumer}/{answer}", s.handleAnswerRequest)
 	mux.HandleFunc("DELETE /api/products/{project}/{product}/consumers/{consumer}", s.handleRemoveConsumer)
