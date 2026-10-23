@@ -35,6 +35,7 @@ spec:
           {{- include "storscale.envFrom" $root | nindent 10 }}
           env:
             - {name: STORSCALE_REVISION, value: {{ $root.Release.Revision | quote }}}
+            - {name: STORSCALE_SAMPLE_TRAFFIC, value: {{ $root.Values.monitoring.sampleTraffic | quote }}}   # the monitoring example's sample buckets
             {{- include "storscale.ca.env" $root | nindent 12 }}
           volumeMounts:
             - {name: files-tools, mountPath: /tools}

@@ -494,6 +494,10 @@ services:
   setup:
     <<: *tools
     command: ["python", "-u", "/tools/setup/run.py", "base"]
+    environment:
+      <<: *urls
+      PYTHONPATH: /tools
+      STORSCALE_SAMPLE_TRAFFIC: "true"   # the monitoring example's sample buckets, for the traffic below
     volumes:
       - ./tools:/tools:ro
       - ./projects:/projects:ro

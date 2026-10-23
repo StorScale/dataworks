@@ -9,7 +9,11 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 - **What a model learned from, in the catalog** (15.1, R15.6): `buckets_lake.sql()` learns the tables each query read (Trino's `EXPLAIN (TYPE IO)`), and tags the MLflow run with them (`lake.tables`: those read before it started, and during it); the catalog draws each from the table, at its Iceberg snapshot when the run started, to the model ("trained on"), beside its scorings' tables.
 
 ### Changed
+- **The dashboards' sample traffic is optional, and off**: the generator the monitoring example runs (overwrites, downloads and failed requests in sample buckets of its own, `photos`, `logs` and `backups`) is the chart's `monitoring.sampleTraffic`, off by default: an install's dashboards show its own traffic. Compose and CI keep it on (`deploy/kind/sample.yaml`). An install that had it keeps its sample buckets until someone removes them. **Upgrading:** the `traffic` deployment goes; to keep it, `--set monitoring.sampleTraffic=true`.
 - **The models' templates run on a schedule too**: Airflow's environment for scheduled notebooks has the notebook image's model libraries (scikit-learn, statsmodels, LightGBM, XGBoost, FLAML, MLflow's client, skops), each template's project is a parameter (`STORSCALE_PROJECT` when scheduled), and the platform's SQL route lets a project's pipelines and agents in, as members, for `buckets_lake.sql()`.
+
+### Fixed
+- **The sample traffic filled Buckets**: it overwrites sample photos for ever in a versioned bucket with no rule for old versions, so every install's `photos` grew without bound (one filled its drives, 40 GiB, in ten days, with 90,000 old versions of 60 photos). Setup now expires the photos' old versions after a day, on every install that has the bucket, and the `monitoring` suite checks the rule. To free the space at once on an install that's filling: `mc rm --recursive --versions --non-current --force <alias>/photos` (only the old versions; the bucket's 60 photos stay).
 
 ## [0.28.0] - 2026-10-22
 

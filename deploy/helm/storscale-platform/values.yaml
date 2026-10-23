@@ -240,6 +240,13 @@ install:
 
 # Projects' sources copied into their tables by change capture (use case 8.1):
 # a pod per copying source, which the operator makes.
+# Sample S3 traffic for the storage dashboards (the monitoring example's): a
+# generator overwriting sample objects in buckets of its own (photos, logs,
+# backups) for ever. For a fresh install with nothing else to show, and CI;
+# off, the dashboards show the platform's own traffic.
+monitoring:
+  sampleTraffic: false
+
 # A project's models answering as an API (serving, use case 15.1): each a
 # server of its own, with this much memory when its serving names none.
 serving:

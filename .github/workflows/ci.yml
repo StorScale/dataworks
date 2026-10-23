@@ -112,7 +112,7 @@ jobs:
             files: {}
             limits: {queries: 3, storage: 5Gi}
           YAML
-      - run: bin/storscale upgrade --k8s --dir stack --yes
+      - run: bin/storscale upgrade --k8s --dir stack --yes --set monitoring.sampleTraffic=true   # the dashboards' sample traffic, for the monitoring checks
       - name: The project kept every setting
         run: |
           p() { kubectl --context kind-storscale -n storscale get project upgrade-check -o jsonpath="$1"; }
@@ -148,7 +148,7 @@ jobs:
     timeout-minutes: 150
     env:
       STORSCALE_DOMAIN: storscale.test   # not .localhost: libcurl takes those for loopback
-      STORSCALE_K8S_VALUES: deploy/kind/https.yaml deploy/kind/ha.yaml deploy/kind/copies.yaml   # HTTPS, two of the services people notice, change capture
+      STORSCALE_K8S_VALUES: deploy/kind/https.yaml deploy/kind/ha.yaml deploy/kind/copies.yaml deploy/kind/sample.yaml   # HTTPS, two of the services people notice, change capture, the dashboards' sample traffic
       KUBECTL_CONTEXT: kind-storscale
     steps:
       - uses: actions/checkout@v4

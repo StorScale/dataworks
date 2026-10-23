@@ -1,0 +1,4 @@
+# The monitoring example's sample S3 traffic, for a fresh cluster's storage
+# dashboards to have something to show (CI's monitoring checks).
+monitoring:
+  sampleTraffic: true

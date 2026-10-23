@@ -121,8 +121,10 @@ spec:
   selector: {{- include "storscale.selector" (list .Release.Name "grafana") | nindent 4 }}
   ports:
     - {name: http, port: 3000, targetPort: http}
+{{- if .Values.monitoring.sampleTraffic }}
 ---
-# A little S3 traffic, so the storage dashboards have something to show.
+# A little S3 traffic, so the storage dashboards have something to show
+# (monitoring.sampleTraffic: a fresh install's, and CI's).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -152,3 +154,4 @@ spec:
           {{- include "storscale.resources" (list "10m" "48Mi" "256Mi") | nindent 10 }}
       volumes:
         {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 8 }}
+{{- end }}
