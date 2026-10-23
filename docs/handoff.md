@@ -8,7 +8,7 @@ the target cluster. Read this, then [plan.md](plan.md) and the
 
 - **Release 0.29.0** is phases 0–5 of the plan (the platform, its web app, projects, the
   catalog, the semantic layer with MCP for agents, and the Helm chart), ready for a real
-  cluster: behind an ingress that ends TLS, with a private CA, on Buckets 1.19.0. It adds
+  cluster: behind an ingress that ends TLS, with a private CA, on Buckets 1.20.4. It adds
   phase 7's first part: each project's pipelines from its own git repo, in an Airflow of
   its own on Kubernetes (plan, "Phase 7: pipelines from git, how"), and from phase 6 Keycloak on its own database, limits per project, the platform's health with
   alerts to its administrators and to each project, `storscale upgrade`, table maintenance
@@ -247,7 +247,7 @@ Items 1 and 2 work on one; 3 to 6 are still to do.
 ## Related repositories
 
 - **[StorScale/buckets](https://github.com/StorScale/buckets):** the storage. The platform
-  pins 1.19.0: bucketsd in `upstream.bucketsd` and `stack/.env`, and the operator chart in
+  pins 1.20.4: bucketsd in `upstream.bucketsd` and `stack/.env`, and the operator chart in
   `Chart.yaml` (then `helm dependency update`). Run the suites after moving it.
 - **[StorScale/buckets-website](https://github.com/StorScale/buckets-website):**
   storscale.io. `deploy/deploy.sh` builds from the Buckets checkout beside it (or

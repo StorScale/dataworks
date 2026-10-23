@@ -1,9 +1,9 @@
 dependencies:
 - name: buckets-operator
   repository: oci://ghcr.io/storscale/charts
-  version: 1.19.0
+  version: 1.20.4
 - name: spark-operator
   repository: https://kubeflow.github.io/spark-operator
   version: 2.5.2
-digest: sha256:500a94b69cdbc4a8725aa3db5632c56172d10269d4456b52a7cf7320e8ef9705
-generated: "2026-10-12T07:39:13.912514309-05:00"
+digest: sha256:86df882e698ce71fa1e62ad7cbb019e424982adfc7bbd8e98f75ef7fe31fd73f
+generated: "2026-10-23T09:10:29.467459742-05:00"
