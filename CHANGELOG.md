@@ -5,6 +5,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 ## [Unreleased]
 
 ### Fixed
+- **The chart installs again:** Helm keeps each release, the chart's files with it, in a Secret of at most 1 MiB, and the chart had grown past it (`create: failed to create: Secret "sh.helm.release.v1.storscale.v1" is invalid: data: Too long`). What the images are built from (Airflow's and JupyterHub's `image/`, the catalog's and semanticd's code) and Compose's own files are no longer in it: about a fifth smaller.
 - **The Roles page renders again:** a platform role's permissions came back as null (only a project's were listed), and the page failed on it; each platform role now lists its own.
 
 ### Added
