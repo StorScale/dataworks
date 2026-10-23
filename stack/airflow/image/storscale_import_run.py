@@ -158,5 +158,19 @@ pipeline = dlt.pipeline(pipeline_name=f"import_{project.replace('-', '_')}_{name
                         dataset_name=namespace, pipelines_dir="/tmp/storscale-imports")
 # A reset: the resources' tables and dlt's state of them dropped first, so all is copied again.
 refresh = "drop_sources" if os.environ.get("STORSCALE_IMPORT_RESET") == "1" else None
+if refresh:
+    # dlt's own drop empties an Iceberg table but keeps it, and its columns'
+    # types with it (Iceberg won't make a text column a date): the import's
+    # tables (<import>_<resource>) are dropped from the catalog, so they're made afresh.
+    from pyiceberg.catalog import load_catalog
+    from pyiceberg.exceptions import NoSuchNamespaceError
+    catalog = load_catalog("default")
+    try:
+        mine = [t for t in catalog.list_tables(namespace) if t[-1].startswith(f"{name}_")]
+    except NoSuchNamespaceError:
+        mine = []
+    for t in mine:
+        catalog.drop_table(t)
+        print(f"reset: dropped {'.'.join(t)}")
 info = pipeline.run(sources, table_format="iceberg", refresh=refresh)
 print(info)
