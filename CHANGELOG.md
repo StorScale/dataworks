@@ -4,6 +4,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-10-23
+
+Platform roles: finance, the governance group and the data-protection approvers become platform roles, and an administrator defines more, given to Keycloak groups; a data product's consumers' custom roles read it; and Buckets 1.20.4, which removes an object's many versions in minutes, not days.
+
+**Upgrading from 0.29.0:** `storscale upgrade --context <cluster> --version 0.30.0`, after a `--dry-run`. The settings' groups (`USAGE_VIEWER_GROUPS`, `PRODUCT_CERTIFIER_GROUPS`, `DELIVERY_APPROVER_GROUPS`) become the built-in platform roles, so nothing changes for anyone. Buckets goes from 1.19.0 to 1.20.4: its servers restart one after another (a single server: a brief outage of S3). Nothing else to set.
+
 ### Added
 - **Platform roles** (16.1, R16.2): an administrator gives a platform role to Keycloak groups on the Roles page (**Define a platform role**), from four platform permissions: see-all-usage (every project's usage and cost), see-governance (the Governance page), certify-products, and protect-personal (approve deliveries of personal columns, search what was sent about a person, record erasures). Finance, the governance group and the data-protection approvers are the install's own platform roles, made from its settings (`USAGE_VIEWER_GROUPS`, `PRODUCT_CERTIFIER_GROUPS`, `DELIVERY_APPROVER_GROUPS`) as before, so an upgrade changes nothing; administrators have every permission. A change reaches its groups within half a minute and is in the audit log, with the groups. A project can't give a platform role. The `roles` suite checks it.
 - **A data product's consumers' custom roles read it** (16.1, R16.3): a consuming project's custom roles that read are named in the producer's policies for the product, under its readers' rules, as the consumer's readers and editors are; a change to them reaches the producer at once.
