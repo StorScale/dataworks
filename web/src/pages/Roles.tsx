@@ -30,19 +30,19 @@ export default function AdminRoles() {
         {data.canEdit && !r.builtIn && (
           <div className="row">
             <button className="btn small" onClick={() => setEditing(r)}>Change</button>
-            <button className="btn small danger" disabled={r.projects.length > 0} title={r.projects.length ? `Given in ${r.projects.join(", ")}` : undefined}
+            <button className="btn small danger" disabled={(r.projects ?? []).length > 0} title={(r.projects ?? []).length ? `Given in ${(r.projects ?? []).join(", ")}` : undefined}
               onClick={() => remove(r)}>Remove</button>
           </div>
         )}
       </div>
       {r.description && <div className="small">{r.description}</div>}
       <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
-        {r.granted.map((p) => <li key={p}>{says(p)}{!r.permissions.includes(p) && <span className="muted"> (comes with another)</span>}</li>)}
+        {(r.granted ?? r.permissions ?? []).map((p) => <li key={p}>{says(p)}{!(r.permissions ?? []).includes(p) && <span className="muted"> (comes with another)</span>}</li>)}
       </ul>
       <div className="small muted">
         {r.scope === "platform"
           ? <>Given to the Keycloak groups <span className="mono">{(r.groups ?? []).join(", ") || "none"}</span>{r.builtIn ? " (the install's settings)" : ""}.</>
-          : r.projects.length ? `Given in ${r.projects.join(", ")}.` : "No project gives it."}
+          : (r.projects ?? []).length ? `Given in ${(r.projects ?? []).join(", ")}.` : "No project gives it."}
         {r.changedBy && ` Changed by ${r.changedBy}${r.changedAt ? ", " + new Date(r.changedAt).toLocaleString() : ""}.`}
       </div>
     </div>

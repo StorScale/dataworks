@@ -130,3 +130,13 @@ func TestConsumersRolesReadProducts(t *testing.T) {
 		t.Error("a consumer's reading role changed is a project to apply again")
 	}
 }
+
+func TestAPlatformRoleGrantsItsPermissions(t *testing.T) {
+	r := Role{Name: "finance", Scope: ScopePlatform, Permissions: []string{PermCertify, PermSeeAllUsage}}
+	if got := r.Granted(); len(got) != 2 || got[0] != PermSeeAllUsage || got[1] != PermCertify {
+		t.Errorf("granted: %v", got)
+	}
+	if got := (Role{Name: "empty"}).Granted(); got == nil {
+		t.Error("granted nothing is an empty list, not null")
+	}
+}
