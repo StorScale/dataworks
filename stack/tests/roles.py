@@ -40,7 +40,7 @@ ORDERS = [(1, "EU", "4111111111111111"), (2, "US", "5500000000000004"), (3, "EU"
 def reads(user):
     """What a person reads of orders: its rows' ids and their cards, or Trino's refusal."""
     try:
-        return sorted(sql(user, "SELECT id, card FROM orders", "iceberg", NAME))
+        return sorted(tuple(row) for row in sql(user, "SELECT id, card FROM orders", "iceberg", NAME))
     except Exception as e:  # noqa: BLE001
         return str(e).splitlines()[0][:120]
 

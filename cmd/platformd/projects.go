@@ -160,6 +160,22 @@ func (s *server) handlePutProject(w http.ResponseWriter, r *http.Request) {
 	if err == nil && p.Metadata.Name != r.PathValue("name") {
 		err = errorString("the project's name must be " + r.PathValue("name"))
 	}
+	if err == nil { // a role given must be defined first (16.1): it would give nothing
+		defs, derr := s.roleDefs(r.Context())
+		if derr != nil {
+			s.fail(w, r, http.StatusBadGateway, "the roles' file: "+derr.Error())
+			return
+		}
+		var undefined []string
+		for _, name := range p.CustomRoles() {
+			if _, ok := defs[name]; !ok {
+				undefined = append(undefined, name)
+			}
+		}
+		if len(undefined) > 0 {
+			err = errorString("role " + strings.Join(undefined, ", ") + ": reader, editor, or a role defined on Administration → Roles (none is called that)")
+		}
+	}
 	if err != nil {
 		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 		return
