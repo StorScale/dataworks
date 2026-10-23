@@ -53,7 +53,8 @@ def make(pi):
             if im["source"] == "files":
                 # The project's landing area is read as the pipelines (their Keycloak
                 # client, exchanged with Buckets' STS for credentials by the runner).
-                k = BaseHook.get_connection("keycloak_pipelines")
+                # A project with an Airflow of its own: its own pipelines' account (pi["identity"]).
+                k = BaseHook.get_connection(pi.get("identity") or "keycloak_pipelines")
                 scheme = (k.extra_dejson or {}).get("scheme", "http")
                 host = f"{k.host}:{k.port}" if k.port else k.host
                 env["STORSCALE_IMPORT_IDENTITY"] = json.dumps({

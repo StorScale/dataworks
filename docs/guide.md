@@ -4,7 +4,7 @@ One company's quarter, told in 22 labs: Harbor Outfitters starts with four sprea
 
 **What you need.** The platform running: on your machine, `storscale up`, then `http://storscale.localhost:8800` (the [README](../README.md) says how); or your company's install, at its own address. Three people exist in the example sign-in: **alice**, an analyst; **bob**, an engineer, who also administers the platform; and **carol**, who has no access. Their password is `LAKEHOUSE_USER_PASSWORD` in `stack/.env` on a local install. Two browser windows, or one normal and one private, make switching between alice and bob easy. Labs 10, 11, 17, 18 and 20 need a GitLab repo the platform can reach (Lab 10 says how); the rest need nothing but the platform.
 
-**The company.** Harbor Outfitters sells outdoor gear in three regions through its web shop, its stores and partners, and runs marketing campaigns. Its data, five CSV files in [`docs/lab/data/`](lab/data/) (made by [`make_data.py`](lab/make_data.py), so the numbers below hold):
+**The company.** Harbor Outfitters sells outdoor gear in three regions through its web shop, its stores and partners, and runs marketing campaigns. Its data, five CSV files and two pages in [`docs/lab/data/`](lab/data/) (made by [`make_data.py`](lab/make_data.py), so the numbers below hold):
 
 | File | What | Rows |
 |---|---|---|
@@ -13,6 +13,7 @@ One company's quarter, told in 22 labs: Harbor Outfitters starts with four sprea
 | `campaigns.csv` | Six marketing campaigns with budgets | 6 |
 | `campaign_responses.csv` | Who responded to which campaign, and whether they converted | 180 |
 | `reviews.csv` | What customers wrote about what they bought, with stars; three sign off with an email address | 90 |
+| `care.md`, `returns.html` | Two of the company's pages, the care guide and the returns page, for Lab 18's knowledge bank of files | |
 
 **The quarter.** In the first week of October the CEO asks three questions: what was revenue by region, which campaigns paid for themselves and should run again, and which customers are worth a call before the holidays. Finance, marketing and the web team each answer the first one with a different number. The privacy officer has a fourth question nobody can answer: where is the customers' personal data, who can see it, and what was sent to partners about a customer who has just asked to be forgotten. The labs are the quarter in which the platform answers all four, and what each answer was worth.
 
@@ -232,16 +233,16 @@ tests:
 ```
 
 1. Save. The platform compiled it with MetricFlow before saving; a mistake is refused with the reason. The page lists the metrics and their dimensions.
-2. Ask: pick `revenue` and `order_count`, group by `order__region`, press **Ask**. As bob: US about 11,341, EU about 7,263, APAC about 3,564; 287 orders in all. That's Finance's 22,168, and now everyone's. As **alice**, the same question gives EU only: the question runs as the person asking, under her rule.
+2. Ask: pick `revenue` and `order_count`, group by `order__region`, press **Ask**. As bob: US about 11,341, EU about 7,263, APAC about 3,564; 300 orders in all (refunded ones included: `order_count` counts every real order). That's Finance's 22,168, and now everyone's. As **alice**, the same question gives EU only: the question runs as the person asking, under her rule.
 3. Press **Run the 2 tests**: both pass. (A test may also be a question in words, `question: What was turnover by region?` with the call it should become, `metrics: [revenue]` and `group_by: [order__region]`: once the project has an LLM budget (Lab 16), the model is asked through the gateway and its call compared, so a renamed metric or a lost synonym fails before anyone asks it for real.) (As alice they'd fail on `three_regions`: she sees one region. Tests are run by the owner, and in a merge request's review, Lab 10.)
 4. Change the definition of `amount_sum` to `amount * 0.9` and save: the next answer follows. Put it back.
-5. Open **Tools → Business terms**: **Revenue** and **Customer** are the company's words now, each with its owner, its definition and synonyms, the metrics and tables behind it, and the projects that use it. Search for "turnover" from the top bar: it finds Revenue. The catalog's glossary has the same terms, kept in step.
+5. **Share them.** On `retail` → **Edit**, add `"semantic": {"shared": true}` to the spec and save: retail's metrics and terms are the company's now, for every project to build on (Lab 12) and every assistant to answer from (Lab 8). Open **Tools → Business terms**: **Revenue** and **Customer** are there, each with its owner, its definition and synonyms, the metrics and tables behind it, and the projects that use it. Search for "turnover" from the top bar: it finds Revenue. The catalog's glossary has the same terms, kept in step.
 6. **A new term.** Marketing keeps saying "basket size" and meaning revenue per order. Make it a word of the company's: on **Metrics** → **Edit**, add to the `terms:` document
 
    ```yaml
      - name: average_order_value
        owner: bob
-       definition: Revenue per real order, in US dollars: what a customer spends on one order, on average.
+       definition: "Revenue per real order, in US dollars: what a customer spends on one order, on average."
        synonyms: [basket size, AOV]
    ```
 
@@ -307,7 +308,7 @@ First, as **bob**, on `retail` → **Edit**, add a member: the user `alice`, as 
 
 As **alice**, now an editor of `retail`, open **Flows**; under **Start a flow**, name it `campaign_results` and press **New flow**. The canvas fills the window; every column, table, step and metric a step needs is picked from a dropdown, so what you can choose is what exists. The question: for each campaign, the revenue of the orders its converted responders placed in the thirty days after responding, against its budget.
 
-1. **Add a step → Input**, pick the table `uploads_campaign_responses` from the dropdown (the project's tables, and the products it reads). The node shows 5 columns: the canvas asked the catalog.
+1. **Add a step → Input**, pick the table `uploads_campaign_responses` from the dropdown (the project's tables, and the products it reads). The node shows 7 columns, the file's five and the import's own `_dlt_load_id` and `_dlt_id`: the canvas asked the catalog.
 2. With it selected, **Add a step → Filter**, condition `converted`. Press **Preview** to see the rows, read on a sample as alice.
 3. **Add a step → Input**, table `uploads_orders`; then select the filter node and **Add a step → Join**: inputs `filter` (left) and `input_2` (right) from the dropdowns, kind `inner`, on `customer_id` = `customer_id`. The node shows the joined columns; the clashing `customer_id` from the right gets `_right`.
 4. **Add a step → Filter** on the join: `not test and not refunded and ordered_on >= responded_on and ordered_on <= date_add('day', 30, responded_on)`: the orders in the month after the response.
@@ -458,7 +459,7 @@ Thursday. Marketing wants the orders for its own models. Acme Outdoors, a partne
    - **The business terms it holds**: tick **Revenue** (Lab 6);
    - **What it promises**: tick the columns `order_id`, `customer_id`, `ordered_on`, `region` and `amount`, and **Changed at least every** `24h`.
 
-   Press **Publish it**. The page lists `orders`: its owner, version, contract, the term **Revenue** it holds, no consumers yet, not certified; its card has **Change** and **Remove** for retail's editors. (The same product is `retail`'s spec's `products`, which the form writes: `"products": [{"name": "orders", "table": "uploads_orders", ...}]`; a project kept as code (Lab 10) has it in its repo.) So that other projects may build on retail's metrics, also add `"semantic": {"shared": true}` on `retail` → **Edit**, and save.
+   Press **Publish it**. The page lists `orders`: its owner, version, contract, the term **Revenue** it holds, no consumers yet, not certified; its card has **Change** and **Remove** for retail's editors. (The same product is `retail`'s spec's `products`, which the form writes: `"products": [{"name": "orders", "table": "uploads_orders", ...}]`; a project kept as code (Lab 10) has it in its repo.) (Lab 6 shared retail's metrics, so other projects may build on them.)
 2. **A second team asks.** Make a project `marketing` (Administration → Projects → New: `analysts` as editors, tick Tables, and in the JSON box `"semantic": {"uses": ["retail"]}`). As **alice** (an editor of `marketing`), open **Data products** and press **Ask for it** on `orders`, for `marketing`, with a reason.
 3. **The publisher approves.** As **bob**, the product's card shows the request; approve it. Within a minute `marketing`'s people may read `iceberg.retail.uploads_orders` in place: as alice, on `marketing`'s SQL tab, `SELECT region, count(*) FROM iceberg.retail.uploads_orders GROUP BY 1` works, and gives EU only: retail's row filter holds for consumers too. Nothing was copied; there's one table.
 4. **On the publisher's definitions.** As alice, on `marketing` → **Metrics** → **Edit**, paste a model of marketing's own that builds on retail's:

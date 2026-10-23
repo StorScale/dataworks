@@ -26,7 +26,7 @@ from lakekit import check, env, finish
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
-GIT_LABS = {10, 17, 18, 20}
+GIT_LABS = {10, 17, 18, 20}   # and 11's schedule, run when retail has a repo
 ALL = [n for n in range(1, 23)]
 
 
@@ -370,7 +370,7 @@ tests:
 """
 NEW_TERM = """  - name: average_order_value
     owner: bob
-    definition: Revenue per real order, in US dollars: what a customer spends on one order, on average.
+    definition: "Revenue per real order, in US dollars: what a customer spends on one order, on average."
     synonyms: [basket size, AOV]
 """
 
@@ -398,8 +398,8 @@ def lab6():
     rows = by_region(a)
     total = round(sum(float(v[a["columns"].index("revenue")]) for v in rows.values()), 2) if rows else None
     orders = sum(int(v[a["columns"].index("order_count")]) for v in rows.values()) if rows else None
-    check("asked by region: about 11,341 US, 7,263 EU, 3,564 APAC; 287 orders; 22,168 in all",
-          total is not None and abs(total - 22168) < 1 and orders == 287, f"{ {k: v for k, v in rows.items()} } total {total}")
+    check("asked by region: about 11,341 US, 7,263 EU, 3,564 APAC; 300 orders; 22,168 in all",
+          total is not None and abs(total - 22168) < 1 and orders == 300, f"{ {k: v for k, v in rows.items()} } total {total}")
     al = by_region(metrics("alice", "retail", ["revenue"], ["order__region"]))
     check("... as alice, EU only", list(al) == ["EU"], list(al))
     t = j(as_("bob").post(f"{PLATFORM}/api/projects/retail/semantic/tests", json={}, timeout=300))
@@ -410,6 +410,9 @@ def lab6():
     api("bob", "PUT", "/api/projects/retail/semantic", {"yaml": model})
     check("amount * 0.9: the next answer follows; put back", tenth and abs(sum(float(v[1]) for v in tenth.values()) - 22168 * 0.9) < 1,
           {k: v[1] for k, v in tenth.items()})
+    p = spec("retail")
+    p["spec"]["semantic"] = {**(p["spec"].get("semantic") or {}), "shared": True}
+    check("bob shares retail's metrics and terms: the company's now", save_spec(p).ok, "")
     terms = {t["name"]: t for t in j(as_("bob").get(f"{PLATFORM}/api/terms", timeout=60)).get("terms", [])}
     check("Business terms: Revenue and Customer, each with its owner and synonyms",
           "turnover" in (terms.get("revenue") or {}).get("synonyms", []) and (terms.get("customer") or {}).get("owner") == "bob", sorted(terms))
@@ -483,7 +486,8 @@ def lab8():
     check("... and answers what revenue means from the term (found by its synonym)", "refunds" in json.dumps(t), str(t)[:200])
     audit = j(as_("bob").get(f"{PLATFORM}/api/projects/retail/audit", timeout=60))
     entries = audit.get("entries") or audit.get("events") or []
-    check("Check: on Audit, the assistant's query names the agent and alice", any("alice" in json.dumps(e) and "agent" in json.dumps(e) for e in entries),
+    check("Check: on Audit, the assistant's query names the agent and alice",
+          any(e.get("user") == "alice" and "agent=" in (e.get("detail") or "") and "agent=platform" not in (e.get("detail") or "") for e in entries),
           f"{len(entries)} entries")
 
 
@@ -525,7 +529,7 @@ def lab9():
     flow = campaign_flow()
     c = j(as_("alice").post(f"{PLATFORM}/api/projects/retail/flows/compile", json={"flow": flow}, timeout=120))
     ins = (c.get("steps") or {}).get("input", {}).get("columns") or []
-    check("alice's canvas: the input shows uploads_campaign_responses' 5 columns, and the flow compiles", len(ins) == 5 and not c.get("errors"),
+    check("alice's canvas: the input shows uploads_campaign_responses' 7 columns (the import's two among them), and the flow compiles", len(ins) == 7 and not c.get("errors"),
           f"{len(ins)} columns; errors {c.get('errors')}")
     def preview(user):
         r = as_(user).post(f"{PLATFORM}/api/projects/retail/flows/preview", json={"flow": flow, "step": "output", "limit": 100}, timeout=300)
@@ -540,7 +544,7 @@ def lab9():
           isinstance(a, dict) and len(a) == 6 and abs(float(a.get("Store weekend", 0)) - 7.84) < 0.005 and abs(float(a.get("Partner push", 0)) - 2.97) < 0.005,
           a)
     check("... bob's the same", a == b, b)
-    broken = j(as_("alice").post(f"{PLATFORM}/api/projects/retail/flows/compile", json={"flow": campaign_flow(("customer_id", "responded_on"))}, timeout=120))
+    broken = j(as_("alice").post(f"{PLATFORM}/api/projects/retail/flows/compile", json={"flow": campaign_flow(("responded_on", "customer_id"))}, timeout=120))
     why = json.dumps(broken.get("errors") or broken.get("steps", {}).get("join", {}).get("error") or broken)
     check("a join on columns of different types is refused before anything runs", "type" in why, why[:200])
     sqls = [(c.get("steps") or {}).get(k, {}).get("sql", "") for k in (c.get("order") or [])]
@@ -937,9 +941,259 @@ def lab11():
     c = predict("carol")
     check("Check: the web shop's call answers with version 2; carol is refused", ans is not None and '"2"' in ans.text or '"version": 2' in (ans.text if ans else ""),
           f"{ans.text[:160] if ans else 'no answer'}; carol HTTP {c.status_code}")
+    if (spec("retail")["spec"].get("pipelines") or {}).get("repo"):
+        lab11_schedule()
 
 
-LABS = {1: lab1, 2: lab2, 3: lab3, 4: lab4, 5: lab5, 6: lab6, 7: lab7, 8: lab8, 9: lab9, 11: lab11, 12: lab12, 13: lab13, 14: lab14, 15: lab15, 16: lab16, 19: lab19, 21: lab21, 22: lab22}
+# --- With the project's repo (Labs 10, 11's schedule, 17, 18, 20) --------------------------
+
+def gitlab():
+    """GitLab's API for retail's repo, signed in with the repo's token (its connection): call(method, path, **kw)."""
+    from urllib.parse import quote, urlparse
+
+    import k8s
+    pl = spec("retail")["spec"]["pipelines"]
+    tok = k8s.get_secret(pl["credentials"]["secretRef"]).get("password", "")
+    base = ((pl.get("reviews") or {}).get("gitlab") or "https://gitlab.com").rstrip("/")
+    path = urlparse(pl["repo"]).path.strip("/").removesuffix(".git")
+    root = f"{base}/api/v4/projects/{quote(path, safe='')}"
+
+    def call(method, sub="", **kw):
+        return requests.request(method, root + sub, headers={"PRIVATE-TOKEN": tok}, timeout=120, **kw)
+    return call
+
+
+def target_branch(gl):
+    return gl("GET").json().get("default_branch") or "main"
+
+
+def merge(gl, mr_url, review=True):
+    """Wait for the merge request's review status (when asked), then merge it: (status, merged)."""
+    iid = int(mr_url.rstrip("/").rsplit("/", 1)[-1])
+    status = None
+    if review:
+        def reviewed():
+            sha = gl("GET", f"/merge_requests/{iid}").json().get("sha")
+            sts = gl("GET", f"/repository/commits/{sha}/statuses").json() if sha else []
+            done = [x for x in sts if isinstance(x, dict) and x.get("name") == "storscale/dbt" and x.get("status") in ("success", "failed")]
+            return done[0] if done else None
+        status = wait(reviewed, 1500, every=30)
+    m = gl("PUT", f"/merge_requests/{iid}/merge", json={"should_remove_source_branch": True})
+    if not m.ok and "already" not in m.text:
+        print(f"    merge: HTTP {m.status_code} {m.text[:200]}")
+    return status, m.ok or gl("GET", f"/merge_requests/{iid}").json().get("state") == "merged"
+
+
+def lab10():
+    heading(10, "The project as code (with a git repo)")
+    gl = gitlab()
+    check("retail's repo answers GitLab's API with its token", gl("GET").ok, gl("GET").status_code)
+    flow = {**campaign_flow(), "schedule": "0 6 * * 1"}
+    r = api("alice", "PUT", "/api/projects/retail/flows/campaign_results", {"flow": flow}, timeout=300)
+    saved = j(r)
+    check("Flows → Save as merge request: the models, schema, sources and the DAG, on a branch with a merge request",
+          r.ok and saved.get("mergeRequest") and any(f.endswith(".sql") for f in saved.get("files", [])), {k: saved.get(k) for k in ("branch", "mergeRequest", "dag")})
+    if not saved.get("mergeRequest"):
+        return
+    status, merged = merge(gl, saved["mergeRequest"])
+    check("the merge request's models are built on a data branch, and it gets a status", status is not None, (status or {}).get("description"))
+    check("... merged", merged, "")
+    state, _ = run_pipeline("bob", "retail", "flow_campaign_results", timeout=1800)
+    rows = sql("bob", "retail", "SELECT count(*) FROM campaign_results")
+    check("Check: flow_campaign_results runs; campaign_results is a table of the project's, six rows", state == "success" and rows == [[6]], f"run {state}: {rows}")
+
+
+def lab11_schedule():
+    heading(11, "the notebook on a schedule (with the repo)")
+    from lakekit import token
+    gl = gitlab()
+    cell = "import io, pandas as pd, buckets_lake\n" + CALL_LIST
+    nb = {"cells": [{"cell_type": "code", "source": cell, "metadata": {}, "outputs": [], "execution_count": None}],
+          "metadata": {"kernelspec": {"name": "python3", "display_name": "Python 3"}}, "nbformat": 4, "nbformat_minor": 5}
+    r = requests.post(f"{PLATFORM}/api/projects/retail/notebooks/schedules", timeout=300, headers={"Authorization": f"Bearer {token('alice')}"},
+                      json={"path": "call_list.ipynb", "schedule": "0 6 * * 1", "notebook": nb})
+    b = j(r)
+    check("alice schedules call_list.ipynb: the notebook and its DAG, on a branch with a merge request", r.ok and b.get("mergeRequest"), str(b)[:200])
+    if not b.get("mergeRequest"):
+        return
+    _, merged = merge(gl, b["mergeRequest"], review=False)
+    check("... merged", merged, "")
+    state, run = run_pipeline("bob", "retail", "notebook_call_list", timeout=1800)
+    nbrun = j(as_("bob").get(f"{PLATFORM}/api/projects/retail/notebooks/runs/notebook_call_list/{run}", timeout=120)) if run else {}
+    check("Check: notebook_call_list runs as the project's pipelines, and its executed notebook is kept", state == "success" and "CALLS" in json.dumps(nbrun),
+          f"run {state}")
+
+
+def agent_mcp(client_id, secret):
+    tok = requests.post(f"{env['KEYCLOAK_URL']}/realms/lakehouse/protocol/openid-connect/token", timeout=30, data={
+        "grant_type": "client_credentials", "client_id": client_id, "client_secret": secret})
+    if not tok.ok:
+        return None
+    t = tok.json()["access_token"]
+
+    def call(tool, **args):
+        r = requests.post(f"{PLATFORM}/mcp", timeout=300, headers={"Authorization": f"Bearer {t}", "Accept": "application/json, text/event-stream"},
+                          json={"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": tool, "arguments": args}})
+        try:
+            body = r.json()
+        except ValueError:
+            data = [x[5:] for x in r.text.splitlines() if x.startswith("data:")]
+            body = json.loads(data[-1]) if data else {"error": r.text[:200]}
+        return body.get("result") or body
+    return call
+
+
+def lab17():
+    heading(17, "An agent of the project's own")
+    agent = {"description": "sums the day's orders for the team's chat", "owner": "bob", "tools": ["list_metrics", "query_metrics"]}
+    api("bob", "DELETE", "/api/projects/retail/agents/nightly-summary", ok=(200, 204, 404))
+    r = api("bob", "PUT", "/api/projects/retail/agents/nightly-summary", agent)
+    own = api("bob", "POST", "/api/projects/retail/agents/nightly-summary/approve", {}, ok=(403, 409))
+    check("bob registers nightly-summary; he can't approve his own", r.ok and own.status_code in (403, 409), f"HTTP {r.status_code}, own {own.status_code}")
+    a = api("alice", "POST", "/api/projects/retail/agents/nightly-summary/approve", {})
+    ap = j(a)
+    check("alice approves it: its client ID and secret, once", a.ok and ap.get("clientId") and ap.get("secret"), ap.get("clientId"))
+    call = wait(lambda: agent_mcp(ap.get("clientId", ""), ap.get("secret", "")), 120, every=10) if a.ok else None
+    rev = call("query_metrics", project="retail", metrics=["revenue"], group_by=["order__region"]) if call else None
+    refused = call("list_products") if call else None
+    check("the agent asks for revenue by region: the whole company; list_products is refused, naming its tools",
+          rev is not None and "APAC" in json.dumps(rev) and "isError" in json.dumps(refused), f"{str(rev)[:120]} / {str(refused)[:120]}")
+    api("bob", "PUT", "/api/projects/retail/agents/nightly-summary", {**agent, "tools": agent["tools"] + ["list_products"]})
+    ag = {x["name"]: x for x in j(as_("bob").get(f"{PLATFORM}/api/projects/retail/agents", timeout=60)).get("agents", [])}
+    check("its tools changed: the approval is taken away", not (ag.get("nightly-summary") or {}).get("approved"), (ag.get("nightly-summary") or {}).get("approval"))
+    api("bob", "DELETE", "/api/projects/retail/agents/nightly-summary")
+    gone = wait(lambda: agent_mcp(ap.get("clientId", ""), ap.get("secret", "")) is None, 120, every=10)
+    check("revoked: within a minute it signs in no more", gone, "")
+    # Run by the platform, from a notebook in the repo.
+    gl = gitlab()
+    branch = target_branch(gl)
+    nb = {"cells": [{"cell_type": "code", "metadata": {}, "outputs": [], "execution_count": None, "source":
+                     "import buckets_lake\na = buckets_lake.agent()\nrevenue = a.call(\"query_metrics\", project=\"retail\", metrics=[\"revenue\"], group_by=[\"order__region\"])\n"
+                     "night = a.call(\"list_runs\", project=\"retail\", limit=10)\nalerts = a.call(\"list_alerts\", project=\"retail\")\n"
+                     "print(buckets_lake.username())\n"
+                     "print(buckets_lake.ask(f\"Two sentences for the team's chat: revenue by region {revenue}; runs {night['runs']}; alerts {alerts['issues']}\"))\n"}],
+          "metadata": {"kernelspec": {"name": "python3", "display_name": "Python 3"}}, "nbformat": 4, "nbformat_minor": 5}
+    path = (spec("retail")["spec"]["pipelines"].get("path") or "").strip("/")
+    file = f"{path}/notebooks/nightly_summary.ipynb" if path else "notebooks/nightly_summary.ipynb"
+    exists = gl("GET", f"/repository/files/{requests.utils.quote(file, safe='')}?ref={branch}").ok
+    c = gl("POST", "/repository/commits", json={"branch": branch, "commit_message": "The nightly summary's notebook (Lab 17)",
+                                                "actions": [{"action": "update" if exists else "create", "file_path": file, "content": json.dumps(nb, indent=1)}]})
+    check(f"the notebook in the repo: {file}", c.ok, f"HTTP {c.status_code} {c.text[:160]}")
+    r = api("bob", "PUT", "/api/projects/retail/agents/nightly-summary", {"description": "sums the night for the team's chat", "owner": "bob",
+                                                                          "tools": ["query_metrics", "list_runs", "list_alerts"], "budget": 0.5,
+                                                                          "schedule": "0 6 * * *", "notebook": "notebooks/nightly_summary.ipynb"})
+    a = api("alice", "POST", "/api/projects/retail/agents/nightly-summary/approve", {})
+    state, run = run_pipeline("bob", "retail", "agent_retail_nightly_summary", timeout=1800) if r.ok and a.ok else ("not registered", None)
+    log = run_log("bob", "retail", "agent_retail_nightly_summary", run) if run else ""
+    check("the platform runs it: the notebook as the agent, asking the model on its own budget", state == "success",
+          f"run {state}" + ("; ran as the agent" if "service-account-agent-retail-nightly-summary" in log else ""))
+    # A prompt, no notebook.
+    r = api("bob", "PUT", "/api/projects/retail/agents/triage", {"description": "reads the alerts and failed runs each morning", "owner": "bob",
+                                                                 "tools": ["list_alerts", "list_runs"], "budget": 0.5, "schedule": "0 7 * * *",
+                                                                 "prompt": "Each morning, read the open alerts and the failed runs, and write a two-sentence summary for the team."})
+    a = api("alice", "POST", "/api/projects/retail/agents/triage/approve", {})
+    state, _ = run_pipeline("bob", "retail", "agent_retail_triage", timeout=1800) if r.ok and a.ok else ("not registered", None)
+    check("triage, a prompt and two tools, runs with no repo", state == "success", f"run {state}")
+    audit = j(as_("bob").get(f"{PLATFORM}/api/projects/retail/audit?q=agent", timeout=60)).get("events", [])
+    acts = {e.get("action") for e in audit}
+    check("Check: the Audit tab has agent.registered, agent.approved, agent.ran and agent.revoked", {"agent.registered", "agent.approved", "agent.revoked"} <= acts,
+          sorted(a for a in acts if a and a.startswith("agent")))
+
+
+def lab18():
+    heading(18, "What customers say, sorted by a model")
+    data = lab_data()
+    for f in ("reviews.csv", "care.md", "returns.html"):
+        r = as_("bob").post(f"{PLATFORM}/api/projects/retail/uploads", files={"file": (f, io.BytesIO(data[f]))}, timeout=120)
+        if not r.ok:
+            print(f"    upload {f}: HTTP {r.status_code} {r.text[:200]}")
+    im = next((x for x in spec("retail")["spec"].get("imports") or [] if x["name"] == "uploads"), None)
+    tabs = [t for t in (im or {}).get("files", {}).get("tables", []) if t["name"] != "reviews"] + [{"name": "reviews", "file": "reviews.csv"}]
+    api("bob", "PUT", "/api/projects/retail/imports/uploads", {"name": "uploads", "source": "files", "schedule": "0 * * * *", "files": {"tables": tabs}})
+    state, _ = run_pipeline("bob", "retail", "import_retail_uploads")
+    n = sql("bob", "retail", "SELECT count(*) FROM uploads_reviews")
+    check("reviews.csv imported: uploads_reviews, 90 rows", state == "success" and n == [[90]], f"run {state}: {n}")
+    st = lambda i, kind, x, **kw: {"id": i, "kind": kind, "x": x, "y": 0, **kw}  # noqa: E731
+    flow = {"name": "review_topics", "steps": [
+        st("input", "input", 0, table="uploads_reviews"),
+        st("prepare", "prepare", 1, inputs=["input"], processors=[{"column": "text", "do": "regex_replace", "args": ["[^@\\s]+@[^@\\s]+\\.[a-z]+", "[email]"]}]),
+        st("llm", "llm", 2, inputs=["prepare"], column="text", mode="classify", values=["delivery", "sizing", "quality", "price", "service"],
+           prompt="Delivery is about shipping and packaging; sizing about fit; quality about the product failing; price about cost; service about staff and support.",
+           name="topic"),
+        st("group", "group", 3, inputs=["llm"], by=["topic"], aggregates=[{"function": "count", "as": "reviews"}, {"function": "avg", "column": "stars", "as": "stars"}]),
+        st("output", "output", 4, inputs=["group"], table="review_topics", checks=[{"column": "topic", "test": "not_null"}])]}
+    pv = as_("bob").post(f"{PLATFORM}/api/projects/retail/flows/preview", json={"flow": flow, "step": "prepare", "limit": 100}, timeout=300)
+    masked = [r for r in j(pv).get("rows", []) if "[email]" in json.dumps(r)]
+    check("mask first: the prepare step's preview signs the three reviews off with [email]", pv.ok and len(masked) >= 1, f"{len(masked)} masked in the sample")
+    pv = as_("bob").post(f"{PLATFORM}/api/projects/retail/flows/preview", json={"flow": flow, "step": "output", "limit": 100}, timeout=600)
+    check("the model classifies the masked reviews: a row per topic in the preview", pv.ok and len(j(pv).get("rows", [])) >= 1, (j(pv).get("rows") or j(pv).get("error") or "")[:5] if pv.ok else pv.text[:200])
+    saved = j(api("bob", "PUT", "/api/projects/retail/flows/review_topics", {"flow": {**flow, "schedule": "0 7 * * 1"}}, timeout=300))
+    if saved.get("mergeRequest"):
+        merge(gitlab(), saved["mergeRequest"])
+        state, _ = run_pipeline("bob", "retail", "flow_review_topics", timeout=2400)
+        rows = sql("bob", "retail", "SELECT topic, reviews FROM review_topics ORDER BY 2 DESC")
+        check("Check: flow_review_topics runs; review_topics has a row per topic", state == "success" and isinstance(rows, list) and rows, f"run {state}: {rows}")
+    # Knowledge banks.
+    sql("bob", "retail", "CREATE OR REPLACE VIEW reviews_masked AS SELECT review_id, regexp_replace(text, '[^@\\s]+@[^@\\s]+\\.[a-z]+', '[email]') AS text FROM uploads_reviews")
+    api("bob", "PUT", "/api/projects/retail/knowledge/reviews", {"tables": [{"table": "reviews_masked", "column": "text", "id": "review_id"}]})
+    b = api("bob", "POST", "/api/projects/retail/knowledge/reviews/build", {}, timeout=900)
+    hits = j(as_("bob").post(f"{PLATFORM}/api/projects/retail/knowledge/reviews/search", json={"query": "the zip broke", "k": 3}, timeout=300)).get("hits", [])
+    check("the knowledge bank reviews, from the masked text: 'the zip broke' finds reviews about zips", b.ok and any("zip" in h["text"].lower() for h in hits),
+          [h["text"][:60] for h in hits])
+    api("bob", "PUT", "/api/projects/retail/knowledge/manuals", {"files": [{"prefix": "landing/uploads/"}], "schedule": "0 3 * * *"})
+    state, _ = run_pipeline("bob", "retail", "knowledge_retail_manuals", timeout=1800)
+    hits = j(as_("bob").post(f"{PLATFORM}/api/projects/retail/knowledge/manuals/search", json={"query": "how do I wash it", "k": 3}, timeout=300)).get("hits", [])
+    check("manuals, the uploaded pages, built each night: 'how do I wash it' finds the care guide", state == "success" and hits and "care" in hits[0].get("source", "") + hits[0].get("ref", ""),
+          [(h.get("source"), h.get("ref")) for h in hits])
+
+
+def lab20():
+    heading(20, "Released on purpose (with a git repo)")
+    gl = gitlab()
+    branch = target_branch(gl)
+    p = spec("retail")
+    sp = p["spec"]
+    for k in ("status",):
+        sp.pop(k, None)
+    model = j(as_("bob").get(f"{PLATFORM}/api/projects/retail/semantic", timeout=60)).get("yaml", "")
+    files = {"storscale/project.yaml": json.dumps({"spec": sp}, indent=2) + "\n", "storscale/semantic.yaml": model,   # JSON is YAML
+             "storscale/targets/development.yaml": "{}\n", "storscale/targets/production.yaml": "{}\n"}
+    actions = []
+    for f, text in files.items():
+        exists = gl("GET", f"/repository/files/{requests.utils.quote(f, safe='')}?ref={branch}").ok
+        actions.append({"action": "update" if exists else "create", "file_path": f, "content": text})
+    c = gl("POST", "/repository/commits", json={"branch": branch, "commit_message": "The project as code (Lab 20)", "actions": actions})
+    gl("DELETE", "/repository/tags/v1.0")
+    t = gl("POST", "/repository/tags", json={"tag_name": "v1.0", "ref": branch})
+    check("the project and its model in the repo, tagged v1.0", c.ok and t.ok, f"commit {c.status_code}, tag {t.status_code} {t.text[:120]}")
+
+    def plan_and_apply(ref):
+        r = api("alice", "POST", "/api/projects/retail/plans", {"ref": ref}, timeout=300)
+        pid = j(r).get("id") or j(r).get("plan")
+        ready = wait(lambda: next((x for x in j(as_("bob").get(f"{PLATFORM}/api/projects/retail/plans", timeout=60)).get("plans", [])
+                                   if x.get("id") == pid and x.get("state") in ("ready", "failed", "refused")), None), 900, every=15) if pid else None
+        a = api("bob", "POST", f"/api/projects/retail/plans/{pid}/apply") if ready and ready.get("state") == "ready" else None
+        return r, ready, a
+    r, ready, a = plan_and_apply("v1.0")
+    check("alice plans v1.0, and bob (another administrator) applies it", a is not None and a.ok, f"plan HTTP {r.status_code} {str(ready)[:200]}")
+    count = sql("bob", "retail", "SELECT count(*) FROM uploads_orders")
+    changed = model.replace('expr: "case when not test and not refunded then amount end"', "expr: \"case when not test and not refunded and channel <> 'partner' then amount end\"")
+    c = gl("POST", "/repository/commits", json={"branch": branch, "commit_message": "Revenue without partner orders (Lab 20)",
+                                                "actions": [{"action": "update", "file_path": "storscale/semantic.yaml", "content": changed}]})
+    gl("DELETE", "/repository/tags/v1.1")
+    gl("POST", "/repository/tags", json={"tag_name": "v1.1", "ref": branch})
+    r, ready, a = plan_and_apply("v1.1")
+    after = by_region(metrics("bob", "retail", ["revenue"], ["order__region"]))
+    total = sum(float(v[1]) for v in after.values()) if after else None
+    check("v1.1: revenue without partner orders, planned and applied; the Metrics tab follows", a is not None and a.ok and total is not None and total < 22168, f"revenue {total}")
+    r, ready, a = plan_and_apply("v1.0")
+    back = by_region(metrics("bob", "retail", ["revenue"], ["order__region"]))
+    total = sum(float(v[1]) for v in back.values()) if back else None
+    check("Check: rolled back to v1.0: revenue as before, the orders' count unchanged",
+          a is not None and a.ok and total is not None and abs(total - 22168) < 300 and sql("bob", "retail", "SELECT count(*) FROM uploads_orders") == count, f"revenue {total}")
+
+
+LABS = {10: lab10, 17: lab17, 18: lab18, 20: lab20, 1: lab1, 2: lab2, 3: lab3, 4: lab4, 5: lab5, 6: lab6, 7: lab7, 8: lab8, 9: lab9, 11: lab11, 12: lab12, 13: lab13, 14: lab14, 15: lab15, 16: lab16, 19: lab19, 21: lab21, 22: lab22}
 
 
 def main():

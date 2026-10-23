@@ -16,10 +16,14 @@ import (
 // platform's Airflow runs it (stack/airflow/dags/storscale_imports.py): a
 // DAG each, its credentials in the Airflow connection ConnID (never here).
 type ProjectImport struct {
-	Project   string         `json:"project"`
-	Namespace string         `json:"namespace"` // where its tables land, in the iceberg catalog
-	ConnID    string         `json:"connId,omitempty"`
-	Import    project.Import `json:"import"`
+	Project   string `json:"project"`
+	Namespace string `json:"namespace"` // where its tables land, in the iceberg catalog
+	ConnID    string `json:"connId,omitempty"`
+	// Identity is the Airflow connection a files import signs in with to read
+	// the project's landing area: its own pipelines' (a project with an
+	// Airflow of its own), else the shared keycloak_pipelines.
+	Identity string         `json:"identity,omitempty"`
+	Import   project.Import `json:"import"`
 }
 
 // Imports are every project's imports that its last apply made ready.
@@ -39,6 +43,9 @@ func (r *Reconciler) Imports(ctx context.Context) ([]ProjectImport, error) {
 			}
 			for _, im := range st.Spec.Spec.Imports {
 				pi := ProjectImport{Project: st.Name, Namespace: st.Spec.Spec.Tables.Namespace, Import: im}
+				if r.ownAirflow(st.Spec) {
+					pi.Identity = st.Spec.ImportIdentityConnID()
+				}
 				if im.Connection != "" {
 					pi.ConnID = st.Spec.ImportConnID(im)
 				}

@@ -279,6 +279,16 @@ func (r *Reconciler) applyProjectAirflow(ctx context.Context, p *project.Project
 	if err := putConnection(ctx, api, p, git); err != nil {
 		return err
 	}
+	// The shared Airflow runs the project's imports (storscale_imports.py), as
+	// its pipelines: this account, not the shared one, which is no longer
+	// among the project's members.
+	if r.Airflow != nil && len(p.Spec.Imports) > 0 {
+		shared := kc
+		shared.ID, shared.Description = p.ImportIdentityConnID(), "The project "+p.Metadata.Name+"'s pipelines, for its imports"
+		if err := r.Airflow.API.PutConnection(ctx, shared); err != nil {
+			return fmt.Errorf("the platform's Airflow: the connection %s: %v", shared.ID, err)
+		}
+	}
 	// Started without these connections (its first start, or a token since
 	// rotated): start it again, with them.
 	if want := connectionsHash(keys[keySecret], kc, git); want != started {
@@ -310,6 +320,11 @@ func (r *Reconciler) teardownProjectAirflow(ctx context.Context, p *project.Proj
 	}
 	if err := r.Keycloak.deleteClient(ctx, p.PipelinesClientID()); err != nil {
 		errs = append(errs, err)
+	}
+	if r.Airflow != nil {
+		if err := r.Airflow.API.DeleteConnection(ctx, p.ImportIdentityConnID()); err != nil {
+			errs = append(errs, err)
+		}
 	}
 	if len(errs) > 0 {
 		return errors.Join(errs...) // the Secret stays, so this is tried again
