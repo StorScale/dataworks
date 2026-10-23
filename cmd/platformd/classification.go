@@ -84,7 +84,7 @@ func (s *server) handleClassify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
-	case !project.NameOK(body.Table) || !project.NameOK(body.Column) || !project.NameOK(body.Tag):
+	case !project.IdentifierOK(body.Table) || !project.IdentifierOK(body.Column) || !project.IdentifierOK(body.Tag):
 		s.fail(w, r, http.StatusUnprocessableEntity, "a table, a column and a tag, each an identifier")
 		return
 	case body.Action != "confirm" && body.Action != "remove":

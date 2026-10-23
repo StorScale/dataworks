@@ -47,8 +47,9 @@ func TestProtectionPolicies(t *testing.T) {
 	if tb := email.Resources["table"].Values; len(tb) != 3 || tb[0] != "customers" || email.Resources["column"].Values[0] != "email" {
 		t.Errorf("email's resources: %+v", email.Resources)
 	}
-	if id := pols[0]; id.DataMaskPolicyItems[len(id.DataMaskPolicyItems)-1].DataMaskInfo.DataMaskType != "MASK_NULL" { // a hash can't be an int: nulled
-		t.Errorf("customer_id's policy: %+v", id.DataMaskPolicyItems)
+	// An int hashed to an int: its nulls, duplicates and joins kept, its values not shown.
+	if id := pols[0].DataMaskPolicyItems[len(pols[0].DataMaskPolicyItems)-1].DataMaskInfo; id.DataMaskType != "CUSTOM" || !strings.Contains(id.ValueExpr, "from_big_endian_32") {
+		t.Errorf("customer_id's policy: %+v", id)
 	}
 	if pay := pols[2]; pay.DataMaskPolicyItems[len(pay.DataMaskPolicyItems)-1].DataMaskInfo.DataMaskType != "CUSTOM" { // personal outranks a tag the install added
 		t.Errorf("pay's policy: %+v", pay.DataMaskPolicyItems)

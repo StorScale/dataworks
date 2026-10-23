@@ -56,6 +56,9 @@ PHONE = re.compile(r"^\+?[0-9][0-9 ().-]{7,18}[0-9]$")
 SSN = re.compile(r"^[0-9]{3}-[0-9]{2}-[0-9]{4}$")
 IBAN = re.compile(r"^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$")
 CARD = re.compile(r"^[0-9][0-9 -]{11,21}[0-9]$")
+# Not a phone number though the pattern fits: a date or a time written as
+# text (2026-05-03), or a plain decimal number (a load's ID, 1792780188.63).
+NOT_PHONE = re.compile(r"^(\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?)?|\d+\.\d+)$")
 
 
 def luhn(s):
@@ -78,7 +81,7 @@ BY_VALUE = [
     ("card number", lambda v: bool(CARD.match(v)) and luhn(v), "personal"),
     ("national ID", lambda v: bool(SSN.match(v)), "personal"),
     ("bank account", lambda v: bool(IBAN.match(v.replace(" ", ""))), "personal"),
-    ("phone number", lambda v: bool(PHONE.match(v)) and sum(c.isdigit() for c in v) >= 8, "personal"),
+    ("phone number", lambda v: bool(PHONE.match(v)) and not NOT_PHONE.match(v) and sum(c.isdigit() for c in v) >= 8, "personal"),
 ]
 
 
@@ -182,7 +185,7 @@ def classify_project(om, h, service, p, trino, before):
         except Exception as e:  # noqa: BLE001 (a table that can't be read is told, not fatal)
             log.warning("classification: sampling %s.%s: %s", schema, name, str(e)[:160])
         for i, col in enumerate(cols):
-            if column_tags(col) or (name, col["name"]) in declared:
+            if column_tags(col) or (name, col["name"]) in declared or col["name"].startswith("_dlt_"):   # the import's own bookkeeping
                 continue
             found = None
             for pattern, tag in BY_NAME:

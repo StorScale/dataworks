@@ -118,12 +118,33 @@ def files():
                     for row in frame.to_dict(orient="records"):
                         yield row
 
+    # Text files hold dates as text: an ISO date or timestamp becomes one, as
+    # the upload's preview says it will (2026-05-03 a date, not a varchar).
+    import re
+    from datetime import date, datetime
+    day = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    moment = re.compile(r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?$")
+
+    def dates(row):
+        for k, v in row.items():
+            if isinstance(v, str):
+                try:
+                    if day.match(v):
+                        row[k] = date.fromisoformat(v)
+                    elif moment.match(v):
+                        row[k] = datetime.fromisoformat(v.replace(" ", "T"))
+                except ValueError:   # 2026-02-30: text it stays
+                    pass
+        return row
+
     out = []
     for t in im["files"]["tables"]:
         fmt = t["file"].rsplit(".", 1)[-1].lower()
         reader = {"csv": read_csv, "jsonl": read_jsonl, "parquet": read_parquet, "xlsx": read_excel, "xls": read_excel}[fmt]
         listing = filesystem(bucket_url=f"s3://{project}/landing/uploads/", file_glob=t["file"], credentials=creds)
         res = listing | reader()
+        if fmt != "parquet":
+            res = res.add_map(dates)
         res.apply_hints(table_name=f"{name}_{t['name']}", primary_key=t.get("primaryKey") or None,
                         write_disposition=disposition(t.get("primaryKey")) if t.get("primaryKey") else "replace")
         out.append(res)

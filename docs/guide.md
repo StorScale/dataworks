@@ -56,9 +56,9 @@ Monday. The orders file is on a shared drive; three people have three copies. No
 As **bob**, Administration → Projects → **New project**:
 
 1. Name `retail`, description "Harbor Outfitters: orders, customers, campaigns".
-2. Members: the group `engineers` as editors; the group `analysts` as readers; and the user `alice` as an editor as well (Lab 17 needs two editors; she keeps reading `sales` as before).
-3. Tick **Tables** (the project gets a namespace, `retail`, in the lakehouse) and **Files** (a bucket of its own, where uploads land).
-4. Under the readers' rules, add a row filter on `orders`: `region = 'EU'`, for the EU analysts' team. Leave masks empty: Lab 4 shows a better way.
+2. Members: the group `engineers` as editors; the group `analysts` as readers. alice is an analyst, so she reads `retail` as its readers do: Labs 3 to 8 show what that means. (She becomes an editor in Lab 9, when she starts building.)
+3. Tick **Tables** (the project gets a namespace, `retail`, in the lakehouse), **Files** (a bucket of its own, where uploads land) and **Pipelines**, service account `airflow-pipelines` (the project's imports, deliveries and scoring run as its pipelines, which read its landing area and write its tables; adding an import gives a project pipelines anyway).
+4. Under the readers' rules, add a row filter on `uploads_orders` (the table Lab 3 makes of the orders file): `region = 'EU'`, for the EU analysts' team. Leave masks empty: Lab 4 shows a better way.
 5. Save. Within a minute the Overview says **Ready**, and the Access tab shows who got what: the readers' and editors' groups in Keycloak, Ranger's policies on the namespace, the bucket's policies.
 
 Also open **Edit** on the project and, in the JSON box, add under `tables`:
@@ -69,7 +69,7 @@ Also open **Edit** on the project and, in the JSON box, add under `tables`:
 
 This declares which tables hold people and which column identifies one. The platform uses it for the privacy labs (4, 14 and 15): those tables are personal data from now on, a delivery of either needs a data-protection approver, and an erasure reaches both.
 
-**Check:** on the Access tab, `alice` is an editor of `retail` and `analysts` are readers; on the Audit tab, the project's creation is the first entry, with who did it.
+**Check:** on the Access tab, `bob` is an editor of `retail` (through `engineers`) and `alice` a reader (through `analysts`); on the Audit tab, the project's creation is the first entry, with who did it.
 
 ---
 
@@ -94,7 +94,7 @@ As **bob**, open `retail` → **Flows** → the **Uploads** panel at the bottom.
    Save. Within a minute the project has a catalog of its own, `retail_dashboards`, and on the **SQL** tab `SELECT count(*) FROM retail_dashboards.public.dashboards` answers from the database itself: nothing was copied. Its editors and pipelines may read it, no one may write it, and it joins with the lakehouse's tables in the same query. On Kubernetes the same source can be copied into the project's tables by change capture instead (`"copy": {"tables": ["public.dashboards"]}` on the source: inserts, updates and deletes follow within a minute).
 6. Open **Imports**: the uploads import's definition, and the same place an application is added from a form: Salesforce by its objects and a date to start from, or any REST API, each on a schedule, each run copying only what's new.
 
-**Check:** on the SQL tab, as bob, `SELECT count(*) FROM uploads_orders` gives 305; as alice, the same query gives the EU rows only (about a third), because the readers' rule from Lab 2 applies to every table the project has, this one included.
+**Check:** on the SQL tab, as bob, `SELECT count(*) FROM uploads_orders` gives 305; as alice, the same query gives the EU rows only (about a third), because the readers' rule from Lab 2 holds for her: she's a reader.
 
 ---
 
@@ -140,7 +140,7 @@ As **bob**, open `retail` → **Edit** and, in the JSON box under `tables`, add:
 Save. (The freshness part has a form of its own on the page; checks don't yet.) Eight kinds of check exist: `unique`, `notNull`, `rowCount`, `acceptedValues`, `range`, `regex` (every value matches a pattern), `references` (every value is found in another table's column), and `sql` (a query of your own that must return no rows; the project's tables may be named bare, as on the SQL tab).
 
 1. The platform runs the checks in the catalog every minute. Open **Data** → `uploads_orders` → **Quality**: its checks, passing, with when they last ran (the test orders' amount of 9,999 is under the range's ceiling; the references check finds every order's customer).
-2. Break one: on the SQL tab, `INSERT INTO uploads_orders (order_id, region, amount, refunded, test) VALUES (307, 'EU', 5.0, false, false)` (no customer). Within a minute **Quality** shows `notNull` on `customer_id` failing ("nullCount=1"), the project's **Overview** lists it as an issue, and the people the project notifies (a Teams or Slack channel, or email, set on the Edit page) are told. The catalog's own page for the table shows the same test, failed.
+2. Break one: on the SQL tab, `INSERT INTO uploads_orders (order_id, region, amount, refunded, test, _dlt_load_id, _dlt_id) VALUES (307, 'EU', 5.0, false, false, 'by-hand', 'by-hand-307')` (no customer; the two `_dlt` columns are the import's own record of each row, never empty). Within a minute **Quality** shows `notNull` on `customer_id` failing ("nullCount=1"), the project's **Overview** lists it as an issue, and the people the project notifies (a Teams or Slack channel, or email, set on the Edit page) are told. The catalog's own page for the table shows the same test, failed.
 3. Fix it: `DELETE FROM uploads_orders WHERE order_id = 307`. The next round passes, the issue clears, and the channel is told it's resolved.
 4. **Freshness:** `uploads_orders` must change within a day. Tomorrow, if nothing has loaded it, the Overview says it's stale and the channel hears; a load (the import's hourly run writes nothing when nothing changed, so set the window to what the business expects). The same rule is what a data product's contract promises (Lab 12).
 
@@ -303,7 +303,9 @@ Wednesday. Six campaigns ran last quarter for 4,900 in budget. Which paid for th
 
 **Value:** an analyst builds a transformation from steps, sees each step's result on a sample before anything runs, and what she builds is code (dbt models) that engineers review and release like any other change. No parallel world of visual pipelines nobody can version.
 
-As **alice** (an editor of `retail`), open **Flows**; under **Start a flow**, name it `campaign_results` and press **New flow**. The canvas fills the window; every column, table, step and metric a step needs is picked from a dropdown, so what you can choose is what exists. The question: for each campaign, the revenue of the orders its converted responders placed in the thirty days after responding, against its budget.
+First, as **bob**, on `retail` → **Edit**, add a member: the user `alice`, as an editor, and save. She builds from now on (Lab 17 also needs two editors). A person given several roles has the one that gives the most, so the readers' rules no longer apply to her on `retail`; on `sales` she's still a reader.
+
+As **alice**, now an editor of `retail`, open **Flows**; under **Start a flow**, name it `campaign_results` and press **New flow**. The canvas fills the window; every column, table, step and metric a step needs is picked from a dropdown, so what you can choose is what exists. The question: for each campaign, the revenue of the orders its converted responders placed in the thirty days after responding, against its budget.
 
 1. **Add a step → Input**, pick the table `uploads_campaign_responses` from the dropdown (the project's tables, and the products it reads). The node shows 5 columns: the canvas asked the catalog.
 2. With it selected, **Add a step → Filter**, condition `converted`. Press **Preview** to see the rows, read on a sample as alice.
@@ -314,7 +316,7 @@ As **alice** (an editor of `retail`), open **Flows**; under **Start a flow**, na
 7. **Add a step → Formula**: column `roi`, expression `revenue / budget`, type `double`.
 8. **Add a step → Prepare**: one processor on `roi`: **Round**, decimals `2`. (A processor changes its column, or makes a new one when "as" is set; each argument is a value, never SQL.)
 9. **Add a step → Output**, table `campaign_results`, with two checks: `name` not null, `name` unique.
-10. Press **Preview** on the output. As alice, the EU rows only; as **bob** (open the same flow), the whole company: **Store weekend** brought 2,353.46 on a budget of 300, an ROI of 7.84; **Partner push** 2.97; **September clearance** 1.52; **Summer sale** 1.40; **Back to school** 0.83 and **Enterprise outreach** 0.88 didn't pay back. Press **SQL** to read the model the platform wrote for each step.
+10. Press **Preview** on the output: the whole company, since alice is an editor now (a reader's preview reads the EU rows only): **Store weekend** brought 2,353.46 on a budget of 300, an ROI of 7.84; **Partner push** 2.97; **September clearance** 1.52; **Summer sale** 1.40; **Back to school** 0.83 and **Enterprise outreach** 0.88 didn't pay back. Press **SQL** to read the model the platform wrote for each step.
 
 Try breaking it: change the first join to `customer_id` = `responded_on`. The canvas refuses before anything runs: "their types differ; retype one first". Put it back.
 
@@ -496,10 +498,10 @@ As **bob**, open `retail` → **Edit**:
 
    Readers see the year a customer signed up, not the day. (The email and phone columns are already masked by their tags, Lab 4: a project's own masks and the install's protection rules add up.)
 3. Save, and open **Access**: the rules in words. "Readers: the EU rows of uploads_orders; signed_up shows the year", and the three tables they may read.
-4. As **alice**, see them hold: the Data tab lists three tables; **Preview** of `uploads_customers` shows `2026-01-01` for every date; the SQL tab refuses `uploads_campaign_responses`; a chart on the dashboard (Lab 7) still shows EU only; the assistant (Lab 8) answers EU only; the canvas's previews (Lab 9) read under the same rules.
+4. To see them as a reader does, take alice's editor membership off for a moment (on **Edit**; she stays a reader through `analysts`), and as **alice**, see them hold: the Data tab lists three tables; **Preview** of `uploads_customers` shows `2026-01-01` for every date; the SQL tab refuses `uploads_campaign_responses`; a chart on the dashboard (Lab 7) still shows EU only; the assistant (Lab 8) answers EU only; the canvas's previews (Lab 9) read under the same rules. Then, as bob, put her back as an editor.
 5. **Roles, not people:** rules name groups (`analysts`), so a new analyst gets them the day they join the group, and loses them the day they leave. A member named as a user (alice as an editor, Lab 2) is the exception for when a person needs more than their group.
 
-**Check:** alice's preview of `uploads_customers` has every `signed_up` on January the first; bob's has the real dates.
+**Check:** alice's preview of `uploads_customers`, while she's a reader, has every `signed_up` on January the first; bob's has the real dates.
 
 ---
 
@@ -657,7 +659,7 @@ End of the quarter. The board pack is due; Finance wants last month's number rep
 As **bob**, on `retail`:
 
 1. Open **Data** → `uploads_orders` → **History**: every change to the table so far (the import's load, Lab 5's insert and delete, Lab 15's erasure), who made it, when, and how many rows it added or removed. Each entry has **Read it as it was**.
-2. Change the data. On the **SQL** tab, run `INSERT INTO uploads_orders VALUES (306, 7, DATE '2026-10-01', 'EU', 'web', 88.0, false, false)`, then `UPDATE uploads_orders SET amount = 1.0 WHERE order_id = 1`. Back on **History**: two more entries, yours.
+2. Change the data. On the **SQL** tab, run `INSERT INTO uploads_orders VALUES (306, 7, DATE '2026-10-01', 'EU', 'web', 88.0, false, false, 'by-hand', 'by-hand-306')` (the last two are the import's own columns, Lab 5), then `UPDATE uploads_orders SET amount = 1.0 WHERE order_id = 1`. Back on **History**: two more entries, yours.
 3. On the first entry's **Read it as it was**: the SQL tab opens with the table named at that commit (`"uploads_orders#<hash>"`). `SELECT count(*), round(sum(amount), 2) FROM ...` gives the table as the import left it: 305 rows and the old amount. The same query without the suffix gives today's table: one row more than before your insert, customer 35's rows gone, and the changed amount.
 4. Any moment, not only a commit: on the SQL tab, type a date and time in the **As of** box under the query and press **Read the tables then** (or Enter). The query's tables are rewritten to the commit current at that moment. `now` puts them back.
 5. **A close that's kept.** On the **Tags** tab, make a tag: name `close-2026-09`, at `now`, keep for `7y`, note "September's close". The tag names a commit; the platform keeps that commit's data however old it gets, where the rest of the history is kept for the install's window (the Data page says how long). On the SQL tab, **As of** `close-2026-09` reads every table of the project as it was at the close.

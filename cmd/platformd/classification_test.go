@@ -69,6 +69,13 @@ func TestClassificationIsShownAndDecided(t *testing.T) {
 	if code, _ := call("alice", "POST", "/api/projects/sales/classification", `{"table":"customers","column":"email","tag":"personal","action":"confirm"}`); code != 403 {
 		t.Errorf("a reader deciding: %d", code)
 	}
+	// A table's name has underscores (uploads_customers): it's an identifier, not a project's name.
+	if code, _ := call("dana", "POST", "/api/projects/sales/classification", `{"table":"uploads_customers","column":"_dlt_id","tag":"personal","action":"remove"}`); code == http.StatusUnprocessableEntity {
+		t.Error("a table named with underscores was refused as no identifier")
+	}
+	if code, _ := call("dana", "POST", "/api/projects/sales/classification", `{"table":"Customers;","column":"email","tag":"personal","action":"confirm"}`); code != http.StatusUnprocessableEntity {
+		t.Error("a name that isn't an identifier wasn't refused")
+	}
 	if code, out := call("dana", "POST", "/api/projects/sales/classification", `{"table":"customers","column":"email","tag":"personal","action":"confirm"}`); code != 200 || out["state"] != "confirmed" {
 		t.Fatalf("confirm: %d %v", code, out)
 	}

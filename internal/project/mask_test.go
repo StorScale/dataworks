@@ -7,6 +7,9 @@ func TestMaskInfo(t *testing.T) {
 		{"MASK_HASH", "varchar", "CUSTOM"},
 		{"MASK_HASH", "", "CUSTOM"}, // unknown: text
 		{"MASK_HASH", "decimal(10,2)", "MASK_NULL"},
+		{"MASK_HASH", "bigint", "CUSTOM"}, // a number hashed to a number: nulls, duplicates and joins kept
+		{"MASK_HASH", "integer", "CUSTOM"},
+		{"MASK_HASH", "smallint", "MASK_NULL"},
 		{"MASK", "varchar(20)", "MASK"},
 		{"MASK", "decimal(10,2)", "MASK_NULL"}, // Ranger's redaction is text: Trino refuses it on a number
 		{"MASK_SHOW_LAST_4", "bigint", "MASK_NULL"},
