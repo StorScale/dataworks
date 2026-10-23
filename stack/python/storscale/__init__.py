@@ -20,7 +20,7 @@ from urllib.parse import quote
 import requests
 
 __all__ = ["Platform", "Error", "Refused"]
-__version__ = "0.27.0"
+__version__ = "0.28.0"
 
 REALM = "lakehouse"
 PUBLIC_CLIENT = "storscale-agent"   # the realm's public client, for a person's name and password
