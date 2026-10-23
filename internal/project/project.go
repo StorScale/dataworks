@@ -784,6 +784,13 @@ func (p *Project) AirflowDatabase() string {
 // project alone.
 func (p *Project) PipelinesClientID() string { return "project-" + p.Metadata.Name + "-pipelines" }
 
+// ImportIdentityConnID is the shared Airflow's connection holding the
+// project's own pipelines' sign-in (PipelinesClientID), which its imports
+// read its landing area with when it has an Airflow of its own.
+func (p *Project) ImportIdentityConnID() string {
+	return "pipelines_" + strings.ReplaceAll(p.Metadata.Name, "-", "_")
+}
+
 // The memory a project's Airflow may have, in MiB.
 const (
 	MinMemoryMiB = 2048

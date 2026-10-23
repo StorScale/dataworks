@@ -201,3 +201,28 @@ func TestAProjectsAirflowStartsAgainWhenItsConnectionsChange(t *testing.T) {
 		t.Error("the hash is keyed: without the Airflow's key it says nothing of the token")
 	}
 }
+
+// A project with an Airflow of its own has its files imported, in the shared
+// Airflow, as its own pipelines: the shared account isn't one of its members.
+func TestImportsSignInAsTheProjectsOwnPipelines(t *testing.T) {
+	spec := func(name, pipelines string) *project.Project {
+		p, err := project.Parse([]byte(`{"metadata": {"name": "` + name + `"}, "spec": {"members": [{"group": "engineers", "role": "editor"}],
+			"tables": {}, "files": {}, "pipelines": ` + pipelines + `,
+			"imports": [{"name": "uploads", "source": "files", "files": {"tables": [{"name": "orders", "file": "orders.csv"}]}}]}}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	own, shared := spec("retail-eu", `{"serviceAccount": "airflow-pipelines", "repo": "https://git.example.com/retail.git"}`), spec("sales", `{"serviceAccount": "airflow-pipelines"}`)
+	applied := []project.Part{{System: "imports", OK: true}}
+	r := &Reconciler{ProjectAirflows: &ProjectAirflows{}, Store: &memStore{statuses: []*project.Status{
+		{Name: "retail-eu", Spec: own, Parts: applied}, {Name: "sales", Spec: shared, Parts: applied}}}}
+	got, err := r.Imports(context.Background())
+	if err != nil || len(got) != 2 {
+		t.Fatalf("imports: %+v %v", got, err)
+	}
+	if got[0].Project != "retail-eu" || got[0].Identity != "pipelines_retail_eu" || got[1].Identity != "" {
+		t.Errorf("identities: %q %q", got[0].Identity, got[1].Identity)
+	}
+}

@@ -5,6 +5,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 ## [Unreleased]
 
 ### Fixed
+- **A project with its own Airflow imports its files again:** imports run in the platform's Airflow as its shared pipelines account, which isn't one of the project's members once it has an Airflow of its own (a repo), so a files import was refused its landing area (`Forbidden`). The operator now gives the platform's Airflow that project's own pipelines' sign-in (`pipelines_<project>`), and its imports read as them.
 - **An uploaded file's dates are dates:** the files import loaded every value of a CSV, Excel or JSON-lines file as text, so `ordered_on` was a varchar though the upload's preview said date, and a date dimension, `date_add` or a date mask on it failed. An ISO date or timestamp is now read as one. A table imported before stays as it was until its import is reset (the Imports tab's **Reset**, which copies it afresh).
 - **Imports run as the project's pipelines, which it now gets:** a project without `pipelines` (Lab 2's, before this) had its import refused reading its own landing area (`Forbidden`). Adding an import gives the project pipelines (the shared Airflow's `airflow-pipelines`), and the audit log says so.
 - **A table's tags can be confirmed or removed:** the classification route checked a table's, column's and tag's names as a project's (no underscores), so `uploads_customers` was refused ("each an identifier") from the Data page and the API alike.
