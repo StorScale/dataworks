@@ -41,6 +41,10 @@ rules:
   - apiGroups: [apps]
     resources: [deployments]
     verbs: [get, list, create, patch, delete]
+  # The operator grows Buckets' drives (their claims) to the chart's size.
+  - apiGroups: [""]
+    resources: [persistentvolumeclaims]
+    verbs: [list, patch]
   - apiGroups: [platform.storscale.io]
     resources: [projects]
     verbs: [get, list, watch, create, update, patch, delete]

@@ -113,11 +113,23 @@ secrets: {}
 examples:
   users: true
 
+# Buckets' first pool: its servers, each one's drives, and each drive's size.
+# Raise storage to grow every drive of the pool (the storage class must allow
+# volume expansion): the platform operator asks for it on each drive's claim
+# within five minutes. Drives never shrink, and a pool's shape and storage
+# class stay as they were made.
 buckets:
   servers: 1
   volumesPerServer: 4
   storage: 10Gi
   storageClassName: ""   # the cluster's default
+  # More pools, appended in order (pool-1, pool-2, ...), each with servers,
+  # volumesPerServer, storage and storageClassName as above. Buckets writes
+  # new objects to the pool with the most free space. Adding one restarts
+  # every Buckets server together; a pool can't be removed here.
+  #   pools:
+  #     - {servers: 1, volumesPerServer: 4, storage: 100Gi}
+  pools: []
   # Each server keeps a copy of its audit log on its first drive, for 30
   # days or this much, whichever comes first (Buckets' default is 10G).
   auditLocalMax: 1G

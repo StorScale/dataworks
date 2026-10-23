@@ -23,7 +23,7 @@ import (
 // a pipeline's latest run failed, a check is failing, a table is stale.
 type issue struct {
 	Key        string     `json:"key"`  // pipeline/<id>/<run>, check/<table>/<check>, stale/<table>
-	Kind       string     `json:"kind"` // pipeline, check, stale, maintenance, copy
+	Kind       string     `json:"kind"` // pipeline, check, stale, maintenance, copy, storage
 	Title      string     `json:"title"`
 	Detail     string     `json:"detail,omitempty"`
 	Link       string     `json:"link"`
@@ -143,6 +143,8 @@ func (s *server) issuesOf(ctx context.Context, p *project.Project) (out []issue,
 			}
 		}
 	}
+	storage, why := s.storageIssues(ctx, p, link)
+	out, unknown = append(out, storage...), append(unknown, why...)
 	out = append(out, s.copyIssues(ctx, p, link)...)
 	out = append(out, s.productIssues(ctx, p, link, out, &unknown)...)
 	if s.maintainer != nil {
@@ -253,7 +255,7 @@ func (pa *projectAlerts) isMuted(project, key string) bool {
 func alertOf(project string, is issue, resolved bool) health.Alert {
 	a := health.Alert{Title: project + ": " + is.Title, Severity: "down", Link: is.Link, LinkText: "Open it in the platform", At: time.Now().UTC(),
 		Facts: [][2]string{{"Project", project}}}
-	if is.Kind == "stale" || is.Kind == "maintenance" {
+	if is.Kind == "stale" || is.Kind == "maintenance" || (is.Kind == "storage" && strings.HasSuffix(is.Key, "/near")) {
 		a.Severity = "warning"
 	}
 	if resolved {

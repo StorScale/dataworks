@@ -225,6 +225,34 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	// On Kubernetes, Buckets' drives grown to each pool's size (BUCKETS_DRIVES:
+	// {"pool-0": "40Gi"}), every five minutes: the chart keeps the claim
+	// templates they were made with, which Kubernetes never lets change.
+	if sizes := os.Getenv("BUCKETS_DRIVES"); sizes != "" {
+		d := &reconcile.Drives{Cluster: env("BUCKETS_CLUSTER", "buckets"), Log: log}
+		if err := json.Unmarshal([]byte(sizes), &d.Sizes); err != nil {
+			log.Error("BUCKETS_DRIVES", "error", err)
+			os.Exit(2)
+		}
+		kube, err := reconcile.NewKube()
+		if err != nil {
+			log.Error("kubernetes", "error", err)
+			os.Exit(2)
+		}
+		d.Kube = kube
+		go func() {
+			for {
+				if _, err := d.Grow(ctx); err != nil {
+					log.Warn("buckets drives", "error", err)
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(5 * time.Minute):
+				}
+			}
+		}()
+	}
 	go func() {
 		mux := http.NewServeMux()
 		mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { fmt.Fprintln(w, "ok") })

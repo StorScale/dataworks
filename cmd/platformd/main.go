@@ -144,6 +144,10 @@ type config struct {
 	// token needs no restart). Empty: templates without repos, and no
 	// libraries.
 	GitLabURL, GitLabGroup, GitLabToken, GitLabTokenFile string
+	// DefaultStorage is a project bucket's size limit when it names none
+	// (LIMITS_PROJECT_STORAGE, as the operator's): its people are told as
+	// the bucket nears it.
+	DefaultStorage string
 	// InstallTarget is which of a project's targets (its repo's
 	// storscale/targets/<target>.yaml) this install is: development, production.
 	InstallTarget                                         string
@@ -192,7 +196,7 @@ func configFromEnv(get func(string) string) (config, error) {
 		ProductCertifierGroups: list("PRODUCT_CERTIFIER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers")),
 		ErasureDeadlineDays:    atoi(or("ERASURE_DEADLINE_DAYS", "45"), 45),
 		LLMGatewayURL:          strings.TrimRight(get("LLM_GATEWAY_URL"), "/"), LLMGatewayMasterKey: get("LLM_GATEWAY_MASTER_KEY"),
-		OperatorURL:   or("OPERATOR_URL", "http://platform-operator:8081"),
+		OperatorURL: or("OPERATOR_URL", "http://platform-operator:8081"), DefaultStorage: get("LIMITS_PROJECT_STORAGE"),
 		InstallTarget: or("INSTALL_TARGET", "production"),
 		Listen:        or("PLATFORM_LISTEN", ":8080"),
 		WebDir:        or("PLATFORM_WEB_DIR", "/usr/share/storscale/web"),

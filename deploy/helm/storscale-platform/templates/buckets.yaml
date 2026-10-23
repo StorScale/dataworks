@@ -1,6 +1,21 @@
 # Buckets: the platform's S3 storage, run by the Buckets operator. Its
 # Service is "buckets" on port 9000, as in Compose. People sign in with
 # Keycloak, and each of their groups names a Buckets policy.
+#
+# Its pools: buckets.* the first, then buckets.pools, each appended in turn.
+# A pool's drives are its StatefulSet's volume claim templates, which
+# Kubernetes never lets change, so a pool already made keeps the claim
+# template it was made with, and the platform operator grows each of its
+# drives to its size instead (BUCKETS_DRIVES). Against the cluster (helm
+# upgrade, storscale upgrade --dry-run) this refuses what would lose data
+# or stop Buckets' operator: a pool removed, a pool's shape changed, its
+# drives smaller or on another storage class.
+{{- $pools := include "storscale.buckets.pools" . | fromJsonArray }}
+{{- $made := list }}
+{{- with (lookup "buckets.io/v1alpha1" "BucketsCluster" .Release.Namespace "buckets") }}{{ $made = .spec.pools | default list }}{{ end }}
+{{- if lt (len $pools) (len $made) }}
+{{- fail (printf "Buckets has %d pools and the values give %d: a pool can't be removed here, its data would go with it" (len $made) (len $pools)) }}
+{{- end }}
 apiVersion: buckets.io/v1alpha1
 kind: BucketsCluster
 metadata:
@@ -10,16 +25,33 @@ spec:
   image: {{ .Values.upstream.bucketsd }}
   credsSecret: {name: buckets-root}
   pools:
-    - servers: {{ .Values.buckets.servers }}
-      volumesPerServer: {{ .Values.buckets.volumesPerServer }}
-      volumeClaimTemplate:
-        {{- with .Values.buckets.storageClassName }}
-        storageClassName: {{ . }}
-        {{- end }}
-        resources:
-          requests: {storage: {{ .Values.buckets.storage }}}
+  {{- range $i, $p := $pools }}
+    {{- $gi := include "storscale.gi" $p.storage | atoi }}
+    {{- $claim := dict "resources" (dict "requests" (dict "storage" $p.storage)) }}
+    {{- with $p.storageClassName }}{{ $_ := set $claim "storageClassName" . }}{{ end }}
+    {{- if lt $i (len $made) }}
+      {{- $was := index $made $i }}
+      {{- if or (ne (int $was.servers) (int $p.servers)) (ne (int $was.volumesPerServer) (int $p.volumesPerServer)) }}
+      {{- fail (printf "pool-%d is %d server(s) of %d drives: a pool's shape can't change (add a pool to buckets.pools instead)" $i (int $was.servers) (int $was.volumesPerServer)) }}
+      {{- end }}
+      {{- $size := dig "volumeClaimTemplate" "resources" "requests" "storage" "" $was }}
+      {{- if and $size (lt $gi (include "storscale.gi" $size | atoi)) }}
+      {{- fail (printf "pool-%d's drives are %s each: they can grow, never shrink (its storage: %s)" $i $size $p.storage) }}
+      {{- end }}
+      {{- $class := dig "volumeClaimTemplate" "storageClassName" "" $was }}
+      {{- if and $p.storageClassName (ne $p.storageClassName $class) }}
+      {{- fail (printf "pool-%d's drives are on storage class %q: a pool's class can't change (add a pool on the new one instead)" $i (default "the cluster's default" $class)) }}
+      {{- end }}
+      {{- $claim = $was.volumeClaimTemplate }}
+    {{- end }}
+    - servers: {{ int $p.servers }}
+      volumesPerServer: {{ int $p.volumesPerServer }}
+      {{- with $claim }}
+      volumeClaimTemplate: {{ toJson . }}
+      {{- end }}
       resources:
         requests: {cpu: 100m, memory: 256Mi}
+  {{- end }}
   env:
     - {name: MINIO_IDENTITY_OPENID_CONFIG_URL, value: "{{ include "storscale.url" . }}/sso/realms/lakehouse/.well-known/openid-configuration"}
     - {name: MINIO_IDENTITY_OPENID_CLIENT_ID, value: lakehouse}

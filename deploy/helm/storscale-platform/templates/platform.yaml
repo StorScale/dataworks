@@ -52,6 +52,8 @@ spec:
             # The Health page, and alerts (where the platform's Secret storscale-alerts says).
             - {name: HEALTH, value: "on"}
             - {name: GATEWAY_HEALTH_URL, value: "http://gateway:{{ .Values.gateway.port }}/healthz"}
+            # Project alerts: a project's bucket near its size limit (the operator's, without its own).
+            - {name: LIMITS_PROJECT_STORAGE, value: {{ .Values.limits.project.storage | quote }}}
             # Project alerts: when a project's tables last changed (its freshness targets).
             - {name: NESSIE_URL, value: "http://nessie:19120"}
             # A project with a repo has an Airflow of its own (project-<name>-airflow).
@@ -223,6 +225,10 @@ spec:
             # Projects' models answering as an API (templates/serving.yaml): a server each.
             - {name: SERVING_TEMPLATE, value: /etc/storscale/serving/template.json}
             - {name: SERVING_DEFAULT_MEMORY, value: {{ .Values.serving.memory | quote }}}
+            # Buckets' drives grown to each pool's size (templates/buckets.yaml).
+            {{- $drives := dict }}
+            {{- range $i, $p := include "storscale.buckets.pools" . | fromJsonArray }}{{ $_ := set $drives (printf "pool-%d" $i) $p.storage }}{{ end }}
+            - {name: BUCKETS_DRIVES, value: {{ toJson $drives | quote }}}
           volumeMounts:
             - {name: airflow-project, mountPath: /etc/storscale/airflow-project, readOnly: true}
             - {name: trino-cert, mountPath: /trino-cert, readOnly: true}

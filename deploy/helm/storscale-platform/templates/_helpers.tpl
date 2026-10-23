@@ -245,3 +245,21 @@ topologySpreadConstraints:
 nodeSelector:{{ toYaml . | nindent 2 }}
 {{- end }}
 {{- end }}
+
+{{/* Buckets' pools, in order (pool-0, pool-1, ...), as JSON: the first from
+     buckets.servers, volumesPerServer, storage and storageClassName, then
+     each of buckets.pools. */}}
+{{- define "storscale.buckets.pools" -}}
+{{- $b := .Values.buckets -}}
+{{- $first := dict "servers" $b.servers "volumesPerServer" $b.volumesPerServer "storage" $b.storage "storageClassName" ($b.storageClassName | default "") -}}
+{{- toJson (prepend ($b.pools | default list) $first) -}}
+{{- end }}
+
+{{/* A Buckets drive's size in Gi, from 20Gi or 2Ti. */}}
+{{- define "storscale.gi" -}}
+{{- $q := toString . -}}
+{{- if not (regexMatch "^[0-9]+(Gi|Ti)$" $q) -}}
+{{- fail (printf "a Buckets drive's size is in Gi or Ti (20Gi, 2Ti), not %q" $q) -}}
+{{- end -}}
+{{- if hasSuffix "Ti" $q -}}{{ mul (trimSuffix "Ti" $q | atoi) 1024 }}{{- else -}}{{ trimSuffix "Gi" $q | atoi }}{{- end -}}
+{{- end }}

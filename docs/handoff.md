@@ -192,10 +192,49 @@ Items 1 and 2 work on one; 3 to 6 are still to do.
    `examples.users` exists in values but doesn't switch them off yet.
 5. **Sizes:**
    - Buckets is one server with four drives (`buckets.servers`, `volumesPerServer`,
-     `storage`).
+     `storage`). To grow it, see **Buckets' capacity** below.
    - Resource requests are set for a laptop; raise them for real use.
    - Trino gets 1.5 GB (`trino.memory`).
 6. **No Spark suite yet.** The Spark Operator is installed, but nothing runs on it.
+
+### Buckets' capacity
+
+Buckets' usable space is its drives' total less parity: four drives at EC:2 hold half
+their size. The administrators are told as it fills (the `BucketsCapacityLow` rule at 15%
+free, `BucketsCapacityCritical` at 5%, `BucketsCapacityFullIn7Days`), and each project's
+people as its own bucket nears its `limits.storage`. Two ways to grow it:
+
+**Bigger drives** (the storage class must allow it: `kubectl get storageclass <class> -o
+jsonpath='{.allowVolumeExpansion}'` says `true`). Raise every drive of the first pool
+together; an erasure set holds only as much as its smallest drive:
+
+```bash
+storscale upgrade --context <cluster> --version <installed> --set buckets.storage=40Gi --dry-run
+storscale upgrade --context <cluster> --version <installed> --set buckets.storage=40Gi
+kubectl -n storscale get pvc -l buckets.io/cluster=buckets   # within five minutes: 40Gi each
+```
+
+The chart keeps the drives' claim template as it was made (Kubernetes never lets a
+StatefulSet's change, and Buckets' operator would stop at it), and the platform operator
+asks for the new size on each drive's claim. Most drivers grow the file system while the
+drive is in use; if a claim's `FileSystemResizePending` condition stays, delete one Buckets
+pod at a time (the operator's StatefulSet makes it again) and wait for it to be ready
+before the next. `mc admin info` then shows the new total. The dry run refuses a smaller
+size, another storage class or another shape for a pool that exists, before anything changes.
+
+**Another pool**, when the drives can't grow or more servers are wanted: a whole set of
+servers and drives beside the first, usually as many drives as it, of any size:
+
+```bash
+storscale upgrade ... --set 'buckets.pools[0].servers=1' --set 'buckets.pools[0].volumesPerServer=4' \
+  --set 'buckets.pools[0].storage=100Gi'   # optional: buckets.pools[0].storageClassName
+```
+
+Adding one restarts every Buckets server together, so S3 is down for a minute or two; new
+objects then go to the pool with the most free space. A pool can't be removed through the
+chart (its data would go with it), and nothing moves existing objects unless someone runs
+`mc admin rebalance start`. Keep the pools in your values file: `storscale upgrade` reuses
+the installed values, and a later `-f` without them is refused.
 
 ## Things we learned the hard way
 
