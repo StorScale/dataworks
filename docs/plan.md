@@ -185,7 +185,7 @@ Dataiku's product, as its own material lays it out in ten areas, checked item by
 |---|---|---|---|
 | Interactive statistics | Nothing visual; notebooks with pandas | — | **Gap; not to fill as a visual tool.** Fill the code path: scikit-learn, statsmodels and scipy in the notebook image (an hour), and a *Describe* card on the Data page from the profiler above. |
 | Charts and visualizations, dashboards | Built: Superset, on the semantic layer's definitions (10.2) | Power BI (R10.5) | None |
-| Reusable analytical workflows | Built: pipelines in git, flows on the canvas, dbt models, scheduled notebooks | Templates (U.2) | None |
+| Reusable analytical workflows | Built: pipelines in git, flows on the canvas, dbt models, scheduled notebooks; project templates and shared libraries (U.2) | None | None |
 | Visual and code-based analysis | Built: Superset and the canvas; SQL and notebooks | — | None |
 | Time-series processing | Partial: MetricFlow's time dimensions and grains; Trino's date functions; the window step | — | Fill with the prepare step (resample, lag, rolling: window-step presets) and statsmodels in the image. Small. |
 | Geographic data | Nothing | — | **Gap.** Fill: Trino's geospatial functions are already there (ST_* on the canvas's formula step); geopandas in the notebook image; Superset's deck.gl map charts (a plugin to enable). A day. |
@@ -337,7 +337,7 @@ Each phase ends with a gate: an end-to-end test like the examples' `test.py`, ru
 | 16 | Roles of the company's own (added 2026-10-22): an Administration → Roles page where administrators define roles beyond editor and reader (a steward, an analyst, an ML engineer) from the platform's permissions; the built-in roles expressed as the same permissions; custom roles given per project to people and groups, and platform-wide to groups (the governance group and usage viewers become such roles); each permission applied in Ranger, Buckets, Keycloak, Airflow, Superset, MLflow and platformd from one mapping; changes carried to every project and audited | A steward defined by an administrator reads every table unmasked in Trino and confirms tags, but can't write a table, run a pipeline or change the spec; taking a permission away reaches every project within a minute; a role in use can't be deleted **Built** (2026-10-22): per project, in Ranger, Buckets, Keycloak, the project's Airflow, platformd and semanticd; platform-wide roles given to Keycloak groups on the same page (2026-10-23), the install's finance, governance and data-protection groups among them; a product's consumers' custom roles read it. |
 
 **Not yet placed:**
-- **Templates and reuse:** project templates, shared libraries and recipes.
+- **Templates and reuse:** project templates, shared libraries and recipes. **Built** (2026-10-23) as U.2: templates on Administration → Templates, their repos copied into the install's GitLab; libraries used by dbt, pipelines and notebooks without copying.
 - **Sharing outside the company:** data products read by partners (9.3 begins it).
 
 **Decided (2026-10-19):** the LLM provider is Microsoft Foundry, serving Anthropic's models (phase 12's gateway).

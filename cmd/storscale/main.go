@@ -199,7 +199,7 @@ func runTests(st *stack, suites []string) error {
 		}
 	}
 	if len(suites) == 0 || len(others) > 0 {
-		if err := st.compose(append([]string{"run", "--rm", "--tty=false", "test"}, others...)...); err != nil {
+		if err := st.compose(append([]string{"run", "--rm", "--tty=false", "--use-aliases", "test"}, others...)...); err != nil {
 			failed = append(failed, "the other suites")
 		}
 	}

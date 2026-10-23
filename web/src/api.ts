@@ -64,6 +64,7 @@ export type Spec = {
       masks?: { table: string; column: string; type: string }[];
     };
     freshness?: { table: string; within: string }[];
+    checks?: { table: string; column?: string; check: string }[];
     maintenance?: { paused?: boolean };
   };
   files?: { bucket?: string };
@@ -144,6 +145,20 @@ export const getRoles = () => api<{ roles: Role[]; permissions: Permission[]; pl
 export const putRole = (name: string, r: { description?: string; permissions: string[]; scope?: string; groups?: string[] }) =>
   api<Role>("PUT", `/api/roles/${encodeURIComponent(name)}`, r);
 export const deleteRole = (name: string) => api<unknown>("DELETE", `/api/roles/${encodeURIComponent(name)}`);
+
+// Project templates and shared libraries (use case U.2).
+export type Template = { name: string; description: string; repo?: string; spec: Partial<Spec>; changedBy?: string; changedAt?: string };
+export type Library = { name: string; description: string; repo: string; ref: string; changedBy?: string; changedAt?: string };
+export const getTemplates = () =>
+  api<{ templates: Template[]; libraries: Library[]; canEdit: boolean; gitlab: string; group: string; repos: boolean }>("GET", "/api/templates");
+export const putTemplate = (name: string, t: { description: string; repo?: string; spec: Partial<Spec> }) =>
+  api<Template>("PUT", `/api/templates/${encodeURIComponent(name)}`, t);
+export const deleteTemplate = (name: string) => api<unknown>("DELETE", `/api/templates/${encodeURIComponent(name)}`);
+export const projectFromTemplate = (template: string, p: { name: string; description?: string; members: Member[]; notify?: Spec["notify"] }) =>
+  api<{ name: string; repo: string }>("POST", `/api/templates/${encodeURIComponent(template)}/projects`, p);
+export const putLibrary = (name: string, l: { description: string; repo: string; ref: string }) =>
+  api<Library>("PUT", `/api/libraries/${encodeURIComponent(name)}`, l);
+export const deleteLibrary = (name: string) => api<unknown>("DELETE", `/api/libraries/${encodeURIComponent(name)}`);
 export const getAssistants = () => api<{ assistants: Assistant[]; available: boolean }>("GET", "/api/assistants");
 export const putAssistant = (a: { name: string; description?: string; redirectUris: string[] }) =>
   api<Assistant>("PUT", `/api/assistants/${encodeURIComponent(a.name)}`, a);

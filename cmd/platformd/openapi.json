@@ -444,6 +444,142 @@
         ]
       }
     },
+    "/api/libraries": {
+      "get": {
+        "description": "the libraries, with their repos' addresses: to anyone the realm signed in\n\nhandleLibraries are the libraries, each with its repo's address (a dbt\nproject's packages.yml names a library by it), to anyone the realm signed in.",
+        "operationId": "get_libraries",
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "The libraries, each with its repo's address (a dbt project's packages.yml names a library by it), to anyone the realm signed in",
+        "tags": [
+          "libraries"
+        ]
+      }
+    },
+    "/api/libraries/{library}": {
+      "delete": {
+        "description": "handleDeleteLibrary removes a library: projects naming it can't fetch it any more.",
+        "operationId": "delete_libraries_library",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "library",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Removes a library: projects naming it can't fetch it any more",
+        "tags": [
+          "libraries"
+        ]
+      },
+      "get": {
+        "description": "a library, at the commit its ref names: to anyone the realm signed in\n\nhandleLibrary is a library, with the commit its ref names now (a cache's\nkey: what was fetched at that commit is still it).",
+        "operationId": "get_libraries_library",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "library",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A library, with the commit its ref names now (a cache's key: what was fetched at that commit is still it)",
+        "tags": [
+          "libraries"
+        ]
+      },
+      "put": {
+        "description": "handlePutLibrary defines a library, or moves it to another ref (the\nadministrators): its repo and ref must be there.",
+        "operationId": "put_libraries_library",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "library",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Defines a library, or moves it to another ref (the administrators): its repo and ref must be there",
+        "tags": [
+          "libraries"
+        ]
+      }
+    },
+    "/api/libraries/{library}/archive": {
+      "get": {
+        "description": "... its files\n\nhandleLibraryArchive is a library's files at a commit of its (default its\nref's), as GitLab's .tar.gz: one top folder, then the repo.",
+        "operationId": "get_libraries_library_archive",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "library",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "A library's files at a commit of its (default its ref's), as GitLab's .tar.gz: one top folder, then the repo",
+        "tags": [
+          "libraries"
+        ]
+      }
+    },
     "/api/notebooks/projects": {
       "get": {
         "description": "handleNotebookProjects are the projects the token's person may schedule a\nnotebook in: they're its editor, and it has a repo.",
@@ -3834,6 +3970,126 @@
         ]
       }
     },
+    "/api/templates": {
+      "get": {
+        "description": "project templates and shared libraries (U.2)\n\nhandleTemplates are the templates and libraries, to anyone signed in (a\nteam sees what a project would start with, and what it may use).",
+        "operationId": "get_templates",
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "The templates and libraries, to anyone signed in (a team sees what a project would start with, and what it may use)",
+        "tags": [
+          "templates"
+        ]
+      }
+    },
+    "/api/templates/{template}": {
+      "delete": {
+        "description": "... or removes one\n\nhandleDeleteTemplate removes a template; projects made from it stay as they are.",
+        "operationId": "delete_templates_template",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "template",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Removes a template; projects made from it stay as they are",
+        "tags": [
+          "templates"
+        ]
+      },
+      "put": {
+        "description": "an administrator defines or changes one\n\nhandlePutTemplate defines a template, or changes one (the administrators).\nProjects made from it before keep what they were made with.",
+        "operationId": "put_templates_template",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "template",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Defines a template, or changes one (the administrators)",
+        "tags": [
+          "templates"
+        ]
+      }
+    },
+    "/api/templates/{template}/projects": {
+      "post": {
+        "description": "a project made from one, with a copy of its repo\n\nhandleProjectFromTemplate makes a project from a template (the\nadministrators): its name, members, and optionally its description and\nwhere it's told of trouble. With the template's repo: the repo is copied\ninto the install's group as the project's (named as the project, and\n\"{project}\" in its files filled in, as in the spec), given a\ntoken of its own (Developer; api and read_repository) kept as the\nproject's connection \u003cproject\u003e-repo, and named in its pipelines. If any\nstep fails, what was made is taken back.",
+        "operationId": "post_templates_template_projects",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "template",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Makes a project from a template (the administrators): its name, members, and optionally its description and where it's told of trouble",
+        "tags": [
+          "templates"
+        ]
+      }
+    },
     "/api/terms": {
       "get": {
         "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them.",
@@ -3990,6 +4246,9 @@
       "name": "knowledge"
     },
     {
+      "name": "libraries"
+    },
+    {
       "name": "llm"
     },
     {
@@ -4036,6 +4295,9 @@
     },
     {
       "name": "tags"
+    },
+    {
+      "name": "templates"
     },
     {
       "name": "terms"

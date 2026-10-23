@@ -19,12 +19,16 @@ After each run, passed or failed, its artifacts (manifest.json, catalog.json
 from dbt docs generate, run_results.json) go to the platform (as the same
 account), which keeps them for the catalog: the models, their columns, their
 lineage and their tests' results appear there.
-Not yet: dbt packages (packages.yml; `dbt deps` would write into the repo's
-checkout, which is read-only).
+dbt packages (packages.yml): the project is copied to a folder of the run's
+(the repo's checkout is read-only) and `dbt deps` installs them there; a
+package naming one of the company's libraries by its repo's address (U.2,
+R-U.4) is the library's files at its ref, fetched through the platform, so
+the project holds no token for it.
 """
 import inspect
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 
@@ -89,20 +93,48 @@ def _report(project, target, token):
         print(f"storscale.dbt: artifacts not sent: {e}")
 
 
+def with_packages(project_dir, work, env):
+    """The dbt project to build: itself, or, with packages.yml, a copy in work
+    with its packages installed (the company's libraries fetched through the
+    platform, the others as dbt deps gets them)."""
+    packages_yml = os.path.join(project_dir, "packages.yml")
+    if not os.path.exists(packages_yml):
+        return project_dir
+    import yaml
+
+    from storscale import library
+    copy = os.path.join(work, "project")
+    shutil.copytree(project_dir, copy, ignore=shutil.ignore_patterns("target", "dbt_packages", "logs"))
+    with open(packages_yml) as f:
+        spec = yaml.safe_load(f) or {}
+    spec["packages"], used = library.localize(spec.get("packages") or [], env["STORSCALE_TRINO_TOKEN"])
+    with open(os.path.join(copy, "packages.yml"), "w") as f:
+        yaml.safe_dump(spec, f)
+    if used:
+        print(f"storscale.dbt: the company's libraries: {', '.join(used)}")
+    deps = subprocess.run([DBT, "deps", "--project-dir", copy, "--profiles-dir", work, "--profile", "storscale",
+                           "--log-path", os.path.join(work, "logs")], env=env)
+    if deps.returncode != 0:
+        raise RuntimeError(f"dbt deps failed (exit {deps.returncode}): its log above says which package")
+    return copy
+
+
 def build(project, path="dbt", schema=None, catalog="iceberg", task_id="dbt_build", select=None):
     """The task: `dbt build` on the dbt project at `path`, beside the DAG file
     that calls this. schema: the project's namespace (default its name, with
     underscores); select: dbt's selection (default everything)."""
     caller = os.path.dirname(os.path.abspath(inspect.stack()[1].filename))
-    project_dir = os.path.join(caller, path)
+    dbt_project = os.path.join(caller, path)
     schema = schema or project.replace("-", "_")
 
     @task(task_id=task_id)
     def dbt_build():
+        project_dir = dbt_project
         work = tempfile.mkdtemp(prefix="dbt-")
         write_profile(work, catalog, schema)
         env = {k: v for k, v in os.environ.items() if not k.startswith("AIRFLOW__")}
         env.update({"STORSCALE_TRINO_TOKEN": token(), "DBT_SEND_ANONYMOUS_USAGE_STATS": "false"})
+        project_dir = with_packages(project_dir, work, env)
         cmd = [DBT, "build", "--project-dir", project_dir, "--profiles-dir", work, "--profile", "storscale",
                "--target-path", os.path.join(work, "target"), "--log-path", os.path.join(work, "logs")]
         if select:

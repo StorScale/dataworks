@@ -192,6 +192,7 @@ def storscale_review():
             target = os.path.join(work, "target")
             env = {k: v for k, v in os.environ.items() if not k.startswith("AIRFLOW__")}
             env.update({"STORSCALE_TRINO_TOKEN": tok, "DBT_SEND_ANONYMOUS_USAGE_STATS": "false"})
+            project_dir = dbt.with_packages(project_dir, work, env)   # its packages, the company's libraries among them
             built = subprocess.run([dbt.DBT, "build", "--project-dir", project_dir, "--profiles-dir", work, "--profile", "storscale",
                                     "--target-path", target, "--log-path", os.path.join(work, "logs"), *select], env=env)
             try:
