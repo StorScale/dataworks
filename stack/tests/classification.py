@@ -66,7 +66,8 @@ def column_tags(om, column):
 def reads(user, column):
     """What alice sees of a column: the first value."""
     try:
-        rows = sql(user, f"SELECT {column} FROM customers ORDER BY customer_id", "iceberg", NAME)
+        # Ana's row, by her name: customer_id, hashed for alice, would order by its hash.
+        rows = sql(user, f"SELECT {column} FROM customers WHERE name = 'Ana'", "iceberg", NAME)
         return rows[0][0] if rows else None
     except Exception as e:  # noqa: BLE001 (refused, or not yet)
         return f"error: {str(e)[:300]}"
