@@ -63,7 +63,7 @@ upstream:
   openmetadata: docker.getcollate.io/openmetadata/server:2.0.4
   prometheus: prom/prometheus:v3.13.4
   grafana: grafana/grafana:13.0.10
-  bucketsd: ghcr.io/storscale/bucketsd:1.19.0
+  bucketsd: ghcr.io/storscale/bucketsd:1.20.4
 
 # The gateway: every address of the platform, as one Service. It listens on
 # its own port over plain HTTP, whatever the platform's address is. The platform's
