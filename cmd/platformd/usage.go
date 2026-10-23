@@ -574,7 +574,7 @@ func (s *server) mayViewUsage(r *http.Request, projectName, who string) bool {
 		return true
 	}
 	sess := s.session(r)
-	return sess != nil && (s.isAdmin(sess.User) || s.inGroups(sess.User.Groups, s.cfg.UsageGroups))
+	return sess != nil && s.platformCan(r.Context(), sess.User, project.PermSeeAllUsage)
 }
 
 func monthOf(r *http.Request) (string, bool) {
@@ -613,7 +613,7 @@ func (s *server) handleProjectUsage(w http.ResponseWriter, r *http.Request) {
 
 // projectViewable is projectRole, letting the install's usage viewers (and administrators) in without being members.
 func (s *server) projectViewable(w http.ResponseWriter, r *http.Request, who string) (*project.Project, string, bool) {
-	if sess := s.session(r); sess != nil && s.inGroups(sess.User.Groups, s.cfg.UsageGroups) && !s.isAdmin(sess.User) {
+	if sess := s.session(r); sess != nil && !s.isAdmin(sess.User) && s.platformCan(r.Context(), sess.User, project.PermSeeAllUsage) {
 		p, err := s.store.Project(r.Context(), r.PathValue("name"))
 		if err != nil || p == nil {
 			s.fail(w, r, http.StatusNotFound, "no such project")
@@ -630,7 +630,7 @@ func (s *server) handleUsage(w http.ResponseWriter, r *http.Request) {
 	if sess == nil {
 		return
 	}
-	if !s.isAdmin(sess.User) && !s.inGroups(sess.User.Groups, s.cfg.UsageGroups) {
+	if !s.platformCan(r.Context(), sess.User, project.PermSeeAllUsage) {
 		s.fail(w, r, http.StatusForbidden, "the install's usage viewers and its administrators see every project's usage")
 		return
 	}

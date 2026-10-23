@@ -168,7 +168,7 @@ func (s *server) handlePutProject(w http.ResponseWriter, r *http.Request) {
 		}
 		var undefined []string
 		for _, name := range p.CustomRoles() {
-			if _, ok := defs[name]; !ok {
+			if d, ok := defs[name]; !ok || d.Scope != project.ScopeProject {
 				undefined = append(undefined, name)
 			}
 		}

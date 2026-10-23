@@ -560,8 +560,26 @@ func (r *Reconciler) pass(ctx context.Context, last map[string]time.Time, resync
 	}
 	live := map[string]bool{}
 	roles := r.roles(ctx)
+	reading := map[string][]string{} // each project's custom roles that read, for the projects whose products it consumes
 	for _, p := range specs {
 		p.Roles = roles
+		if gs := p.ReadingRoleGroups(); len(gs) > 0 {
+			reading[p.Metadata.Name] = gs
+		}
+	}
+	for _, p := range specs {
+		for _, pr := range p.Spec.Products {
+			for _, c := range pr.Consumers {
+				if gs := reading[c]; len(gs) > 0 {
+					if p.ConsumerRoleGroups == nil {
+						p.ConsumerRoleGroups = map[string][]string{}
+					}
+					p.ConsumerRoleGroups[c] = gs
+				}
+			}
+		}
+	}
+	for _, p := range specs {
 		live[p.Metadata.Name] = true
 		st := byName[p.Metadata.Name]
 		since := time.Since(last[p.Metadata.Name])

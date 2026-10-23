@@ -182,9 +182,9 @@ func (s *server) handleDeliverySearch(w http.ResponseWriter, r *http.Request) {
 	}
 	who := sess.User.Username
 	name := r.PathValue("name")
-	if !s.isAdmin(sess.User) && !s.inGroups(sess.User.Groups, s.cfg.DeliveryApproverGroups) {
+	if !s.platformCan(r.Context(), sess.User, project.PermProtectPersons) {
 		s.recordRefusal(r, who, "deliveries.searched", "project:"+name, "not a data-protection approver")
-		s.fail(w, r, http.StatusForbidden, "the data-protection approvers ("+strings.Join(s.cfg.DeliveryApproverGroups, ", ")+") search the delivery log")
+		s.fail(w, r, http.StatusForbidden, "the data-protection approvers (a platform role with protect-personal) search the delivery log")
 		return
 	}
 	person := strings.TrimSpace(r.URL.Query().Get("person"))

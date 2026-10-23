@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/StorScale/storscale-platform/internal/project"
 	"github.com/StorScale/storscale-platform/internal/trino"
 )
 
@@ -57,8 +59,8 @@ func personHash(id string) string {
 }
 
 // erasureAllowed says whether the session may ask for, or read, erasures.
-func (s *server) erasureAllowed(u user) bool {
-	return s.isAdmin(u) || s.inGroups(u.Groups, s.cfg.DeliveryApproverGroups)
+func (s *server) erasureAllowed(ctx context.Context, u user) bool {
+	return s.platformCan(ctx, u, project.PermProtectPersons)
 }
 
 // handleErasures lists a project's erasure records, to the approvers.
@@ -68,8 +70,8 @@ func (s *server) handleErasures(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := r.PathValue("name")
-	if !s.erasureAllowed(sess.User) {
-		s.fail(w, r, http.StatusForbidden, "the data-protection approvers ("+strings.Join(s.cfg.DeliveryApproverGroups, ", ")+") see erasures")
+	if !s.erasureAllowed(r.Context(), sess.User) {
+		s.fail(w, r, http.StatusForbidden, "the data-protection approvers (a platform role with protect-personal) see erasures")
 		return
 	}
 	out := []erasure{}
@@ -86,7 +88,7 @@ func (s *server) handleErasures(w http.ResponseWriter, r *http.Request) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].At.After(out[j].At) })
 	writeJSON(w, http.StatusOK, map[string]any{"erasures": out, "deadlineDays": s.cfg.ErasureDeadlineDays,
-		"canErase": s.erasureAllowed(sess.User)})
+		"canErase": s.erasureAllowed(r.Context(), sess.User)})
 }
 
 // handleErase deletes a person's rows from the project's tables of people's
@@ -101,9 +103,9 @@ func (s *server) handleErase(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusForbidden, "missing X-Platform-Request")
 		return
 	}
-	if !s.erasureAllowed(sess.User) {
+	if !s.erasureAllowed(r.Context(), sess.User) {
 		s.recordRefusal(r, who, "erasure", "project:"+name, "not a data-protection approver")
-		s.fail(w, r, http.StatusForbidden, "the data-protection approvers ("+strings.Join(s.cfg.DeliveryApproverGroups, ", ")+") ask for erasures")
+		s.fail(w, r, http.StatusForbidden, "the data-protection approvers (a platform role with protect-personal) ask for erasures")
 		return
 	}
 	var body struct {

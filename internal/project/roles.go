@@ -72,11 +72,37 @@ func permissionNames() []string {
 	return out
 }
 
-// A Role is a named set of the platform's permissions.
+// The platform-wide permissions (a platform role's, given to Keycloak groups
+// across every project; an administrator has them all).
+const (
+	PermSeeAllUsage    = "see-all-usage"    // every project's usage and cost (finance)
+	PermSeeGovernance  = "see-governance"   // the Governance page across projects
+	PermCertify        = "certify-products" // certify data products, and take certification away
+	PermProtectPersons = "protect-personal" // approve deliveries of personal columns; what was sent about a person; erasures
+)
+
+// PlatformPermissions are the platform-wide ones, as the Roles page lists them.
+var PlatformPermissions = []Permission{
+	{PermSeeAllUsage, "See every project's usage and cost"},
+	{PermSeeGovernance, "See the Governance page: every project's approvals, agents, rules, products and erasures"},
+	{PermCertify, "Certify data products, and take certification away"},
+	{PermProtectPersons, "Approve deliveries that send personal columns, search what was sent about a person, and record erasures"},
+}
+
+// Role scopes: a project's (given to its members in its spec), or the platform's (given to Keycloak groups on the Roles page).
+const (
+	ScopeProject  = ""
+	ScopePlatform = "platform"
+)
+
+// A Role is a named set of the platform's permissions: a project's, given in
+// a project's spec, or the platform's, given to Keycloak groups.
 type Role struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description,omitempty"`
 	Permissions []string `json:"permissions"`
+	Scope       string   `json:"scope,omitempty"`  // "" a project's, "platform" the platform's
+	Groups      []string `json:"groups,omitempty"` // a platform role's: the Keycloak groups given it
 	BuiltIn     bool     `json:"builtIn,omitempty"`
 	ChangedBy   string   `json:"changedBy,omitempty"`
 	ChangedAt   string   `json:"changedAt,omitempty"`
@@ -106,15 +132,40 @@ func (r Role) Check() error {
 		return fmt.Errorf("a role gives at least one permission")
 	case len(r.Description) > 300:
 		return fmt.Errorf("a description of up to 300 characters")
+	case r.Scope != ScopeProject && r.Scope != ScopePlatform:
+		return fmt.Errorf("a role is a project's or the platform's, not %q", r.Scope)
+	case r.Scope == ScopeProject && len(r.Groups) > 0:
+		return fmt.Errorf("a project's role is given in a project's spec, not to groups here")
+	case r.Scope == ScopePlatform && len(r.Groups) == 0:
+		return fmt.Errorf("a platform role is given to at least one Keycloak group")
 	}
 	known := permissionNames()
+	if r.Scope == ScopePlatform {
+		known = platformPermissionNames()
+	}
 	for _, p := range r.Permissions {
 		if !slices.Contains(known, p) {
-			return fmt.Errorf("no permission %q: the platform's are %v", p, known)
+			return fmt.Errorf("no permission %q for a %s role: they're %v", p, map[string]string{"": "project's", "platform": "platform"}[r.Scope], known)
+		}
+	}
+	for _, g := range r.Groups {
+		if !principalRE.MatchString(g) {
+			return fmt.Errorf("%q isn't a Keycloak group's name", g)
 		}
 	}
 	return nil
 }
+
+func platformPermissionNames() []string {
+	out := make([]string, len(PlatformPermissions))
+	for i, p := range PlatformPermissions {
+		out[i] = p.Name
+	}
+	return out
+}
+
+// AllPlatformPermissions are the platform-wide permissions, as an administrator has them.
+func AllPlatformPermissions() []string { return platformPermissionNames() }
 
 // Has says whether the role gives a permission, as the systems apply it:
 // writing the tables reads them all, and writing the files reads them.
@@ -155,7 +206,7 @@ func (p *Project) RoleOf(name string) (Role, bool) {
 		}
 	}
 	r, ok := p.Roles[name]
-	return r, ok
+	return r, ok && r.Scope == ScopeProject // a platform role isn't a project's
 }
 
 // CustomRoles are the custom roles the project's members are given, sorted.
@@ -210,3 +261,14 @@ func AllPermissions() []string { return permissionNames() }
 
 // RolesKey is where platformd keeps the defined roles, in the platform's bucket: {name: Role}.
 const RolesKey = "roles/roles.json"
+
+// ReadingRoleGroups are the groups of the project's custom roles that read its tables (16.1): what a product it consumes is read by, besides its readers, editors and pipelines.
+func (p *Project) ReadingRoleGroups() []string {
+	var out []string
+	for _, name := range p.CustomRoles() {
+		if r, ok := p.RoleOf(name); ok && r.Has(PermRead) {
+			out = append(out, p.Group(name))
+		}
+	}
+	return out
+}

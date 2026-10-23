@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
@@ -49,7 +50,7 @@ func (s *server) needs(p *project.Project, d project.Delivery) []string {
 		out = append(out, "an editor of the project other than "+d.ChangedBy)
 	}
 	if len(p.PersonalColumns(d)) > 0 && !slices.ContainsFunc(protection, other) {
-		out = append(out, "a data-protection approver ("+strings.Join(s.cfg.DeliveryApproverGroups, ", ")+")")
+		out = append(out, "a data-protection approver ("+strings.Join(s.platformGroupsWith(context.Background(), project.PermProtectPersons), ", ")+")")
 	}
 	return out
 }
@@ -80,7 +81,7 @@ func (s *server) handleDeliveries(w http.ResponseWriter, r *http.Request) {
 			Needs: s.needs(v.Spec, d), Runs: s.deliveryRuns(r, v.Name, d.Name, 10)})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"deliveries": out,
-		"canSearch": s.isAdmin(sess.User) || s.inGroups(sess.User.Groups, s.cfg.DeliveryApproverGroups)})
+		"canSearch": s.platformCan(r.Context(), sess.User, project.PermProtectPersons)})
 }
 
 // handleApproveDelivery records the signed-in person's approval of what a
@@ -107,7 +108,7 @@ func (s *server) handleApproveDelivery(w http.ResponseWriter, r *http.Request) {
 	}
 	d := &p.Spec.Deliveries[i]
 	editor := v.can(project.PermApprove)
-	protection := s.inGroups(sess.User.Groups, s.cfg.DeliveryApproverGroups)
+	protection := s.platformCan(r.Context(), sess.User, project.PermProtectPersons)
 	switch {
 	case who == d.ChangedBy:
 		s.recordRefusal(r, who, "delivery.approved", "project:"+v.Name+"/"+name, "changed it")
