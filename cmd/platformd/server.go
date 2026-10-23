@@ -188,14 +188,23 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/projects/{name}/flow", s.handleFlow)
 	mux.HandleFunc("GET /api/terms", s.handleSemantic)
 	mux.HandleFunc("GET /api/products", s.handleProducts)
-	mux.HandleFunc("POST /internal/usage/trino", s.handleTrinoEvents)      // Trino's finished queries (its HTTP event listener), for usage (13.1)
-	mux.HandleFunc("GET /internal/catalog/models", s.handleCatalogModels)  // every project's models and scorings, for catalog-sync (R15.6)
-	mux.HandleFunc("GET /api/usage", s.handleUsage)                        // every project's month: usage viewers, administrators
-	mux.HandleFunc("GET /api/projects/{name}/usage", s.handleProjectUsage) // a project's: its editors too
-	mux.HandleFunc("GET /api/governance", s.handleGovernance)              // across projects (12.9): administrators, certifiers, data-protection approvers
-	mux.HandleFunc("GET /api/roles", s.handleRoles)                        // the roles, built in and defined, and the platform's permissions (16.1)
-	mux.HandleFunc("PUT /api/roles/{role}", s.handlePutRole)               // an administrator defines or changes one
-	mux.HandleFunc("DELETE /api/roles/{role}", s.handleDeleteRole)         // ... or removes one no project gives
+	mux.HandleFunc("POST /internal/usage/trino", s.handleTrinoEvents)                      // Trino's finished queries (its HTTP event listener), for usage (13.1)
+	mux.HandleFunc("GET /internal/catalog/models", s.handleCatalogModels)                  // every project's models and scorings, for catalog-sync (R15.6)
+	mux.HandleFunc("GET /api/usage", s.handleUsage)                                        // every project's month: usage viewers, administrators
+	mux.HandleFunc("GET /api/projects/{name}/usage", s.handleProjectUsage)                 // a project's: its editors too
+	mux.HandleFunc("GET /api/governance", s.handleGovernance)                              // across projects (12.9): administrators, certifiers, data-protection approvers
+	mux.HandleFunc("GET /api/roles", s.handleRoles)                                        // the roles, built in and defined, and the platform's permissions (16.1)
+	mux.HandleFunc("PUT /api/roles/{role}", s.handlePutRole)                               // an administrator defines or changes one
+	mux.HandleFunc("DELETE /api/roles/{role}", s.handleDeleteRole)                         // ... or removes one no project gives
+	mux.HandleFunc("GET /api/templates", s.handleTemplates)                                // project templates and shared libraries (U.2)
+	mux.HandleFunc("PUT /api/templates/{template}", s.handlePutTemplate)                   // an administrator defines or changes one
+	mux.HandleFunc("DELETE /api/templates/{template}", s.handleDeleteTemplate)             // ... or removes one
+	mux.HandleFunc("POST /api/templates/{template}/projects", s.handleProjectFromTemplate) // a project made from one, with a copy of its repo
+	mux.HandleFunc("GET /api/libraries", s.handleLibraries)                                // the libraries, with their repos' addresses: to anyone the realm signed in
+	mux.HandleFunc("GET /api/libraries/{library}", s.handleLibrary)                        // a library, at the commit its ref names: to anyone the realm signed in
+	mux.HandleFunc("GET /api/libraries/{library}/archive", s.handleLibraryArchive)         // ... its files
+	mux.HandleFunc("PUT /api/libraries/{library}", s.handlePutLibrary)
+	mux.HandleFunc("DELETE /api/libraries/{library}", s.handleDeleteLibrary)
 	mux.HandleFunc("GET /api/assistants", s.handleAssistants)
 	mux.HandleFunc("PUT /api/assistants/{name}", s.handlePutAssistant)
 	mux.HandleFunc("DELETE /api/assistants/{name}", s.handleDeleteAssistant)

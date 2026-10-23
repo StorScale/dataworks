@@ -232,6 +232,20 @@ usage:
   rates: {currency: USD, cpuHour: 0.05, storageGBMonth: 0.023}
   viewerGroups: []
 
+# Project templates and shared libraries (use case U.2), on Administration →
+# Templates. With a GitLab here, a project made from a template gets a copy
+# of the template's repo in the group (its full path, as data/teams), with a
+# token of its own; and the libraries' repos are read for the projects. The
+# token (a group or service account's, scope api) lives in a Secret of the
+# install's (key token): it must be allowed to make projects in the group and
+# to read the templates' and libraries' repos. Empty url: templates without
+# repos, and no libraries.
+templates:
+  gitlab:
+    url: ""            # https://gitlab.example.com
+    group: ""          # data/teams
+    tokenSecret: ""    # a Secret in the release's namespace, with key token
+
 # Projects as code (use case 7.4): which of a project's targets this install
 # is. A plan of the project's repo lays storscale/targets/<target>.yaml over
 # storscale/project.yaml.

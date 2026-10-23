@@ -1,0 +1,7 @@
+# The templates suite's stand-in GitLab (use case U.2): the test pod's own,
+# with the token the suite writes into storscale-test-gitlab.
+templates:
+  gitlab:
+    url: http://storscale-test-gitlab:9480
+    group: teams
+    tokenSecret: storscale-test-gitlab

@@ -287,6 +287,12 @@ services:
       # The semantic layer, which platformd calls with the signed-in person's token.
       SEMANTIC_URL: http://semanticd:8000
       INSTALL_TARGET: development   # a project's repo's storscale/targets/development.yaml (use case 7.4)
+      # Project templates' repos and the shared libraries (U.2): the install's GitLab.
+      # Here, the templates suite's own (a stand-in it serves while it runs); set
+      # GITLAB_URL, GITLAB_GROUP and GITLAB_TOKEN in .env for a real one.
+      GITLAB_URL: ${GITLAB_URL:-http://test:9480}
+      GITLAB_GROUP: ${GITLAB_GROUP:-teams}
+      GITLAB_TOKEN: ${GITLAB_TOKEN:-storscale-test-gitlab}
       # The data-protection approvers: beside the administrators (bob), the
       # analysts (alice), so the example has one besides who changes a delivery.
       DELIVERY_APPROVER_GROUPS: engineers,analysts
@@ -1044,7 +1050,8 @@ services:
     depends_on:
       setup: {condition: service_completed_successfully}
 
-  # --- The end-to-end checks: docker compose run --rm test [suite ...] --------------------
+  # --- The end-to-end checks: docker compose run --rm --use-aliases test [suite ...] -------
+  # (--use-aliases: the templates suite's stand-in GitLab is reached as test)
   test:
     <<: *tools
     entrypoint: ["python", "-u", "/tests/run.py"]

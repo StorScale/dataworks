@@ -74,6 +74,14 @@ spec:
             - {name: LLM_GATEWAY_MASTER_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: LLM_MASTER_KEY}}}
             {{- end }}
             - {name: INSTALL_TARGET, value: {{ .Values.install.target | quote }}}   # a project's repo's storscale/targets/<target>.yaml
+            {{- with .Values.templates.gitlab }}
+            {{- if .url }}
+            # Project templates' repos and the shared libraries (U.2), in the install's GitLab.
+            - {name: GITLAB_URL, value: {{ .url | quote }}}
+            - {name: GITLAB_GROUP, value: {{ .group | quote }}}
+            - {name: GITLAB_TOKEN_FILE, value: /etc/storscale/gitlab/token}   # read at each use: a new token needs no restart
+            {{- end }}
+            {{- end }}
             - {name: MAINTENANCE_KEEP_HISTORY, value: {{ .Values.maintenance.history.keep | quote }}}
             # The audit log, beside Ranger's in its Solr (audit.*).
             - {name: AUDIT_URL, value: "http://ranger-solr:8983/solr/ranger_audits"}
@@ -101,6 +109,9 @@ spec:
             {{- if or .Values.brand.logo .Values.brand.icon }}
             - {name: brand, mountPath: /etc/storscale/brand, readOnly: true}
             {{- end }}
+            {{- if .Values.templates.gitlab.url }}
+            - {name: gitlab, mountPath: /etc/storscale/gitlab, readOnly: true}
+            {{- end }}
             {{- include "storscale.ca.mount" . | nindent 12 }}
           {{- include "storscale.resources" (list "20m" "32Mi" "256Mi") | nindent 10 }}
       volumes:
@@ -111,6 +122,12 @@ spec:
         - {name: trino-cert, secret: {secretName: trino-tls, items: [{key: cert.pem, path: cert.pem}]}}
         {{- if or .Values.brand.logo .Values.brand.icon }}
         - {name: brand, configMap: {name: storscale-brand}}
+        {{- end }}
+        {{- with .Values.templates.gitlab }}
+        {{- if .url }}
+        # The install's GitLab token (key token); optional: until it's there, templates' repos and libraries say so.
+        - {name: gitlab, secret: {secretName: {{ required "templates.gitlab.tokenSecret: the Secret holding the install's GitLab token (key token)" .tokenSecret | quote }}, optional: true, items: [{key: token, path: token}]}}
+        {{- end }}
         {{- end }}
 ---
 apiVersion: v1

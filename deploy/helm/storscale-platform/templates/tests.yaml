@@ -31,7 +31,7 @@ rules:
     verbs: [create]
   - apiGroups: [""]
     resources: [secrets]
-    resourceNames: [storscale-test-git, storscale-alerts, storscale-test-alerts, storscale-test-source, storscale-test-copy, storscale-test-import, storscale-test-sftp, storscale-test-s3, storscale-test-pgp]   # the health suites put back what was there
+    resourceNames: [storscale-test-git, storscale-alerts, storscale-test-alerts, storscale-test-source, storscale-test-copy, storscale-test-import, storscale-test-sftp, storscale-test-s3, storscale-test-pgp, storscale-test-gitlab]   # the health suites put back what was there
     verbs: [update, delete]
   # ... and the project Airflow the operator makes for it (its memory).
   - apiGroups: [apps]
@@ -46,6 +46,23 @@ metadata:
 roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: storscale-test}
 subjects:
   - {kind: ServiceAccount, name: storscale-test, namespace: {{ .Release.Namespace }}}
+---
+# The templates suite's stand-in GitLab (its API and its repos), served from
+# the test pod: the install's GitLab when the chart is given
+# templates.gitlab.url=http://storscale-test-gitlab:9480 (CI, the dev cluster).
+apiVersion: v1
+kind: Service
+metadata:
+  name: storscale-test-gitlab
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-weight: "1"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  selector: {app.kubernetes.io/name: storscale-test}
+  ports:
+    - {name: http, port: 9480, targetPort: 9480}
 ---
 apiVersion: v1
 kind: Pod

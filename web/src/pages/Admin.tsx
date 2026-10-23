@@ -19,6 +19,7 @@ export default function Admin() {
             <NavLink to="/admin/projects" data-testid="admin-projects">Projects</NavLink>
             <NavLink to="/admin/access" data-testid="admin-access">Access</NavLink>
             <NavLink to="/admin/roles" data-testid="admin-roles">Roles</NavLink>
+            <NavLink to="/admin/templates" data-testid="admin-templates">Templates</NavLink>
             <NavLink to="/admin/audit" data-testid="admin-audit">Audit</NavLink>
             <NavLink to="/admin/governance" data-testid="admin-governance">Governance</NavLink>
             <NavLink to="/admin/usage" data-testid="admin-usage">Usage</NavLink>
@@ -43,7 +44,10 @@ export function AdminProjects() {
         <p className="lead">
           A project is a team's tables, files and pipelines, and who may use them. The platform applies it to Keycloak, Ranger, Buckets and Nessie, and keeps them that way.
         </p>
-        <Link className="btn primary" to="/admin/projects/new" data-testid="new-project">New project</Link>
+        <div className="row">
+          <Link className="btn" to="/admin/templates" data-testid="from-template">From a template</Link>
+          <Link className="btn primary" to="/admin/projects/new" data-testid="new-project">New project</Link>
+        </div>
       </div>
       <ErrorBanner error={error} />
       {!data ? <Spinner /> : data.projects.length === 0 ? <Empty>No projects yet.</Empty> : (

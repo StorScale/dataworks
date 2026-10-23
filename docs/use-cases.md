@@ -679,7 +679,7 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 - R15.4 A registered, approved model served as an API in the project's namespace (MLflow's serving image behind the gateway), signed in through Keycloak, under the project's limits, audited. (Built 2026-10-22: a serving in the project's spec is a server of the project's own on Kubernetes (a shared one in Compose), loading the approved version and moving to a newly approved one within a minute, signed in to MLflow as a client of its own that reads the project as its readers do; reached by platformd alone, which signs the caller in, lets the project's people and agents call it, keeps the project to eight calls at a time and a serving's rows a call, and records each call and refusal.)
 - R15.5 A model card per registered model, kept with the registry. (Built 2026-10-22: the registered model's description, written on the Models tab.)
 - R15.6 Models in the catalog's lineage, with their inputs at their snapshots. (Built 2026-10-22: each registered model an ML model in OpenMetadata, with its card, its approved version, who registered and approved it, and its training run's catalog commit; each scoring an edge from its input table, at its Iceberg snapshot then, through the model to its output.)
-- R15.7 The code path for the common cases: FLAML and the libraries of R7.24, and notebook templates (churn, forecast, propensity) with U.2's project template. (Built 2026-10-22: the three templates in each person's notebooks, reading through `buckets_lake.sql`, searching models with FLAML, registering the best; U.2's project template waits for U.2.)
+- R15.7 The code path for the common cases: FLAML and the libraries of R7.24, and notebook templates (churn, forecast, propensity) with U.2's project template. (Built 2026-10-22: the three templates in each person's notebooks, reading through `buckets_lake.sql`, searching models with FLAML, registering the best. U.2's project templates came 2026-10-23: a template's repo can carry them.)
 
 ---
 
@@ -708,8 +708,8 @@ A project's members are editors or readers, and its pipelines a service account;
 2. The team signs in to a project that works on day one, and changes what they need.
 
 **Requirements**
-- R-U.3 Project templates: a spec and a repo to copy, kept by the platform's administrators.
-- R-U.4 Shared libraries (code, recipes, checks) that projects use without copying.
+- R-U.3 Project templates: a spec and a repo to copy, kept by the platform's administrators. (Built 2026-10-23: Administration → Templates; a project made from one gets a copy of its repo in the install's GitLab group, made by the platform, with a token of its own as the project's connection; "{project}" in the spec and the repo's files becomes the project's name.)
+- R-U.4 Shared libraries (code, recipes, checks) that projects use without copying. (Built 2026-10-23: a repo in the install's GitLab at a ref, read by the platform for whoever the realm signed in: a dbt package named in `packages.yml` (macros are the recipes, generic tests the checks), Python code on a pipeline's or notebook's path. A new ref reaches every project at its next run.)
 
 
 ## To decide, with the first teams

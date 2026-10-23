@@ -144,6 +144,20 @@ storscale restore --context <new cluster> --key <dir>/storscale-backup-key.pem -
 copies the data back, restores every database, gives each database role its password of then,
 puts the backup's Secrets back, restarts Buckets and runs the setup steps again.
 
+**Project templates and shared libraries** (U.2) need the company's GitLab: a group the new
+projects' repos go in, and a token (scope `api`) that may make projects there and read the
+templates' and libraries' repos, in a Secret of the release's namespace (key `token`; read at
+each use, so a new token needs no restart):
+
+```bash
+kubectl -n storscale create secret generic storscale-gitlab --from-literal=token=<token>
+storscale upgrade --context <cluster> --set templates.gitlab.url=https://gitlab.example.com \
+  --set templates.gitlab.group=data/teams --set templates.gitlab.tokenSecret=storscale-gitlab
+```
+
+Without it, templates are only a spec (no repo), and there are no libraries. A new
+project's repo token lasts a year (GitLab's most); renew it on the project's Connections tab.
+
 People's password (the example users alice, bob, carol):
 `kubectl -n storscale get secret storscale-env -o jsonpath='{.data.LAKEHOUSE_USER_PASSWORD}' | base64 -d`.
 Every other secret is in the same Secret. They're generated on install and kept on upgrade.

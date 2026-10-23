@@ -286,3 +286,41 @@ def mlflow(project):
     _mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
     _tables_at_start()
     return _mlflow
+
+
+# --- The company's shared libraries (use case U.2, R-U.4) --------------------------------
+
+def library(name, path=""):
+    """One of the company's libraries on sys.path, at the ref the
+    administrators gave it (Administration → Templates lists them): its
+    modules then import as any other. The platform reads it from GitLab as
+    you ask, so no token for it is needed here. Each commit is fetched once
+    (a cache under /tmp). Returns the folder."""
+    import io
+    import re
+    import tarfile
+    import tempfile
+    url = os.environ.get("STORSCALE_PLATFORMD_URL", "http://platformd:8080").rstrip("/")
+
+    def get(route):
+        r = requests.get(f"{url}{route}", headers={"Authorization": f"Bearer {token()}"}, timeout=300)
+        if r.status_code != 200:
+            raise RuntimeError(f"library {name}: HTTP {r.status_code} {r.text[:200]}")
+        return r
+    commit = get(f"/api/libraries/{quote(name, safe='')}").json()["commit"]
+    if not re.fullmatch(r"[0-9a-f]{7,64}", commit):
+        raise RuntimeError(f"library {name}: the platform named no commit")
+    cache = os.path.join(tempfile.gettempdir(), "storscale-libraries")
+    where = os.path.join(cache, f"{name}-{commit[:16]}")
+    if not os.path.isdir(where):
+        os.makedirs(cache, exist_ok=True)
+        work = tempfile.mkdtemp(dir=cache, prefix=f".{name}-")
+        with tarfile.open(fileobj=io.BytesIO(get(f"/api/libraries/{quote(name, safe='')}/archive?commit={commit}").content), mode="r:gz") as tar:
+            tar.extractall(work, filter="data")
+        (top,) = os.listdir(work)
+        if not os.path.isdir(where):   # else another kernel fetched it first
+            os.replace(os.path.join(work, top), where)
+    where = os.path.normpath(os.path.join(where, path))
+    if where not in sys.path:
+        sys.path.insert(0, where)
+    return where

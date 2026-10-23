@@ -135,6 +135,15 @@ type config struct {
 	// OperatorURL is the platform operator's (a GitLab webhook asks it to
 	// look at a project's merge requests at once).
 	OperatorURL string
+	// GitLabURL, GitLabGroup and GitLabToken are the install's GitLab for
+	// project templates and shared libraries (U.2): a project made from a
+	// template gets a copy of its repo in the group (its full path), and
+	// the token (api scope; may make projects there, read the templates' and
+	// libraries' repos) reads libraries for the projects: GITLAB_TOKEN, or
+	// GITLAB_TOKEN_FILE (a mounted Secret's, read at each use, so a new
+	// token needs no restart). Empty: templates without repos, and no
+	// libraries.
+	GitLabURL, GitLabGroup, GitLabToken, GitLabTokenFile string
 	// InstallTarget is which of a project's targets (its repo's
 	// storscale/targets/<target>.yaml) this install is: development, production.
 	InstallTarget                                         string
@@ -210,6 +219,8 @@ func configFromEnv(get func(string) string) (config, error) {
 	}
 	c.UsageGroups = list("USAGE_VIEWER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers"))
 	c.MLflowURL = strings.TrimRight(get("MLFLOW_URL"), "/")
+	c.GitLabURL, c.GitLabGroup, c.GitLabToken = strings.TrimRight(get("GITLAB_URL"), "/"), strings.Trim(get("GITLAB_GROUP"), "/"), get("GITLAB_TOKEN")
+	c.GitLabTokenFile = get("GITLAB_TOKEN_FILE")
 	c.ServingURL = strings.TrimRight(get("SERVING_URL"), "/")
 	var missing []string
 	for k, v := range map[string]string{"PLATFORM_URL": c.PlatformURL, "KEYCLOAK_URL": c.KeycloakURL, "OIDC_CLIENT_SECRET": c.ClientSecret} {
