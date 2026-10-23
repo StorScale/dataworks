@@ -17,7 +17,7 @@ import (
 
 // handlePutImport adds or replaces one of the project's imports.
 func (s *server) handlePutImport(w http.ResponseWriter, r *http.Request) {
-	sess, v := s.editorOf(w, r, "change its imports")
+	sess, v := s.editorOf(w, r, project.PermConnections, "change its imports")
 	if sess == nil {
 		return
 	}
@@ -64,7 +64,7 @@ func (s *server) handlePutImport(w http.ResponseWriter, r *http.Request) {
 
 // handleDeleteImport removes one of the project's imports (its tables stay, as data does).
 func (s *server) handleDeleteImport(w http.ResponseWriter, r *http.Request) {
-	sess, v := s.editorOf(w, r, "change its imports")
+	sess, v := s.editorOf(w, r, project.PermConnections, "change its imports")
 	if sess == nil {
 		return
 	}

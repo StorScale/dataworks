@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { type ColumnProfile, SQLAnswer, TableStats, ago, classify, getClassification, getFlow, getHistory, getMaintenance, runMaintenance, runSQL, when } from "../api";
-import { CheckPill, checkName, ErrorBanner, failing, limits, maskLabel, Spinner, usePlatform, usePoll, useProject } from "../lib";
+import { can, checkName, CheckPill, ErrorBanner, failing, limits, maskLabel, Spinner, usePoll, useProject } from "../lib";
 import { FlowStrip } from "./Overview";
 
 const TABS = ["columns", "preview", "lineage", "quality", "history", "storage"] as const;
@@ -23,7 +23,6 @@ function holds(p?: ColumnProfile, type?: string) {
 
 export default function Data() {
   const { name, view } = useProject();
-  const { admin } = usePlatform();
   const spec = view?.spec?.spec;
   const [params, setParams] = useSearchParams();
   const flow = usePoll(() => getFlow(name), [name], 30_000);
@@ -38,7 +37,7 @@ export default function Data() {
   if (!flow.data) return <div className="page"><Spinner /></div>;
   if (tables.length === 0) return <div className="page"><div className="empty">The catalog hasn't seen this project's tables yet. It looks every minute.</div></div>;
 
-  const reader = view?.role === "reader";
+  const reader = !!view?.role && !can(view, "read-all"); // under the readers' rules
   const lim = limits(spec, table.name);
   const protectedOf = (col: string) => (klass.data?.columns ?? []).filter((c) => c.table === table.name && c.column === col);
   const decide = async (col: string, tag: string, action: "confirm" | "remove") => {
@@ -164,7 +163,7 @@ export default function Data() {
               )
             )}
             {tab === "history" && <History project={name} table={table.name} key={table.name} />}
-            {tab === "storage" && <Storage project={name} table={table.name} canRun={view?.role === "editor" || admin} />}
+            {tab === "storage" && <Storage project={name} table={table.name} canRun={can(view, "run-pipelines")} />}
           </div>
         </section>
       </div>

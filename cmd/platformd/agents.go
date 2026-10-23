@@ -64,12 +64,12 @@ func (s *server) handleAgents(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"agents": s.agentViews(v.Spec), "tools": project.AgentTools, "grants": grants,
-		"canEdit": v.Role == project.Editor || s.isAdmin(sess.User)})
+		"canEdit": v.can(project.PermBuild), "canApprove": v.can(project.PermApprove)})
 }
 
 // handlePutAgent registers an agent, or changes one (which takes its approval away if the change is to what approval covers).
 func (s *server) handlePutAgent(w http.ResponseWriter, r *http.Request) {
-	sess, v := s.editorOf(w, r, "register its agents")
+	sess, v := s.editorOf(w, r, project.PermBuild, "register its agents")
 	if sess == nil {
 		return
 	}
@@ -110,7 +110,7 @@ func (s *server) handlePutAgent(w http.ResponseWriter, r *http.Request) {
 // registered it. The agent's secret is made here and shown once; the
 // operator makes its client from the connection that keeps it.
 func (s *server) handleApproveAgent(w http.ResponseWriter, r *http.Request) {
-	sess, v := s.editorOf(w, r, "approve its agents")
+	sess, v := s.editorOf(w, r, project.PermApprove, "approve its agents")
 	if sess == nil {
 		return
 	}
@@ -154,7 +154,7 @@ func (s *server) handleApproveAgent(w http.ResponseWriter, r *http.Request) {
 // handleDeleteAgent revokes an agent: out of the spec, its secret gone; the
 // operator removes its client at its next pass, and its token is refused.
 func (s *server) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
-	sess, v := s.editorOf(w, r, "revoke its agents")
+	sess, v := s.editorOf(w, r, project.PermBuild, "revoke its agents")
 	if sess == nil {
 		return
 	}

@@ -18,6 +18,7 @@ export default function Admin() {
             <NavLink to="/admin/health" data-testid="admin-health">Health</NavLink>
             <NavLink to="/admin/projects" data-testid="admin-projects">Projects</NavLink>
             <NavLink to="/admin/access" data-testid="admin-access">Access</NavLink>
+            <NavLink to="/admin/roles" data-testid="admin-roles">Roles</NavLink>
             <NavLink to="/admin/audit" data-testid="admin-audit">Audit</NavLink>
             <NavLink to="/admin/governance" data-testid="admin-governance">Governance</NavLink>
             <NavLink to="/admin/usage" data-testid="admin-usage">Usage</NavLink>

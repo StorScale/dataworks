@@ -93,7 +93,7 @@ func (s *server) handleFlowLLMRun(w http.ResponseWriter, r *http.Request) {
 	}
 	allowed := false
 	for _, m := range st.Members {
-		if m.Username == who && (m.Role == "editor" || m.Role == "pipelines") {
+		if m.Username == who && (m.Role == "pipelines" || project.Permits(m.Role, m.Can, project.PermBuild)) {
 			allowed = true
 		}
 	}

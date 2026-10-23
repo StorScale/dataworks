@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { asOf, atCommit, getFlow, Moment, runSQL, sourceCatalog, SQLAnswer } from "../api";
-import { ErrorBanner, limits, maskLabel, usePoll, useProject } from "../lib";
+import { can, ErrorBanner, limits, maskLabel, usePoll, useProject } from "../lib";
 import { Results } from "./Data";
 
 // SQL is a query editor over the project's tables. Queries run in Trino as
@@ -21,7 +21,7 @@ export default function SQL() {
   const [open, setOpen] = useState<string | undefined>(params.get("table") ?? undefined);
   const box = useRef<HTMLTextAreaElement>(null);
   const tables = flow.data?.tables.filter((t) => !t.external) ?? [];
-  const reader = view?.role === "reader";
+  const reader = !!view?.role && !can(view, "read-all");
   useEffect(() => { if (!sql && tables[0]) setSql(starter(tables[0].name)); }, [tables[0]?.name]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The project's sources' tables, as Trino shows them to this person (what

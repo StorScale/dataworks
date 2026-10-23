@@ -319,7 +319,7 @@ func (s *server) handleProjectAlerts(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, http.StatusForbidden, "missing X-Platform-Request")
 			return
 		}
-		if v.Role != project.Editor && !s.isAdmin(sess.User) {
+		if !v.can(project.PermMuteAlerts) {
 			s.fail(w, r, http.StatusForbidden, "the project's editors mute its alerts")
 			return
 		}

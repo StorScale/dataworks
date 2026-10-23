@@ -45,12 +45,12 @@ func TestADashedNameMakesAnIdentifierNamespace(t *testing.T) {
 
 func TestValidateSaysEverythingThatsWrong(t *testing.T) {
 	_, err := Parse([]byte(`{"metadata": {"name": "X"}, "spec": {
-	  "members": [{"group": "a", "user": "b", "role": "owner"}],
+	  "members": [{"group": "a", "user": "b", "role": "Owner"}],
 	  "tables": {"namespace": "Bad Name", "readers": {"masks": [{"table": "t", "column": "c", "type": "SCRAMBLE"}]}}}}`))
 	if err == nil {
 		t.Fatal("accepted")
 	}
-	for _, want := range []string{`name "X"`, "not both", `role "owner"`, `namespace "Bad Name"`, `mask type "SCRAMBLE"`} {
+	for _, want := range []string{`name "X"`, "not both", `role "Owner"`, `namespace "Bad Name"`, `mask type "SCRAMBLE"`} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q doesn't mention %s", err, want)
 		}

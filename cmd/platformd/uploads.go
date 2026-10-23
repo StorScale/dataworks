@@ -108,12 +108,12 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p, role, ok := s.projectRole(w, r, who)
+	p, _, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
-	if role != project.Editor {
-		s.recordRefusal(r, who, "upload", "project:"+p.Metadata.Name, "not an editor")
+	if !s.memberCan(r, p.Metadata.Name, who, project.PermWriteFiles) {
+		s.recordRefusal(r, who, "upload", "project:"+p.Metadata.Name, "not permitted (write-files)")
 		s.fail(w, r, http.StatusForbidden, "the project's editors upload files to it")
 		return
 	}
@@ -211,12 +211,12 @@ func (s *server) handleDeleteUpload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p, role, ok := s.projectRole(w, r, who)
+	p, _, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
 	name := r.PathValue("file")
-	if role != project.Editor || !uploadNameRE.MatchString(name) {
+	if !s.memberCan(r, p.Metadata.Name, who, project.PermWriteFiles) || !uploadNameRE.MatchString(name) {
 		s.fail(w, r, http.StatusForbidden, "the project's editors remove its uploads")
 		return
 	}

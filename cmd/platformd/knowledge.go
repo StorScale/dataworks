@@ -110,7 +110,7 @@ func (s *server) handleKnowledgeBuild(w http.ResponseWriter, r *http.Request) {
 	}
 	allowed := false
 	for _, m := range st.Members {
-		if m.Username == who && (m.Role == "editor" || m.Role == "pipelines") {
+		if m.Username == who && (m.Role == "pipelines" || project.Permits(m.Role, m.Can, project.PermBuild)) {
 			allowed = true
 		}
 	}
@@ -314,7 +314,7 @@ func (s *server) handleKnowledgeList(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p, role, ok := s.projectRole(w, r, who)
+	p, _, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
@@ -337,7 +337,7 @@ func (s *server) handleKnowledgeList(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, b)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"banks": out, "canBuild": role == "editor",
+	writeJSON(w, http.StatusOK, map[string]any{"banks": out, "canBuild": s.memberCan(r, p.Metadata.Name, who, project.PermBuild),
 		// what a new bank needs, so the card can say: a budget to embed on, a bucket for files, pipelines for a schedule
 		"hasBudget": p.Spec.LLM != nil && p.Spec.LLM.Budget > 0, "hasFiles": p.Spec.Files != nil, "hasPipelines": p.Spec.Pipelines != nil})
 }
@@ -345,7 +345,7 @@ func (s *server) handleKnowledgeList(w http.ResponseWriter, r *http.Request) {
 // handlePutKnowledge declares a bank, or changes one: the project's editors,
 // as they register its agents. Its table is made when it's first built.
 func (s *server) handlePutKnowledge(w http.ResponseWriter, r *http.Request) {
-	sess, v := s.editorOf(w, r, "declare its knowledge banks")
+	sess, v := s.editorOf(w, r, project.PermBuild, "declare its knowledge banks")
 	if sess == nil {
 		return
 	}
@@ -385,7 +385,7 @@ func (s *server) handlePutKnowledge(w http.ResponseWriter, r *http.Request) {
 // handleDeleteKnowledge takes a bank out of the project: its editors. Its
 // table stays, a table of the project's like any other, until they drop it.
 func (s *server) handleDeleteKnowledge(w http.ResponseWriter, r *http.Request) {
-	sess, v := s.editorOf(w, r, "remove its knowledge banks")
+	sess, v := s.editorOf(w, r, project.PermBuild, "remove its knowledge banks")
 	if sess == nil {
 		return
 	}

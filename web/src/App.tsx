@@ -5,6 +5,7 @@ import { ProjectFrame, TopBar } from "./components";
 import { PlatformContext, Spinner, usePlatform } from "./lib";
 import Admin, { AdminAccess, AdminMonitoring, AdminProjects } from "./pages/Admin";
 import AdminAssistants from "./pages/Assistants";
+import AdminRoles from "./pages/Roles";
 import { AdminHealth } from "./pages/Health";
 import { AdminAudit, ProjectAudit } from "./pages/Audit";
 import Tags from "./pages/Tags";
@@ -104,6 +105,7 @@ function Shell() {
           <Route path="governance" element={<Governance />} />
           <Route path="usage" element={<Usage />} />
           <Route path="assistants" element={<AdminAssistants />} />
+          <Route path="roles" element={<AdminRoles />} />
           <Route path="monitoring" element={<AdminMonitoring />} />
         </Route>
         <Route path="/governance" element={<Governance />} />

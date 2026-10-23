@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -86,6 +87,10 @@ func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Sta
 	people, err := r.members(ctx, p)
 	st.Members = people.list
 	part("keycloak", err)
+	if len(people.undefined) > 0 {
+		part("roles", fmt.Errorf("no role %s: an administrator defines it (Administration → Roles); its members have no access meanwhile",
+			strings.Join(people.undefined, ", ")))
+	}
 	// The open merge requests (their data branches' policies go with the
 	// project's); on GitLab's error, those of before, kept.
 	var before []int
@@ -270,8 +275,10 @@ func (r *Reconciler) Delete(ctx context.Context, p *project.Project) error {
 
 // people are a project's members, by the group they belong in.
 type people struct {
-	list    []project.Person
-	byGroup map[string]map[string]kcUser // project group -> user ID -> user
+	list      []project.Person
+	byGroup   map[string]map[string]kcUser // project group -> user ID -> user
+	undefined []string                     // custom roles its members are given that no one defined
+	gone      []string                     // the groups of custom roles it no longer gives: Ranger's go once no policy names them
 }
 
 // members works out who's in the project, and makes the project's Keycloak
@@ -307,16 +314,36 @@ func (r *Reconciler) members(ctx context.Context, p *project.Project) (people, e
 		}
 		for _, u := range found {
 			users[u.ID] = u
-			if role[u.ID] != project.Editor {
+			// One role each: the one that gives the most (an editor's above
+			// all; a reader's below any other), so the readers' rules don't
+			// hold someone a role lifts them for.
+			if have, ok := role[u.ID]; !ok || roleRank(p, m.Role) > roleRank(p, have) {
 				role[u.ID], via[u.ID] = m.Role, m.Group
 			}
 		}
 	}
 	wanted := map[string]map[string]kcUser{p.Group(project.Reader): {}, p.Group(project.Editor): {}}
-	for id, rl := range role {
-		wanted[p.Group(rl)][id] = users[id]
-		out.list = append(out.list, project.Person{Username: users[id].Username, Role: rl, Via: via[id]})
+	var undefined []string
+	for _, name := range p.CustomRoles() {
+		if _, ok := p.RoleOf(name); ok {
+			wanted[p.Group(name)] = map[string]kcUser{}
+		} else {
+			undefined = append(undefined, name)
+		}
 	}
+	for id, rl := range role {
+		def, ok := p.RoleOf(rl)
+		if !ok {
+			continue // a role nobody defined gives nothing
+		}
+		wanted[p.Group(rl)][id] = users[id]
+		out.list = append(out.list, project.Person{Username: users[id].Username, Role: rl, Via: via[id], Can: def.Granted()})
+	}
+	gone, err := r.removeRoleGroups(ctx, p)
+	if err != nil {
+		return out, err
+	}
+	out.gone = gone
 	if pl := p.Spec.Pipelines; pl != nil {
 		clientID := pl.ServiceAccount
 		if r.ownAirflow(p) { // its own service account, made with its Airflow's keys
@@ -394,6 +421,7 @@ func (r *Reconciler) members(ctx context.Context, p *project.Project) (people, e
 	}
 	sort.Slice(out.list, func(i, j int) bool { return out.list[i].Username < out.list[j].Username })
 	out.byGroup = wanted
+	out.undefined = undefined
 	return out, nil
 }
 
@@ -407,6 +435,11 @@ func (r *Reconciler) applyRanger(ctx context.Context, p *project.Project, ppl pe
 	// The policies name the readers' and editors' groups (and the pipelines',
 	// when there are pipelines) whether or not anyone's in them yet.
 	named := []string{p.Group(project.Reader), p.Group(project.Editor)}
+	for _, name := range p.CustomRoles() {
+		if _, ok := p.RoleOf(name); ok {
+			named = append(named, p.Group(name))
+		}
+	}
 	if p.Spec.Pipelines != nil {
 		named = append(named, p.Group("pipelines"))
 	}
@@ -428,7 +461,10 @@ func (r *Reconciler) applyRanger(ctx context.Context, p *project.Project, ppl pe
 	have["public"] = 0
 	policies := append(p.RangerPolicies(), p.ReviewPolicies(reviews)...)
 	policies = append(policies, p.ProtectionPolicies(r.classification(ctx, p), r.Protection, r.ProtectSuggested)...)
-	return r.Ranger.syncPolicies(ctx, p.RangerPrefix(), knownGroups(policies, have))
+	if err := r.Ranger.syncPolicies(ctx, p.RangerPrefix(), knownGroups(policies, have)); err != nil {
+		return err
+	}
+	return r.Ranger.deleteGroups(ctx, ppl.gone)
 }
 
 // classification is what the catalog has tagged of a project's columns, as
@@ -523,7 +559,9 @@ func (r *Reconciler) pass(ctx context.Context, last map[string]time.Time, resync
 		byName[st.Name] = st
 	}
 	live := map[string]bool{}
+	roles := r.roles(ctx)
 	for _, p := range specs {
+		p.Roles = roles
 		live[p.Metadata.Name] = true
 		st := byName[p.Metadata.Name]
 		since := time.Since(last[p.Metadata.Name])

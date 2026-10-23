@@ -33,7 +33,8 @@ type Part struct {
 }
 
 type Person struct {
-	Username string `json:"username"`
-	Role     string `json:"role"` // reader, editor, or pipelines
-	Via      string `json:"via"`  // the group they're in it through, or "" when named
+	Username string   `json:"username"`
+	Role     string   `json:"role"`          // reader, editor, a custom role (16.1), or pipelines, agent, serving
+	Via      string   `json:"via"`           // the group they're in it through, or "" when named
+	Can      []string `json:"can,omitempty"` // the role's permissions (people's roles alone)
 }

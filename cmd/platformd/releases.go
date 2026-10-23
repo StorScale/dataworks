@@ -137,7 +137,7 @@ func (s *server) handlePlans(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"plans": plans, "release": release, "target": s.cfg.InstallTarget,
 		"repo":     pl != nil && pl.Repo != "",
-		"canPlan":  v.Role == project.Editor || s.isAdmin(sess.User),
+		"canPlan":  v.can(project.PermRelease),
 		"canApply": s.isAdmin(sess.User),
 	})
 }
@@ -161,7 +161,7 @@ func (s *server) handlePlan(w http.ResponseWriter, r *http.Request) {
 	if v == nil {
 		return
 	}
-	if v.Role != project.Editor && !s.isAdmin(sess.User) {
+	if !v.can(project.PermRelease) {
 		s.fail(w, r, http.StatusForbidden, "the project's editors plan its releases")
 		return
 	}

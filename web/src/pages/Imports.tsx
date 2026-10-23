@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getConnections, getConnectors, putImport, removeImport, resetImport, type Connection, type Connector, type Import } from "../api";
 import { Empty, Intro } from "../components";
-import { ErrorBanner, Spinner, usePlatform, useProject } from "../lib";
+import { can, ErrorBanner, Spinner, useProject } from "../lib";
 
 const sourceLabel: Record<Import["source"], string> = { rest_api: "a REST API", sql_database: "a database", salesforce: "Salesforce", files: "uploaded files" };
 
@@ -11,14 +11,13 @@ const sourceLabel: Record<Import["source"], string> = { rest_api: "a REST API", 
 // (use case 8.4): sign in (a connection), pick what to copy, and when.
 export default function Imports() {
   const { name, view, reload } = useProject();
-  const { admin } = usePlatform();
   const [adding, setAdding] = useState<Connector>();
   const [connectors, setConnectors] = useState<Connector[]>();
   const [error, setError] = useState<string>();
   useEffect(() => { getConnectors().then((r) => setConnectors(r.connectors)).catch((e) => setError(e.message)); }, []);
   if (!view?.spec) return <div className="page"><Spinner /></div>;
   const imports = view.spec.spec.imports ?? [];
-  const canEdit = view.role === "editor" || admin;
+  const canEdit = can(view, "connections");
   const act = async (f: () => Promise<unknown>) => { setError(undefined); try { await f(); reload(); } catch (e) { setError((e as Error).message); } };
   return (
     <div className="page stack" data-testid="imports">

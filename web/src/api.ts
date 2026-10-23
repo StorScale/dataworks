@@ -51,7 +51,7 @@ export async function signOut() {
 
 // --- Projects -----------------------------------------------------------------------
 
-export type Member = { group?: string; user?: string; role: "reader" | "editor" };
+export type Member = { group?: string; user?: string; role: string }; // reader, editor, or a role the administrators define (16.1)
 export type Spec = {
   description?: string;
   members: Member[];
@@ -100,9 +100,9 @@ export type Source = {
 export const sourceCatalog = (project: string, s: { name: string }) => `${project.replace(/-/g, "_")}_${s.name}`;
 export type Project = { apiVersion: string; kind: string; metadata: { name: string }; spec: Spec };
 export type Part = { system: string; ok: boolean; message: string };
-export type Person = { username: string; role: string; via: string };
+export type Person = { username: string; role: string; via: string; can?: string[] };
 export type Status = { name: string; phase: string; parts: Part[]; members: Person[]; updated: string };
-export type ProjectView = { name: string; spec?: Project; status?: Status; role?: string };
+export type ProjectView = { name: string; spec?: Project; status?: Status; role?: string; can?: string[] };
 
 export const MASK_TYPES = ["MASK", "MASK_SHOW_LAST_4", "MASK_SHOW_FIRST_4", "MASK_HASH", "MASK_NULL", "MASK_NONE", "MASK_DATE_SHOW_YEAR"];
 
@@ -136,6 +136,14 @@ export const putProject = (p: Project) => api<ProjectView>("PUT", `/api/projects
 export const deleteProject = (name: string) => api<void>("DELETE", `/api/projects/${encodeURIComponent(name)}`);
 export type AccessPerson = { username: string; roles: Record<string, string>; via: Record<string, string> };
 export type Assistant = { name: string; description?: string; redirectUris: string[]; addedBy?: string; addedAt?: string; clientId: string; mcpUrl: string };
+// Roles of the company's own (16.1): editor and reader built in, the rest the administrators define.
+export type Permission = { name: string; says: string };
+export type Role = { name: string; description?: string; permissions: string[]; builtIn?: boolean; changedBy?: string; changedAt?: string;
+  granted: string[]; projects: string[] };
+export const getRoles = () => api<{ roles: Role[]; permissions: Permission[]; canEdit: boolean }>("GET", "/api/roles");
+export const putRole = (name: string, r: { description?: string; permissions: string[] }) =>
+  api<Role>("PUT", `/api/roles/${encodeURIComponent(name)}`, r);
+export const deleteRole = (name: string) => api<unknown>("DELETE", `/api/roles/${encodeURIComponent(name)}`);
 export const getAssistants = () => api<{ assistants: Assistant[]; available: boolean }>("GET", "/api/assistants");
 export const putAssistant = (a: { name: string; description?: string; redirectUris: string[] }) =>
   api<Assistant>("PUT", `/api/assistants/${encodeURIComponent(a.name)}`, a);

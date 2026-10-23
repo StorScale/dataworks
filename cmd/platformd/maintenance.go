@@ -292,7 +292,7 @@ func (s *server) handleMaintenance(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, http.StatusForbidden, "missing X-Platform-Request")
 			return
 		}
-		if v.Role != project.Editor && !s.isAdmin(sess.User) {
+		if !v.can(project.PermRunPipelines) {
 			s.fail(w, r, http.StatusForbidden, "the project's editors ask for its maintenance")
 			return
 		}

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getSemantic, MetricAnswer, putSemantic, queryMetrics, runSemanticTests, type SemanticTest } from "../api";
-import { ErrorBanner, Spinner, usePoll, useProject } from "../lib";
+import { can, ErrorBanner, Spinner, usePoll, useProject } from "../lib";
 import { Empty } from "../components";
 
 // Metrics is a project's semantic layer: its metrics, defined once, a way to
@@ -28,7 +28,7 @@ export default function Metrics() {
     try { setTests(await runSemanticTests(name)); } catch (e) { setTestError((e as Error).message); } finally { setTesting(false); }
   };
   const [defsOpen, setDefsOpen] = useState(false);
-  const editor = view?.role === "editor";
+  const editor = can(view, "change-metrics");
 
   if (model.error && !model.data) return <div className="page"><ErrorBanner error={model.error} /></div>;
   if (!model.data) return <div className="page"><Spinner /></div>;

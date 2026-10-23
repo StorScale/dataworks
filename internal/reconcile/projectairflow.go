@@ -167,7 +167,16 @@ func connectionsHash(key string, conns ...pipelines.Connection) string {
 // connections it starts with, and its Service.
 func (pa *ProjectAirflows) objects(a *Airflow, p *project.Project, connections string) (deployment, service map[string]any) {
 	bundles, _ := json.Marshal([]Bundle{a.bundle(p), StorscaleBundle})
-	roles, _ := json.Marshal(map[string][]string{p.Group(project.Editor): {"Op"}, p.Group(project.Reader): {"Viewer"}})
+	groups := map[string][]string{p.Group(project.Editor): {"Op"}, p.Group(project.Reader): {"Viewer"}}
+	for _, name := range p.CustomRoles() { // a custom role (16.1): Op if it runs the pipelines, else it watches them
+		if r, ok := p.RoleOf(name); ok {
+			groups[p.Group(name)] = []string{"Viewer"}
+			if r.Has(project.PermRunPipelines) {
+				groups[p.Group(name)] = []string{"Op"}
+			}
+		}
+	}
+	roles, _ := json.Marshal(groups)
 	pairs := []string{"@PROJECT@", p.Metadata.Name, "@AIRFLOW@", p.AirflowName(), "@DATABASE@", p.AirflowDatabase(),
 		"@BUNDLES@", string(bundles), "@ROLE_GROUPS@", string(roles)}
 	for k, v := range pa.memory(p) {

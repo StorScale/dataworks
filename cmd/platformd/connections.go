@@ -66,12 +66,12 @@ func (s *server) handleConnections(w http.ResponseWriter, r *http.Request) {
 		out = append(out, view(v.Spec, c))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"connections": out, "kinds": project.ConnectionKinds,
-		"canEdit": v.Role == project.Editor || s.isAdmin(sess.User)})
+		"canEdit": v.can(project.PermConnections)})
 }
 
 // editorOf is the signed-in editor (or administrator) of the request's
 // project, for a change; otherwise it answers.
-func (s *server) editorOf(w http.ResponseWriter, r *http.Request, what string) (*session, *projectView) {
+func (s *server) editorOf(w http.ResponseWriter, r *http.Request, perm, what string) (*session, *projectView) {
 	sess := s.signedIn(w, r)
 	if sess == nil {
 		return nil, nil
@@ -84,8 +84,8 @@ func (s *server) editorOf(w http.ResponseWriter, r *http.Request, what string) (
 	if v == nil {
 		return nil, nil
 	}
-	if v.Role != project.Editor && !s.isAdmin(sess.User) {
-		s.fail(w, r, http.StatusForbidden, "the project's editors "+what)
+	if !v.can(perm) {
+		s.fail(w, r, http.StatusForbidden, "the project's editors "+what+" (it takes the permission "+perm+")")
 		return nil, nil
 	}
 	return sess, v
@@ -95,7 +95,7 @@ func (s *server) editorOf(w http.ResponseWriter, r *http.Request, what string) (
 // and a dash first) or gives an existing one new values (PUT: a value left
 // empty stays as it was; rotating a token is pasting the new one).
 func (s *server) handlePutConnection(w http.ResponseWriter, r *http.Request) {
-	sess, v := s.editorOf(w, r, "change its connections")
+	sess, v := s.editorOf(w, r, project.PermConnections, "change its connections")
 	if sess == nil {
 		return
 	}
@@ -186,7 +186,7 @@ func (s *server) handlePutConnection(w http.ResponseWriter, r *http.Request) {
 
 // handleDeleteConnection removes a connection the project's spec doesn't name.
 func (s *server) handleDeleteConnection(w http.ResponseWriter, r *http.Request) {
-	sess, v := s.editorOf(w, r, "remove its connections")
+	sess, v := s.editorOf(w, r, project.PermConnections, "remove its connections")
 	if sess == nil {
 		return
 	}

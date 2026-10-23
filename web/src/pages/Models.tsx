@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { approveModel, getModels, getScorings, getServings, putModelCard, type RegisteredModel, type Scoring } from "../api";
 import { Empty, Intro } from "../components";
-import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
+import { can, ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
 
 // A project's models (use case 15.1): its registered models with their cards
 // and versions, each version's approval (by an editor other than who
@@ -52,7 +52,7 @@ with mlflow.start_run():                          # stamped with you and the dat
     mlflow.sklearn.log_model(model, name="model", registered_model_name="churn")`}</pre>
         <span className="field-help">Elsewhere, MLFLOW_TRACKING_URI=<span className="mono">{d.trackingUri}</span> with MLFLOW_TRACKING_TOKEN, a Keycloak token.</span>
       </div>
-      {view?.role === "reader" && <div className="small muted">As a reader you see the project's models and experiments; its editors train, register and approve them.</div>}
+      {!can(view, "models") && <div className="small muted">As a reader you see the project's models and experiments; its editors train, register and approve them.</div>}
     </div>
   );
 }

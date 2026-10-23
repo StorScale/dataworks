@@ -19,7 +19,10 @@ func (s *server) handleSemantic(w http.ResponseWriter, r *http.Request) {
 	case sess == nil:
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"login": "/auth/login"})
 		return
-	case !s.allowed(sess.User.Groups):
+	// Someone in the platform's groups, or a member of the project (its
+	// pipelines and agents, signed in with a token: a scheduled notebook's
+	// buckets_lake.sql), whom semanticd checks again.
+	case !s.allowed(sess.User.Groups) && (r.PathValue("name") == "" || s.mlflowRole(r, r.PathValue("name"), sess.User.Username) == ""):
 		s.fail(w, r, http.StatusForbidden, "no access")
 		return
 	case s.cfg.SemanticURL == "":

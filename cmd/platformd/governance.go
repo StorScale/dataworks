@@ -88,6 +88,7 @@ func (s *server) handleGovernance(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusForbidden, "the administrators, the products' certifiers and the data-protection approvers see the governance view")
 		return
 	}
+	defs, _ := s.roleDefs(r.Context()) // the roles of the company's own: who among them is under the readers' rules
 	specs, err := s.store.Projects(r.Context())
 	if err != nil {
 		s.fail(w, r, http.StatusBadGateway, "the project store isn't answering")
@@ -140,8 +141,12 @@ func (s *server) handleGovernance(w http.ResponseWriter, r *http.Request) {
 		}
 		gr := govRules{Project: name, Readers: []string{}}
 		for _, m := range p.Spec.Members {
-			if m.Role == "reader" {
+			def, custom := defs[m.Role]
+			switch {
+			case m.Role == project.Reader:
 				gr.Readers = append(gr.Readers, firstOf(m.Group, m.User))
+			case custom && def.Has(project.PermRead) && !def.Has(project.PermReadAll):
+				gr.Readers = append(gr.Readers, firstOf(m.Group, m.User)+" ("+m.Role+")")
 			}
 		}
 		if t := p.Spec.Tables; t != nil {

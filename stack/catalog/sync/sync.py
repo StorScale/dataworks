@@ -448,6 +448,9 @@ def model_description(project, m, scorings):
                 out.append(f"\n{run}, on the catalog at its Nessie commit `{v['dataCommit']}`: every table as it was then.")
             else:
                 out.append(f"\n{run}; it recorded no data commit.")
+        if v.get("tables"):
+            out.append("\nIts training read " + ", ".join(f"`{t['table']}`" + (f" (snapshot {t['snapshot']})" if t.get("snapshot") else "")
+                                                       for t in v["tables"]) + ", as its notebook's queries recorded them.")
     for s in scorings:
         out.append(f"\nScores `{s['table']}` into `{s['output']}` (the scoring {s['name']}, `{s['schedule']}`).")
     return "\n".join(out)
@@ -455,10 +458,12 @@ def model_description(project, m, scorings):
 
 def sync_models():
     """OpenMetadata's ML models as the projects' registered models (R15.6),
-    as platformd says them; each scoring's input table upstream of its model,
-    with the input's snapshot when the approved version was trained, and its
-    output downstream. Models gone (their project too) removed, and edges no
-    scoring draws; a project whose models platformd couldn't read keeps its."""
+    as platformd says them; upstream of each model, the tables its approved
+    version's training read (each at its snapshot then) and each scoring's
+    input table (with its snapshot when the approved version was trained);
+    downstream, each scoring's output. Only tables the catalog has. Models
+    gone (their project too) removed, and edges neither draws; a project
+    whose models platformd couldn't read keeps its."""
     h = admin_headers()
     r = requests.get(f"{PLATFORMD_URL}/internal/catalog/models", headers=h, timeout=120)
     r.raise_for_status()
@@ -484,9 +489,16 @@ def sync_models():
             requests.delete(f"{OM}/v1/mlmodels/{x['id']}", headers=h, timeout=30, params={"hardDelete": "true"})
             log.info("model %s: no longer registered, removed", x["name"])
 
+    found = {}
+
+    def by_name(fqn):   # catalog.schema.table, in the catalog's Trino service; None when it hasn't the table
+        if fqn not in found:
+            t = requests.get(f"{OM}/v1/tables/name/{SERVICE}.{fqn}", headers=h, timeout=30)
+            found[fqn] = t.json() if t.ok else None
+        return found[fqn]
+
     def table(p, name):
-        t = requests.get(f"{OM}/v1/tables/name/{SERVICE}.{p['catalog']}.{p['namespace']}.{name}", headers=h, timeout=30)
-        return t.json() if t.ok else None
+        return by_name(f"{p['catalog']}.{p['namespace']}.{name}")
     for key, (p, m) in wanted.items():
         project, v = p["name"], m.get("approved") or {}
         scorings = [s for s in p.get("scorings") or [] if s["model"] == m["name"]]
@@ -504,6 +516,14 @@ def sync_models():
             continue
         model = r.json()
         edges = set()
+        upstream = {}   # a table's id -> (its name, what its edge to the model says): one edge, however it's drawn
+        for t in v.get("tables") or []:
+            src = by_name(t["table"])
+            if src:   # what the approved version's training read, and at which snapshot
+                at = f"Nessie commit `{v['dataCommit']}`" if v.get("dataCommit") else "a Nessie commit not recorded"
+                at += f", Iceberg snapshot {t['snapshot']}" if t.get("snapshot") else ""
+                upstream.setdefault(src["id"], (t["table"], []))[1].append(
+                    f"Trained on: the approved version, {v['version']}, read it (the run `{v.get('runId')}`, {when(v.get('started'))}) at {at}.")
         for s in scorings:
             src, dst = table(p, s["table"]), table(p, s["output"])
             if src:   # the input, at the snapshot the approved version was trained on
@@ -513,12 +533,8 @@ def sync_models():
                     at += f", when this table was Iceberg snapshot {s['inputSnapshot']}." if s.get("inputSnapshot") else (
                         ", when this table's snapshot isn't known." if v.get("dataCommit") else ".")
                 columns = f" (its columns {', '.join(s['columns'])})" if s.get("columns") else ""
-                edges.add((src["id"], model["id"]))
-                r = requests.put(f"{OM}/v1/lineage", headers=h, timeout=30, json={"edge": {
-                    "fromEntity": {"id": src["id"], "type": "table"}, "toEntity": {"id": model["id"], "type": "mlmodel"},
-                    "lineageDetails": {"description": f"Scored by {m['name']}{columns}: the scoring {s['name']} ({s['schedule']}). {at}"}}})
-                if not r.ok:
-                    log.warning("lineage of %s to %s: HTTP %d %s", s["table"], key, r.status_code, r.text[:200])
+                upstream.setdefault(src["id"], (s["table"], []))[1].append(
+                    f"Scored by {m['name']}{columns}: the scoring {s['name']} ({s['schedule']}). {at}")
             if dst:
                 edges.add((model["id"], dst["id"]))
                 r = requests.put(f"{OM}/v1/lineage", headers=h, timeout=30, json={"edge": {
@@ -526,12 +542,19 @@ def sync_models():
                     "lineageDetails": {"description": f"Its scores of {s['table']}, by the approved version: the scoring {s['name']} ({s['schedule']}), written afresh each run."}}})
                 if not r.ok:
                     log.warning("lineage of %s to %s: HTTP %d %s", key, s["output"], r.status_code, r.text[:200])
+        for src_id, (name, said) in upstream.items():
+            edges.add((src_id, model["id"]))
+            r = requests.put(f"{OM}/v1/lineage", headers=h, timeout=30, json={"edge": {
+                "fromEntity": {"id": src_id, "type": "table"}, "toEntity": {"id": model["id"], "type": "mlmodel"},
+                "lineageDetails": {"description": " ".join(said)}}})
+            if not r.ok:
+                log.warning("lineage of %s to %s: HTTP %d %s", name, key, r.status_code, r.text[:200])
         if project not in unknown:
             prune_model_lineage(h, model["id"], edges)
 
 
 def prune_model_lineage(h, model_id, keep):
-    """A model's edges to and from tables that no scoring draws any more, deleted."""
+    """A model's edges to and from tables that neither its scorings nor its training draw any more, deleted."""
     r = requests.get(f"{OM}/v1/lineage/mlmodel/{model_id}", headers=h, timeout=30, params={"upstreamDepth": 1, "downstreamDepth": 1})
     if not r.ok:
         return
@@ -546,7 +569,7 @@ def prune_model_lineage(h, model_id, keep):
             continue
         ta, tb = ("mlmodel", "table") if a == model_id else ("table", "mlmodel")
         d = requests.delete(f"{OM}/v1/lineage/{ta}/{a}/{tb}/{b}", headers=h, timeout=30)
-        log.info("lineage of model %s: an edge no scoring draws, removed (HTTP %d)", model_id, d.status_code)
+        log.info("lineage of model %s: an edge nothing draws now, removed (HTTP %d)", model_id, d.status_code)
 
 
 def q(name):

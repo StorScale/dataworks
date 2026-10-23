@@ -38,12 +38,15 @@ RUN /opt/score/bin/pip install --no-cache-dir mlflow-skinny==3.17.2 scikit-learn
 COPY storscale_score_run.py storscale_serve.py /opt/score/
 # Notebooks on a schedule (use case 7.7): papermill runs them in a virtualenv
 # with the notebook image's packages (storscale.notebook starts it), and
-# buckets_lake signed in as the project's pipelines.
+# buckets_lake signed in as the project's pipelines. The model libraries and
+# MLflow are the notebook image's too, at its versions (use case 15.1): a
+# model template (churn, propensity, forecast) runs on a schedule as by hand.
 USER root
 RUN python -m venv /opt/notebook && chown -R airflow:0 /opt/notebook
 USER airflow
 RUN /opt/notebook/bin/pip install --no-cache-dir papermill==2.7.0 ipykernel==7.4.0 nbconvert==7.17.1 \
-      boto3==1.43.108 requests==2.34.2 pandas==3.0.6 pyarrow==25.0.1
+      boto3==1.43.108 requests==2.34.2 pandas==3.0.6 pyarrow==25.0.1 \
+      scikit-learn==1.9.1 statsmodels==0.15.0 scipy==1.18.1 lightgbm==4.7.0 xgboost==3.4.1 flaml==2.7.0 mlflow-skinny==3.17.2 skops==0.16.0
 COPY notebook/buckets_lake.py /opt/notebook/lib/buckets_lake.py
 RUN echo /opt/notebook/lib > "$(/opt/notebook/bin/python -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')/buckets.pth"
 # dbt (use case 7.5), for projects' DAGs: in a virtualenv of its own too, run by

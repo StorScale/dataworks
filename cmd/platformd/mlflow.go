@@ -239,7 +239,7 @@ func (s *server) handleMLflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reading := r.Method == http.MethodGet || r.Method == http.MethodHead || (r.Method == http.MethodPost && mlflowRead.MatchString(rest))
-	if !reading && role != project.Editor && role != "pipelines" {
+	if !reading && role != "pipelines" && !s.memberCan(r, name, who, project.PermModels) {
 		s.fail(w, r, http.StatusForbidden, "the project's readers read its experiments and models; its editors and pipelines write them")
 		return
 	}
@@ -373,7 +373,7 @@ func (s *server) handleModels(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p, role, ok := s.projectRole(w, r, who)
+	p, _, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
@@ -452,14 +452,14 @@ func (s *server) handleModels(w http.ResponseWriter, r *http.Request) {
 		}
 		experiments = append(experiments, map[string]any{"id": e.ID, "name": e.Name, "updated": e.Updated})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"available": true, "models": models, "experiments": experiments, "canApprove": role == project.Editor,
+	writeJSON(w, http.StatusOK, map[string]any{"available": true, "models": models, "experiments": experiments, "canApprove": s.memberCan(r, name, who, project.PermApprove),
 		"trackingUri": s.cfg.PlatformURL + "/mlflow/" + name})
 }
 
 // handleApproveModel approves a model version for use (R15.2): an editor other than who registered it.
 // The version's storscale.approved_* tags and the model's alias "approved" are the platform's alone.
 func (s *server) handleApproveModel(w http.ResponseWriter, r *http.Request) {
-	sess, v := s.editorOf(w, r, "approve its models")
+	sess, v := s.editorOf(w, r, project.PermApprove, "approve its models")
 	if sess == nil {
 		return
 	}

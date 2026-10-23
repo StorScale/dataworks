@@ -18,8 +18,9 @@ import (
 // MLflow. For each model: its card, its approved version, who registered and
 // who approved it, and the run that trained it, with the catalog's Nessie
 // commit when it started (the data it read: every table at its snapshot then);
-// for each scoring, its model, its input and output tables, and the input's
-// Iceberg snapshot at that commit.
+// and the tables it read (buckets_lake's lake.tables tag), each at its
+// Iceberg snapshot then; for each scoring, its model, its input and output
+// tables, and the input's Iceberg snapshot at that commit.
 
 // catalogModelVersion is a model's approved version, as the catalog shows it.
 type catalogModelVersion struct {
@@ -35,7 +36,25 @@ type catalogModelVersion struct {
 	Started      int64             `json:"started,omitempty"`    // the run's start, ms since the epoch
 	Algorithm    string            `json:"algorithm,omitempty"`  // the estimator, as autologging names it
 	Params       map[string]string `json:"params,omitempty"`     // the run's parameters (at most 50)
+	// What the run read (its lake.tables, as buckets_lake.sql() recorded
+	// it), each at its snapshot at DataCommit.
+	Tables []catalogTrainingTable `json:"tables,omitempty"`
 }
+
+// catalogTrainingTable is a table a model's training read: catalog.schema.table,
+// and its Iceberg snapshot at the run's data commit (0: not there, not known,
+// or not a table of the Nessie catalog).
+type catalogTrainingTable struct {
+	Table    string `json:"table"`
+	Snapshot int64  `json:"snapshot,omitempty"`
+}
+
+// lakeTablesTag is the tag buckets_lake puts on a run: the tables its
+// notebook read, catalog.schema.table, comma-separated.
+const lakeTablesTag = "lake.tables"
+
+// maxTrainingTables is the most of a run's tables the catalog is told of.
+const maxTrainingTables = 100
 
 type catalogModel struct {
 	Name        string               `json:"name"`
@@ -233,7 +252,7 @@ func (s *server) catalogVersion(ctx context.Context, m *mlflowProxy, workspace, 
 		return nil, fmt.Errorf("%s version %s's run: %w", model, version, err)
 	}
 	v.Started = run.Run.Info.Started
-	estimator := ""
+	estimator, read := "", ""
 	for _, t := range run.Run.Data.Tags {
 		switch t.Key {
 		case "storscale.user":
@@ -244,9 +263,12 @@ func (s *server) catalogVersion(ctx context.Context, m *mlflowProxy, workspace, 
 			v.Algorithm = t.Value
 		case "estimator_name":
 			estimator = t.Value
+		case lakeTablesTag:
+			read = t.Value
 		}
 	}
 	v.Algorithm = firstOf(estimator, v.Algorithm)
+	v.Tables = s.trainingTables(ctx, read, v.DataCommit)
 	for _, p := range run.Run.Data.Params {
 		if len(v.Params) >= 50 {
 			break
@@ -257,6 +279,30 @@ func (s *server) catalogVersion(ctx context.Context, m *mlflowProxy, workspace, 
 		v.Params[p.Key] = p.Value
 	}
 	return v, nil
+}
+
+// trainingTables are a run's lake.tables, each with its snapshot at the
+// run's data commit when it's a table of the Nessie catalog (iceberg).
+func (s *server) trainingTables(ctx context.Context, tag, commit string) []catalogTrainingTable {
+	var out []catalogTrainingTable
+	seen := map[string]bool{}
+	for _, name := range strings.Split(tag, ",") {
+		name = strings.TrimSpace(name)
+		parts := strings.Split(name, ".")
+		if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" || seen[name] {
+			continue
+		}
+		if len(out) == maxTrainingTables {
+			break
+		}
+		seen[name] = true
+		t := catalogTrainingTable{Table: name}
+		if commit != "" && parts[0] == "iceberg" {
+			t.Snapshot = s.snapshotAt(ctx, commit, parts[1]+"."+parts[2])
+		}
+		out = append(out, t)
+	}
+	return out
 }
 
 // snapshotAt is a table's Iceberg snapshot at a commit of the catalog (key:

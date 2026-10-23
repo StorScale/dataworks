@@ -125,10 +125,11 @@ func (p *Project) ProtectionPolicies(cols []ProtectedColumn, rules ProtectionRul
 		rule := rules[c.Tag]
 		// Who sees the column as it is: the project's editors and its pipelines
 		// (they own and write the data; Trino refuses a write to a table the
-		// writer is masked on), the platform's maintenance account (erasure,
-		// retention), and the groups the install excepts. Everyone else is masked.
+		// writer is masked on), a role that reads every table as it is (16.1),
+		// the platform's maintenance account (erasure, retention), and the
+		// groups the install excepts. Everyone else is masked.
 		var items []RangerItem
-		clear := []string{p.Group(Editor)}
+		clear := append(p.tableWriters(), p.wholeReaders()...)
 		if p.Spec.Pipelines != nil {
 			clear = append(clear, p.Group("pipelines"))
 		}

@@ -3734,6 +3734,88 @@
         ]
       }
     },
+    "/api/roles": {
+      "get": {
+        "description": "the roles, built in and defined, and the platform's permissions (16.1)\n\nhandleRoles are the roles (editor and reader, built in, then the\ndefined ones), each with the projects giving it, and the platform's\npermissions: to anyone signed in, as a project's page names them.",
+        "operationId": "get_roles",
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "The roles (editor and reader, built in, then the defined ones), each with the projects giving it, and the platform's permissions: to anyone signed in, as a project's page names them",
+        "tags": [
+          "roles"
+        ]
+      }
+    },
+    "/api/roles/{role}": {
+      "delete": {
+        "description": "... or removes one no project gives\n\nhandleDeleteRole removes a role (the administrators), once no project gives it.",
+        "operationId": "delete_roles_role",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Removes a role (the administrators), once no project gives it",
+        "tags": [
+          "roles"
+        ]
+      },
+      "put": {
+        "description": "an administrator defines or changes one\n\nhandlePutRole defines a role, or changes one (the administrators): its\ndescription and permissions. Every project giving it is applied again.",
+        "operationId": "put_roles_role",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "role",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Defines a role, or changes one (the administrators): its description and permissions",
+        "tags": [
+          "roles"
+        ]
+      }
+    },
     "/api/session": {
       "get": {
         "description": "handleSession says who's signed in, and what they may open.",
@@ -3933,6 +4015,9 @@
     },
     {
       "name": "reference"
+    },
+    {
+      "name": "roles"
     },
     {
       "name": "scoring"

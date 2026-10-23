@@ -86,13 +86,13 @@ type askableView struct {
 }
 
 // mayCallTool says whether the caller may call the project's tool: an agent
-// given it, or an editor.
-func mayCallTool(caller *project.Agent, role, tool string) bool {
+// given it, or someone who builds the project's things (an editor).
+func mayCallTool(caller *project.Agent, builds bool, tool string) bool {
 	if caller != nil {
 		_, tools := caller.AgentGrants()
 		return slices.Contains(tools, tool)
 	}
-	return role == project.Editor
+	return builds
 }
 
 // mayAsk says whether the caller may ask the project's agent: an agent given
@@ -113,14 +113,14 @@ func (s *server) handleListTools(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p, role, ok := s.projectRole(w, r, who)
+	p, _, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
 	_, caller := s.agentByUser(r.Context(), who)
 	tools, agents := []toolView{}, []askableView{}
 	for _, t := range p.Spec.Tools {
-		if mayCallTool(caller, role, t.Name) {
+		if mayCallTool(caller, s.memberCan(r, p.Metadata.Name, who, project.PermBuild), t.Name) {
 			params := t.Parameters
 			if params == nil {
 				params = []project.ToolParameter{}
@@ -142,7 +142,7 @@ func (s *server) handleCallTool(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p, role, ok := s.projectRole(w, r, who)
+	p, _, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
@@ -154,7 +154,7 @@ func (s *server) handleCallTool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, caller := s.agentByUser(r.Context(), who)
-	if !mayCallTool(caller, role, name) {
+	if !mayCallTool(caller, s.memberCan(r, p.Metadata.Name, who, project.PermBuild), name) {
 		why := "the project's editors, and the agents given it (tool:" + name + "), call its tools"
 		s.recordRefusal(r, who, "tool.call", resource, why)
 		s.fail(w, r, http.StatusForbidden, why)

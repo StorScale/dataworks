@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
-import { grants, maskLabel, namespaceOf, Spinner, usePlatform, useProject } from "../lib";
+import { getRoles } from "../api";
+import { grants, maskLabel, namespaceOf, Spinner, usePlatform, usePoll, useProject } from "../lib";
 
 // ProjectAccess: who's in the project, how, and what each role may do.
 export default function ProjectAccess() {
   const { name, view } = useProject();
   const { admin } = usePlatform();
+  const roles = usePoll(getRoles, [], 60_000);
   if (!view) return <div className="page"><Spinner /></div>;
   const spec = view.spec?.spec;
   const r = spec?.tables?.readers;
@@ -64,6 +66,21 @@ export default function ProjectAccess() {
               <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>{g.items.map((i) => <li key={i}>{i}</li>)}</ul>
             </section>
           ))}
+          {/* The roles of the company's own it gives (16.1), in words, as the Roles page defines them. */}
+          {spec && roles.data && [...new Set(spec.members.map((m) => m.role))].filter((r) => r !== "editor" && r !== "reader").map((rn) => {
+            const def = roles.data!.roles.find((x) => x.name === rn);
+            const says = (p: string) => roles.data!.permissions.find((x) => x.name === p)?.says ?? p;
+            return (
+              <section key={rn} className="card" style={rn === view.role ? { borderColor: "var(--accent)", borderWidth: 2 } : undefined} data-testid={`access-role-${rn}`}>
+                <div className="card-head" style={{ marginBottom: 6 }}>
+                  <h2>{rn.charAt(0).toUpperCase() + rn.slice(1)}</h2>
+                  {rn === view.role ? <span className="pill blue">you</span> : <span className="pill mono" style={{ fontWeight: 400 }}>{name}-role-{rn}</span>}
+                </div>
+                {def ? <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>{def.granted.map((p) => <li key={p}>{says(p)}</li>)}</ul>
+                  : <div className="small" style={{ color: "var(--bad-ink)" }}>No role {rn} is defined: its members have no access until an administrator defines it.</div>}
+              </section>
+            );
+          })}
           {spec && (
             <p className="small muted">
               The platform applies these in Keycloak (groups), Ranger (Trino policies on {namespaceOf(name, spec) ?? "no namespace"}), Buckets and Nessie, and keeps them that way.

@@ -45,7 +45,7 @@ spec:
                     properties:
                       group: {type: string, maxLength: 100}
                       user: {type: string, maxLength: 100}
-                      role: {type: string, enum: [reader, editor]}
+                      role: {type: string, pattern: '^[a-z][a-z0-9-]{1,23}$'}   # reader, editor, or a role the administrators define (16.1)
                     x-kubernetes-validations:
                       - rule: has(self.group) != has(self.user)
                         message: give a group or a user, not both
