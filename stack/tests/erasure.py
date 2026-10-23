@@ -64,8 +64,9 @@ def main():
         listed = (bob.get(f"{PLATFORM}/api/projects/{NAME}/erasures", timeout=30).json() or {}).get("erasures", [])
         audit = wait(lambda: next((x for x in (bob.get(f"{PLATFORM}/api/projects/{NAME}/audit", timeout=30).json() or {}).get("events", [])
                                    if x.get("action") == "erasure"), None), 60, every=5)
+        # Among the project's records: an earlier run's stay (records are kept two years, by the CCPA's rule).
         check("... it's listed and in the audit log, without the person's ID",
-              len(listed) == 1 and listed[0]["id"] == ej.get("id") and audit is not None and "customer 2" not in json.dumps(audit) and '"2"' not in json.dumps(audit),
+              any(x["id"] == ej.get("id") for x in listed) and audit is not None and "customer 2" not in json.dumps(audit) and '"2"' not in json.dumps(audit),
               (len(listed), audit))
         check("... the other customers are untouched", rows("customers") == 2 and rows("orders") == 2, (rows("customers"), rows("orders")))
 
