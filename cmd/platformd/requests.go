@@ -146,3 +146,25 @@ func (s *server) projectRole(w http.ResponseWriter, r *http.Request, who string)
 	}
 	return p, role, true
 }
+
+// memberCan says whether someone may do something in a project: by the
+// permissions the operator recorded for their role there (an administrator,
+// signed in, everything; the project's pipelines, nothing this asks).
+func (s *server) memberCan(r *http.Request, projectName, who, perm string) bool {
+	if sess := s.session(r); sess != nil && s.isAdmin(sess.User) {
+		return true
+	}
+	if s.store == nil {
+		return false
+	}
+	st, err := s.store.Status(r.Context(), projectName)
+	if err != nil || st == nil {
+		return false
+	}
+	for _, m := range st.Members {
+		if m.Username == who && m.Role != "pipelines" {
+			return project.Permits(m.Role, m.Can, perm)
+		}
+	}
+	return false
+}

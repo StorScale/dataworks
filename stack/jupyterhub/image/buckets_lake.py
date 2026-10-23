@@ -17,7 +17,9 @@ groups, and their private prefix is home/<username>/. The credentials renew
 themselves before they expire.
 """
 import datetime
+import json
 import os
+import sys
 import warnings
 from urllib.parse import quote
 
@@ -90,11 +92,19 @@ def sql(project, query):
     Integers come back as int64 (float64 with nulls), reals and decimals as
     float64, dates and timestamps as datetimes. At most 100,000 rows: aggregate
     or sample in the query. A refusal raises, with the platform's reason:
-    PermissionError when it's who you are, RuntimeError otherwise."""
+    PermissionError when it's who you are, RuntimeError otherwise.
+    The tables it read are kept, for the model's lineage (use case 15.1):
+    after the answer, the same route asks Trino for the query's EXPLAIN
+    (TYPE IO), which names them as catalog.schema.table. On the MLflow run
+    it runs in, and each run started after (see mlflow()), they're the tag
+    lake.tables. A query EXPLAIN can't describe is just not recorded."""
     import pandas as pd
     url = os.environ.get("STORSCALE_PLATFORMD_URL", "http://platformd:8080").rstrip("/")
-    r = requests.post(f"{url}/api/projects/{quote(project, safe='')}/sql", json={"sql": query, "limit": ROWS}, timeout=600,
-                      headers={"Authorization": f"Bearer {token()}", "X-Platform-Request": "1"})
+
+    def post(statement, limit):
+        return requests.post(f"{url}/api/projects/{quote(project, safe='')}/sql", json={"sql": statement, "limit": limit}, timeout=600,
+                             headers={"Authorization": f"Bearer {token()}", "X-Platform-Request": "1"})
+    r = post(query, ROWS)
     try:
         body = r.json()
     except ValueError:
@@ -121,7 +131,83 @@ def sql(project, query):
                 pass   # a time zone pandas doesn't read: left as text
     if len(df) == ROWS:
         warnings.warn(f"the answer has {ROWS} rows, the most the platform's SQL route gives: there may be more", stacklevel=2)
+    _read.update(_tables_in(post, query))
+    _tag_run()
     return df
+
+
+# --- What the notebook read, for its models' lineage (use case 15.1) ----------------------
+
+TABLES_TAG = "lake.tables"   # not storscale.*: those are the platform's own
+_TAG_MOST = 8000             # the most MLflow keeps of a tag's value
+_read = set()                # catalog.schema.table: every table sql() has read in this kernel
+
+
+def tables():
+    """The tables sql() has read in this kernel, as catalog.schema.table, sorted:
+    what a run started now is tagged with (lake.tables)."""
+    return sorted(_read)
+
+
+def _tables_in(post, query):
+    """The tables a query reads, as Trino's EXPLAIN (TYPE IO, FORMAT JSON) names
+    them (its one row: inputTableColumnInfos); none when it can't say."""
+    try:
+        r = post(f"EXPLAIN (TYPE IO, FORMAT JSON) {query}", 1)
+        if not r.ok:
+            return set()
+        plan = json.loads(r.json()["rows"][0][0])
+        out = set()
+        for info in plan.get("inputTableColumnInfos") or []:
+            t = info.get("table") or {}
+            st = t.get("schemaTable") or {}
+            if t.get("catalog") and st.get("schema") and st.get("table"):
+                out.add(f"{t['catalog']}.{st['schema']}.{st['table']}")
+        return out
+    except Exception:  # the answer stands; only its lineage is short
+        return set()
+
+
+def _tag_value():
+    """lake.tables' value: the tables read, comma-separated and sorted (as many as MLflow keeps)."""
+    value = ""
+    for t in sorted(_read):
+        if len(value) + len(t) + 1 > _TAG_MOST:
+            break
+        value = f"{value},{t}" if value else t
+    return value
+
+
+def _tag_run():
+    """The active MLflow run, if sql() ran inside one, tagged with what's been read."""
+    m = sys.modules.get("mlflow")
+    if m is None or not _read:
+        return
+    try:
+        if m.active_run() is not None:
+            m.set_tag(TABLES_TAG, _tag_value())
+    except Exception as e:  # the answer stands; only its lineage is short
+        warnings.warn(f"the tables read weren't recorded on the MLflow run: {e}", stacklevel=3)
+
+
+def _tables_at_start():
+    """Each run started from now on tagged, at its start, with what was read
+    before: a run-context provider, in MLflow's registry (once a kernel)."""
+    from mlflow.tracking.context.abstract_context import RunContextProvider
+    from mlflow.tracking.context.registry import _run_context_provider_registry as registry
+
+    if any(getattr(p, "lake_tables", False) for p in registry):
+        return
+
+    class LakeTables(RunContextProvider):
+        lake_tables = True
+
+        def in_context(self):
+            return bool(_read)
+
+        def tags(self):
+            return {TABLES_TAG: _tag_value()}
+    registry.register(LakeTables)
 
 
 def mlflow(project):
@@ -129,7 +215,11 @@ def mlflow(project):
     platform's MLflow, reached through platformd, which signs you in with
     the token below (renewed every two minutes) and keeps everything in the
     project. Returns the mlflow module, ready: mlflow.set_experiment("churn"),
-    mlflow.sklearn.autolog(), mlflow.register_model(...)."""
+    mlflow.sklearn.autolog(), mlflow.register_model(...).
+    The tables sql() read go on its runs as the tag lake.tables
+    (catalog.schema.table, comma-separated, sorted): at a run's start, those
+    read before; as sql() runs inside it, those too. The platform's catalog
+    draws the approved version's as what its model was trained on."""
     import threading
 
     import mlflow as _mlflow
@@ -142,4 +232,5 @@ def mlflow(project):
         t.start()
     renew()
     _mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
+    _tables_at_start()
     return _mlflow

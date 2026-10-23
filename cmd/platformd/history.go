@@ -156,7 +156,7 @@ func (s *server) handleTags(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, http.StatusForbidden, "missing X-Platform-Request")
 			return
 		}
-		if v.Role != project.Editor && !s.isAdmin(sess.User) {
+		if !v.can(project.PermRelease) {
 			s.fail(w, r, http.StatusForbidden, "the project's editors make and remove its tags")
 			return
 		}

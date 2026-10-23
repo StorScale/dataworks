@@ -29,7 +29,7 @@ func (s *server) handleApps(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p, role, ok := s.projectRole(w, r, who)
+	p, _, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
@@ -41,13 +41,13 @@ func (s *server) handleApps(w http.ResponseWriter, r *http.Request) {
 	for _, k := range p.Spec.Knowledge {
 		banks = append(banks, k.Name)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"apps": apps, "canEdit": role == project.Editor, "banks": banks,
+	writeJSON(w, http.StatusOK, map[string]any{"apps": apps, "canEdit": s.memberCan(r, p.Metadata.Name, who, project.PermBuild), "banks": banks,
 		"hasTables": p.Spec.Tables != nil, "hasBudget": p.Spec.LLM != nil && p.Spec.LLM.Budget > 0})
 }
 
 // handlePutApp makes an app of the project's, or changes one: its editors.
 func (s *server) handlePutApp(w http.ResponseWriter, r *http.Request) {
-	sess, v := s.editorOf(w, r, "make its apps")
+	sess, v := s.editorOf(w, r, project.PermBuild, "make its apps")
 	if sess == nil {
 		return
 	}
@@ -77,7 +77,7 @@ func (s *server) handlePutApp(w http.ResponseWriter, r *http.Request) {
 
 // handleDeleteApp takes an app out of the project: its editors.
 func (s *server) handleDeleteApp(w http.ResponseWriter, r *http.Request) {
-	sess, v := s.editorOf(w, r, "remove its apps")
+	sess, v := s.editorOf(w, r, project.PermBuild, "remove its apps")
 	if sess == nil {
 		return
 	}

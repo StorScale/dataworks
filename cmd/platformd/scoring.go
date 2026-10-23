@@ -70,10 +70,13 @@ func (s *server) scoringOf(w http.ResponseWriter, r *http.Request) (*project.Pro
 		s.fail(w, r, http.StatusNotFound, "the project has no scoring "+r.PathValue("scoring"))
 		return nil, nil, "", false
 	}
+	if role == "pipelines" || s.memberCan(r, name, who, project.PermModels) {
+		role = "writer" // its pipelines, or someone who tracks the project's models
+	}
 	return p, sc, role, true
 }
 
-func scoringWriter(role string) bool { return role == project.Editor || role == "pipelines" }
+func scoringWriter(role string) bool { return role == "writer" }
 
 // handleScoringReference is a model version's drift reference (GET; null
 // when there's none yet), or the first run's, kept once a version (PUT: the

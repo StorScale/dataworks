@@ -1,19 +1,18 @@
 import { useState } from "react";
 import { getTags, makeTag, removeTag } from "../api";
 import { Empty, Intro } from "../components";
-import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
+import { can, ErrorBanner, Spinner, usePoll, useProject } from "../lib";
 
 // Tags are moments of the project's tables kept (a month-end close, a
 // delivery): every table as it was then, readable as long as the tag is
 // kept, whatever history is kept otherwise. The project's editors make them.
 export default function Tags() {
   const { name, view } = useProject();
-  const { admin } = usePlatform();
   const { data, error, reload } = usePoll(() => getTags(name), [name], 30_000);
   const [form, setForm] = useState({ name: "", at: "now", keep: "7y", note: "" });
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string>();
-  const canEdit = view?.role === "editor" || admin;
+  const canEdit = can(view, "release");
   const act = async (f: () => Promise<unknown>) => {
     setBusy(true);
     setActionError(undefined);

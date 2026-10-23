@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { appData, askApp, deleteApp, getApps, getSemantic, putApp, type App, type AppFilter, type KnowledgeHit } from "../api";
 import { Empty, Intro } from "../components";
-import { ErrorBanner, Spinner, usePoll, useProject } from "../lib";
+import { can, ErrorBanner, Spinner, usePoll, useProject } from "../lib";
 
 // A project's apps (use case 14.1): small pages of its data, declared by its
 // editors (a metric by a dimension, a table's columns, or questions answered
@@ -40,7 +40,7 @@ export default function Apps() {
               <h2><Link to={`/p/${name}/apps/${a.name}`}>{a.title || a.name}</Link></h2>
               <span className="small muted">{a.description || KINDS.find(([k]) => k === a.kind)?.[1]}</span>
               <span className="small muted mono">{a.kind === "metric" ? `${(a.metrics ?? []).join(", ")}${a.by ? ` by ${a.by}` : ""}` : a.kind === "table" ? a.table : `bank ${a.bank}`}</span>
-              {(view?.role === "editor") && <div style={{ marginTop: 6 }}><button className="btn small danger" onClick={() => remove(a.name)}>Remove</button></div>}
+              {can(view, "build") && <div style={{ marginTop: 6 }}><button className="btn small danger" onClick={() => remove(a.name)}>Remove</button></div>}
             </div>
           ))}
         </div>

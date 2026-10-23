@@ -1,7 +1,7 @@
 import { Fragment, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ago, deleteProject, Flow, getCopies, FlowTable, getFlow, getPipelines, getProjectAlerts, getSemantic, muteProjectAlert, ProjectIssue, took, when } from "../api";
-import { checkName, ErrorBanner, failing, grants, StateDot, usePlatform, usePoll, useProject } from "../lib";
+import { can, checkName, ErrorBanner, failing, grants, StateDot, usePlatform, usePoll, useProject } from "../lib";
 
 // levels puts each table in a column: sources first, then what's made from them.
 export function levels(flow: Flow): FlowTable[][] {
@@ -140,7 +140,7 @@ export default function Overview() {
             <section className="card" data-testid="grants">
               <h2>What you can do here</h2>
               <p className="muted small" style={{ margin: "4px 0 12px" }}>
-                {mine === "editor" ? "You're an editor." : mine === "reader" ? "You're a reader." : "You administer the platform; you're not a member of this project."}{" "}
+                {mine === "editor" ? "You're an editor." : mine === "reader" ? "You're a reader." : mine ? `Your role here is ${mine}.` : "You administer the platform; you're not a member of this project."}{" "}
                 Each role, as the platform applies it in Trino (through Ranger), Buckets and Keycloak:
               </p>
               <div className="grid cards" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
@@ -158,7 +158,7 @@ export default function Overview() {
         </div>
 
         <aside className="stack">
-          <Alerts name={name} canMute={view.role === "editor" || admin} />
+          <Alerts name={name} canMute={can(view, "mute-alerts")} />
           <section className="card">
             <div className="card-head"><h2>People</h2><Link to="access" className="small">Access</Link></div>
             {view.status?.members?.length ? (

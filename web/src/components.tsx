@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useMatch, useNavigate, useParams } from "react-router-dom";
 import { ApiError, getFlow, getPipelines, getProject, getSemantic, getProducts, getTerms, listProjects, ProjectView, signOut, type Product, type Term } from "./api";
-import { initials, lastProject, Phase, ProjectContext, rememberProject, RolePill, Spinner, usePlatform, usePoll } from "./lib";
+import { can, initials, lastProject, Phase, ProjectContext, rememberProject, RolePill, Spinner, usePlatform, usePoll } from "./lib";
 
 // useMenu is a menu that closes when someone clicks elsewhere or presses Escape.
 function useMenu() {
@@ -256,8 +256,8 @@ export function ProjectFrame() {
     ["imports", "Imports", !!spec?.tables],
     ["connections", "Connections", true],
     ["access", "Access", true],
-    ["audit", "Audit", view?.role === "editor" || admin],
-    ["usage", "Usage", view?.role === "editor" || admin || !!usage],
+    ["audit", "Audit", can(view, "see-audit")],
+    ["usage", "Usage", can(view, "see-usage") || !!usage],
   ];
   return (
     <ProjectContext.Provider value={{ name: project, view, error, reload }}>

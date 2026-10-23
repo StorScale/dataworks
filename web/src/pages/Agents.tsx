@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { useState } from "react";
 import { approveAgent, buildKnowledge, deleteKnowledge, getAgents, getKnowledge, getLLM, getLLMCalls, putAgent, putKnowledge, removeAgent, searchKnowledge, type KnowledgeHit, type LLMUse } from "../api";
 import { Empty, Intro } from "../components";
-import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
+import { can, ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
 
 // Agents are programs of the project's own (use case 12.2): each with an
 // identity of its own, the tools it may use, an owner, approved by an editor
@@ -17,7 +17,7 @@ export default function Agents() {
   const [error, setError] = useState<string>();
   const [adding, setAdding] = useState(false);
   const [secret, setSecret] = useState<{ agent: string; clientId: string; secret: string; mcpUrl: string }>();
-  const canEdit = view?.role === "editor" || admin;
+  const canEdit = can(view, "build"), canApprove = can(view, "approve");
   if (list.error && !list.data) return <div className="page"><ErrorBanner error={list.error} /></div>;
   if (!list.data) return <div className="page"><Spinner /></div>;
   const act = async (f: () => Promise<unknown>) => { setError(undefined); try { await f(); list.reload(); } catch (e) { setError((e as Error).message); } };
@@ -42,7 +42,7 @@ export default function Agents() {
           <div className="card-head">
             <h2 className="mono">{a.name}<span className={"pill " + (a.approved ? "green" : "amber")}>{a.approved ? `approved by ${a.approvedBy}` : "awaiting approval"}</span></h2>
             <div className="row">
-            {canEdit && !a.approved && a.registeredBy !== user.username && (
+            {canApprove && !a.approved && a.registeredBy !== user.username && (
               <button className="btn small primary" data-testid={`approve-${a.name}`}
                 onClick={() => act(async () => { const r = await approveAgent(name, a.name); if (r.secret) setSecret({ agent: a.name, clientId: r.clientId, secret: r.secret, mcpUrl: r.mcpUrl }); })}>Approve</button>
             )}

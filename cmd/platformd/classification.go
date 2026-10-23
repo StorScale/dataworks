@@ -64,12 +64,12 @@ func (s *server) handleClassify(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p, role, ok := s.projectRole(w, r, who)
+	p, _, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
-	if role != project.Editor {
-		s.recordRefusal(r, who, "classification.changed", "project:"+p.Metadata.Name, "not an editor")
+	if !s.memberCan(r, p.Metadata.Name, who, project.PermClassify) {
+		s.recordRefusal(r, who, "classification.changed", "project:"+p.Metadata.Name, "not permitted (classify)")
 		s.fail(w, r, http.StatusForbidden, "the project's editors confirm or remove a column's tags")
 		return
 	}

@@ -695,10 +695,10 @@ A project's members are editors or readers, and its pipelines a service account;
 4. The administrator changes the role (takes away "read unmasked columns"); every project using it follows within a minute, and the audit log records who changed it and what. A role in use can't be deleted until no project or group holds it.
 
 **Requirements**
-- R16.1 Roles defined by administrators: a name, a description and a set of the platform's permissions, kept by the platform (not per project), the built-in roles expressed as the same permissions.
-- R16.2 Custom roles given per project to people and Keycloak groups, and platform-wide to groups; the project spec names them (`members[].role`).
-- R16.3 Each permission applied in every system the built-in roles reach (Ranger, Buckets, Keycloak, Airflow, Superset, MLflow, platformd), from one mapping, so a new permission is added in one place.
-- R16.4 Changes to a role carried to every project using it, audited; a role in use not deleted; the separation rules kept (who registers a model, agent or delivery change still can't approve it, whatever their role).
+- R16.1 Roles defined by administrators: a name, a description and a set of the platform's permissions, kept by the platform (not per project), the built-in roles expressed as the same permissions. (Built 2026-10-22: the Roles page, Administration → Roles, from seventeen permissions; editor and reader shown as the same permissions; kept in the platform's bucket.)
+- R16.2 Custom roles given per project to people and Keycloak groups, and platform-wide to groups; the project spec names them (`members[].role`). (Built 2026-10-22, per project: a project's Edit page offers the defined roles beside editor and reader, for people and groups. Platform-wide roles, the governance group and the usage viewers, are still settings.)
+- R16.3 Each permission applied in every system the built-in roles reach (Ranger, Buckets, Keycloak, Airflow, Superset, MLflow, platformd), from one mapping, so a new permission is added in one place. (Built 2026-10-22: a group per custom role per project (`<project>-role-<name>`), named in Ranger's table, mask, row filter, tag and source policies, Buckets' policies and the project's Airflow by its permissions; each member's permissions in the project's status, which platformd and semanticd check. Not yet: Superset and the shared Airflow, which follow the platform-wide groups, and a data product's consumers' custom roles.)
+- R16.4 Changes to a role carried to every project using it, audited; a role in use not deleted; the separation rules kept (who registers a model, agent or delivery change still can't approve it, whatever their role). (Built 2026-10-22: a change reaches every project giving the role within a minute (its hash covers the role's permissions), and is in the audit log with what it was; a role a project gives can't be removed.)
 
 ## Not yet placed
 

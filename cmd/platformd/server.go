@@ -192,6 +192,9 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/usage", s.handleUsage)                        // every project's month: usage viewers, administrators
 	mux.HandleFunc("GET /api/projects/{name}/usage", s.handleProjectUsage) // a project's: its editors too
 	mux.HandleFunc("GET /api/governance", s.handleGovernance)              // across projects (12.9): administrators, certifiers, data-protection approvers
+	mux.HandleFunc("GET /api/roles", s.handleRoles)                        // the roles, built in and defined, and the platform's permissions (16.1)
+	mux.HandleFunc("PUT /api/roles/{role}", s.handlePutRole)               // an administrator defines or changes one
+	mux.HandleFunc("DELETE /api/roles/{role}", s.handleDeleteRole)         // ... or removes one no project gives
 	mux.HandleFunc("GET /api/assistants", s.handleAssistants)
 	mux.HandleFunc("PUT /api/assistants/{name}", s.handlePutAssistant)
 	mux.HandleFunc("DELETE /api/assistants/{name}", s.handleDeleteAssistant)

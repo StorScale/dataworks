@@ -568,9 +568,9 @@ func money(x float64) string {
 	return strings.TrimRight(strconv.FormatFloat(x, 'f', digits, 64), "0")
 }
 
-// mayViewUsage: the project's editors, administrators and the install's usage viewers.
-func (s *server) mayViewUsage(r *http.Request, role string) bool {
-	if role == project.Editor {
+// mayViewUsage: the project's members who may see its usage (its editors), administrators and the install's usage viewers.
+func (s *server) mayViewUsage(r *http.Request, projectName, who string) bool {
+	if s.memberCan(r, projectName, who, project.PermSeeUsage) {
 		return true
 	}
 	sess := s.session(r)
@@ -592,11 +592,11 @@ func (s *server) handleProjectUsage(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p, role, ok := s.projectViewable(w, r, who)
+	p, _, ok := s.projectViewable(w, r, who)
 	if !ok {
 		return
 	}
-	if !s.mayViewUsage(r, role) {
+	if !s.mayViewUsage(r, p.Metadata.Name, who) {
 		s.fail(w, r, http.StatusForbidden, "the project's editors, and the install's usage viewers, see what it uses and costs")
 		return
 	}

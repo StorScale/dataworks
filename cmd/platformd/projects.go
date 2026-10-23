@@ -21,8 +21,12 @@ type projectView struct {
 	Name   string           `json:"name"`
 	Spec   *project.Project `json:"spec,omitempty"` // nil while it's being deleted
 	Status *project.Status  `json:"status,omitempty"`
-	Role   string           `json:"role,omitempty"` // the viewer's: reader, editor, or ""
+	Role   string           `json:"role,omitempty"` // the viewer's: reader, editor, a custom role (16.1), or ""
+	Can    []string         `json:"can,omitempty"`  // what the viewer may do in it (an administrator, everything)
 }
+
+// can says whether the viewer may do something in the project.
+func (v *projectView) can(perm string) bool { return project.Permits(v.Role, v.Can, perm) }
 
 func (s *server) isAdmin(u user) bool {
 	return slices.ContainsFunc(u.Groups, func(g string) bool { return slices.Contains(s.cfg.AdminGroups, g) })
@@ -86,13 +90,16 @@ func (s *server) views(r *http.Request, u user) ([]projectView, error) {
 		v.Status = st
 		for _, m := range st.Members {
 			if m.Username == u.Username && m.Role != "pipelines" {
-				v.Role = m.Role
+				v.Role, v.Can = m.Role, m.Can
 			}
 		}
 	}
 	admin := s.isAdmin(u)
 	var out []projectView
 	for _, v := range byName {
+		if admin { // an administrator may do everything in every project
+			v.Can = project.AllPermissions()
+		}
 		if admin || v.Role != "" {
 			out = append(out, *v)
 		}
@@ -385,7 +392,7 @@ func (s *server) handlePipelines(w http.ResponseWriter, r *http.Request) {
 		}
 		ps = append(ps, shared...)
 	}
-	out := map[string]any{"pipelines": ps, "canRun": v.Role == project.Editor || s.isAdmin(sess.User)}
+	out := map[string]any{"pipelines": ps, "canRun": v.can(project.PermRunPipelines)}
 	if ui != "" {
 		out["airflowPath"] = ui // the project's own Airflow's UI
 	}
@@ -460,7 +467,7 @@ func (s *server) handleStartRun(w http.ResponseWriter, r *http.Request) {
 	if v == nil {
 		return
 	}
-	if v.Role != project.Editor && !s.isAdmin(sess.User) {
+	if !v.can(project.PermRunPipelines) {
 		s.fail(w, r, http.StatusForbidden, "only the project's editors run its pipelines")
 		return
 	}

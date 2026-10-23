@@ -119,8 +119,9 @@ def get_json(key):
         raise
 
 
-def projects_of(c: Caller):
-    """The projects the caller is a member of (by the operator's status), with their role."""
+def projects_of(c: Caller, can=None):
+    """The projects the caller is a member of (by the operator's status), with their role.
+    With can, a dict, each project's permissions too (16.1): the role's, as the operator recorded them."""
     out = {}
     for page in store.get_paginator("list_objects_v2").paginate(Bucket=STORE_BUCKET, Prefix="status/"):
         for o in page.get("Contents", []):
@@ -128,7 +129,18 @@ def projects_of(c: Caller):
             for m in st.get("members") or []:  # none yet, the first seconds of a project
                 if m["username"] == c.username:
                     out[st["name"]] = m["role"]
+                    if can is not None:
+                        can[st["name"]] = m.get("can") or []
     return out
+
+
+def may(c: Caller, project, permission):
+    """Whether the caller may do something in the project: an editor anything, another role what it gives."""
+    can = {}
+    role = projects_of(c, can).get(project)
+    if not role:
+        raise PermissionError(f"you're not a member of {project}")
+    return role == "editor" or permission in can.get(project, [])
 
 
 def model_yaml(project):
@@ -884,8 +896,8 @@ def get_model(c, project, body, request):
 
 
 def put_model(c, project, body, request):
-    if member(c, project) != "editor":
-        raise PermissionError(f"only {project}'s editors change its semantic model")
+    if not may(c, project, "change-metrics"):
+        raise PermissionError(f"only those who may change {project}'s metrics (its editors) change its semantic model")
     text = body.get("yaml", "")
     _, summary = compile_model(project, text)  # ValueError: what's wrong
     refuse_breaking(project, text)

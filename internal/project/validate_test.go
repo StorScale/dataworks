@@ -11,7 +11,7 @@ func TestValidators(t *testing.T) {
 	for _, tc := range []struct{ area, extra, want string }{
 		{"members", `,"members":[]`, "at least one member"},
 		{"members", `,"members":[{"user":"bob","group":"x","role":"editor"}]`, "a group or a user, not both"},
-		{"members", `,"members":[{"user":"bob","role":"owner"}]`, `role "owner" must be reader or editor`},
+		{"members", `,"members":[{"user":"bob","role":"pipelines"}]`, `role "pipelines": reader, editor, or a role`},
 		{"tables", `,"tables":{"catalog":"Bad Name"}`, "must be lowercase identifiers"},
 		{"tables", `,"tables":{"readers":{"masks":[{"table":"t","column":"c","type":"blur"}]}}`, "mask type"},
 		{"tables", `,"tables":{"checks":[{"table":"t","check":"rowCount"}]}`, "rowCount needs a min, a max, or both"},

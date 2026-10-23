@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { APIResource, getProject, resetImport, Import, MASK_TYPES, Member, Project, putProject, Source, sourceCatalog, Spec } from "../api";
+import { APIResource, getProject, getRoles, resetImport, Import, MASK_TYPES, Member, Project, putProject, Source, sourceCatalog, Spec } from "../api";
 import { grants } from "../lib";
 
 const blank = (): Project => ({
@@ -21,6 +21,10 @@ export default function ProjectEditor() {
   const [json, setJson] = useState<string>();
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
+  const [defined, setDefined] = useState<string[]>([]); // the roles the administrators define (16.1)
+  useEffect(() => { getRoles().then((r) => setDefined(r.roles.filter((x) => !x.builtIn).map((x) => x.name))).catch(() => {}); }, []);
+  // The roles a member may be given: editor, reader, the defined ones, and the one they have (should it be gone).
+  const roleNames = (have: string) => [...new Set(["editor", "reader", ...defined, have])];
   useEffect(() => {
     if (!name) setP(blank());
     else getProject(name).then((v) => v.spec && setP(v.spec)).catch((e) => setError(e.message));
@@ -102,9 +106,8 @@ export default function ProjectEditor() {
               </select>
               <input value={m.group ?? m.user ?? ""} placeholder={m.user !== undefined ? "username" : "group"}
                 onChange={(e) => setMember(i, m.user !== undefined ? { user: e.target.value } : { group: e.target.value })} />
-              <select value={m.role} onChange={(e) => setMember(i, { role: e.target.value as Member["role"] })}>
-                <option value="editor">editor</option>
-                <option value="reader">reader</option>
+              <select value={m.role} onChange={(e) => setMember(i, { role: e.target.value as Member["role"] })} aria-label="Role">
+                {roleNames(m.role).map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
               <button className="btn" onClick={() => set({ members: spec.members.filter((_, j) => j !== i) })}>Remove</button>
             </div>

@@ -9,7 +9,7 @@ import {
   type CanvasFlow, type StepColumn, type FlowItem, type FlowPreview, type FlowProcessorDef, type FlowStep, type FlowTable, type FlowView, type SemanticMetric, type Upload, type UploadPreview,
 } from "../api";
 import { Empty, Intro } from "../components";
-import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
+import { can, ErrorBanner, Spinner, usePoll, useProject } from "../lib";
 import { Results } from "./Data";
 
 // Flows is a project's pipelines built on a canvas (use cases 11.1 and
@@ -52,12 +52,11 @@ const nodeTypes = { step: StepNode };
 
 export default function Flows() {
   const { name, view } = useProject();
-  const { admin } = usePlatform();
   const [params, setParams] = useSearchParams();
   const current = params.get("flow");
   const list = usePoll(() => getFlows(name), [name]);
   const [newName, setNewName] = useState("");
-  const canEdit = view?.role === "editor" || admin;
+  const canEdit = can(view, "build");
   if (current) return <Canvas project={name} flowName={current} canEdit={canEdit} noRepo={list.data?.why} onClose={() => { setParams({}); list.reload(); }} />;
   if (list.error && !list.data) return <div className="page"><ErrorBanner error={list.error} /></div>;
   if (!list.data) return <div className="page"><Spinner /></div>;

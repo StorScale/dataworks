@@ -51,8 +51,8 @@ func (p *Project) checkMembers(bad func(format string, a ...any)) {
 		case m.Group != "" && !principalRE.MatchString(m.Group), m.User != "" && !principalRE.MatchString(m.User):
 			bad("member %d: %q isn't a group or user name", i+1, m.Group+m.User)
 		}
-		if m.Role != Reader && m.Role != Editor {
-			bad("member %d: role %q must be %s or %s", i+1, m.Role, Reader, Editor)
+		if !IsBuiltIn(m.Role) && (!roleNameRE.MatchString(m.Role) || slices.Contains(reservedRoles, m.Role)) {
+			bad("member %d: role %q: %s, %s, or a role the platform's administrators define", i+1, m.Role, Reader, Editor)
 		}
 	}
 }

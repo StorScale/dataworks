@@ -52,7 +52,14 @@ export function initials(u: User) {
 export function roleLabel(role?: string, admin?: boolean) {
   if (role === "editor") return "Editor";
   if (role === "reader") return "Reader";
+  if (role) return role.charAt(0).toUpperCase() + role.slice(1); // a role the administrators define (16.1)
   return admin ? "Administrator" : "No role";
+}
+
+// can says whether the viewer may do something in the project: by the permissions of their role there
+// (16.1; an administrator, everything), as the platform sends them.
+export function can(view: ProjectView | undefined, permission: string) {
+  return !!view && (view.role === "editor" || !!view.can?.includes(permission));
 }
 
 export function RolePill({ role, admin }: { role?: string; admin?: boolean }) {

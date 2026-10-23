@@ -678,6 +678,8 @@ storscale/
 5. Nothing in the log can be edited from the platform; it's written as things happen and read by whoever may.
 6. **Every project at once.** The log says what happened; Administration → **Governance** says where things stand now, across every project. It's for the administrators, and for the products' certifiers and the data-protection approvers, who reach it from the account menu. **Awaiting approval** lists the agents, deliveries and requests for a data product that wait on someone, and whom. **Agents** lists every project's agents with their owner, tools, schedule, last run and spend against their budget (`nightly-summary`, `triage` and `weekly` from Lab 17). **What readers see** shows what each tag means across the platform (the mask, and who sees through it), then each project's readers with their tables, row filters, masks and tagged columns (`retail`'s readers' rules from Lab 13, the email addresses from Lab 4). **Data products** shows each product and whether it's certified (Lab 12). **Erasures** shows each one with its deadline (Lab 15). The page changes nothing; each row links to where the decision is made.
 
+7. **A role for the auditor.** The auditor needs to read every table as it is and see the log, and to change nothing: neither an editor (who writes) nor a reader (who's masked). As **bob**, open Administration → **Roles** → **Define a role**: `auditor`, "Reads every table as it is and the audit log; changes nothing", with **read-all**, **read-files** and **see-audit**. Save. On `retail` → **Edit**, add a member, the person `alice`, as `auditor` (her group still makes her a reader too: the platform takes the role that gives the most). Within a minute, on **Access**, alice is an auditor, and the card says what that gives; on the SQL tab she reads `uploads_customers` with the email addresses whole, where Lab 4 masked them for readers, and **Audit** is on her tabs; a `CREATE TABLE` is refused, and so is **Make a tag**. Take **read-all** away from the role: within a minute she reads as readers do again, in every project giving it, and Administration → **Audit** has bob's change with what the role was. **Remove** is refused while `retail` gives it.
+
 **Check:** the quarter is there in order: the uploads, the import's runs, the tags confirmed, the campaign flow saved and merged, the product certified, the deliveries approved, the erasure, the agent approved and revoked, the model asked, with the right names on each.
 
 ---
@@ -725,7 +727,7 @@ storscale/
 | 18 | Ninety reviews sorted into five topics by a model, addresses masked first |
 | 19 | September's close reproducible to the row for seven years |
 | 20 | The quarter's changes released as a tag, with a rollback |
-| 21 | The auditor's question answered by a search; every project's approvals, agents, rules and erasures on one page |
+| 21 | The auditor's question answered by a search, and a role of the company's own that reads everything and changes nothing; every project's approvals, agents, rules and erasures on one page |
 | 22 | Upgraded and restored by command; what each project costs a month, against its budget |
 
 ---

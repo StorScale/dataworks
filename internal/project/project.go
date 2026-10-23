@@ -35,6 +35,10 @@ type Project struct {
 	Kind       string   `json:"kind"`
 	Metadata   Metadata `json:"metadata"`
 	Spec       Spec     `json:"spec"`
+	// Roles are the custom roles the platform's administrators define (16.1),
+	// as the operator and platformd read them: not the spec's, but what its
+	// members' roles mean.
+	Roles map[string]Role `json:"-"`
 }
 
 type Metadata struct {
@@ -798,27 +802,44 @@ func MiB(q string) (int, bool) {
 // Hash identifies a spec: the operator applies a project again when it changes.
 func (p *Project) Hash() string {
 	b, _ := json.Marshal(p.Spec)
-	sum := sha256.Sum256(append([]byte(p.Metadata.Name+"\x00"), b...))
-	return hex.EncodeToString(sum[:8])
+	sum := sha256.New()
+	sum.Write(append([]byte(p.Metadata.Name+"\x00"), b...))
+	// The custom roles its members are given, as defined now: a role changed is a project to apply again.
+	for _, name := range p.CustomRoles() {
+		r, ok := p.Roles[name]
+		rb, _ := json.Marshal(struct {
+			Defined     bool
+			Permissions []string
+		}{ok, r.Granted()})
+		sum.Write(append([]byte("\x00role:"+name+"\x00"), rb...))
+	}
+	return hex.EncodeToString(sum.Sum(nil)[:8])
 }
 
 // Group is the Keycloak group that holds a project's members in one role (or
-// its pipelines' service account): <project>-readers, -editors, -pipelines.
-// The same name is their Buckets policy and their group in Ranger.
+// its pipelines' service account): <project>-readers, -editors, -pipelines,
+// and -role-<name> for a custom role (16.1). The same name is their Buckets
+// policy and their group in Ranger.
 func (p *Project) Group(role string) string {
 	switch role {
 	case Reader:
 		return p.Metadata.Name + "-readers"
 	case Editor:
 		return p.Metadata.Name + "-editors"
+	case "pipelines":
+		return p.Metadata.Name + "-pipelines"
 	}
-	return p.Metadata.Name + "-pipelines"
+	return p.Metadata.Name + "-role-" + role
 }
 
 // Groups are all of a project's groups, whether it uses them or not: what to
 // remove when the project goes.
 func (p *Project) Groups() []string {
-	return []string{p.Group(Reader), p.Group(Editor), p.Group("pipelines")}
+	out := []string{p.Group(Reader), p.Group(Editor), p.Group("pipelines")}
+	for _, r := range p.CustomRoles() {
+		out = append(out, p.Group(r))
+	}
+	return out
 }
 
 // RangerPrefix starts the name of every Ranger policy a project owns.
@@ -848,7 +869,16 @@ func (p *Project) BucketsPolicies() map[string][]Statement {
 		{Effect: "Allow", Action: []string{"s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"},
 			Resource: []string{arn + "/*"}},
 	}
-	out := map[string][]Statement{p.Group(Reader): read, p.Group(Editor): write}
+	out := map[string][]Statement{}
+	for _, name := range append([]string{Reader, Editor}, p.CustomRoles()...) {
+		switch r, ok := p.RoleOf(name); {
+		case !ok:
+		case r.Has(PermWriteFiles):
+			out[p.Group(name)] = write
+		case r.Has(PermReadFiles):
+			out[p.Group(name)] = read
+		}
+	}
 	if p.Spec.Pipelines != nil {
 		out[p.Group("pipelines")] = []Statement{
 			{Effect: "Allow", Action: []string{"s3:GetBucketLocation"}, Resource: []string{arn}},
@@ -986,12 +1016,12 @@ func (p *Project) sourcePolicies() []RangerPolicy {
 	desc := "From the project " + p.Metadata.Name + ": the platform operator keeps it as the project says."
 	for _, src := range p.Spec.Sources {
 		cat, named := p.SourceCatalog(src), p.RangerPrefix()+"source:"+src.Name
-		who := []string{p.Group(Editor)}
+		who := append(p.tableWriters(), p.wholeReaders()...)
 		if p.Spec.Pipelines != nil {
 			who = append(who, p.Group("pipelines"))
 		}
 		if src.Readers {
-			who = append(who, p.Group(Reader))
+			who = append(who, p.maskedReaders()...)
 		}
 		items := func(accesses ...string) []RangerItem {
 			var its []RangerItem
@@ -1030,19 +1060,27 @@ func (p *Project) sourcePolicies() []RangerPolicy {
 				Resources: resources("catalog", cat, "schema", "information_schema", "table", "*", "column", "*"), PolicyItems: see(nil, "select")})
 		for _, m := range src.Masks {
 			sc, tb, _ := strings.Cut(m.Table, ".")
-			it := allow(p.Group(Reader), "select")
-			it.DataMaskInfo = maskInfo(m.Type, "")
+			var its []RangerItem
+			for _, g := range p.maskedReaders() {
+				it := allow(g, "select")
+				it.DataMaskInfo = maskInfo(m.Type, "")
+				its = append(its, it)
+			}
 			out = append(out, RangerPolicy{Name: named + ":mask:" + m.Table + "." + m.Column, PolicyType: 1, Description: desc,
 				Resources:           resources("catalog", cat, "schema", sc, "table", tb, "column", m.Column),
-				DataMaskPolicyItems: []RangerItem{it}})
+				DataMaskPolicyItems: its})
 		}
 		for _, f := range src.RowFilters {
 			sc, tb, _ := strings.Cut(f.Table, ".")
-			it := allow(p.Group(Reader), "select")
-			it.RowFilterInfo = &RangerRowFilter{FilterExpr: f.Filter}
+			var its []RangerItem
+			for _, g := range p.maskedReaders() {
+				it := allow(g, "select")
+				it.RowFilterInfo = &RangerRowFilter{FilterExpr: f.Filter}
+				its = append(its, it)
+			}
 			out = append(out, RangerPolicy{Name: named + ":filter:" + f.Table, PolicyType: 2, Description: desc,
 				Resources:            resources("catalog", cat, "schema", sc, "table", tb),
-				RowFilterPolicyItems: []RangerItem{it}})
+				RowFilterPolicyItems: its})
 		}
 	}
 	return out
@@ -1057,8 +1095,15 @@ func (p *Project) ReviewPolicies(iids []int) []RangerPolicy {
 		return nil
 	}
 	desc := "From the project " + p.Metadata.Name + ": a merge request's data branch, which the platform operator keeps."
-	editors, pipelines := p.Group(Editor), p.Group("pipelines")
+	readAll, pipelines := append(p.tableWriters(), p.wholeReaders()...), p.Group("pipelines")
 	var out []RangerPolicy
+	readers := func(accesses ...string) []RangerItem {
+		var its []RangerItem
+		for _, g := range readAll {
+			its = append(its, allow(g, accesses...))
+		}
+		return its
+	}
 	for _, iid := range iids {
 		cat, named := p.ReviewCatalog(iid), p.RangerPrefix()+fmt.Sprintf("review:%d", iid)
 		schemas := resources("catalog", cat, "schema", "-")
@@ -1067,12 +1112,12 @@ func (p *Project) ReviewPolicies(iids []int) []RangerPolicy {
 		tables["schema"] = schemas["schema"]
 		out = append(out,
 			RangerPolicy{Name: named, Description: desc, Resources: resources("catalog", cat),
-				PolicyItems: []RangerItem{allow(editors, "use", "show"), allow(pipelines, "use", "show")}},
+				PolicyItems: append(readers("use", "show"), allow(pipelines, "use", "show"))},
 			RangerPolicy{Name: named + ":schemas", Description: desc, Resources: schemas,
-				PolicyItems: []RangerItem{allow(editors, "use", "show"), allow(pipelines, "use", "show")}},
+				PolicyItems: append(readers("use", "show"), allow(pipelines, "use", "show"))},
 			RangerPolicy{Name: named + ":tables", Description: desc, Resources: tables,
-				PolicyItems: []RangerItem{allow(editors, "select", "show"),
-					allow(pipelines, "select", "insert", "delete", "create", "drop", "alter", "show")}})
+				PolicyItems: append(readers("select", "show"),
+					allow(pipelines, "select", "insert", "delete", "create", "drop", "alter", "show"))})
 	}
 	return out
 }
@@ -1082,17 +1127,26 @@ func (p *Project) tablePolicies() []RangerPolicy {
 	if t == nil {
 		return nil
 	}
-	readers, editors, pipelines := p.Group(Reader), p.Group(Editor), p.Group("pipelines")
+	// By how each role reads (16.1): its writers (editors), those who read
+	// every table as it is, and those under the readers' rules (readers).
+	writers, whole, masked, pipelines := p.tableWriters(), p.wholeReaders(), p.maskedReaders(), p.Group("pipelines")
 	hasPipelines := p.Spec.Pipelines != nil
 	desc := "From the project " + p.Metadata.Name + ": the platform operator keeps it as the project says."
 	named := func(n string) string { return p.RangerPrefix() + n }
+	each := func(groups []string, accesses ...string) []RangerItem {
+		var its []RangerItem
+		for _, g := range groups {
+			its = append(its, allow(g, accesses...))
+		}
+		return its
+	}
 
 	schema := RangerPolicy{Name: named("namespace"), Description: desc,
 		Resources:   resources("catalog", t.Catalog, "schema", t.Namespace),
-		PolicyItems: []RangerItem{allow(editors, "all"), allow(readers, "use", "show")}}
+		PolicyItems: append(append(each(writers, "all"), each(whole, "use", "show")...), each(masked, "use", "show")...)}
 	tables := RangerPolicy{Name: named("tables"), Description: desc,
 		Resources:   resources("catalog", t.Catalog, "schema", t.Namespace, "table", "*", "column", "*"),
-		PolicyItems: []RangerItem{allow(editors, "all")}}
+		PolicyItems: append(each(writers, "all"), each(whole, "select", "show")...)}
 	if hasPipelines {
 		schema.PolicyItems = append(schema.PolicyItems, allow(pipelines, "use", "show"))
 		// The pipelines make their tables too (dbt's models: made, swapped
@@ -1110,40 +1164,54 @@ func (p *Project) tablePolicies() []RangerPolicy {
 	for _, g := range allConsumers {
 		schema.PolicyItems = append(schema.PolicyItems, allow(g, "use", "show"))
 	}
-	alsoFor := func(it RangerItem, table string) []RangerItem {
-		its := []RangerItem{it}
+	// Each of the project's groups' items, then the consumers' (a copy of the first, for each consumer's group).
+	alsoForAll := func(its []RangerItem, table string) []RangerItem {
+		if len(its) == 0 {
+			return its
+		}
 		for _, g := range consumers[table] {
-			c := it
+			c := its[0]
 			c.Groups = []string{g}
 			its = append(its, c)
 		}
 		return its
 	}
+	alsoForEach := func(groups []string, table string, accesses ...string) []RangerItem {
+		return alsoForAll(each(groups, accesses...), table)
+	}
 	out := []RangerPolicy{schema}
 	if len(view.Tables) == 0 {
-		tables.PolicyItems = append(tables.PolicyItems, allow(readers, "select", "show"))
+		tables.PolicyItems = append(tables.PolicyItems, each(masked, "select", "show")...)
 		out = append(out, tables)
 	} else {
 		out = append(out, tables)
 		for _, tb := range sorted(view.Tables) {
 			out = append(out, RangerPolicy{Name: named("read:" + tb), Description: desc,
 				Resources:   atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", tb, "column", "*")),
-				PolicyItems: alsoFor(allow(readers, "select", "show"), tb)})
+				PolicyItems: alsoForEach(masked, tb, "select", "show")})
 		}
 	}
 	for _, m := range view.Masks {
-		it := allow(readers, "select")
-		it.DataMaskInfo = maskInfo(m.Type, "")
+		var its []RangerItem
+		for _, g := range masked {
+			it := allow(g, "select")
+			it.DataMaskInfo = maskInfo(m.Type, "")
+			its = append(its, it)
+		}
 		out = append(out, RangerPolicy{Name: named("mask:" + m.Table + "." + m.Column), PolicyType: 1, Description: desc,
 			Resources:           atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", m.Table, "column", m.Column)),
-			DataMaskPolicyItems: alsoFor(it, m.Table)})
+			DataMaskPolicyItems: alsoForAll(its, m.Table)})
 	}
 	for _, f := range view.RowFilters {
-		it := allow(readers, "select")
-		it.RowFilterInfo = &RangerRowFilter{FilterExpr: f.Filter}
+		var its []RangerItem
+		for _, g := range masked {
+			it := allow(g, "select")
+			it.RowFilterInfo = &RangerRowFilter{FilterExpr: f.Filter}
+			its = append(its, it)
+		}
 		out = append(out, RangerPolicy{Name: named("filter:" + f.Table), PolicyType: 2, Description: desc,
 			Resources:            atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", f.Table)),
-			RowFilterPolicyItems: alsoFor(it, f.Table)})
+			RowFilterPolicyItems: alsoForAll(its, f.Table)})
 	}
 	return out
 }

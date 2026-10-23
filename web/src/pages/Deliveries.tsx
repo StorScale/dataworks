@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { approveDelivery, erasePerson, getDeliveries, getErasures, searchDeliveries, type Erasure, type SearchHit } from "../api";
-import { ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
+import { can, ErrorBanner, Spinner, usePoll, useProject } from "../lib";
 import { Empty, Intro } from "../components";
 
 // Deliveries send files to clients and partners on a schedule (SFTP, S3).
@@ -9,11 +9,10 @@ import { Empty, Intro } from "../components";
 // runs are the delivery log.
 export default function Deliveries() {
   const { name, view } = useProject();
-  const { admin } = usePlatform();
   const { data, error, reload } = usePoll(() => getDeliveries(name), [name], 30_000);
   const [busy, setBusy] = useState<string>();
   const [actionError, setActionError] = useState<string>();
-  const mayApprove = view?.role === "editor" || admin;
+  const mayApprove = can(view, "approve");
   const approve = async (d: string) => {
     setBusy(d);
     setActionError(undefined);

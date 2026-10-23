@@ -581,13 +581,13 @@ func (s *server) handleSaveFlow(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p, role, ok := s.projectRole(w, r, who)
+	p, _, ok := s.projectRole(w, r, who)
 	if !ok {
 		return
 	}
 	name := r.PathValue("flow")
-	if role != project.Editor {
-		s.recordRefusal(r, who, "flow.saved", "project:"+p.Metadata.Name, "not an editor")
+	if !s.memberCan(r, p.Metadata.Name, who, project.PermBuild) {
+		s.recordRefusal(r, who, "flow.saved", "project:"+p.Metadata.Name, "not permitted (build)")
 		s.fail(w, r, http.StatusForbidden, "the project's editors save flows in it")
 		return
 	}

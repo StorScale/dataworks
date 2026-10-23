@@ -151,7 +151,7 @@ func (s *server) handleProjectAudit(w http.ResponseWriter, r *http.Request) {
 	if v == nil {
 		return
 	}
-	if v.Role != project.Editor && !s.isAdmin(sess.User) {
+	if !v.can(project.PermSeeAudit) {
 		s.fail(w, r, http.StatusForbidden, "a project's audit log is for its editors")
 		return
 	}

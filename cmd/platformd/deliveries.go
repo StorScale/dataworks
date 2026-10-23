@@ -106,7 +106,7 @@ func (s *server) handleApproveDelivery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := &p.Spec.Deliveries[i]
-	editor := v.Role == project.Editor || s.isAdmin(sess.User)
+	editor := v.can(project.PermApprove)
 	protection := s.inGroups(sess.User.Groups, s.cfg.DeliveryApproverGroups)
 	switch {
 	case who == d.ChangedBy:
@@ -232,7 +232,7 @@ func (s *server) handleResetImport(w http.ResponseWriter, r *http.Request) {
 	if v == nil {
 		return
 	}
-	if v.Role != project.Editor && !s.isAdmin(sess.User) {
+	if !v.can(project.PermConnections) {
 		s.fail(w, r, http.StatusForbidden, "the project's editors reset its imports")
 		return
 	}

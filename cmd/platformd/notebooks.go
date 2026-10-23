@@ -89,8 +89,13 @@ func (s *server) handleNotebookProjects(w http.ResponseWriter, r *http.Request) 
 }
 
 func editorIn(members []project.Person, who string) bool {
+	return permittedIn(members, who, project.PermBuild)
+}
+
+// permittedIn says whether someone among a project's members may do something there.
+func permittedIn(members []project.Person, who, perm string) bool {
 	for _, m := range members {
-		if m.Username == who && m.Role == project.Editor {
+		if m.Username == who && m.Role != "pipelines" && project.Permits(m.Role, m.Can, perm) {
 			return true
 		}
 	}
