@@ -13,8 +13,8 @@ mask. These check (use case 16.1):
   3. bob takes away read-all and classify: within minutes she reads as a
      reader does, and may no longer confirm tags; the change is in the
      audit log;
-  4. a platform role, given to the analysts group, lets alice see the
-     Governance page and the project's erasures; removed, she's refused;
+  4. a platform role, given to the analysts group, lets alice see every
+     project's usage and certify products; removed, she's refused;
   5. a role a project gives can't be removed; alice (no administrator)
      can't define one; once no project gives it, it's removed.
 
@@ -30,7 +30,7 @@ from projects import platform, projects, wait
 PLATFORM = os.environ["PLATFORM_URL"]
 NAME = "stewarded"
 ROLE = "steward"
-PRIVACY = "privacy-office"
+PRIVACY = "money-and-catalog"
 H = {"X-Platform-Request": "1"}
 MEMBERS = [{"group": "engineers", "role": "editor"}, {"user": "alice", "role": ROLE}, {"user": "carol", "role": "reader"}]
 SPEC = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": NAME},
@@ -100,17 +100,18 @@ def main():
         check("... and may no longer confirm tags; the change is in the audit log, with what it was",
               no_more is True and any("was read-all" in e.get("detail", "") for e in saved), (no_more, saved[:2]))
 
-        # 4. A platform role: given to a Keycloak group, across every project.
-        gov = lambda: alice.get(f"{PLATFORM}/api/governance", timeout=60).status_code
-        erasures = lambda: alice.get(f"{url}/erasures", timeout=60).status_code
-        before = (gov(), erasures())
+        # 4. A platform role: given to a Keycloak group, across every project. (Not one analysts
+        # have anywhere: Compose makes them data-protection approvers, so the example has one besides bob.)
+        usage = lambda: alice.get(f"{PLATFORM}/api/usage", timeout=60).status_code
+        certify = lambda: (alice.get(f"{PLATFORM}/api/products", timeout=60).json() or {}).get("canCertify")
+        before = (usage(), certify())
         made = bob.put(f"{PLATFORM}/api/roles/{PRIVACY}", headers=H, timeout=30, json={
-            "description": "The privacy office", "scope": "platform", "groups": ["analysts"], "permissions": ["see-governance", "protect-personal"]})
-        given = wait(lambda: True if (gov(), erasures()) == (200, 200) else None, 120, every=5)
+            "description": "Finance and the catalog's stewards", "scope": "platform", "groups": ["analysts"], "permissions": ["see-all-usage", "certify-products"]})
+        given = wait(lambda: True if (usage(), certify()) == (200, True) else None, 120, every=5)
         gone = bob.delete(f"{PLATFORM}/api/roles/{PRIVACY}", headers=H, timeout=30)
-        taken = wait(lambda: True if (gov(), erasures()) == (403, 403) else None, 120, every=5)
-        check("a platform role given to analysts lets alice see Governance and a project's erasures; removed, she's refused again",
-              before == (403, 403) and made.ok and given is True and gone.status_code == 204 and taken is True,
+        taken = wait(lambda: True if (usage(), certify()) == (403, False) else None, 120, every=5)
+        check("a platform role given to analysts lets alice see every project's usage and certify products; removed, she's refused again",
+              before == (403, False) and made.ok and given is True and gone.status_code == 204 and taken is True,
               (before, made.status_code, made.text[:200], given, gone.status_code, taken))
 
         # 5. Removing it.
