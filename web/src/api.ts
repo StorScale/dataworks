@@ -138,10 +138,10 @@ export type AccessPerson = { username: string; roles: Record<string, string>; vi
 export type Assistant = { name: string; description?: string; redirectUris: string[]; addedBy?: string; addedAt?: string; clientId: string; mcpUrl: string };
 // Roles of the company's own (16.1): editor and reader built in, the rest the administrators define.
 export type Permission = { name: string; says: string };
-export type Role = { name: string; description?: string; permissions: string[]; builtIn?: boolean; changedBy?: string; changedAt?: string;
-  granted: string[]; projects: string[] };
-export const getRoles = () => api<{ roles: Role[]; permissions: Permission[]; canEdit: boolean }>("GET", "/api/roles");
-export const putRole = (name: string, r: { description?: string; permissions: string[] }) =>
+export type Role = { name: string; description?: string; permissions: string[]; scope?: "" | "platform"; groups?: string[]; builtIn?: boolean;
+  changedBy?: string; changedAt?: string; granted: string[]; projects: string[] };
+export const getRoles = () => api<{ roles: Role[]; permissions: Permission[]; platformPermissions: Permission[]; canEdit: boolean }>("GET", "/api/roles");
+export const putRole = (name: string, r: { description?: string; permissions: string[]; scope?: string; groups?: string[] }) =>
   api<Role>("PUT", `/api/roles/${encodeURIComponent(name)}`, r);
 export const deleteRole = (name: string) => api<unknown>("DELETE", `/api/roles/${encodeURIComponent(name)}`);
 export const getAssistants = () => api<{ assistants: Assistant[]; available: boolean }>("GET", "/api/assistants");

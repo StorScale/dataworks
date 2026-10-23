@@ -92,7 +92,7 @@ func (s *server) handleProducts(w http.ResponseWriter, r *http.Request) {
 		return out[i].Project+"/"+out[i].Name < out[j].Project+"/"+out[j].Name
 	})
 	writeJSON(w, http.StatusOK, map[string]any{"products": out,
-		"canCertify": s.isAdmin(sess.User) || s.inGroups(sess.User.Groups, s.cfg.ProductCertifierGroups)})
+		"canCertify": s.platformCan(r.Context(), sess.User, project.PermCertify)})
 }
 
 // productOf is the request's producer's spec and its product, or it answers.
@@ -240,8 +240,8 @@ func (s *server) handleCertify(w http.ResponseWriter, r *http.Request) {
 	if sess == nil {
 		return
 	}
-	if !s.isAdmin(sess.User) && !s.inGroups(sess.User.Groups, s.cfg.ProductCertifierGroups) {
-		s.fail(w, r, http.StatusForbidden, "the governance group ("+strings.Join(s.cfg.ProductCertifierGroups, ", ")+") certifies products")
+	if !s.platformCan(r.Context(), sess.User, project.PermCertify) {
+		s.fail(w, r, http.StatusForbidden, "the governance group (a platform role with certify-products) certifies products")
 		return
 	}
 	p, pr := s.productOf(w, r)

@@ -102,13 +102,13 @@ func (p *Project) productProblems(bad func(string, ...any)) {
 
 // consumerGroups are, for each of the project's tables that is a product
 // with consumers, the consuming projects' groups (readers, editors and
-// pipelines), and all of them together.
+// pipelines, and their custom roles that read), and all of them together.
 func (p *Project) consumerGroups() (map[string][]string, []string) {
 	byTable := map[string][]string{}
 	var all []string
 	for _, pr := range p.Spec.Products {
 		for _, c := range sorted(pr.Consumers) {
-			for _, g := range []string{GroupOf(c, Reader), GroupOf(c, Editor), GroupOf(c, "pipelines")} {
+			for _, g := range append([]string{GroupOf(c, Reader), GroupOf(c, Editor), GroupOf(c, "pipelines")}, p.ConsumerRoleGroups[c]...) {
 				if !slices.Contains(byTable[pr.Table], g) {
 					byTable[pr.Table] = append(byTable[pr.Table], g)
 				}

@@ -22,7 +22,7 @@ export default function ProjectEditor() {
   const [error, setError] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [defined, setDefined] = useState<string[]>([]); // the roles the administrators define (16.1)
-  useEffect(() => { getRoles().then((r) => setDefined(r.roles.filter((x) => !x.builtIn).map((x) => x.name))).catch(() => {}); }, []);
+  useEffect(() => { getRoles().then((r) => setDefined(r.roles.filter((x) => !x.builtIn && !x.scope).map((x) => x.name))).catch(() => {}); }, []);
   // The roles a member may be given: editor, reader, the defined ones, and the one they have (should it be gone).
   const roleNames = (have: string) => [...new Set(["editor", "reader", ...defined, have])];
   useEffect(() => {

@@ -13,7 +13,9 @@ mask. These check (use case 16.1):
   3. bob takes away read-all and classify: within minutes she reads as a
      reader does, and may no longer confirm tags; the change is in the
      audit log;
-  4. a role a project gives can't be removed; alice (no administrator)
+  4. a platform role, given to the analysts group, lets alice see the
+     Governance page and the project's erasures; removed, she's refused;
+  5. a role a project gives can't be removed; alice (no administrator)
      can't define one; once no project gives it, it's removed.
 
 The project and the role are removed after.
@@ -28,6 +30,7 @@ from projects import platform, projects, wait
 PLATFORM = os.environ["PLATFORM_URL"]
 NAME = "stewarded"
 ROLE = "steward"
+PRIVACY = "privacy-office"
 H = {"X-Platform-Request": "1"}
 MEMBERS = [{"group": "engineers", "role": "editor"}, {"user": "alice", "role": ROLE}, {"user": "carol", "role": "reader"}]
 SPEC = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": NAME},
@@ -97,7 +100,20 @@ def main():
         check("... and may no longer confirm tags; the change is in the audit log, with what it was",
               no_more is True and any("was read-all" in e.get("detail", "") for e in saved), (no_more, saved[:2]))
 
-        # 4. Removing it.
+        # 4. A platform role: given to a Keycloak group, across every project.
+        gov = lambda: alice.get(f"{PLATFORM}/api/governance", timeout=60).status_code
+        erasures = lambda: alice.get(f"{url}/erasures", timeout=60).status_code
+        before = (gov(), erasures())
+        made = bob.put(f"{PLATFORM}/api/roles/{PRIVACY}", headers=H, timeout=30, json={
+            "description": "The privacy office", "scope": "platform", "groups": ["analysts"], "permissions": ["see-governance", "protect-personal"]})
+        given = wait(lambda: True if (gov(), erasures()) == (200, 200) else None, 120, every=5)
+        gone = bob.delete(f"{PLATFORM}/api/roles/{PRIVACY}", headers=H, timeout=30)
+        taken = wait(lambda: True if (gov(), erasures()) == (403, 403) else None, 120, every=5)
+        check("a platform role given to analysts lets alice see Governance and a project's erasures; removed, she's refused again",
+              before == (403, 403) and made.ok and given is True and gone.status_code == 204 and taken is True,
+              (before, made.status_code, made.text[:200], given, gone.status_code, taken))
+
+        # 5. Removing it.
         in_use = bob.delete(role_url, headers=H, timeout=30)
         bob.put(url, data=json.dumps(dict(SPEC, spec=dict(SPEC["spec"], members=[m for m in MEMBERS if m["role"] != ROLE]))), timeout=30)
         time.sleep(2)
@@ -108,6 +124,7 @@ def main():
         bob.delete(url, headers=H, timeout=30)
         wait(lambda: NAME not in (projects(bob) or {}), 300)
         bob.delete(role_url, headers=H, timeout=30)
+        bob.delete(f"{PLATFORM}/api/roles/{PRIVACY}", headers=H, timeout=30)
     finish()
 
 

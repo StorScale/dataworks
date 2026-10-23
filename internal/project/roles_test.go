@@ -85,3 +85,48 @@ func TestCustomRolesInPolicies(t *testing.T) {
 		t.Error("a role changed is a project to apply again")
 	}
 }
+
+func TestPlatformRoles(t *testing.T) {
+	for _, tc := range []struct {
+		role Role
+		want string
+	}{
+		{Role{Name: "privacy", Scope: ScopePlatform, Groups: []string{"privacy-office"}, Permissions: []string{PermProtectPersons, PermSeeGovernance}}, ""},
+		{Role{Name: "privacy", Scope: ScopePlatform, Permissions: []string{PermProtectPersons}}, "at least one Keycloak group"},
+		{Role{Name: "privacy", Scope: ScopePlatform, Groups: []string{"x"}, Permissions: []string{PermRead}}, `no permission "read" for a platform role`},
+		{Role{Name: "steward", Groups: []string{"x"}, Permissions: []string{PermRead}}, "given in a project's spec"},
+		{Role{Name: "steward", Permissions: []string{PermCertify}}, `no permission "certify-products" for a project's role`},
+	} {
+		err := tc.role.Check()
+		if (tc.want == "") != (err == nil) || (err != nil && !strings.Contains(err.Error(), tc.want)) {
+			t.Errorf("%+v: %v, want %q", tc.role, err, tc.want)
+		}
+	}
+	// A platform role isn't a project's: a project giving it gives nothing.
+	p := &Project{Roles: map[string]Role{"privacy": {Name: "privacy", Scope: ScopePlatform, Groups: []string{"g"}, Permissions: []string{PermProtectPersons}}}}
+	if _, ok := p.RoleOf("privacy"); ok {
+		t.Error("a platform role taken as a project's")
+	}
+}
+
+func TestConsumersRolesReadProducts(t *testing.T) {
+	p, err := Parse([]byte(`{"metadata":{"name":"sales"},"spec":{"members":[{"group":"engineers","role":"editor"}],"tables":{},
+		"products":[{"name":"orders","table":"orders","owner":"bob","version":"1","consumers":["marketing"]}]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := p.Hash()
+	p.ConsumerRoleGroups = map[string][]string{"marketing": {"marketing-role-steward"}}
+	var groups []string
+	for _, pol := range p.RangerPolicies() {
+		for _, it := range pol.PolicyItems {
+			groups = append(groups, it.Groups...)
+		}
+	}
+	if !slices.Contains(groups, "marketing-role-steward") || !slices.Contains(groups, "marketing-readers") {
+		t.Errorf("the consumer's steward reads the product: %v", groups)
+	}
+	if p.Hash() == before {
+		t.Error("a consumer's reading role changed is a project to apply again")
+	}
+}

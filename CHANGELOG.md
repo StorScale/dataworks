@@ -4,6 +4,10 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **Platform roles** (16.1, R16.2): an administrator gives a platform role to Keycloak groups on the Roles page (**Define a platform role**), from four platform permissions: see-all-usage (every project's usage and cost), see-governance (the Governance page), certify-products, and protect-personal (approve deliveries of personal columns, search what was sent about a person, record erasures). Finance, the governance group and the data-protection approvers are the install's own platform roles, made from its settings (`USAGE_VIEWER_GROUPS`, `PRODUCT_CERTIFIER_GROUPS`, `DELIVERY_APPROVER_GROUPS`) as before, so an upgrade changes nothing; administrators have every permission. A change reaches its groups within half a minute and is in the audit log, with the groups. A project can't give a platform role. The `roles` suite checks it.
+- **A data product's consumers' custom roles read it** (16.1, R16.3): a consuming project's custom roles that read are named in the producer's policies for the product, under its readers' rules, as the consumer's readers and editors are; a change to them reaches the producer at once.
+
 ## [0.29.0] - 2026-10-23
 
 Roles of the company's own: an administrator defines a role from the platform's permissions, a project gives it as it gives editor and reader, and every system applies it; what a model learned from, in the catalog; the models' templates on a schedule; and the dashboards' sample traffic optional, and no longer filling Buckets.

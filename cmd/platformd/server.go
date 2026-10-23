@@ -24,6 +24,7 @@ import (
 	"github.com/StorScale/storscale-platform/internal/flow"
 	"github.com/StorScale/storscale-platform/internal/llm"
 	"github.com/StorScale/storscale-platform/internal/pipelines"
+	"github.com/StorScale/storscale-platform/internal/project"
 	"github.com/StorScale/storscale-platform/internal/store"
 )
 
@@ -381,8 +382,8 @@ func (s *server) handleSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"user": sess.User, "tools": toolsFor(s.cfg.PlatformURL, sess.User.Groups, s.cfg.AdminGroups),
 		"admin": s.isAdmin(sess.User), "projects": s.store != nil,
 		// the pages across projects some see besides the administrators: usage (finance), governance (certifiers, approvers)
-		"usage":      s.isAdmin(sess.User) || s.inGroups(sess.User.Groups, s.cfg.UsageGroups),
-		"governance": s.isAdmin(sess.User) || s.inGroups(sess.User.Groups, s.cfg.ProductCertifierGroups) || s.inGroups(sess.User.Groups, s.cfg.DeliveryApproverGroups), "flow": s.catalog != nil, "semantic": s.cfg.SemanticURL != "", "pipelines": s.airflow != nil,
+		"usage":      s.platformCan(r.Context(), sess.User, project.PermSeeAllUsage),
+		"governance": s.platformCan(r.Context(), sess.User, project.PermSeeGovernance), "flow": s.catalog != nil, "semantic": s.cfg.SemanticURL != "", "pipelines": s.airflow != nil,
 		"brand": s.brand.session()})
 }
 

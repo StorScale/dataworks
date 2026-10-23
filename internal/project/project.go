@@ -39,6 +39,10 @@ type Project struct {
 	// as the operator and platformd read them: not the spec's, but what its
 	// members' roles mean.
 	Roles map[string]Role `json:"-"`
+	// ConsumerRoleGroups are, for each project consuming its data products,
+	// the groups of that project's custom roles that read (16.1), which read
+	// the products as its readers and editors do; the operator fills them in.
+	ConsumerRoleGroups map[string][]string `json:"-"`
 }
 
 type Metadata struct {
@@ -812,6 +816,15 @@ func (p *Project) Hash() string {
 			Permissions []string
 		}{ok, r.Granted()})
 		sum.Write(append([]byte("\x00role:"+name+"\x00"), rb...))
+	}
+	// Its products' consumers' custom roles that read: a role changed there is a policy changed here.
+	consumers := make([]string, 0, len(p.ConsumerRoleGroups))
+	for c := range p.ConsumerRoleGroups {
+		consumers = append(consumers, c)
+	}
+	sort.Strings(consumers)
+	for _, c := range consumers {
+		sum.Write([]byte("\x00consumer:" + c + "\x00" + strings.Join(p.ConsumerRoleGroups[c], ",")))
 	}
 	return hex.EncodeToString(sum.Sum(nil)[:8])
 }

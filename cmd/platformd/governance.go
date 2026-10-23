@@ -84,7 +84,7 @@ func (s *server) handleGovernance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u := sess.User
-	if !s.isAdmin(u) && !s.inGroups(u.Groups, s.cfg.ProductCertifierGroups) && !s.inGroups(u.Groups, s.cfg.DeliveryApproverGroups) {
+	if !s.platformCan(r.Context(), u, project.PermSeeGovernance) {
 		s.fail(w, r, http.StatusForbidden, "the administrators, the products' certifiers and the data-protection approvers see the governance view")
 		return
 	}
@@ -171,7 +171,7 @@ func (s *server) handleGovernance(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		rules = append(rules, gr)
-		if s.files != nil && s.erasureAllowed(u) {
+		if s.files != nil && s.erasureAllowed(r.Context(), u) {
 			keys, _ := s.files.ListFiles(r.Context(), "erasures/"+name+"/")
 			for _, k := range keys {
 				if b, err := s.files.GetFile(r.Context(), k); err == nil && b != nil {
