@@ -158,6 +158,7 @@ pipeline = dlt.pipeline(pipeline_name=f"import_{project.replace('-', '_')}_{name
                         dataset_name=namespace, pipelines_dir="/tmp/storscale-imports")
 # A reset: the resources' tables and dlt's state of them dropped first, so all is copied again.
 refresh = "drop_sources" if os.environ.get("STORSCALE_IMPORT_RESET") == "1" else None
+mine = []
 if refresh:
     # dlt's own drop empties an Iceberg table but keeps it, and its columns'
     # types with it (Iceberg won't make a text column a date): the import's
@@ -174,3 +175,11 @@ if refresh:
         print(f"reset: dropped {'.'.join(t)}")
 info = pipeline.run(sources, table_format="iceberg", refresh=refresh)
 print(info)
+if refresh and mine:
+    # The run after a drop can leave a dropped table unmade (dlt's own record
+    # said it was there); an ordinary run makes it, as the next would.
+    missing = [t for t in mine if not catalog.table_exists(t)]
+    if missing:
+        print(f"reset: {', '.join('.'.join(t) for t in missing)} not made again yet: once more")
+        sources = {"rest_api": rest_api, "sql_database": sql_database, "salesforce": salesforce, "files": files}[im["source"]]()
+        print(pipeline.run(sources, table_format="iceberg"))

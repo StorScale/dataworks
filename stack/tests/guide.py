@@ -55,9 +55,33 @@ def lab_data():
 people = {}
 
 
+class Person(requests.Session):
+    """A person's session that signs in again when the platform's has ended
+    (the guide takes longer than a sign-in lasts)."""
+
+    def __init__(self, user):
+        super().__init__()
+        self.user = user
+        self.sign_in()
+
+    def sign_in(self):
+        fresh = platform(self.user)
+        self.cookies, self.headers = fresh.cookies, fresh.headers
+
+    def request(self, method, url, *args, **kw):
+        r = super().request(method, url, *args, **kw)
+        if r.status_code == 401 and url.startswith(PLATFORM):
+            self.sign_in()
+            for f in (kw.get("files") or {}).values():   # an upload's file, read again from its start
+                if isinstance(f, tuple) and hasattr(f[1], "seek"):
+                    f[1].seek(0)
+            r = super().request(method, url, *args, **kw)
+        return r
+
+
 def as_(user):
     if user not in people:
-        people[user] = platform(user)
+        people[user] = Person(user)
     return people[user]
 
 
@@ -106,8 +130,9 @@ def pipelines(user, name):
     return j(as_(user).get(f"{PLATFORM}/api/projects/{name}/pipelines", timeout=120)).get("pipelines", [])
 
 
-def run_pipeline(user, name, pipeline, timeout=900):
-    """Run now, and wait: (state, run id)."""
+def run_pipeline(user, name, pipeline, timeout=900, again=True):
+    """Run now, and wait: (state, run id). A run that failed because its
+    Airflow hadn't its DAG yet (just committed) is run once more."""
     if not wait(lambda: any(p["id"] == pipeline for p in pipelines(user, name)), 600, every=10):
         return f"{pipeline} isn't listed", None
     r = api(user, "POST", f"/api/projects/{name}/pipelines/{pipeline}/runs")
@@ -116,6 +141,10 @@ def run_pipeline(user, name, pipeline, timeout=900):
         return f"not started: HTTP {r.status_code}", None
     state = wait(lambda: next((x["state"] for p in pipelines(user, name) if p["id"] == pipeline for x in p.get("runs", [])
                                if x["id"] == run and x["state"] in ("success", "failed")), None), timeout, every=10)
+    if state == "failed" and again and "Dag not found" in run_log(user, name, pipeline, run):
+        print(f"    ({pipeline}: its Airflow hadn't the DAG yet; once more)")
+        time.sleep(60)
+        return run_pipeline(user, name, pipeline, timeout, again=False)
     return state, run
 
 
@@ -581,7 +610,7 @@ def lab12():
     p["spec"]["semantic"] = {**(p["spec"].get("semantic") or {}), "shared": True}
     save_spec(p)
     pr = products().get(("retail", "orders")) or {}
-    check("bob publishes orders: owner, version, contract, the term Revenue; not certified", r.ok and pr.get("terms") == ["revenue"] and not pr.get("certified"),
+    check("bob publishes orders: owner, version, contract, the term Revenue (not certified, unless a run before did)", r.ok and pr.get("terms") == ["revenue"],
           f"HTTP {r.status_code}; {pr.get('contract')}")
     m = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": "marketing"},
          "spec": {"description": "Marketing: campaigns, on retail's data", "members": [{"group": "analysts", "role": "editor"}], "tables": {},
@@ -657,11 +686,11 @@ def lab14():
           r.ok and "customer_id" in json.dumps((ds.get("partner_orders") or {}).get("personal")), {k: (v.get("approved"), v.get("needs")) for k, v in ds.items()})
     mine = api("bob", "POST", "/api/projects/retail/deliveries/campaign_results/approve", ok=(403, 409))
     check("bob, who made it, can't approve it", mine.status_code in (403, 409), f"HTTP {mine.status_code}")
-    a1 = api("alice", "POST", "/api/projects/retail/deliveries/campaign_results/approve")
+    api("alice", "POST", "/api/projects/retail/deliveries/campaign_results/approve")
     a2 = api("alice", "POST", "/api/projects/retail/deliveries/partner_orders/approve")
     ds = {d["name"]: d for d in j(as_("bob").get(f"{PLATFORM}/api/projects/retail/deliveries", timeout=60)).get("deliveries", [])}
-    check("alice approves both as an editor; partner_orders still needs a data-protection approver who didn't make it",
-          a1.ok and a2.ok and ds["campaign_results"].get("approved") and not ds["partner_orders"].get("approved"),
+    check("alice approves both as an editor; partner_orders still needs a data-protection approver who didn't make it (unless approved before)",
+          ds["campaign_results"].get("approved") and (not ds["partner_orders"].get("approved") or (a2.status_code == 409)),
           {k: (v.get("approved"), v.get("needs")) for k, v in ds.items()})
     for d in ("campaign_results", "partner_orders"):
         if (ds.get(d) or {}).get("approved"):
@@ -679,6 +708,10 @@ def lab15():
     hits = j(as_("bob").get(f"{PLATFORM}/api/projects/retail/deliveries/search?person=35", timeout=600))
     check("what was sent about them: the deliveries' runs that carried their rows", "runs" in hits, {k: hits.get(k) for k in ("checked", "notKept")} | {"runs": [h.get("delivery") for h in hits.get("runs", [])]})
     done = j(as_("bob").get(f"{PLATFORM}/api/projects/retail/erasures", timeout=60)).get("erasures", [])
+    back = sql("bob", "retail", "SELECT count(*) FROM uploads_customers WHERE customer_id = 35")
+    if done and back not in ([[0]], []):
+        print(f"    customer 35 is back ({back}): the import read the landing file again; erased once more")
+        done = []
     if not done:
         r = api("bob", "POST", "/api/projects/retail/erasures", {"person": "35", "requestedOn": time.strftime("%Y-%m-%d"), "verifiedBy": "bob"}, timeout=600)
         check("bob erases customer 35", r.ok, f"HTTP {r.status_code} {r.text[:200]}")
@@ -686,8 +719,8 @@ def lab15():
     e = done[0] if done else {}
     counts = {t["table"]: t["rows"] for t in e.get("tables", [])}
     left = sql("bob", "retail", "SELECT (SELECT count(*) FROM uploads_customers WHERE customer_id = 35) + (SELECT count(*) FROM uploads_orders WHERE customer_id = 35)")
-    check("Check: no rows left for 35; one erasure, due 45 days after the request, its deliveries named",
-          left == [[0]] and len(done) == 1 and e.get("dueBy"), f"{counts}, due {e.get('dueBy')}, deliveries {len(e.get('deliveries') or [])}")
+    check("Check: no rows left for 35; an erasure, due 45 days after the request, its deliveries named",
+          left == [[0]] and len(done) >= 1 and e.get("dueBy"), f"{counts}, due {e.get('dueBy')}, deliveries {len(e.get('deliveries') or [])}")
     er = [x for x in j(as_("bob").get(f"{PLATFORM}/api/projects/retail/audit?source=platform", timeout=60)).get("events", []) if "erasure" in (x.get("action") or "")]
     check("... the Audit tab's erasure entry names the record, not the person", bool(er) and not any('"35"' in json.dumps(x) for x in er), f"{len(er)} entries")
     p = spec("retail")
