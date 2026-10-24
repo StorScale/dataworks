@@ -18,6 +18,7 @@ The project is removed after.
 """
 import json
 import os
+import time
 
 import requests
 from ml import token
@@ -45,6 +46,7 @@ def predict(user, rows):
 def main():
     bob, alice = platform("bob"), platform("alice")
     url = f"{PLATFORM}/api/projects/{NAME}"
+    began = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())   # the audit log outlives an earlier run's project of this name
     try:
         r = bob.put(url, data=json.dumps(SPEC), timeout=30)
         ready = wait(lambda: (lambda x: x if x and (x.get("status") or {}).get("phase") == "Ready" else None)((projects(bob) or {}).get(NAME)), 900, every=10)
@@ -68,7 +70,7 @@ def main():
               and preds[0][1] > preds[1][1], (got.status_code, body))
         refused, _ = predict("carol", ROWS)
         check("carol, no member of the project, is refused", refused.status_code == 403, refused.status_code)
-        log = lambda: (bob.get(f"{url}/audit", params={"source": "platform", "q": "model"}, timeout=60).json() or {}).get("events", [])
+        log = lambda: (bob.get(f"{url}/audit", params={"source": "platform", "q": "model", "since": began}, timeout=60).json() or {}).get("events", [])
         seen = wait(lambda: (lambda ev: ev if any(e["action"] == "model.called" and e["user"] == "alice" for e in ev)
                              and any(e["action"] == "model.call" and e["user"] == "carol" and not e.get("allowed") for e in ev) else None)(log()), 120, every=5)
         called = next((e for e in seen or [] if e["action"] == "model.called"), {})
