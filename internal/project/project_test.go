@@ -122,10 +122,13 @@ func TestRangerPolicies(t *testing.T) {
 			t.Error("readers limited to orders must not get every table")
 		}
 	}
-	if f := byName["catalog=iceberg schema=sales table=orders 2"]; f.RowFilterPolicyItems[0].RowFilterInfo.FilterExpr != "region = 'EU'" {
+	// Editors first, as they are; then the readers, ruled.
+	if f := byName["catalog=iceberg schema=sales table=orders 2"]; len(f.RowFilterPolicyItems) != 2 || f.RowFilterPolicyItems[0].Groups[0] != "sales-editors" ||
+		f.RowFilterPolicyItems[0].RowFilterInfo.FilterExpr != "true" || f.RowFilterPolicyItems[1].RowFilterInfo.FilterExpr != "region = 'EU'" {
 		t.Errorf("row filter: %+v", f)
 	}
-	if m := byName["catalog=iceberg schema=sales table=orders column=card_number 1"]; m.DataMaskPolicyItems[0].DataMaskInfo.DataMaskType != "MASK_SHOW_LAST_4" {
+	if m := byName["catalog=iceberg schema=sales table=orders column=card_number 1"]; len(m.DataMaskPolicyItems) != 2 ||
+		m.DataMaskPolicyItems[0].DataMaskInfo.DataMaskType != "MASK_NONE" || m.DataMaskPolicyItems[1].DataMaskInfo.DataMaskType != "MASK_SHOW_LAST_4" {
 		t.Errorf("mask: %+v", m)
 	}
 	// The table as it was (orders@a-tag, orders#a-commit) is the table: its

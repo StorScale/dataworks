@@ -102,7 +102,8 @@ def main():
     started = time.time() * 1000
     run, state = run_pipeline()
     check("bob runs the sales pipeline", state == "success", f"run {run}: {state}")
-    details = wait(lambda: (lambda d: d if d and d.get("updatedAt", 0) >= started - 5000 else None)(lineage(om)), 60, 3)
+    # The lineage, with its columns: the catalog may file the run before it knows the new table's columns.
+    details = wait(lambda: (lambda d: d if d and d.get("updatedAt", 0) >= started - 5000 and d.get("columnsLineage") else None)(lineage(om)), 180, 5) or lineage(om)
     cols = {c["toColumn"].rsplit(".", 1)[1]: [f.rsplit(".", 1)[1] for f in c["fromColumns"]] for c in (details or {}).get("columnsLineage", [])}
     check("the run's lineage is in the catalog: orders_by_region is made from orders, column by column",
           cols == {"region": ["region"], "orders": ["id"], "amount": ["amount"]},
