@@ -64,8 +64,8 @@ func (s *server) handlePutImport(w http.ResponseWriter, r *http.Request) {
 	if gavePipelines {
 		what += "; the project runs pipelines now (airflow-pipelines), as imports need"
 	}
-	if sf := im.Salesforce; sf != nil {
-		what += " (" + strings.Join(sf.Objects, ", ") + ")"
+	if app := im.App(); app != nil {
+		what += " (" + strings.Join(app.Objects, ", ") + ")"
 	}
 	s.record(r, sess.User.Username, "import.saved", "project:"+v.Name+"/import:"+im.Name, what)
 	s.kick(r.Context(), v.Name)
@@ -100,8 +100,5 @@ func (s *server) handleConnectors(w http.ResponseWriter, r *http.Request) {
 	if s.signedIn(w, r) == nil {
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"connectors": []map[string]any{{
-		"source": "salesforce", "label": "Salesforce", "connection": "salesforce",
-		"objects": project.SalesforceObjects, "incremental": project.SalesforceIncremental,
-	}}})
+	writeJSON(w, http.StatusOK, map[string]any{"connectors": project.Connectors})
 }

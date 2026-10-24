@@ -1,6 +1,6 @@
 # 3. Getting data in
 
-This chapter is for the people who bring a project's data onto the platform: an engineer adding a feed from an application or a database, an analyst uploading a spreadsheet, an administrator wiring up a project's sources. It covers every way in: files uploaded to the project's landing area and imported as tables; imports from a REST API, a database or Salesforce, each on a schedule; a database queried where it is, with no copy; a database copied by change capture; and the connections that hold the credentials all of these sign in with. Who may read what arrives is [chapter 4](04-access-and-protection.md); checking that it's right is [chapter 5](05-quality.md).
+This chapter is for the people who bring a project's data onto the platform: an engineer adding a feed from an application or a database, an analyst uploading a spreadsheet, an administrator wiring up a project's sources. It covers every way in: files uploaded to the project's landing area and imported as tables; imports from a REST API, a database, Salesforce, Gong or HighSpot, each on a schedule; a database queried where it is, with no copy; a database copied by change capture; and the connections that hold the credentials all of these sign in with. Who may read what arrives is [chapter 4](04-access-and-protection.md); checking that it's right is [chapter 5](05-quality.md).
 
 In this chapter:
 
@@ -11,6 +11,8 @@ In this chapter:
 - [A REST API import](#a-rest-api-import)
 - [A database import (sql_database)](#a-database-import-sql_database)
 - [A Salesforce import](#a-salesforce-import)
+- [A Gong import](#a-gong-import)
+- [A HighSpot import](#a-highspot-import)
 - [Schedules and runs](#schedules-and-runs)
 - [Reset: copy everything again](#reset-copy-everything-again)
 - [Removing an import](#removing-an-import)
@@ -29,6 +31,8 @@ In this chapter:
 | An application with a REST API | A **rest_api import** | `<import>_<resource>` | On its schedule; only what's past the cursor |
 | A PostgreSQL or MySQL table with a column that grows | A **sql_database import** | `<import>_<table>` | On its schedule; only what's past the cursor (deletes aren't seen) |
 | Salesforce | A **salesforce import**, from the Imports tab's form | `<import>_<object>` | On its schedule; some objects by their changes |
+| Gong (calls, transcripts, scorecards) | A **gong import**, from the Imports tab's form | `<import>_<object>` | On its schedule; calls and answered scorecards by what's new |
+| HighSpot (spots, items, users) | A **highspot import**, from the Imports tab's form | `<import>_<object>` | On its schedule; all of it each run |
 | A database the company runs, needed in queries today | A **source** | A Trino catalog `<project>_<source>`, nothing copied | Always: queried live |
 | A database whose every change should reach the lakehouse | A source with **copy** (Kubernetes only) | `<source>_<table>` | Within `copy.commitEvery` seconds (30) |
 
@@ -96,14 +100,14 @@ An import copies data into the project's tables on a schedule. It's [dlt](https:
 | Field | What |
 |---|---|
 | `name` | 1 to 20 lowercase letters, digits and underscores, starting with a letter. Its tables are `<name>_<resource>` |
-| `source` | `files`, `rest_api`, `sql_database` or `salesforce` |
-| `connection` | One of the project's [connections](#connections): `rest_api` an API token, `sql_database` a database user, `salesforce` a Salesforce org. A files import has none |
+| `source` | `files`, `rest_api`, `sql_database`, `salesforce`, `gong` or `highspot` |
+| `connection` | One of the project's [connections](#connections): `rest_api` an API token, `sql_database` a database user, `salesforce` a Salesforce org, `gong` a Gong API key, `highspot` a HighSpot API key. A files import has none |
 | `schedule` | Cron's five fields, in UTC (`0 * * * *`). Empty: hourly |
-| `files` / `api` / `database` / `salesforce` | What it copies, by its source (below) |
+| `files` / `api` / `database` / `salesforce` / `gong` / `highspot` | What it copies, by its source (below); only the one its `source` names |
 
 ### Three ways to add one
 
-- **From a form.** Files: the Uploads panel's **Import as a table** (above). Salesforce: Imports → **Add Salesforce** (below). REST APIs and databases: the project's Edit page, section **Imports** → **Add an import** (administrators).
+- **From a form.** Files: the Uploads panel's **Import as a table** (above). Salesforce, Gong and HighSpot: Imports → **Add Salesforce**, **Add Gong**, **Add HighSpot** (below). REST APIs and databases: the project's Edit page, section **Imports** → **Add an import** (administrators).
 - **In the spec**, on the Edit page's **JSON** (administrators).
 - **Through the API**, one import at a time, the rest of the spec as it is:
 
@@ -287,7 +291,7 @@ dlt's Salesforce source, from a form. Pick the objects; those that carry their c
 |---|---|
 | `account`, `campaign_member`, `event`, `opportunity`, `opportunity_contact_role`, `opportunity_line_item`, `task` | `campaign`, `contact`, `lead`, `pricebook_2`, `pricebook_entry`, `product_2`, `sf_user`, `user_role` |
 
-`GET /api/connectors` lists the connectors the form offers (today: Salesforce), with these lists.
+`GET /api/connectors` lists the connectors the forms offer (Salesforce, Gong, HighSpot), each with its objects and those copied by their changes.
 
 ### How it behaves
 
@@ -301,7 +305,88 @@ dlt's Salesforce source, from a form. Pick the objects; those that carry their c
 - "imports: crm: "orders" isn't one of Salesforce's objects: account, campaign, …".
 - `since` is a date: "imports: crm: since "1/1/24": a date, as 2024-01-01".
 - The connection needs a user's name and password, or an instance's address and a session; otherwise the operator says so on the Overview.
-- Gong, HighSpot and SAP connectors: not yet.
+- An SAP connector: not yet.
+
+## A Gong import
+
+Gong's calls, their transcripts and its scorecards, read from Gong's v2 API with an API key, from a form.
+
+### Set up
+
+1. In Gong, a technical administrator makes the API key: **Company settings** → **Ecosystem** → **API** → **Create**. It's an access key and its secret. Gong may give the company its own API address (shown on that page); otherwise it's `https://api.gong.io`.
+2. On **Connections**, add one of kind **A Gong account's API key**: **Access key**, **Access key secret**, and **API address** only if Gong gave you one.
+3. Open **Imports** → **Add Gong**. Name (default `gong`), **Sign in with**, the objects (all of them ticked to start), **When (cron, UTC)** and **History from** (the calls and answered scorecards from that date; empty: all of them). Press **Add**.
+
+```json
+{
+  "name": "gong",
+  "source": "gong",
+  "connection": "sales-gong",
+  "schedule": "0 3 * * *",
+  "gong": {"objects": ["users", "calls", "call_transcripts"], "since": "2026-01-01"}
+}
+```
+
+| Object | Table | How |
+|---|---|---|
+| `calls` ↻ | `<import>_calls` | Calls started since the last run's newest (from `since` the first time), merged on `id`. Private calls are left out |
+| `call_transcripts` ↻ | `<import>_call_transcripts` | The transcript of each call that run copied (100 calls a request), merged on `call_id`; who said what is in `<import>_call_transcripts__transcript` and its `__sentences` |
+| `answered_scorecards` ↻ | `<import>_answered_scorecards` | Scorecards answered on calls, from the last run's newest review, merged on `answered_scorecard_id` |
+| `users` | `<import>_users` | Gong's users, replaced each run |
+| `scorecards` | `<import>_scorecards` | The scorecards' definitions, replaced each run |
+
+### How it behaves
+
+- It signs in with the key and secret (HTTP Basic), pages through each list by Gong's cursor, and when Gong says it's sending too many requests (429), waits as long as Gong asks and tries again (up to 8 times).
+- `call_transcripts` without `calls` still reads the calls (to know which transcripts to ask for), but only the transcripts are kept.
+- No call since the last run is not an error: the run copies nothing new.
+- Transcripts are what people said on calls: give the tables [protection tags](04-access-and-protection.md) or leave them out of readers' rules as you would any personal data, and see [chapter 13](13-privacy.md) for erasure.
+
+### Limits and gotchas
+
+- Gong allows about 3 requests a second and 10,000 a day for a company; a large first copy of transcripts can take a while, and may use a good part of the day's allowance.
+- A wrong key or secret fails the run with Gong's 401 in its log, and the run is one of the project's alerts.
+- "imports: gong: "deals" isn't one of Gong's objects: users, calls, call_transcripts, scorecards, answered_scorecards".
+
+---
+
+## A HighSpot import
+
+HighSpot's spots, the items in them and its users, read from HighSpot's v1.0 API with an API key, from a form.
+
+### Set up
+
+1. HighSpot's API needs its **Platform Plus** add-on. A HighSpot administrator makes an API key and its secret in HighSpot's settings, and notes the API's address for the company's region, as `https://api-su2.highspot.com` (HighSpot says which).
+2. On **Connections**, add one of kind **A HighSpot API key**: **API key**, **API secret** and **API address**.
+3. Open **Imports** → **Add HighSpot**. Name (default `highspot`), **Sign in with**, the objects, **When (cron, UTC)**. Press **Add**. (There's no **History from**: each run copies all of it.)
+
+```json
+{
+  "name": "highspot",
+  "source": "highspot",
+  "connection": "sales-hs",
+  "schedule": "0 4 * * *",
+  "highspot": {"objects": ["spots", "items", "users"]}
+}
+```
+
+| Object | Table | How |
+|---|---|---|
+| `spots` | `<import>_spots` | The spots the key may view |
+| `items` | `<import>_items` | Every item in each of those spots, with its spot in `spot_id` |
+| `users` | `<import>_users` | HighSpot's users |
+
+Each is replaced on every run.
+
+### How it behaves
+
+- It signs in with the key and secret (HTTP Basic), reads each list 100 at a time, and waits out HighSpot's 429s as Gong's are.
+- What the key may see is what's copied: a spot the key can't view, and its items, aren't.
+
+### Limits and gotchas
+
+- No copy by changes: a large HighSpot is read whole on each run, so schedule it daily, not hourly.
+- Items are the content's details (title, type, links), not the files themselves.
 
 ---
 
@@ -330,7 +415,7 @@ A reset drops the import's tables and where its cursors got to, then copies ever
 
 ### How it behaves
 
-- The run drops every table of the namespace whose name starts with `<import>_`, and dlt's record of them, then copies from the start: from each cursor's `cursorStart`, from Salesforce's `since`, every file again.
+- The run drops every table of the namespace whose name starts with `<import>_`, and dlt's record of them, then copies from the start: from each cursor's `cursorStart`, from Salesforce's or Gong's `since`, every file again.
 - The tables are made afresh, with their columns' types as the data says now. **Their history before the reset goes with them**: the History tab and reading as it was ([chapter 15](15-history-and-releases.md)) start again at the reset.
 - The audit log records `import.reset`: "its tables and where it got to dropped, all copied again".
 
@@ -508,6 +593,8 @@ Secret fields (marked †) are never shown again. "One of" means at least one of
 | `ssh` | An SSH key | The pipelines' repo (ssh) | `sshPrivateKey`†, required, multi-line; `sshPrivateKeyPassphrase`† |
 | `database` | A database user | Sources, copies and sql_database imports | `host`, `port`, `database`, `username` (required), `password`† (required), `url` (a JDBC URL, in place of host, port and database), `sslmode` (PostgreSQL), `trustServerCertificate` (SQL Server: `true`). One of `host`, `url` |
 | `salesforce` | A Salesforce org | Salesforce imports | `username`, `password`†, `securityToken`†, `consumerKey`†, `consumerSecret`†, `organizationId` (sign-in from trusted IP ranges), `domain` (`login` or `test`), `instanceUrl` (with a session, in place of a user), `sessionId`†, `caCertificate` (multi-line). One of `password`, `sessionId` |
+| `gong` | A Gong account's API key | Gong imports | `accessKey` (required), `accessKeySecret`† (required), `baseUrl` (default `https://api.gong.io`; the company's own, if Gong gave one), `caCertificate` (multi-line) |
+| `highspot` | A HighSpot API key | HighSpot imports | `apiKey` (required), `apiSecret`† (required), `baseUrl` (the region's API address, as `https://api-su2.highspot.com`; required), `caCertificate` (multi-line) |
 | `api` | An API token | rest_api imports, and the project's tools (sent as a Bearer) | `token`†, required |
 | `sftp` | An SFTP server | Deliveries' targets | `host` (required), `port`, `username` (required), `password`†, `sshPrivateKey`† (multi-line), `hostKey` (as in known_hosts, required), `path` (folder). One of `password`, `sshPrivateKey` |
 | `s3` | An S3 bucket | Deliveries' targets | `endpoint` (empty: AWS), `region`, `bucket` (required), `prefix`, `accessKey` (required), `secretKey`† (required) |
@@ -542,7 +629,7 @@ Deliveries' kinds are [chapter 12](12-deliveries.md); the git and ssh kinds [cha
 |---|---|---|
 | `upload` | A file uploaded | Its name and size |
 | `upload.removed` | An upload removed | Its name |
-| `import.saved` | An import added or changed (through the API or a form) | "added: files", the objects for Salesforce, and whether pipelines were given |
+| `import.saved` | An import added or changed (through the API or a form) | "added: files", the objects for Salesforce, Gong and HighSpot, and whether pipelines were given |
 | `import.removed` | An import removed | "its tables stay" |
 | `import.reset` | A reset asked for | "its tables and where it got to dropped, all copied again" |
 | `pipeline.started` | **Run now** | The run's ID |

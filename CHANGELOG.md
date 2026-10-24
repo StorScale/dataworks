@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **Gong and HighSpot imports** (8.4), from the Imports tab's form as Salesforce's are: an import's source may be `gong` (users, calls, their transcripts, scorecards and answered scorecards; calls, transcripts and answered scorecards copied by what's new, private calls left out) or `highspot` (spots, their items, users), signed in by a connection of the new kind `gong` or `highspot` (an API key and secret; Gong's address if the company has its own, HighSpot's region's). Both wait out the API's rate limit. The `imports` suite plays both APIs.
+
 ## [0.31.0] - 2026-10-24
 
 A new team's project from a template, its repo copied in the company's GitLab, and the company's shared libraries used without copying; a form to publish a data product; Buckets' drives grown by the chart, more pools, and a project told as its bucket fills; and what running the lab guide end to end found: imported files' dates, an erasure that cleanses the landing files too, editors reading their own tables unfiltered, and pages that no longer break on an empty list.

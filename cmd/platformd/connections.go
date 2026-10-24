@@ -142,7 +142,11 @@ func (s *server) handlePutConnection(w http.ResponseWriter, r *http.Request) {
 	}
 	k := project.KindOf(c.Kind)
 	if k == nil {
-		s.fail(w, r, http.StatusUnprocessableEntity, "kind: one of git, ssh, database, api, sftp, s3, pgp, teams")
+		var kinds []string
+		for _, k := range project.ConnectionKinds {
+			kinds = append(kinds, k.Kind)
+		}
+		s.fail(w, r, http.StatusUnprocessableEntity, "kind: one of "+strings.Join(kinds, ", "))
 		return
 	}
 	data := map[string]string{}

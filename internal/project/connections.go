@@ -40,6 +40,16 @@ var ConnectionKinds = []ConnectionKind{
 		{Key: "username", Label: "User", Required: true}, {Key: "password", Label: "Password", Secret: true, Required: true},
 		{Key: "url", Label: "JDBC URL (in place of host, port and database)"}, {Key: "sslmode", Label: "sslmode (PostgreSQL)"},
 		{Key: "trustServerCertificate", Label: "trustServerCertificate (SQL Server: true)"}}, OneOf: []string{"host", "url"}},
+	{Kind: "gong", Label: "A Gong account's API key", For: "Gong imports (8.4)", Fields: []ConnectionField{
+		{Key: "accessKey", Label: "Access key (Gong: Company settings, API)", Required: true},
+		{Key: "accessKeySecret", Label: "Access key secret", Secret: true, Required: true},
+		{Key: "baseUrl", Label: "API address (default https://api.gong.io; your tenant's, if Gong gave you one)"},
+		{Key: "caCertificate", Label: "A CA certificate to trust too (a proxy that inspects TLS)", Multi: true}}},
+	{Kind: "highspot", Label: "A HighSpot API key", For: "HighSpot imports (8.4)", Fields: []ConnectionField{
+		{Key: "apiKey", Label: "API key (HighSpot: Platform Plus, API keys)", Required: true},
+		{Key: "apiSecret", Label: "API secret", Secret: true, Required: true},
+		{Key: "baseUrl", Label: "API address, your region's (as https://api-su2.highspot.com)", Required: true},
+		{Key: "caCertificate", Label: "A CA certificate to trust too (a proxy that inspects TLS)", Multi: true}}},
 	{Kind: "salesforce", Label: "A Salesforce org", For: "Salesforce imports (8.4)", Fields: []ConnectionField{
 		{Key: "username", Label: "User"}, {Key: "password", Label: "Password", Secret: true},
 		{Key: "securityToken", Label: "Security token", Secret: true},

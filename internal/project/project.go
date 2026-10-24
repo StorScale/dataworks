@@ -193,13 +193,21 @@ type Import struct {
 	API        *ImportAPI        `json:"api,omitempty"`
 	Database   *ImportDatabase   `json:"database,omitempty"`
 	Salesforce *ImportSalesforce `json:"salesforce,omitempty"`
+	Gong       *ImportApp        `json:"gong,omitempty"`
+	Highspot   *ImportApp        `json:"highspot,omitempty"`
 	Files      *ImportFiles      `json:"files,omitempty"`
+}
+
+// App is a connector's import's objects (Salesforce's, Gong's or
+// HighSpot's), or nil for an import of another source.
+func (im Import) App() *ImportApp {
+	return map[string]*ImportApp{"salesforce": im.Salesforce, "gong": im.Gong, "highspot": im.Highspot}[im.Source]
 }
 
 // ImportSources are dlt's sources an import may be: two general ones, the
 // platform's connectors (use case 8.4), and files uploaded to the project's
 // landing area (11.1's uploads).
-var ImportSources = []string{"rest_api", "sql_database", "salesforce", "files"}
+var ImportSources = []string{"rest_api", "sql_database", "salesforce", "gong", "highspot", "files"}
 
 // ImportFiles are files of the project's landing area (landing/uploads/ in
 // its bucket, where the canvas's uploads go), each read into a table: CSV,
@@ -232,13 +240,57 @@ func FileFormat(file string) string {
 	return ""
 }
 
-// ImportSalesforce is Salesforce's objects to copy (dlt's verified Salesforce
-// source: its connection a kind of its own), and how far back the objects
-// copied by their changes start (Since, a date; default all of it).
-type ImportSalesforce struct {
+// ImportApp is an application's objects to copy, by one of the platform's
+// connectors (8.4: its connection a kind of its own), and how far back the
+// objects copied by their changes start (Since, a date; default all of it).
+type ImportApp struct {
 	Objects []string `json:"objects"`
 	Since   string   `json:"since,omitempty"`
 }
+
+// ImportSalesforce is Salesforce's (dlt's verified Salesforce source).
+type ImportSalesforce = ImportApp
+
+// A Connector is one of the platform's: the source an import names, the
+// application, the connection kind it signs in with, its objects, and those
+// copied by their changes and merged (the others are replaced each run).
+type Connector struct {
+	Source      string   `json:"source"`
+	Label       string   `json:"label"`
+	Connection  string   `json:"connection"`
+	Objects     []string `json:"objects"`
+	Incremental []string `json:"incremental"`
+}
+
+// Connectors are the platform's (8.4): Salesforce on dlt's verified source;
+// Gong and HighSpot on their REST APIs (stack/airflow/image/sources/storscale_connectors.py).
+var Connectors = []Connector{
+	{Source: "salesforce", Label: "Salesforce", Connection: "salesforce", Objects: SalesforceObjects, Incremental: SalesforceIncremental},
+	{Source: "gong", Label: "Gong", Connection: "gong", Objects: GongObjects, Incremental: GongIncremental},
+	{Source: "highspot", Label: "HighSpot", Connection: "highspot", Objects: HighspotObjects, Incremental: []string{}},
+}
+
+// ConnectorOf is the connector a source is, or nil.
+func ConnectorOf(source string) *Connector {
+	for i := range Connectors {
+		if Connectors[i].Source == source {
+			return &Connectors[i]
+		}
+	}
+	return nil
+}
+
+// GongObjects are what the Gong connector copies: its users, its calls (the
+// public ones), their transcripts, its scorecards, and the scorecards
+// answered on calls. Calls, transcripts and answered scorecards are copied by
+// their changes (calls by when they started, from Since).
+var GongObjects = []string{"users", "calls", "call_transcripts", "scorecards", "answered_scorecards"}
+
+var GongIncremental = []string{"calls", "call_transcripts", "answered_scorecards"}
+
+// HighspotObjects are what the HighSpot connector copies: its spots (those
+// its API key may view), their items, and its users; each replaced each run.
+var HighspotObjects = []string{"spots", "items", "users"}
 
 // SalesforceObjects are the objects dlt's Salesforce source copies, by its
 // resources' names; Incremental, those copied by their changes and merged

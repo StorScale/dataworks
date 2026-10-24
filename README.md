@@ -19,7 +19,7 @@ It brings together:
 - **One web app with one sign-in.** Notebooks, SQL, dashboards, pipelines and monitoring open inside it; each project has its own pages for its data, pipelines, metrics, apps, models, agents and access.
 - **Projects** defined once, and applied in Keycloak, Ranger, Buckets, Nessie, Trino and Airflow. Readers see their rows and masked columns everywhere, in SQL, dashboards, notebooks and agents' answers alike. Roles of the company's own, per project and platform-wide.
 - **Git-native pipelines:** each project's DAGs and dbt models from its repo, in an Airflow of its own; a merge request built and tested on a data branch of its own; the project itself released from its repo.
-- **Data in and out:** databases queried in place or copied by change capture, applications' data and files imported, Salesforce from a form; file deliveries to clients over SFTP and S3, approved before they run.
+- **Data in and out:** databases queried in place or copied by change capture, applications' data and files imported, Salesforce, Gong and HighSpot from a form; file deliveries to clients over SFTP and S3, approved before they run.
 - **The business layer:** the company's terms and metrics defined once, the same in SQL, Superset and assistants; certified data products read in place across projects.
 - **A pipeline canvas** that writes dbt models as a merge request; a step that asks a model about a column.
 - **Governed AI:** an LLM gateway with budgets and a guardrail; agents with their own identity, approved before they run; knowledge banks; new personal columns masked by their tag.
