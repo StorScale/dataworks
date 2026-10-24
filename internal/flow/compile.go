@@ -27,7 +27,7 @@ type Env struct {
 // of its model (dbt's refs and sources in it), or why it couldn't.
 type StepResult struct {
 	Model   string   `json:"model"`
-	Columns []Column `json:"columns"`
+	Columns []Column `json:"columns,omitempty"` // none: not known yet
 	SQL     string   `json:"sql"`
 	Error   string   `json:"error,omitempty"`
 	// Unknown says the columns can't be told without running it: a code
