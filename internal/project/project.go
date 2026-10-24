@@ -1221,6 +1221,11 @@ func (p *Project) tablePolicies() []RangerPolicy {
 				PolicyItems: alsoForEach(masked, tb, "select", "show")})
 		}
 	}
+	// Those who read the tables as they are (its editors, a read-all role)
+	// come first, unmasked and unfiltered: Ranger takes the first item a
+	// person matches, and an editor of the project may also be in a group
+	// that's a consumer's or a reader's (alice, an analyst, edits it).
+	asIs := append(slices.Clone(writers), whole...)
 	for _, m := range view.Masks {
 		var its []RangerItem
 		for _, g := range masked {
@@ -1228,9 +1233,15 @@ func (p *Project) tablePolicies() []RangerPolicy {
 			it.DataMaskInfo = maskInfo(m.Type, "")
 			its = append(its, it)
 		}
+		var items []RangerItem
+		for _, g := range asIs {
+			it := allow(g, "select")
+			it.DataMaskInfo = &RangerMask{DataMaskType: "MASK_NONE"}
+			items = append(items, it)
+		}
 		out = append(out, RangerPolicy{Name: named("mask:" + m.Table + "." + m.Column), PolicyType: 1, Description: desc,
 			Resources:           atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", m.Table, "column", m.Column)),
-			DataMaskPolicyItems: alsoForAll(its, m.Table)})
+			DataMaskPolicyItems: append(items, alsoForAll(its, m.Table)...)})
 	}
 	for _, f := range view.RowFilters {
 		var its []RangerItem
@@ -1239,9 +1250,15 @@ func (p *Project) tablePolicies() []RangerPolicy {
 			it.RowFilterInfo = &RangerRowFilter{FilterExpr: f.Filter}
 			its = append(its, it)
 		}
+		var items []RangerItem
+		for _, g := range asIs {
+			it := allow(g, "select")
+			it.RowFilterInfo = &RangerRowFilter{FilterExpr: "true"} // every row
+			items = append(items, it)
+		}
 		out = append(out, RangerPolicy{Name: named("filter:" + f.Table), PolicyType: 2, Description: desc,
 			Resources:            atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", f.Table)),
-			RowFilterPolicyItems: alsoForAll(its, f.Table)})
+			RowFilterPolicyItems: append(items, alsoForAll(its, f.Table)...)})
 	}
 	return out
 }

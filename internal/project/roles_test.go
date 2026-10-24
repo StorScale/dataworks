@@ -65,11 +65,33 @@ func TestCustomRolesInPolicies(t *testing.T) {
 			t.Errorf("tables policy lacks %s: %v", g, tables)
 		}
 	}
-	masked := groupsOf("mask:orders.card_number", func(pol RangerPolicy) []RangerItem { return pol.DataMaskPolicyItems })
-	filtered := groupsOf("filter:orders", func(pol RangerPolicy) []RangerItem { return pol.RowFilterPolicyItems })
-	for _, got := range [][]string{masked, filtered} {
-		if !slices.Equal(got, []string{"sales-readers", "sales-role-analyst"}) {
-			t.Errorf("the readers' rules hold readers and analysts, not the steward nor editors: %v", got)
+	// The readers' rules: editors and the steward first, as they are (Ranger
+	// takes the first item one matches), then readers and analysts, ruled.
+	ruled := func(name string, open func(RangerItem) bool) (asIs, rules []string) {
+		for _, pol := range p.RangerPolicies() {
+			if pol.Name != p.RangerPrefix()+name {
+				continue
+			}
+			for _, it := range append(pol.DataMaskPolicyItems, pol.RowFilterPolicyItems...) {
+				if open(it) {
+					asIs = append(asIs, it.Groups...)
+				} else {
+					rules = append(rules, it.Groups...)
+				}
+			}
+		}
+		return asIs, rules
+	}
+	for name, open := range map[string]func(RangerItem) bool{
+		"mask:orders.card_number": func(it RangerItem) bool { return it.DataMaskInfo.DataMaskType == "MASK_NONE" },
+		"filter:orders":           func(it RangerItem) bool { return it.RowFilterInfo.FilterExpr == "true" },
+	} {
+		asIs, rules := ruled(name, open)
+		if !slices.Equal(asIs, []string{"sales-editors", "sales-role-steward"}) {
+			t.Errorf("%s: as they are: %v", name, asIs)
+		}
+		if !slices.Equal(rules, []string{"sales-readers", "sales-role-analyst"}) {
+			t.Errorf("%s: the readers' rules hold readers, not the steward nor editors: %v", name, rules)
 		}
 	}
 	b := p.BucketsPolicies()
