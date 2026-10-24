@@ -546,7 +546,8 @@ export const getGovernance = () => api<Governance>("GET", "/api/governance");
 // --- Erasure of a person's data (use case 6.9) ------------------------------------------
 export type Erasure = {
   id: string; project: string; personHash: string; requestedOn: string; dueBy: string; by: string; verifiedBy: string; at: string;
-  tables: { table: string; column: string; rows: number }[]; deliveries: SearchHit[]; deliveriesChecked: number; deliveriesNotCheckable: number;
+  tables: { table: string; column: string; rows: number }[]; files?: { file: string; column: string; rows: number }[];
+  deliveries: SearchHit[]; deliveriesChecked: number; deliveriesNotCheckable: number;
   historyKept?: string; agesOutBy?: string; closes?: string[]; errors?: Record<string, string>;
 };
 export const getErasures = (name: string) => api<{ erasures: Erasure[]; deadlineDays: number; canErase: boolean }>("GET", `/api/projects/${encodeURIComponent(name)}/erasures`);

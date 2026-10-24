@@ -709,18 +709,25 @@ def lab15():
     check("what was sent about them: the deliveries' runs that carried their rows", "runs" in hits, {k: hits.get(k) for k in ("checked", "notKept")} | {"runs": [h.get("delivery") for h in hits.get("runs", [])]})
     done = j(as_("bob").get(f"{PLATFORM}/api/projects/retail/erasures", timeout=60)).get("erasures", [])
     back = sql("bob", "retail", "SELECT count(*) FROM uploads_customers WHERE customer_id = 35")
-    if done and back not in ([[0]], []):
-        print(f"    customer 35 is back ({back}): the import read the landing file again; erased once more")
+    from lakekit import s3_root
+    in_file = any(line.split(",")[0] == "35" for line in
+                  s3_root().get_object(Bucket="retail", Key="landing/uploads/customers.csv")["Body"].read().decode().splitlines()[1:])
+    if done and (back not in ([[0]], []) or in_file):
+        print(f"    customer 35 is still here (tables {back}, landing file {in_file}): an erasure from before files were cleansed; erased once more")
         done = []
     if not done:
         r = api("bob", "POST", "/api/projects/retail/erasures", {"person": "35", "requestedOn": time.strftime("%Y-%m-%d"), "verifiedBy": "bob"}, timeout=600)
         check("bob erases customer 35", r.ok, f"HTTP {r.status_code} {r.text[:200]}")
         done = j(as_("bob").get(f"{PLATFORM}/api/projects/retail/erasures", timeout=60)).get("erasures", [])
-    e = done[0] if done else {}
+    e = max(done, key=lambda x: x.get("at", "")) if done else {}   # the newest
     counts = {t["table"]: t["rows"] for t in e.get("tables", [])}
     left = sql("bob", "retail", "SELECT (SELECT count(*) FROM uploads_customers WHERE customer_id = 35) + (SELECT count(*) FROM uploads_orders WHERE customer_id = 35)")
     check("Check: no rows left for 35; an erasure, due 45 days after the request, its deliveries named",
           left == [[0]] and len(done) >= 1 and e.get("dueBy"), f"{counts}, due {e.get('dueBy')}, deliveries {len(e.get('deliveries') or [])}")
+    landing = {k: s3_root().get_object(Bucket="retail", Key=f"landing/uploads/{k}")["Body"].read().decode() for k in ("customers.csv", "orders.csv")}
+    still = {k: sum(1 for line in v.splitlines()[1:] if line.split(",")[1 if k == "orders.csv" else 0] == "35") for k, v in landing.items()}
+    check("... and the landing files are cleansed too: 35 is in neither customers.csv nor orders.csv",
+          not any(still.values()) and [f["file"] for f in e.get("files") or []], f"left {still}; erased {[(f['file'], f['rows']) for f in e.get('files') or []]}")
     er = [x for x in j(as_("bob").get(f"{PLATFORM}/api/projects/retail/audit?source=platform", timeout=60)).get("events", []) if "erasure" in (x.get("action") or "")]
     check("... the Audit tab's erasure entry names the record, not the person", bool(er) and not any('"35"' in json.dumps(x) for x in er), f"{len(er)} entries")
     p = spec("retail")

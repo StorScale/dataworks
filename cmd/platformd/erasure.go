@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/minio/minio-go/v7"
+
 	"github.com/StorScale/storscale-platform/internal/project"
 	"github.com/StorScale/storscale-platform/internal/trino"
 )
@@ -38,6 +40,7 @@ type erasure struct {
 	VerifiedBy  string            `json:"verifiedBy"`
 	At          time.Time         `json:"at"`
 	Tables      []erasedTable     `json:"tables"`
+	Files       []erasedFile      `json:"files"` // the landing files its imports read, written again without the person
 	Deliveries  []searchHit       `json:"deliveries"`
 	Checked     int               `json:"deliveriesChecked"`
 	NotKept     int               `json:"deliveriesNotCheckable"`
@@ -151,7 +154,7 @@ func (s *server) handleErase(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	e := erasure{ID: s.now().UTC().Format("20060102T150405") + "-" + personHash(body.Person)[:6], Project: name, PersonHash: personHash(body.Person),
 		RequestedOn: requested.Format("2006-01-02"), DueBy: requested.AddDate(0, 0, s.cfg.ErasureDeadlineDays).Format("2006-01-02"),
-		By: who, VerifiedBy: body.VerifiedBy, At: s.now().UTC(), Tables: []erasedTable{}, Deliveries: []searchHit{}, Errors: map[string]string{}}
+		By: who, VerifiedBy: body.VerifiedBy, At: s.now().UTC(), Tables: []erasedTable{}, Files: []erasedFile{}, Deliveries: []searchHit{}, Errors: map[string]string{}}
 	// What was sent about them, before their rows go (the search reads the
 	// tables as they were at each delivery: unchanged by the deletion).
 	if hits, checked, unkept, err := s.searchPerson(ctx, p, body.Person); err == nil {
@@ -180,6 +183,19 @@ func (s *server) handleErase(w http.ResponseWriter, r *http.Request) {
 		}
 		e.Tables = append(e.Tables, erasedTable{Table: pk.Table, Column: pk.Column, Rows: n})
 	}
+	// The files the imports read them from, so the next import doesn't bring them back: as who erases.
+	if len(landingFiles(p)) > 0 {
+		token, err := s.sessionToken(ctx, sess, true)
+		var c *minio.Client
+		if err == nil {
+			c, err = s.bucketAs(ctx, token)
+		}
+		if err != nil {
+			e.Errors["landing files"] = err.Error()
+		} else {
+			e.Files = eraseFromLanding(ctx, c, p, body.Person, e.Errors)
+		}
+	}
 	// Where the rows still are: the tables' old versions, for as long as the
 	// history is kept, and in any close tagged while they were there.
 	if s.history != nil && s.history.keep > 0 {
@@ -202,8 +218,12 @@ func (s *server) handleErase(w http.ResponseWriter, r *http.Request) {
 		rows += et.Rows
 	}
 	// Recorded without the ID.
-	s.record(r, who, "erasure", "project:"+name, fmt.Sprintf("%s: %d rows from %d tables, %d deliveries had carried the person's data; verified by %s; due %s",
-		e.ID, rows, len(e.Tables), len(e.Deliveries), e.VerifiedBy, e.DueBy))
+	fileRows := int64(0)
+	for _, f := range e.Files {
+		fileRows += f.Rows
+	}
+	s.record(r, who, "erasure", "project:"+name, fmt.Sprintf("%s: %d rows from %d tables and %d from %d landing files, %d deliveries had carried the person's data; verified by %s; due %s",
+		e.ID, rows, len(e.Tables), fileRows, len(e.Files), len(e.Deliveries), e.VerifiedBy, e.DueBy))
 	code := http.StatusOK
 	if e.Errors != nil {
 		code = http.StatusMultiStatus

@@ -323,3 +323,37 @@ func TestSemanticRequestsGoAsThePerson(t *testing.T) {
 		t.Errorf("semanticd got %q, want %q: the person's own access token", got, want)
 	}
 }
+
+func TestAnswersHaveNoNullLists(t *testing.T) {
+	type inner struct {
+		Tags []string `json:"tags"`
+	}
+	type view struct {
+		Name    string            `json:"name"`
+		List    []string          `json:"list"`
+		Kept    []string          `json:"kept,omitempty"`
+		Raw     json.RawMessage   `json:"raw,omitempty"`
+		Inner   *inner            `json:"inner"`
+		Many    []inner           `json:"many"`
+		ByName  map[string][]int  `json:"byName"`
+		At      time.Time         `json:"at"`
+		Unknown any               `json:"unknown"`
+		Nothing []map[string]bool `json:"nothing"`
+	}
+	shared := &inner{}
+	v := view{Name: "x", Inner: shared, Many: []inner{{}}, ByName: map[string][]int{"a": nil}, Unknown: map[string]any{"l": []string(nil)}}
+	w := httptest.NewRecorder()
+	writeJSON(w, 200, v)
+	got := strings.TrimSpace(w.Body.String())
+	for _, want := range []string{`"list":[]`, `"inner":{"tags":[]}`, `"many":[{"tags":[]}]`, `"byName":{"a":[]}`, `"unknown":{"l":[]}`, `"nothing":[]`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("%s: no %s", got, want)
+		}
+	}
+	if strings.Contains(got, "null") || strings.Contains(got, `"kept"`) || strings.Contains(got, `"raw"`) {
+		t.Errorf("%s", got)
+	}
+	if shared.Tags != nil {
+		t.Error("what the answer pointed at was changed")
+	}
+}

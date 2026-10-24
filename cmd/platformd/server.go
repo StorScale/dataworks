@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -548,5 +549,69 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(noNullLists(reflect.ValueOf(v)).Interface())
+}
+
+var jsonMarshaler = reflect.TypeFor[json.Marshaler]()
+
+// noNullLists is v with every list that's nil an empty one, as JSON [] not
+// null: the web app reads a list's length (a null broke the Roles and
+// Deliveries pages). It's a copy: what v points at is never changed. A value
+// that writes its own JSON (a time, json.RawMessage) is left as it is.
+func noNullLists(v reflect.Value) reflect.Value {
+	if !v.IsValid() {
+		return v
+	}
+	t := v.Type()
+	if t.Implements(jsonMarshaler) || reflect.PointerTo(t).Implements(jsonMarshaler) && t.Kind() != reflect.Pointer {
+		return v
+	}
+	switch t.Kind() {
+	case reflect.Interface:
+		if v.IsNil() {
+			return v
+		}
+		out := reflect.New(t).Elem()
+		out.Set(noNullLists(v.Elem()))
+		return out
+	case reflect.Pointer:
+		if v.IsNil() {
+			return v
+		}
+		out := reflect.New(t.Elem())
+		out.Elem().Set(noNullLists(v.Elem()))
+		return out
+	case reflect.Slice:
+		if t.Elem().Kind() == reflect.Uint8 { // []byte: base64, as it is
+			return v
+		}
+		out := reflect.MakeSlice(t, v.Len(), v.Len())
+		for i := range v.Len() {
+			out.Index(i).Set(noNullLists(v.Index(i)))
+		}
+		return out
+	case reflect.Map:
+		if v.IsNil() {
+			return v
+		}
+		out := reflect.MakeMapWithSize(t, v.Len())
+		for it := v.MapRange(); it.Next(); {
+			out.SetMapIndex(it.Key(), noNullLists(it.Value()))
+		}
+		return out
+	case reflect.Struct:
+		for i := range t.NumField() {
+			if f := t.Field(i); !f.IsExported() && f.Anonymous {
+				return v // an unexported embedded struct's fields are JSON's too, and can't be copied here
+			}
+		}
+		out := reflect.New(t).Elem()
+		for i := range t.NumField() {
+			if f := t.Field(i); f.IsExported() {
+				out.Field(i).Set(noNullLists(v.Field(i)))
+			}
+		}
+		return out
+	}
+	return v
 }

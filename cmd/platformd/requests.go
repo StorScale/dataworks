@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -93,23 +94,38 @@ func (s *server) personWith(w http.ResponseWriter, r *http.Request, fresh bool) 
 		return "", "", false
 	}
 	if sess.Token != nil {
-		have := sess.Token
-		if fresh && have.RefreshToken != "" {
-			have = &oauth2.Token{RefreshToken: have.RefreshToken} // no access token: the source gets a new one
-		}
-		tok, err := s.oauth.TokenSource(r.Context(), have).Token()
-		if err != nil {
+		var err error
+		if token, err = s.sessionToken(r.Context(), sess, fresh); err != nil {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"login": "/auth/login"})
 			return "", "", false
 		}
-		if tok.AccessToken != sess.Token.AccessToken {
-			s.mu.Lock()
-			sess.Token = tok
-			s.mu.Unlock()
-		}
-		token = tok.AccessToken
 	}
 	return sess.User.Username, token, true
+}
+
+// sessionToken is a session's access token, renewed if it's old (or now,
+// when fresh: a token's own claims are read, as Buckets' STS reads its groups).
+func (s *server) sessionToken(ctx context.Context, sess *session, fresh bool) (string, error) {
+	if sess.Token == nil {
+		return "", errors.New("no token: sign in again")
+	}
+	if s.oauth.ClientID == "" { // the tests'
+		return sess.Token.AccessToken, nil
+	}
+	have := sess.Token
+	if fresh && have.RefreshToken != "" {
+		have = &oauth2.Token{RefreshToken: have.RefreshToken} // no access token: the source gets a new one
+	}
+	tok, err := s.oauth.TokenSource(ctx, have).Token()
+	if err != nil {
+		return "", err
+	}
+	if tok.AccessToken != sess.Token.AccessToken {
+		s.mu.Lock()
+		sess.Token = tok
+		s.mu.Unlock()
+	}
+	return tok.AccessToken, nil
 }
 
 // projectRole is the project a request names ({name}) and the person's role
