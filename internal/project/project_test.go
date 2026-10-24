@@ -124,7 +124,7 @@ func TestRangerPolicies(t *testing.T) {
 	}
 	// Editors first, as they are; then the readers, ruled.
 	if f := byName["catalog=iceberg schema=sales table=orders 2"]; len(f.RowFilterPolicyItems) != 2 || f.RowFilterPolicyItems[0].Groups[0] != "sales-editors" ||
-		f.RowFilterPolicyItems[0].RowFilterInfo.FilterExpr != "true" || f.RowFilterPolicyItems[1].RowFilterInfo.FilterExpr != "region = 'EU'" {
+		f.RowFilterPolicyItems[0].RowFilterInfo.FilterExpr != "" || f.RowFilterPolicyItems[1].RowFilterInfo.FilterExpr != "region = 'EU'" {
 		t.Errorf("row filter: %+v", f)
 	}
 	if m := byName["catalog=iceberg schema=sales table=orders column=card_number 1"]; len(m.DataMaskPolicyItems) != 2 ||

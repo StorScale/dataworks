@@ -1253,7 +1253,9 @@ func (p *Project) tablePolicies() []RangerPolicy {
 		var items []RangerItem
 		for _, g := range asIs {
 			it := allow(g, "select")
-			it.RowFilterInfo = &RangerRowFilter{FilterExpr: "true"} // every row
+			// No filter at all (an empty one: Ranger applies none): Trino
+			// refuses to update a table with any row filter, "true" too.
+			it.RowFilterInfo = &RangerRowFilter{FilterExpr: ""}
 			items = append(items, it)
 		}
 		out = append(out, RangerPolicy{Name: named("filter:" + f.Table), PolicyType: 2, Description: desc,

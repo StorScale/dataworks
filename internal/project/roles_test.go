@@ -84,7 +84,7 @@ func TestCustomRolesInPolicies(t *testing.T) {
 	}
 	for name, open := range map[string]func(RangerItem) bool{
 		"mask:orders.card_number": func(it RangerItem) bool { return it.DataMaskInfo.DataMaskType == "MASK_NONE" },
-		"filter:orders":           func(it RangerItem) bool { return it.RowFilterInfo.FilterExpr == "true" },
+		"filter:orders":           func(it RangerItem) bool { return it.RowFilterInfo.FilterExpr == "" },
 	} {
 		asIs, rules := ruled(name, open)
 		if !slices.Equal(asIs, []string{"sales-editors", "sales-role-steward"}) {
