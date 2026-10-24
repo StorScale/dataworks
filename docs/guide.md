@@ -600,7 +600,7 @@ As **bob**, on `retail`:
 
 1. As **bob**, open `retail` → **Agents** → **Register an agent**: name `nightly-summary`, "sums the day's orders for the team's chat", tools `list_metrics` and `query_metrics`. Register. It awaits approval; bob can't approve his own.
 2. As **alice** (an editor too), open the same tab and **Approve**. The page shows the agent's client ID and its secret, once. Give them to the program.
-3. The program signs in to Keycloak with those (client credentials) and asks the MCP server for `revenue` by region: it gets the whole company's numbers, as a reader of the project, and the audit names `agent-retail-nightly-summary`. Ask it for `list_products`: refused, naming the two tools it may use.
+3. The program signs in to Keycloak with those (client credentials) and asks the MCP server for `revenue` by region: it gets the EU's numbers, since it's a reader of the project and the readers' rule (Lab 2) holds for it as for anyone, and the audit names `agent-retail-nightly-summary`. Ask it for `list_products`: refused, naming the two tools it may use.
 4. Change its tools (add `list_products`): the approval is taken away, and its client with it, until alice approves again.
 5. **Revoke** it: within a minute it signs in no more.
 6. **Let the platform run it** (the project's repo, Lab 10, and its budget, Lab 16). Put a notebook in the repo under the pipelines' path, say `notebooks/nightly_summary.ipynb`:
