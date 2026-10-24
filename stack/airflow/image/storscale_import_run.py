@@ -83,6 +83,14 @@ def salesforce():
     return storscale_connectors.salesforce(im, secret, name)
 
 
+def connector():
+    """Gong's or HighSpot's objects, from the platform's connectors (8.4)."""
+    import sys
+    sys.path.insert(0, "/opt/dlt/sources")
+    import storscale_connectors
+    return getattr(storscale_connectors, im["source"])(im, secret, name)
+
+
 def files():
     """Files of the project's landing area (landing/uploads/ in its bucket),
     each a table: read as the project's pipelines (their Keycloak client's
@@ -151,7 +159,7 @@ def files():
     return out
 
 
-sources = {"rest_api": rest_api, "sql_database": sql_database, "salesforce": salesforce, "files": files}[im["source"]]()
+sources = {"rest_api": rest_api, "sql_database": sql_database, "salesforce": salesforce, "gong": connector, "highspot": connector, "files": files}[im["source"]]()
 destination = filesystem(bucket_url="s3://warehouse", credentials={
     "aws_access_key_id": access, "aws_secret_access_key": key, "endpoint_url": "http://buckets:9000", "region_name": "us-east-1"})
 pipeline = dlt.pipeline(pipeline_name=f"import_{project.replace('-', '_')}_{name}", destination=destination,
@@ -181,5 +189,5 @@ if refresh and mine:
     missing = [t for t in mine if not catalog.table_exists(t)]
     if missing:
         print(f"reset: {', '.join('.'.join(t) for t in missing)} not made again yet: once more")
-        sources = {"rest_api": rest_api, "sql_database": sql_database, "salesforce": salesforce, "files": files}[im["source"]]()
+        sources = {"rest_api": rest_api, "sql_database": sql_database, "salesforce": salesforce, "gong": connector, "highspot": connector, "files": files}[im["source"]]()
         print(pipeline.run(sources, table_format="iceberg"))

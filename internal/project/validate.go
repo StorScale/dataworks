@@ -312,20 +312,25 @@ func (p *Project) checkImports(bad func(format string, a ...any)) {
 				}
 				landing(r.Name)
 			}
-		case "salesforce":
-			sf := im.Salesforce
-			if sf == nil || len(sf.Objects) == 0 || im.Connection == "" {
-				bad("imports: %s: a salesforce import names its objects (salesforce.objects) and a connection (kind salesforce)", im.Name)
+		case "salesforce", "gong", "highspot":
+			c, app := ConnectorOf(im.Source), im.App()
+			if app == nil || len(app.Objects) == 0 || im.Connection == "" {
+				bad("imports: %s: a %s import names its objects (%s.objects) and a connection (kind %s)", im.Name, im.Source, im.Source, c.Connection)
 				break
 			}
-			for _, o := range sf.Objects {
-				if !slices.Contains(SalesforceObjects, o) {
-					bad("imports: %s: %q isn't one of Salesforce's objects: %s", im.Name, o, strings.Join(SalesforceObjects, ", "))
+			for _, o := range app.Objects {
+				if !slices.Contains(c.Objects, o) {
+					bad("imports: %s: %q isn't one of %s's objects: %s", im.Name, o, c.Label, strings.Join(c.Objects, ", "))
 				}
 				landing(o)
 			}
-			if _, err := time.Parse("2006-01-02", sf.Since); sf.Since != "" && err != nil {
-				bad("imports: %s: since %q: a date, as 2024-01-01", im.Name, sf.Since)
+			if _, err := time.Parse("2006-01-02", app.Since); app.Since != "" && err != nil {
+				bad("imports: %s: since %q: a date, as 2024-01-01", im.Name, app.Since)
+			}
+			for source, other := range map[string]*ImportApp{"salesforce": im.Salesforce, "gong": im.Gong, "highspot": im.Highspot} {
+				if source != im.Source && other != nil {
+					bad("imports: %s: a %s import has no %s part", im.Name, im.Source, source)
+				}
 			}
 		case "files":
 			f := im.Files

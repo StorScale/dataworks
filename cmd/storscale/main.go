@@ -28,8 +28,9 @@ Usage:
   storscale up [--port N]       start the platform (builds its images the first time)
   storscale status              the platform's services
   storscale urls                where each tool is
-  storscale test [suite ...]    the end-to-end checks (all of them, or some of: shell, lakehouse,
-                                superset, airflow, jupyterhub, catalog, semantic, projects, monitoring)
+  storscale test [suite ...]    the end-to-end checks: all of them, or those named (stack/tests/run.py
+                                lists them: lakehouse, projects, roles, templates, ... and shell, the
+                                browser's); guide runs the lab guide's labs, only when named
   storscale logs [service ...]  follow the logs
   storscale down [--volumes]    stop it; --volumes also deletes its data
   storscale upgrade [flags]     take the platform on a Kubernetes cluster to a newer release:

@@ -4,7 +4,7 @@ import { getConnections, getConnectors, putImport, removeImport, resetImport, ty
 import { Empty, Intro } from "../components";
 import { can, ErrorBanner, Spinner, useProject } from "../lib";
 
-const sourceLabel: Record<Import["source"], string> = { rest_api: "a REST API", sql_database: "a database", salesforce: "Salesforce", files: "uploaded files" };
+const sourceLabel: Record<Import["source"], string> = { rest_api: "a REST API", sql_database: "a database", salesforce: "Salesforce", gong: "Gong", highspot: "HighSpot", files: "uploaded files" };
 
 // The project's imports: applications' and databases' data copied into its
 // tables on a schedule (dlt). Its editors add one from a connector's form
@@ -28,7 +28,7 @@ export default function Imports() {
       <ErrorBanner error={error} />
       {adding && <ConnectorForm project={name} connector={adding} taken={imports.map((i) => i.name)} onDone={() => { setAdding(undefined); reload(); }} />}
       {imports.length === 0 && !adding && <Empty>No imports yet.</Empty>}
-      {imports.map((im) => (
+      {imports.map((im) => { const app = im.salesforce ?? im.gong ?? im.highspot; return (
         <div key={im.name} className="card stack" style={{ gap: 6 }} data-testid={`import-${im.name}`}>
           <div className="card-head">
             <h2 className="mono">{im.name}<span className="pill">{sourceLabel[im.source]}</span></h2>
@@ -38,7 +38,7 @@ export default function Imports() {
             </div>
           </div>
           <div className="small">
-            {im.salesforce && <>Objects: <span className="mono">{im.salesforce.objects.join(", ")}</span>{im.salesforce.since ? `, from ${im.salesforce.since}` : ""}. </>}
+            {app && <>Objects: <span className="mono">{app.objects.join(", ")}</span>{app.since ? `, from ${app.since}` : ""}. </>}
             {im.api && <>From <span className="mono">{im.api.baseUrl}</span>: {im.api.resources.map((r) => r.name).join(", ")}. </>}
             {im.database && <>Tables: <span className="mono">{im.database.tables.map((t) => t.table).join(", ")}</span>. </>}
             {im.files && <>Files: <span className="mono">{im.files.tables.map((t) => `${t.file} → ${im.name}_${t.name}`).join(", ")}</span> (from the landing area). </>}
@@ -46,16 +46,17 @@ export default function Imports() {
             {im.connection && <>, signed in with <span className="mono">{im.connection}</span></>}.
           </div>
         </div>
-      ))}
+      ); })}
     </div>
   );
 }
 
 function ConnectorForm({ project, connector, taken, onDone }: { project: string; connector: Connector; taken: string[]; onDone: () => void }) {
   const [conns, setConns] = useState<Connection[]>();
+  const [kindLabel, setKindLabel] = useState(connector.connection);
   const [imName, setName] = useState(connector.source === "salesforce" ? "crm" : connector.source);
   const [connection, setConnection] = useState("");
-  const [objects, setObjects] = useState<string[]>(["account", "opportunity"]);
+  const [objects, setObjects] = useState<string[]>(connector.source === "salesforce" ? ["account", "opportunity"] : connector.objects);
   const [schedule, setSchedule] = useState("0 * * * *");
   const [since, setSince] = useState("");
   const [busy, setBusy] = useState(false);
@@ -64,6 +65,7 @@ function ConnectorForm({ project, connector, taken, onDone }: { project: string;
     getConnections(project).then((r) => {
       const mine = r.connections.filter((c) => c.kind === connector.connection);
       setConns(mine);
+      setKindLabel(r.kinds.find((k) => k.kind === connector.connection)?.label ?? connector.connection);
       if (mine[0]) setConnection(mine[0].name);
     }).catch((e) => setError(e.message));
   }, [project, connector.connection]);
@@ -72,7 +74,7 @@ function ConnectorForm({ project, connector, taken, onDone }: { project: string;
     setError(undefined);
     try {
       await putImport(project, { name: imName, source: connector.source, connection, schedule: schedule || undefined,
-        salesforce: { objects, since: since || undefined } });
+        [connector.source]: { objects, since: since || undefined } });
       onDone();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
@@ -86,7 +88,7 @@ function ConnectorForm({ project, connector, taken, onDone }: { project: string;
         {conns.length > 0 && <label>Sign in with<select value={connection} onChange={(e) => setConnection(e.target.value)}>{conns.map((c) => <option key={c.name}>{c.name}</option>)}</select></label>}
       </div>
       {conns.length === 0 && (
-        <div className="banner warn">No {connector.label} connection yet: add one on the <Link to={`/p/${project}/connections`}>Connections tab</Link> (kind “A Salesforce org”), then come back.</div>
+        <div className="banner warn">No {connector.label} connection yet: add one on the <Link to={`/p/${project}/connections`}>Connections tab</Link> (kind “{kindLabel}”), then come back.</div>
       )}
       <div className="stack" style={{ gap: 8 }}>
         <span className="field-label">What to copy (each into {imName}_<i>object</i>; those marked ↻ copy only what changed)</span>
@@ -99,7 +101,7 @@ function ConnectorForm({ project, connector, taken, onDone }: { project: string;
       </div>
       <div className="fields">
         <label>When (cron, UTC)<input className="mono" value={schedule} onChange={(e) => setSchedule(e.target.value)} /></label>
-        <label>History from<input type="date" value={since} onChange={(e) => setSince(e.target.value)} /><span className="field-help">Empty: all of it.</span></label>
+        {connector.incremental.length > 0 && <label>History from<input type="date" value={since} onChange={(e) => setSince(e.target.value)} /><span className="field-help">Empty: all of it.</span></label>}
       </div>
       <ErrorBanner error={error} />
       <div className="form-actions">

@@ -82,6 +82,20 @@ func importConnection(p *project.Project, im project.Import, secret map[string]s
 		}
 		b, _ := json.Marshal(extra)
 		c.Type, c.Extra = "generic", string(b)
+	case "gong", "highspot":
+		// The runner takes the sign-in from the connection's Extra, as for Salesforce.
+		need := map[string][2]string{"gong": {"accessKey", "accessKeySecret"}, "highspot": {"apiKey", "apiSecret"}}[im.Source]
+		if secret[need[0]] == "" || secret[need[1]] == "" || im.Source == "highspot" && secret["baseUrl"] == "" {
+			return c, fmt.Errorf("its connection needs %s and %s%s", need[0], need[1], map[bool]string{true: ", and the API's address (baseUrl)"}[im.Source == "highspot"])
+		}
+		extra := map[string]string{}
+		for _, k := range []string{need[0], need[1], "baseUrl", "caCertificate"} {
+			if secret[k] != "" {
+				extra[k] = secret[k]
+			}
+		}
+		b, _ := json.Marshal(extra)
+		c.Type, c.Extra = "generic", string(b)
 	case "sql_database":
 		if secret["host"] == "" || secret["username"] == "" || secret["password"] == "" {
 			return c, errors.New("its connection needs a host, username and password")

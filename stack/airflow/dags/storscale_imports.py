@@ -48,7 +48,7 @@ def make(pi):
             if pi.get("connId"):
                 c = BaseHook.get_connection(pi["connId"])
                 secret = {"host": c.host, "port": c.port, "database": c.schema, "username": c.login, "password": c.password}
-                secret.update(c.extra_dejson or {})   # a connector's sign-in (8.4: Salesforce's keys)
+                secret.update(c.extra_dejson or {})   # a connector's sign-in (8.4: Salesforce's, Gong's or HighSpot's keys)
                 env["STORSCALE_IMPORT_SECRET"] = json.dumps(secret)
             if im["source"] == "files":
                 # The project's landing area is read as the pipelines (their Keycloak

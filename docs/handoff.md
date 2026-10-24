@@ -23,8 +23,8 @@ the target cluster. Read this, then [plan.md](plan.md) and the
     GitLab told (7.3); the project as code, planned and applied by another (7.4); the
     Connections tab; a notebook scheduled from JupyterLab; VS Code and the ML libraries.
   - **Phase 8, getting data in:** databases queried where they are (8.3), copied by change
-    capture (8.1), applications' data and uploaded files imported with dlt (8.2), Salesforce
-    from a form (8.4).
+    capture (8.1), applications' data and uploaded files imported with dlt (8.2), Salesforce,
+    Gong and HighSpot from a form (8.4).
   - **Phase 9, getting data out:** file deliveries over SFTP and S3, approved before they run
     (9.1), and the delivery log searched by a person's ID (9.2).
   - **Phase 10, the business layer:** the company's terms in a shared semantic model (10.1),

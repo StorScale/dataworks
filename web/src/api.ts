@@ -80,14 +80,18 @@ export type Spec = {
 // An application's data (or a database's, by a cursor), copied into the project's tables on a schedule (dlt).
 export type APIResource = { name: string; path: string; dataSelector?: string; primaryKey?: string; cursor?: string; cursorParam?: string; cursorStart?: string };
 export type Import = {
-  name: string; source: "rest_api" | "sql_database" | "salesforce" | "files"; connection?: string; schedule?: string;
+  name: string; source: "rest_api" | "sql_database" | "salesforce" | "gong" | "highspot" | "files"; connection?: string; schedule?: string;
   files?: { tables: { name: string; file: string; primaryKey?: string }[] };
   api?: { baseUrl: string; resources: APIResource[] };
   database?: { kind: "postgresql" | "mysql"; tables: { table: string; cursor?: string; primaryKey?: string }[] };
-  salesforce?: { objects: string[]; since?: string };
+  salesforce?: ImportApp;
+  gong?: ImportApp;
+  highspot?: ImportApp;
 };
+// What a connector's import copies: some of its objects, the history from a date.
+export type ImportApp = { objects: string[]; since?: string };
 // The platform's connectors (8.4), and a project's editors' imports.
-export type Connector = { source: "salesforce"; label: string; connection: string; objects: string[]; incremental: string[] };
+export type Connector = { source: "salesforce" | "gong" | "highspot"; label: string; connection: string; objects: string[]; incremental: string[] };
 export const getConnectors = () => api<{ connectors: Connector[] }>("GET", "/api/connectors");
 export const putImport = (name: string, im: Import) =>
   api<Import>("PUT", `/api/projects/${encodeURIComponent(name)}/imports/${encodeURIComponent(im.name)}`, { ...im, name: undefined });

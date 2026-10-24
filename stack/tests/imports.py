@@ -16,7 +16,12 @@ here (a token, a cursor, its leads changing):
      connection on its Connections tab and adds the import from the form's
      endpoint (alice, a reader, can't); a run copies the accounts and leads
      (the stand-in for Salesforce served here over HTTPS, its certificate
-     the connection's to trust), and the next merges a changed account.
+     the connection's to trust), and the next merges a changed account;
+  8. Gong and HighSpot, from theirs: with an API key each (Basic sign-in),
+     a run copies Gong's users, calls (not the private one) and their
+     transcripts, and HighSpot's spots, every item of each (paged) and users
+     (stand-ins served here: connector_standins.py); the next Gong run asks
+     only for the calls since the last.
 
 The sales spec, the connection and the tables are put back after.
 """
@@ -33,6 +38,7 @@ from urllib.parse import parse_qs, urlparse
 
 import k8s
 import requests
+from connector_standins import GONG_KEY, GONG_SECRET, HS_KEY, HS_SECRET, Gong, Highspot
 
 from lakekit import check, denied, env, finish, s3_root, sql
 from projects import platform, wait
@@ -83,7 +89,7 @@ def delete_connection():
         s3_root().delete_object(Bucket="storscale-platform", Key=f"connections/{PROJECT}/{CONNECTION}.json")
 
 
-SF_PORT = 8428
+SF_PORT, GONG_PORT, HS_PORT = 8428, 8429, 8430
 
 
 class Salesforce(BaseHTTPRequestHandler):
@@ -147,7 +153,7 @@ def clear_dlt():
     (warehouse/sales/_dlt_*), not tables Trino drops: removed, so a run of
     this suite starts afresh, whatever one before left."""
     s3 = s3_root()
-    for prefix in ("sales/_dlt_", f"sales/{TABLE}", "sales/sf_"):
+    for prefix in ("sales/_dlt_", f"sales/{TABLE}", "sales/sf_", "sales/gong_", "sales/hs_"):
         for page in s3.get_paginator("list_objects_v2").paginate(Bucket="warehouse", Prefix=prefix):
             keys = [{"Key": o["Key"]} for o in page.get("Contents", [])]
             if keys:
@@ -288,13 +294,65 @@ def main():
         check("... and the next merges the account that changed", state == "success" and accounts == [["001A", "Media"], ["001B", "Energy"]],
               (state, accounts))
         sf_server.shutdown()
+
+        # 8. Gong and HighSpot, from theirs.
+        servers = [ThreadingHTTPServer(("0.0.0.0", GONG_PORT), Gong), ThreadingHTTPServer(("0.0.0.0", HS_PORT), Highspot)]
+        for sv in servers:
+            threading.Thread(target=sv.serve_forever, daemon=True).start()
+        made = [bob.post(f"{url}/connections", timeout=30, json={"name": "sales-gong", "kind": "gong", "values": {
+                    "accessKey": GONG_KEY, "accessKeySecret": GONG_SECRET, "baseUrl": f"http://{here}:{GONG_PORT}"}}),
+                bob.post(f"{url}/connections", timeout=30, json={"name": "sales-hs", "kind": "highspot", "values": {
+                    "apiKey": HS_KEY, "apiSecret": HS_SECRET, "baseUrl": f"http://{here}:{HS_PORT}"}}),
+                bob.put(f"{url}/imports/gong", headers={"X-Platform-Request": "1"}, timeout=30, json={
+                    "source": "gong", "connection": "sales-gong", "schedule": "0 0 1 1 *",
+                    "gong": {"objects": ["users", "calls", "call_transcripts"], "since": "2026-09-01"}}),
+                bob.put(f"{url}/imports/hs", headers={"X-Platform-Request": "1"}, timeout=30, json={
+                    "source": "highspot", "connection": "sales-hs", "schedule": "0 0 1 1 *", "highspot": {"objects": ["spots", "items", "users"]}})]
+        check("bob adds Gong and HighSpot imports, each with its API key", all(m.ok for m in made), [m.text[:150] for m in made if not m.ok])
+        found = wait(lambda: pipeline(bob, "import_sales_gong") and pipeline(bob, "import_sales_hs"), 420, every=10)
+        app_rows = lambda q: (lambda: [list(x) for x in sql("bob", q, "iceberg", "sales")])
+        state = run(bob, "import_sales_gong") if found else "not loaded"
+        try:
+            got = (app_rows("SELECT id FROM gong_users ORDER BY id")(), app_rows("SELECT id, title FROM gong_calls ORDER BY id")(),
+                   app_rows("SELECT call_id FROM gong_call_transcripts ORDER BY call_id")())
+        except Exception as e:  # noqa: BLE001
+            got = str(e)[:200]
+        check("a run copies Gong's users, calls (not the private one) and their transcripts, signed in with the key",
+              state == "success" and got == ([["u1"], ["u2"]], [["c1", "Acme renewal"], ["c3", "Globex discovery"]], [["c1"], ["c3"]]),
+              (state, got))
+        Gong.asked.clear()
+        Gong.calls.append({"id": "c4", "title": "Initech pricing", "started": "2026-10-01T09:00:00Z", "isPrivate": False})
+        state = run(bob, "import_sales_gong")
+        since = [a[3] for a in Gong.asked if a[1].endswith("/calls")]
+        try:
+            got = app_rows("SELECT id FROM gong_calls ORDER BY id")()
+        except Exception as e:  # noqa: BLE001
+            got = str(e)[:200]
+        check("... and the next asks only for the calls since the last, and adds the new one",
+              state == "success" and since == ["2026-09-20T15:00:00Z"] and got == [["c1"], ["c3"], ["c4"]], (state, since, got))
+        state = run(bob, "import_sales_hs") if found else "not loaded"
+        try:
+            got = (app_rows("SELECT id FROM hs_spots ORDER BY id")(), app_rows("SELECT spot_id, count(*) FROM hs_items GROUP BY 1 ORDER BY 1")(),
+                   app_rows("SELECT id FROM hs_users")())
+        except Exception as e:  # noqa: BLE001
+            got = str(e)[:200]
+        check("a run copies HighSpot's spots, every item of each (paged) and its users",
+              state == "success" and got == ([["sp1"], ["sp2"]], [["sp1", 102], ["sp2", 1]], [["hu1"]]), (state, got))
+        for sv in servers:
+            sv.shutdown()
     finally:
         CRM.down = False
-        bob.delete(f"{url}/imports/sf", headers={"X-Platform-Request": "1"}, timeout=30)
+        for im in ("sf", "gong", "hs"):
+            bob.delete(f"{url}/imports/{im}", headers={"X-Platform-Request": "1"}, timeout=30)
         bob.put(url, data=json.dumps(before), timeout=30)
         delete_connection()
-        bob.delete(f"{url}/connections/sales-sf", timeout=30)
-        for t in (TABLE, "sf_account", "sf_lead", "_dlt_loads", "_dlt_pipeline_state", "_dlt_version"):
+        for c in ("sales-sf", "sales-gong", "sales-hs"):
+            bob.delete(f"{url}/connections/{c}", timeout=30)
+        try:
+            app_tables = [r[0] for r in sql("bob", "SHOW TABLES", "iceberg", "sales") if r[0].startswith(("gong_", "hs_"))]
+        except Exception:  # noqa: BLE001
+            app_tables = []
+        for t in (TABLE, "sf_account", "sf_lead", *app_tables, "_dlt_loads", "_dlt_pipeline_state", "_dlt_version"):
             try:
                 sql("bob", f"DROP TABLE IF EXISTS {t}", "iceberg", "sales")
             except Exception as e:  # noqa: BLE001
