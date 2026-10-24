@@ -127,6 +127,19 @@ def tag_column(om, h, table, index, tag, confirmed):
     return True
 
 
+def untag_column(om, h, table, index, tag):
+    """One of the classifier's own suggestions taken back, as a JSON patch on the table."""
+    col = table["columns"][index]
+    at = next(j for j, t in enumerate(col.get("tags") or []) if t.get("tagFQN") == f"{PROTECTION}.{tag}")
+    r = requests.patch(f"{om}/v1/tables/{table['id']}", headers={**h, "Content-Type": "application/json-patch+json"},
+                       timeout=10, data=json.dumps([{"op": "remove", "path": f"/columns/{index}/tags/{at}"}]))
+    if not r.ok:
+        log.warning("classification: untagging %s.%s: %s", table["name"], col["name"], r.text[:200])
+        return False
+    del col["tags"][at]
+    return True
+
+
 def looks_like(values):
     """What a column's values look like, by the first pattern most of them match: (kind, tag) or None."""
     vals = [v.strip() for v in values if isinstance(v, str) and v.strip()]
@@ -177,6 +190,14 @@ def classify_project(om, h, service, p, trino, before):
         for i, col in enumerate(cols):
             if (name, col["name"]) in declared and "personal" not in column_tags(col):
                 tag_column(om, h, table, i, "personal", confirmed=True)
+        # The import's own bookkeeping (_dlt_ columns) is never personal: a
+        # suggestion made there before the classifier skipped them is taken
+        # back, unless someone confirmed it.
+        for i, col in enumerate(cols):
+            if col["name"].startswith("_dlt_"):
+                for tag, (state, label) in list(column_tags(col).items()):
+                    if state == "Suggested" and label == "Automated" and untag_column(om, h, table, i, tag):
+                        log.info("classification: %s.%s.%s: the suggestion %s taken back (an import's own column)", schema, name, col["name"], tag)
         # Found: by name, then by a sample of the values.
         text = [c["name"] for c in cols if (c.get("dataType") or "").upper() in TEXT_TYPES and not column_tags(c)]
         values = {}
