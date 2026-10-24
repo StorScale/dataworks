@@ -10,7 +10,9 @@ check (use case 15.1, R15.4):
      the call and the refusal are in the project's audit log, rows not kept;
   3. a call over the serving's rows is refused;
   4. bob registers a better version and alice approves it: the serving
-     answers with it within a couple of minutes, nobody restarting anything.
+     answers with it within a couple of minutes, nobody restarting anything;
+  5. a member whose role doesn't give call-models (carol, as a looker) is
+     refused, naming the permission.
 
 The project is removed after.
 """
@@ -30,6 +32,7 @@ H = {"X-Platform-Request": "1"}
 SERVING = {"name": "churn", "model": "churn", "maxRows": 5}
 SPEC = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": NAME},
         "spec": {"description": "Serving: the serving suite's.", "members": [{"group": "engineers", "role": "editor"}, {"user": "alice", "role": "editor"}]}}
+ROLE = "serving-looker"
 ROWS = [{"tenure": 3.0, "spend": 40.0}, {"tenure": 48.0, "spend": 320.0}, {"tenure": 20.0, "spend": 120.0}]
 
 
@@ -82,9 +85,21 @@ def main():
         moved = wait(lambda: (lambda b: b if b.get("version") == second else None)(predict("alice", ROWS[:1])[1]), 240, every=10)
         check("bob registers version 2 and alice approves it: the serving answers with it within minutes",
               ok.ok and second != first and moved is not None, (first, second, ok.status_code, moved))
+
+        # 5. A role without call-models.
+        role = bob.put(f"{PLATFORM}/api/roles/{ROLE}", headers=H, timeout=30, json={"description": "Reads, calls no models", "permissions": ["read"]})
+        members = SPEC["spec"]["members"] + [{"user": "carol", "role": ROLE}]
+        put = bob.put(url, data=json.dumps(dict(SPEC, spec=dict(SPEC["spec"], members=members, serving=[SERVING]))), timeout=30)
+        joined = wait(lambda: next((m for m in (((projects(bob) or {}).get(NAME) or {}).get("status") or {}).get("members", [])
+                                    if m["username"] == "carol" and m["role"] == ROLE), None), 300, every=10)
+        refused, body = predict("carol", ROWS[:1])
+        check("carol, a member as a looker (read, not call-models), is refused, naming the permission",
+              role.ok and put.ok and joined is not None and refused.status_code == 403 and "call-models" in body.get("error", ""),
+              (role.status_code, put.text[:150], joined, refused.status_code, body))
     finally:
         bob.delete(url, headers=H, timeout=30)
         wait(lambda: NAME not in (projects(bob) or {}), 300)
+        bob.delete(f"{PLATFORM}/api/roles/{ROLE}", headers=H, timeout=30)   # once no project gives it
     finish()
 
 

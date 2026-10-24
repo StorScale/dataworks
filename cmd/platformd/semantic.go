@@ -2,9 +2,14 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/StorScale/storscale-platform/internal/project"
 )
 
 var semanticClient = &http.Client{Timeout: 120 * time.Second}
@@ -12,7 +17,8 @@ var semanticClient = &http.Client{Timeout: 120 * time.Second}
 // handleSemantic passes a project's semantic-layer requests (its model, and
 // queries of its metrics) to semanticd, as the signed-in person: with their
 // own access token, refreshed when it has expired. semanticd checks that
-// they're a member, and runs queries in Trino as them.
+// they're a member, and runs queries in Trino as them. A model saved is in
+// the audit log (semantic.saved), with the metrics it changed.
 func (s *server) handleSemantic(w http.ResponseWriter, r *http.Request) {
 	sess := s.session(r)
 	switch {
@@ -51,6 +57,11 @@ func (s *server) handleSemantic(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
+	saving := r.Method == http.MethodPut && r.PathValue("name") != "" && !strings.Contains(strings.TrimPrefix(r.URL.Path, "/api/projects/"+r.PathValue("name")+"/semantic"), "/")
+	var before string
+	if saving {
+		before = s.semanticModel(r.Context(), r.PathValue("name"))
+	}
 	req, _ := http.NewRequestWithContext(r.Context(), r.Method, s.cfg.SemanticURL+r.URL.Path, bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+tok.AccessToken)
 	req.Header.Set("Content-Type", "application/json")
@@ -61,8 +72,31 @@ func (s *server) handleSemantic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer res.Body.Close()
+	if saving && res.StatusCode/100 == 2 {
+		var in struct {
+			YAML string `json:"yaml"`
+		}
+		json.Unmarshal(body, &in)
+		detail := "saved"
+		if moved, err := project.MetricChanges(before, in.YAML); err == nil && len(moved) > 0 {
+			detail = strings.Join(moved, "; ")
+		}
+		s.record(r, sess.User.Username, "semantic.saved", "project:"+r.PathValue("name"), detail)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(res.StatusCode)
 	io.Copy(w, io.LimitReader(res.Body, 8<<20))
+}
+
+// semanticModel is a project's model as kept (semantic/<project>.yaml), or "" for none.
+func (s *server) semanticModel(ctx context.Context, name string) string {
+	if s.files == nil {
+		return ""
+	}
+	b, err := s.files.GetFile(ctx, "semantic/"+name+".yaml")
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }

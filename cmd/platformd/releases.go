@@ -260,6 +260,9 @@ func (s *server) handlePlanFiles(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}
+	// What applying it keeps (below), kept here too, so its changes are what it will change.
+	project.KeepAgentState(before, composed)
+	project.KeepTags(before, composed)
 	changes := project.SpecChanges(before, composed)
 	if text, ok := body.Files["semantic.yaml"]; ok {
 		if err := s.checkModel(r, name, text); err != nil {
@@ -317,8 +320,10 @@ func (s *server) checkModel(r *http.Request, name, text string) error {
 }
 
 // handleApplyPlan applies a ready plan (an administrator other than who
-// planned it): the spec saved (deliveries' approvals kept; one whose sending
-// changed, approved again), the semantic model saved, the release recorded.
+// planned it): the spec saved (deliveries' approvals kept, one whose sending
+// changed approved again; agents' as on the Agents tab, a new one registered
+// by who planned it; the History tab's tags kept), the semantic model saved,
+// the release recorded.
 func (s *server) handleApplyPlan(w http.ResponseWriter, r *http.Request) {
 	sess := s.admin(w, r)
 	if sess == nil {
@@ -361,6 +366,9 @@ func (s *server) handleApplyPlan(w http.ResponseWriter, r *http.Request) {
 	spec := p.Spec
 	keepDeliveryApprovals(v.Spec, spec, p.By)
 	project.KeepProductState(v.Spec, spec)
+	project.KeepAgentState(v.Spec, spec)
+	project.RegisterNewAgents(spec, p.By, s.now().UTC())
+	project.KeepTags(v.Spec, spec)
 	if err := s.saveSpec(r.Context(), spec); err != nil {
 		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())
 		return

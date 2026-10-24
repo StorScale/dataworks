@@ -52,9 +52,16 @@ func (s *server) servingOf(w http.ResponseWriter, r *http.Request) (*project.Pro
 		return nil, nil, "", false
 	}
 	name := r.PathValue("name")
-	if s.mlflowRole(r, name, who) == "" {
+	role, can := s.memberRole(r, name, who)
+	if role == "" {
 		s.recordRefusal(r, who, "model.call", "project:"+name+"/serving:"+r.PathValue("serving"), "not a member of the project")
 		s.fail(w, r, http.StatusForbidden, "not a member of the project")
+		return nil, nil, "", false
+	}
+	// A person's role must give call-models; the project's own accounts (pipelines, agents) call them as they always have.
+	if account := role == "pipelines" || role == "agent" || role == "serving"; !account && !project.Permits(role, can, project.PermCallModels) {
+		s.recordRefusal(r, who, "model.call", "project:"+name+"/serving:"+r.PathValue("serving"), "the role "+role+" doesn't give call-models")
+		s.fail(w, r, http.StatusForbidden, "your role in "+name+" ("+role+") doesn't let you call its models (call-models)")
 		return nil, nil, "", false
 	}
 	p, err := s.store.Project(r.Context(), name)

@@ -407,8 +407,10 @@ With a session, a change needs the header `X-Platform-Request: 1`; a Keycloak to
   three minutes, so the test suites can watch history go. On an install for real use, set `NESSIE_GC_KEEP=P7D` (or more)
   and leave `NESSIE_GC_EVERY` empty. Anything that must outlive the window needs a tag.
 - **The window is install-wide.** It isn't per project or per table; a project keeps longer only by tagging.
-- **A release replaces the whole spec.** `project.yaml` must hold everything the project has, `pipelines` included; a tag
-  made on the Tags tab and not in `project.yaml` is removed by the next release (the plan lists "changed: tables.tags").
+- **A release replaces the whole spec.** `project.yaml` must hold everything the project has, `pipelines` included. What the
+  platform sets is kept: the Tags tab's tags (a tag `project.yaml` names too stays as the platform made it), agents'
+  registrations and approvals (a new agent registered by who planned it), data products' consumers and certification, and
+  deliveries' approvals.
 - **Lists in a target replace, maps merge.** A target's `members` is the whole list.
 - **A hand edit invalidates a plan.** Edit the repo, not the Edit page, once a project is released from code.
 - **Rollback is of the definition, not of the data.**

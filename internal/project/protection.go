@@ -87,10 +87,20 @@ func (p *Project) ProtectionPolicies(cols []ProtectedColumn, rules ProtectionRul
 	if t == nil {
 		return nil
 	}
-	own := map[string]bool{} // columns the project masks itself: its rule stands, and Ranger takes one policy per resource
+	// Columns the project masks itself: Ranger takes one policy per
+	// resource, so the tag's policy takes the project's readers' items in
+	// (with the project's mask: last four digits of a card, say, but never
+	// none), and the project's own is dropped (DropCoveredMasks).
+	own := map[string]Mask{}
 	if t.Readers != nil {
 		for _, m := range t.Readers.Masks {
-			own[m.Table+"."+m.Column] = true
+			own[m.Table+"."+m.Column] = m
+		}
+	}
+	readersOf := map[string][]RangerItem{}
+	for _, pl := range p.tablePolicies() {
+		if key, ok := strings.CutPrefix(pl.Name, p.RangerPrefix()+"mask:"); ok {
+			readersOf[key] = pl.DataMaskPolicyItems
 		}
 	}
 	byColumn := map[string]ProtectedColumn{} // the strongest tag per column: the first rule in tag order wins
@@ -106,9 +116,6 @@ func (p *Project) ProtectionPolicies(cols []ProtectedColumn, rules ProtectionRul
 			continue
 		}
 		key := c.Table + "." + c.Column
-		if own[key] {
-			continue
-		}
 		if have, ok := byColumn[key]; ok && rank(order, have.Tag) <= rank(order, c.Tag) {
 			continue
 		}
@@ -126,8 +133,9 @@ func (p *Project) ProtectionPolicies(cols []ProtectedColumn, rules ProtectionRul
 		// Who sees the column as it is: the project's editors and its pipelines
 		// (they own and write the data; Trino refuses a write to a table the
 		// writer is masked on), a role that reads every table as it is (16.1),
-		// the platform's maintenance account (erasure, retention), and the
-		// groups the install excepts. Everyone else is masked.
+		// the platform's maintenance account (erasure, retention), the
+		// catalog's (its checks test the values; it doesn't profile tagged
+		// columns), and the groups the install excepts. Everyone else is masked.
 		var items []RangerItem
 		clear := append(p.tableWriters(), p.wholeReaders()...)
 		if p.Spec.Pipelines != nil {
@@ -139,8 +147,20 @@ func (p *Project) ProtectionPolicies(cols []ProtectedColumn, rules ProtectionRul
 			it.DataMaskInfo = &RangerMask{DataMaskType: "MASK_NONE"}
 			items = append(items, it)
 		}
-		items = append(items, RangerItem{Groups: []string{}, Users: []string{MaintenanceUser}, Accesses: []RangerAccess{{Type: "select", IsAllowed: true}},
+		items = append(items, RangerItem{Groups: []string{}, Users: []string{MaintenanceUser, CatalogUser}, Accesses: []RangerAccess{{Type: "select", IsAllowed: true}},
 			DataMaskInfo: &RangerMask{DataMaskType: "MASK_NONE"}})
+		if m, ok := own[key]; ok { // the project's readers (and consumers): its own mask, or the tag's for none
+			mask := m.Type
+			if mask == "MASK_NONE" {
+				mask = rule.Mask
+			}
+			for _, it := range readersOf[key] {
+				if len(it.Groups) == 1 && !slices.Contains(clear, it.Groups[0]) { // a reader's or a consumer's, not one already clear
+					it.DataMaskInfo = maskInfo(mask, c.Type)
+					items = append(items, it)
+				}
+			}
+		}
 		it := allow("public", "select")
 		it.DataMaskInfo = maskInfo(rule.Mask, c.Type)
 		items = append(items, it)
@@ -150,6 +170,19 @@ func (p *Project) ProtectionPolicies(cols []ProtectedColumn, rules ProtectionRul
 			DataMaskPolicyItems: items})
 	}
 	return out
+}
+
+// DropCoveredMasks leaves out the project's own mask policies on columns a
+// protection policy covers (it took their readers in): Ranger refuses two
+// policies on one resource.
+func DropCoveredMasks(prefix string, policies, protection []RangerPolicy) []RangerPolicy {
+	covered := map[string]bool{}
+	for _, pl := range protection {
+		if key, ok := strings.CutPrefix(pl.Name, prefix+"protect:"); ok {
+			covered[prefix+"mask:"+key] = true
+		}
+	}
+	return slices.DeleteFunc(policies, func(pl RangerPolicy) bool { return covered[pl.Name] })
 }
 
 func rank(order map[string]int, tag string) int {

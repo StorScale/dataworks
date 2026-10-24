@@ -79,14 +79,14 @@ Each check has:
 - catalog-sync turns each check into an OpenMetadata test case on the table and runs the table's tests every round. The first result comes within a minute or two of the save, once the catalog has the table.
 - Each test is named `<project>_<table>_<name or column>_<kind>` (a `regex` check ends in `_matches`): `retail_uploads_orders_customer_id_notNull`, `retail_uploads_orders_rowCount`, `retail_uploads_orders_no_refund_without_amount_sql`. The platform's pages drop the `<project>_<table>_` part.
 - A check taken out of the spec is deleted from the catalog, with its results, at the next round.
-- Checks run as the catalog's own Trino account: every row, but tagged columns masked ([chapter 4](04-access-and-protection.md#protection-tags-and-the-classifier)).
+- Checks run as the catalog's own Trino account: every row, every column as it is, tagged ones too ([chapter 4](04-access-and-protection.md#protection-tags-and-the-classifier)).
 - A failing check is an issue on the project ([below](#project-alerts)) until it passes; its channels hear when it starts failing and when it passes again.
 
 ### Limits and gotchas
 
 - Checks run on the table as it is now; they don't stop a pipeline's run or a write. A dbt model's own tests, which do, are [chapter 9](09-pipelines-and-git.md).
 - Two checks of the same kind on the same column of a table get the same name; give one a `name`.
-- **A check on a column a protection tag masks tests the masked value.** A `regex` of an email address on a tagged `email` sees its hash and fails; `acceptedValues` and `range` likewise. `notNull`, `unique` and `references` still answer truly on a hashed text or a hashed `bigint`/`integer` (a hash keeps nulls, duplicates and joins), but a tagged date or decimal is masked to null, so `notNull` on it fails.
+- A check's failing rows aren't shown on the platform's pages, only its counts; the catalog's own page for the test case has what OpenMetadata keeps.
 - `min` and `max` are whole numbers: a `range` with `9.99` is refused when the spec is read ("not a project: json: cannot unmarshal number 9.99 …").
 - The refused words, by kind:
   - "check 3: unique needs a column"
@@ -182,7 +182,7 @@ The catalog profiles every table of every project: its row count, and each colum
 
 ### Limits and gotchas
 
-- The profile is the whole table's, unfiltered: a reader sees the row count and each column's range of rows the readers' rules hide from them, and of tables they can't read. A tagged column is profiled masked (its hash), so its values don't show.
+- The profile is the whole table's, unfiltered, so the Data tab leaves it out for someone who reads under the readers' rules where the rules hide something: no row count or column figures for a table with a row filter, none for a column with a mask. A tagged column isn't profiled at all. The catalog's own pages show the profile to whoever the catalog lets see the table.
 - A table just made has no profile until the next round reaches it ("–" in **Holds**).
 
 ---
@@ -257,9 +257,8 @@ Each issue links to where to look (the pipeline's runs, the table's Quality tab)
 
 ### Limits and gotchas
 
-- `notify.teams` must be a connection's name ("notify: teams "Retail Alerts" isn't a connection's name"); each address an address ("notify: "retail-data" isn't an email address"). The spec doesn't check the connection exists: a misspelt one fails when there's something to tell.
-- The Overview's "Told to …" line names Teams and email, not Slack, though Slack is told.
-- A Slack connection named by `notify.slack` can be removed while named (the Connections tab doesn't count it as used); the project's Slack alerts then fail.
+- `notify.teams` and `notify.slack` must be a connection's name ("notify: teams "Retail Alerts" isn't a connection's name"); each address an address ("notify: "retail-data" isn't an email address"). The spec doesn't check the connection exists: a misspelt one fails when there's something to tell.
+- A connection named by `notify.teams` or `notify.slack` can't be removed while named: "still used by alerts (notify.slack)".
 - Not yet: the failing task and its error in a pipeline's alert (the run is named and linked), and a check's failing rows.
 
 ---
@@ -289,7 +288,7 @@ curl -X POST "$PLATFORM/api/projects/retail/alerts/mute" \
 
 ### Limits and gotchas
 
-- Mutes are kept in platformd's memory: a restart of platformd forgets them (the audit log keeps who muted what).
+- Mutes are kept in the platform's bucket (`alerts/mutes.json`), so a restart of platformd keeps them; the audit log keeps who muted what.
 - A pipeline's issue is keyed by its run: muting it mutes that run's failure, not the next run's.
 - "want {key, hours}: up to a week".
 

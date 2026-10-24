@@ -133,6 +133,9 @@ func (p *Project) ConnectionUses(name string) []string {
 	if s.Notify != nil && s.Notify.Teams == name {
 		out = append(out, "alerts (notify.teams)")
 	}
+	if s.Notify != nil && s.Notify.Slack == name {
+		out = append(out, "alerts (notify.slack)")
+	}
 	for _, src := range s.Sources {
 		if src.Connection == name {
 			out = append(out, "source "+src.Name)

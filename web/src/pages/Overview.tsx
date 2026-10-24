@@ -222,7 +222,7 @@ function Alerts({ name, canMute }: { name: string; canMute: boolean }) {
   };
   const path = (link: string) => { try { const u = new URL(link); return u.pathname + u.search; } catch { return link; } };
   const n = data.notify;
-  const where = [n?.teams && "its Teams channel", n?.email.length && n.email.join(", ")].filter(Boolean).join(" and ");
+  const where = [n?.teams && "its Teams channel", n?.slack && "its Slack channel", n?.email.length && n.email.join(", ")].filter(Boolean).join(" and ");
   return (
     <section className="card" data-testid="project-alerts">
       <h2>Alerts</h2>

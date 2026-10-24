@@ -204,10 +204,7 @@ for the knowledge bank.
 
 ### Limits and gotchas
 
-- **A table app made on the page is refused today.** The form's **Table** list offers the tables the semantic model reads, in full
-  (`iceberg.retail.uploads_orders`), and a table app's `table` is the bare name, so saving says
-  `table "iceberg.retail.uploads_orders": one of the project's tables, by its name`. Make a table app through the API or the spec
-  with the bare name (`uploads_orders`). The list also lacks tables no semantic model reads.
+- The form's **Table** list is the project's own tables, as the catalog has them: a table made a moment ago shows once the catalog has read it (a few minutes).
 - A filter with `values` refuses any other value: "Region is one of EU, US, APAC".
 - A metric app needs the project's tables ("a metric app needs the project's tables, where its metrics are"); a bar or line needs
   `by` ("a bar chart is by a dimension (by)"); a number is one metric by nothing ("a number is one metric, by nothing").

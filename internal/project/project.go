@@ -546,6 +546,28 @@ type Tag struct {
 	By        string `json:"by,omitempty"` // who made it
 }
 
+// KeepTags keeps the project's tags across a release: they're moments made
+// on the platform (the History tab), not code, so a project.yaml that
+// doesn't name one doesn't take it away. One it names as well is the
+// platform's, as it was made.
+func KeepTags(before, p *Project) {
+	if before == nil || before.Spec.Tables == nil || len(before.Spec.Tables.Tags) == 0 {
+		return
+	}
+	tables := Tables{}
+	if p.Spec.Tables != nil {
+		tables = *p.Spec.Tables
+	}
+	tags := slices.Clone(before.Spec.Tables.Tags)
+	for _, t := range tables.Tags {
+		if !slices.ContainsFunc(tags, func(k Tag) bool { return k.Name == t.Name }) {
+			tags = append(tags, t)
+		}
+	}
+	tables.Tags = tags
+	p.Spec.Tables = &tables
+}
+
 // NessieTag is a tag's name in Nessie: the project's name, then its own.
 func (p *Project) NessieTag(t Tag) string { return p.Metadata.Name + "." + t.Name }
 

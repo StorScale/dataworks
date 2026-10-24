@@ -142,13 +142,17 @@ def main():
 
     # 5. What the table holds: the profiler's count and each column's nulls, distinct values and range (6.11).
     def profiled():
-        t = next((t for t in (flow("alice").json() or {}).get("tables", []) if t["name"] == "orders"), {})
+        t = next((t for t in (flow("bob").json() or {}).get("tables", []) if t["name"] == "orders"), {})
         return t if t.get("rows") and any(c.get("profile") for c in t.get("columns", [])) else None
     prof = wait(profiled, 240, every=10) or {}
     amount = next((c.get("profile") or {} for c in prof.get("columns", []) if c["name"] == "amount"), {})
     check("the catalog profiled orders: its rows, and amount's nulls, distinct values, min and max, on the Data page",
           (prof.get("rows") or 0) >= 1 and "nulls" in amount and amount.get("distinct") and amount.get("min") is not None and amount.get("max") is not None,
           (prof.get("rows"), amount))
+    as_alice = next((t for t in (flow("alice").json() or {}).get("tables", []) if t["name"] == "orders"), {})
+    check("... which alice, who reads orders under a row filter, doesn't see (its figures are every row's)",
+          prof and as_alice and as_alice.get("rows") is None and not any(c.get("profile") for c in as_alice.get("columns", [])),
+          (as_alice.get("rows"), [c["name"] for c in as_alice.get("columns", []) if c.get("profile")]))
     carol = flow("carol").status_code
     check("people in neither group don't see it", carol == 403, f"carol: HTTP {carol}")
 

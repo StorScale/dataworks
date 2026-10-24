@@ -133,10 +133,8 @@ See [Lab 12](../guide.md#lab-12-a-certified-data-product-read-in-place), step 1.
 
 ### Limits and gotchas
 
-- **The suggested name can be refused.** Picking a table suggests its name without `uploads_` and with underscores made dashes
-  (`uploads_campaign_responses` becomes `campaign-responses`), but a product's name takes no dashes: the save says
-  `products: name "campaign-responses": an identifier`. Write it with underscores (`campaign_responses`). (`uploads_orders`
-  becomes `orders`, which is fine.)
+- Picking a table suggests its name without `uploads_` (`uploads_campaign_responses` becomes `campaign_responses`). A product's
+  name takes no dashes: `products: name "campaign-responses": an identifier`.
 - **Names aren't checked against the table.** A table that doesn't exist yet, or a contracted column it doesn't have, is accepted;
   the contract's check then reports the columns missing ([below](#the-contract-and-broken-promises)).
 - **A product's name and project can't be changed** on the form: remove it and publish it again (once no project reads it).

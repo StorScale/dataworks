@@ -201,20 +201,25 @@ func asMLflow(err error, out **mlflowError) bool {
 
 // mlflowRole is the caller's role in the project: a member's, the project's pipelines', an administrator's (an editor's); "" for no one.
 func (s *server) mlflowRole(r *http.Request, name, who string) string {
+	role, _ := s.memberRole(r, name, who)
+	return role
+}
+
+// memberRole is mlflowRole with the permissions the operator recorded for a person's role.
+func (s *server) memberRole(r *http.Request, name, who string) (role string, can []string) {
 	st, err := s.store.Status(r.Context(), name)
 	if err != nil || st == nil {
-		return ""
+		return "", nil
 	}
-	role := ""
 	for _, m := range st.Members {
 		if m.Username == who {
-			role = m.Role
+			role, can = m.Role, m.Can
 		}
 	}
 	if sess := s.session(r); sess != nil && s.isAdmin(sess.User) {
-		role = project.Editor
+		role, can = project.Editor, nil
 	}
-	return role
+	return role, can
 }
 
 // handleMLflow is MLflow, for a project's people, in its workspace.

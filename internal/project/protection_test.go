@@ -40,7 +40,7 @@ func TestProtectionPolicies(t *testing.T) {
 		clear = append(clear, append(it.Groups, it.Users...)...)
 	}
 	last := items[len(items)-1]
-	if email.PolicyType != 1 || strings.Join(clear, " ") != "sales-editors data-protection maintenance" ||
+	if email.PolicyType != 1 || strings.Join(clear, " ") != "sales-editors data-protection maintenance openmetadata" ||
 		last.Groups[0] != "public" || last.DataMaskInfo.DataMaskType != "CUSTOM" || !strings.Contains(last.DataMaskInfo.ValueExpr, "sha256") {
 		t.Errorf("email's policy: %s; %+v", strings.Join(clear, " "), last)
 	}
@@ -72,6 +72,41 @@ func TestProtectionPolicies(t *testing.T) {
 	for _, bad := range []string{`{"personal": {"mask": "BLUR"}}`, `{"Bad Tag": {}}`, `nope`} {
 		if _, err := ParseProtection(bad); err == nil {
 			t.Errorf("%s accepted", bad)
+		}
+	}
+}
+
+// A column the project masks itself and the catalog tags: one policy, the
+// tag's, with the project's readers masked as the project says, but never not at all.
+func TestProtectionOverAProjectsOwnMask(t *testing.T) {
+	p, err := Parse([]byte(`{"metadata":{"name":"sales"},"spec":{"members":[{"user":"bob","role":"editor"},{"group":"analysts","role":"reader"}],
+		"tables":{"readers":{"masks":[{"table":"orders","column":"card_number","type":"MASK_SHOW_LAST_4"},{"table":"orders","column":"note","type":"MASK_NONE"}]}}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cols := []ProtectedColumn{{Table: "orders", Column: "card_number", Tag: "personal", State: "confirmed", Type: "varchar"},
+		{Table: "orders", Column: "note", Tag: "financial", State: "confirmed", Type: "varchar"}}
+	protection := p.ProtectionPolicies(cols, DefaultProtection(), true)
+	if len(protection) != 2 {
+		t.Fatalf("policies: %+v", protection)
+	}
+	masks := func(pl RangerPolicy) map[string]string {
+		out := map[string]string{}
+		for _, it := range pl.DataMaskPolicyItems {
+			out[strings.Join(append(it.Groups, it.Users...), ",")] = it.DataMaskInfo.DataMaskType
+		}
+		return out
+	}
+	card, note := masks(protection[0]), masks(protection[1])
+	if card["sales-readers"] != "MASK_SHOW_LAST_4" || card["public"] != "CUSTOM" || card["sales-editors"] != "MASK_NONE" { // its readers the last four; everyone else the tag's hash
+		t.Errorf("card_number: %v", card)
+	}
+	if note["sales-readers"] != "MASK" || note["public"] != "MASK" { // the project's none doesn't lift financial's mask
+		t.Errorf("note: %v", note)
+	}
+	for _, pl := range DropCoveredMasks(p.RangerPrefix(), p.RangerPolicies(), protection) {
+		if strings.Contains(pl.Name, ":mask:orders.") {
+			t.Errorf("the project's own mask kept beside the tag's: %s", pl.Name)
 		}
 	}
 }

@@ -29,7 +29,7 @@ A project's members are Keycloak groups (or named people), each with a role ([ch
 | **Readers**, and roles with `read` (and not `read-all`) | Those readers may read (default all) | Applied | Masked, unless the install excepts one of their groups |
 | The project's **pipelines** (`<project>-pipelines`): its imports, deliveries, scorings and DAGs | All, read and write | None | None |
 | A project **consuming** one of its data products: that project's readers, editors, pipelines and roles that read | The product's table only | Applied, as for readers | Masked, unless excepted |
-| The catalog's own Trino account (`openmetadata`): its checks, profiles and samples | All, read only | None | Masked |
+| The catalog's own Trino account (`openmetadata`): its checks, profiles and samples | All, read only | None | As they are (tagged columns aren't profiled) |
 | Anyone else | Nothing of the project's | | |
 
 An **editor is never filtered or masked by the readers' rules, whatever other groups they're in.** alice can be an editor of `retail` and also an analyst, in a group that reads `retail` as a reader or that consumes its data product: in the readers' filter and mask policies the project's editors and read-all roles come first, unfiltered and unmasked, and Ranger takes the first item a person matches. Readers and consuming projects get the rules.
@@ -175,13 +175,13 @@ The three parts together, as they sit in a project's spec:
 
 - Ranger masks the column for readers (and consuming projects) in every query. The Data tab's **Readers see** column says what they get ("year only", "last 4 only"), and a reader's **Preview** shows it: `2026-01-01` for every `signed_up`.
 - Editors and read-all roles come first in the mask's policy with no mask (`MASK_NONE`).
-- A project's own mask and the install's protection tags add up: a column the project masks keeps the project's mask, and the other tagged columns keep the tags' masks.
+- A project's own mask and the install's protection tags add up: on a column the project masks and the catalog tags, the project's readers (and consuming projects) get the project's mask (the last four digits of a card, say), everyone else the tag's, and the tag's excepted groups see it as it is. Other tagged columns keep the tags' masks.
 
 ### Limits and gotchas
 
 - One mask per column.
 - **A project's own masks are written for a text column.** `MASK`, `MASK_SHOW_LAST_4`, `MASK_SHOW_FIRST_4` and `MASK_HASH` give text back, and Trino refuses a mask that changes a number's or a date's type ("Invalid column mask"), for every reader's query of the column. On a number or a date use `MASK_NULL` (or `MASK_DATE_SHOW_YEAR` on a date), or let a protection tag do it: a tag's mask knows the column's type (below).
-- **A project's own mask takes the place of the tag's on that column.** A readers' mask of `MASK_NONE` on a column the catalog tagged personal shows it to readers as it is: the install's rule for the tag no longer applies there. The Governance page lists each project's masks, so it shows.
+- **A project's own mask can't lift a tag's.** A readers' mask of `MASK_NONE` on a column the catalog tagged personal gives readers the tag's hash, not the values. Any other mask of the project's stands for its readers, even one that shows more than the tag's (`MASK_SHOW_LAST_4` on a card number the catalog tagged financial): it's the project's choice for its own readers, and the Governance page lists each project's masks. The Data tab's **Readers see** describes the project's own mask, and the **Protection** column the tag.
 - "readers: mask type "HASH" must be one of MASK, MASK_SHOW_LAST_4, MASK_SHOW_FIRST_4, MASK_HASH, MASK_NULL, MASK_NONE, MASK_DATE_SHOW_YEAR".
 
 ---
@@ -295,7 +295,7 @@ The classifier's timings are catalog-sync's own environment, not chart values: i
 - Only `personal` is found by value. `financial` and `health` are found by a column's name only.
 - Free text that mentions a person (a review signed with an email address) isn't found unless 60% of the sampled values look like one: the classifier tags columns, not sentences.
 - The sample is the table's first 200 rows, not a random 200.
-- A protected column is masked for the catalog's own account too, so the catalog's checks and profile see it masked: a `regex` check on a tagged `email` tests the hash, and fails ([chapter 5](05-quality.md#checks)).
+- The catalog's own account sees a tagged column as it is, so the checks test its values ([chapter 5](05-quality.md#checks)); the profiler leaves tagged columns out, so their values' ranges aren't in the catalog.
 - catalog-sync reads up to 200 tables of a project's namespace each round.
 
 See [Lab 4 in the lab guide](../guide.md#lab-4-personal-data-found-and-protected).

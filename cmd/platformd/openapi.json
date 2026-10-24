@@ -3112,7 +3112,7 @@
     },
     "/api/projects/{name}/plans/{plan}/apply": {
       "post": {
-        "description": "handleApplyPlan applies a ready plan (an administrator other than who\nplanned it): the spec saved (deliveries' approvals kept; one whose sending\nchanged, approved again), the semantic model saved, the release recorded.",
+        "description": "handleApplyPlan applies a ready plan (an administrator other than who\nplanned it): the spec saved (deliveries' approvals kept, one whose sending\nchanged approved again; agents' as on the Agents tab, a new one registered\nby who planned it; the History tab's tags kept), the semantic model saved,\nthe release recorded.",
         "operationId": "post_projects_name_plans_plan_apply",
         "parameters": [
           {
@@ -3150,7 +3150,7 @@
             "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
           }
         },
-        "summary": "Applies a ready plan (an administrator other than who planned it): the spec saved (deliveries' approvals kept; one whose sending changed, approved again), the semantic model saved, the release recorded",
+        "summary": "Applies a ready plan (an administrator other than who planned it): the spec saved (deliveries' approvals kept, one whose sending changed approved again; agents' as on the Agents tab, a new one registered by who planned it; the History tab's tags kept), the semantic model saved, the release recorded",
         "tags": [
           "plans"
         ]
@@ -3438,7 +3438,7 @@
     },
     "/api/projects/{name}/semantic": {
       "get": {
-        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them.",
+        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them. A model saved is in\nthe audit log (semantic.saved), with the metrics it changed.",
         "operationId": "get_projects_name_semantic",
         "parameters": [
           {
@@ -3464,7 +3464,7 @@
         ]
       },
       "put": {
-        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them.",
+        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them. A model saved is in\nthe audit log (semantic.saved), with the metrics it changed.",
         "operationId": "put_projects_name_semantic",
         "parameters": [
           {
@@ -3502,7 +3502,7 @@
     },
     "/api/projects/{name}/semantic/query": {
       "post": {
-        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them.",
+        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them. A model saved is in\nthe audit log (semantic.saved), with the metrics it changed.",
         "operationId": "post_projects_name_semantic_query",
         "parameters": [
           {
@@ -3540,7 +3540,7 @@
     },
     "/api/projects/{name}/semantic/tests": {
       "post": {
-        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them.",
+        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them. A model saved is in\nthe audit log (semantic.saved), with the metrics it changed.",
         "operationId": "post_projects_name_semantic_tests",
         "parameters": [
           {
@@ -3652,7 +3652,7 @@
     },
     "/api/projects/{name}/sql": {
       "post": {
-        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them.",
+        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them. A model saved is in\nthe audit log (semantic.saved), with the metrics it changed.",
         "operationId": "post_projects_name_sql",
         "parameters": [
           {
@@ -4172,7 +4172,7 @@
     },
     "/api/terms": {
       "get": {
-        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them.",
+        "description": "handleSemantic passes a project's semantic-layer requests (its model, and\nqueries of its metrics) to semanticd, as the signed-in person: with their\nown access token, refreshed when it has expired. semanticd checks that\nthey're a member, and runs queries in Trino as them. A model saved is in\nthe audit log (semantic.saved), with the metrics it changed.",
         "operationId": "get_terms",
         "responses": {
           "200": {
