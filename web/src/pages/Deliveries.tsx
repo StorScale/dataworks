@@ -44,21 +44,21 @@ export default function Deliveries() {
             {" "}on <span className="mono">{d.schedule}</span>, as <span className="mono">{d.files}</span>.
           </div>
           {d.query && <pre className="code">{d.query}</pre>}
-          {d.personal.length > 0 && <div className="small">Personal columns: <span className="pill amber">{d.personal.join(", ")}</span></div>}
+          {(d.personal ?? []).length > 0 && <div className="small">Personal columns: <span className="pill amber">{(d.personal ?? []).join(", ")}</span></div>}
           <div className="small muted">
             Changed by {d.changedBy || "?"}.
             {d.approval?.by?.length ? ` Approved by ${[...d.approval.by, ...(d.approval.protection ?? [])].join(", ")}.` : ""}
-            {d.needs.length > 0 && ` Needs: ${d.needs.join("; ")}.`}
+            {(d.needs ?? []).length > 0 && ` Needs: ${(d.needs ?? []).join("; ")}.`}
           </div>
-          {d.runs.length > 0 && (
+          {(d.runs ?? []).length > 0 && (
             <div className="scroll-x"><table className="t">
               <thead><tr><th>Run</th><th>Rows</th><th>Files</th><th>Where</th></tr></thead>
               <tbody>
-                {d.runs.map((r) => (
+                {(d.runs ?? []).map((r) => (
                   <tr key={r.recorded}>
                     <td className="small">{new Date(r.recorded).toLocaleString()}</td>
                     <td className="small">{r.rows}</td>
-                    <td className="small">{r.files.map((f) => <div key={f.name} className="mono" title={`sha256 ${f.sha256}`}>{f.name} ({f.bytes} bytes)</div>)}</td>
+                    <td className="small">{(r.files ?? []).map((f) => <div key={f.name} className="mono" title={`sha256 ${f.sha256}`}>{f.name} ({f.bytes} bytes)</div>)}</td>
                     <td className="small mono">{r.target}</td>
                   </tr>
                 ))}
@@ -93,7 +93,7 @@ function Erasures({ project }: { project: string }) {
               <td className="small">{new Date(e.at).toLocaleString()}</td>
               <td className="small">{e.requestedOn}</td>
               <td className="small">{e.dueBy}</td>
-              <td className="small">{e.tables.map((t) => `${t.table}: ${t.rows}`).join(", ") || "–"}{e.errors ? " (with errors)" : ""}</td>
+              <td className="small">{[...(e.tables ?? []).map((t) => `${t.table}: ${t.rows}`), ...(e.files ?? []).map((f) => `${f.file.split("/").pop()}: ${f.rows}`)].join(", ") || "–"}{e.errors ? " (with errors)" : ""}</td>
               <td className="small">{e.deliveries.length}</td>
               <td className="small">{e.by}</td>
               <td className="small">{e.verifiedBy}</td>
@@ -135,7 +135,8 @@ function PersonSearch({ project }: { project: string }) {
       </form>
       {erased && (
         <div className="banner info" data-testid="erased">
-          <strong>Erased.</strong> {erased.tables.map((t) => `${t.rows} rows from ${t.table}`).join(", ") || "nothing to delete"};
+          <strong>Erased.</strong> {(erased.tables ?? []).map((t) => `${t.rows} rows from ${t.table}`).join(", ") || "nothing to delete"};
+          {(erased.files ?? []).length > 0 && <> and from the landing files the imports read, {(erased.files ?? []).map((f) => `${f.rows} rows from ${f.file.split("/").pop()}`).join(", ")}, so the next import doesn't bring them back;</>}
           {" "}{erased.deliveries.length} deliveries had carried their data. Due by {erased.dueBy}; recorded as {erased.id}, without the ID.
           {erased.agesOutBy && <> The tables' old versions hold the rows until about {erased.agesOutBy}{(erased.closes ?? []).length > 0 ? `, and the closes ${erased.closes!.join(", ")} keep theirs` : ""}.</>}
           {erased.errors && <div className="small">Not done: {Object.entries(erased.errors).map(([k, v]) => `${k}: ${v}`).join("; ")}</div>}

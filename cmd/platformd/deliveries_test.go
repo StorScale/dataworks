@@ -1,8 +1,13 @@
 package main
 
 import (
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/StorScale/storscale-platform/internal/project"
 )
@@ -58,5 +63,27 @@ func TestADeliveryNeedsAnotherToApproveWhatItSends(t *testing.T) {
 	pd.Approval.Protection = append(pd.Approval.Protection, "priya")
 	if n := s.needs(personal, pd); len(n) != 0 {
 		t.Errorf("bob and priya: %v", n)
+	}
+}
+
+// The Deliveries page reads each delivery's lists: an approved delivery of
+// nothing personal has none, as [] (null broke the page).
+func TestTheDeliveriesListsAreNeverNull(t *testing.T) {
+	sales, err := project.Parse([]byte(`{"metadata":{"name":"sales"},"spec":{"members":[{"user":"bob","role":"editor"}],"tables":{},
+		"deliveries":[{"name":"acme","table":"regions","format":"csv","files":"a_{date}.csv","schedule":"0 6 * * 1","target":"acme"}]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sales.Spec.Deliveries[0].Approval = &project.Approval{Hash: sales.Spec.Deliveries[0].SendsHash(), By: []string{"alice"}, Done: true}
+	st := &projectsKept{statuses: statuses{list: []*project.Status{{Name: "sales", Members: []project.Person{{Username: "bob", Role: "editor"}}}}},
+		specs: map[string]*project.Project{"sales": sales}}
+	s := &server{cfg: config{Groups: []string{"engineers"}}, store: st, files: kept{}, now: time.Now, log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		sessions: map[string]*session{"bob": {User: user{Username: "bob", Groups: []string{"engineers"}}, Expires: time.Now().Add(time.Hour)}}}
+	r := httptest.NewRequest("GET", "/api/projects/sales/deliveries", nil)
+	r.AddCookie(&http.Cookie{Name: sessionCookie, Value: "bob"})
+	w := httptest.NewRecorder()
+	s.routes().ServeHTTP(w, r)
+	if body := w.Body.String(); w.Code != 200 || !strings.Contains(body, `"personal":[]`) || !strings.Contains(body, `"needs":[]`) || !strings.Contains(body, `"runs":[]`) {
+		t.Errorf("%d %s", w.Code, body)
 	}
 }

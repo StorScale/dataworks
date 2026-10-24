@@ -77,8 +77,13 @@ func (s *server) handleDeliveries(w http.ResponseWriter, r *http.Request) {
 	}
 	out := []deliveryView{}
 	for _, d := range v.Spec.Spec.Deliveries {
-		out = append(out, deliveryView{Delivery: d, Approved: d.Approved(), Personal: v.Spec.PersonalColumns(d),
-			Needs: s.needs(v.Spec, d), Runs: s.deliveryRuns(r, v.Name, d.Name, 10)})
+		runs := s.deliveryRuns(r, v.Name, d.Name, 10)
+		if runs == nil {
+			runs = []map[string]any{}
+		}
+		// Lists, never null: the Deliveries page reads their length.
+		out = append(out, deliveryView{Delivery: d, Approved: d.Approved(), Personal: orEmpty(v.Spec.PersonalColumns(d)),
+			Needs: orEmpty(s.needs(v.Spec, d)), Runs: runs})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"deliveries": out,
 		"canSearch": s.platformCan(r.Context(), sess.User, project.PermProtectPersons)})
