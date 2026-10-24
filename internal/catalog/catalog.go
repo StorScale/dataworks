@@ -344,7 +344,8 @@ func (c *Client) checks(ctx context.Context, fqn string) ([]Check, error) {
 
 // profile adds the table's latest profile (its row count, each column's
 // nulls, distinct values, min, max and mean) when the profiler has run;
-// without one the table is as it was.
+// without one the table is as it was. A column the last run left out (one
+// the catalog tagged) keeps an older profile in the catalog: it isn't shown.
 func (c *Client) profile(ctx context.Context, tb *Table) {
 	var res struct {
 		Profile *struct {
@@ -359,6 +360,7 @@ func (c *Client) profile(ctx context.Context, tb *Table) {
 				Min            any      `json:"min"`
 				Max            any      `json:"max"`
 				Mean           *float64 `json:"mean"`
+				Timestamp      int64    `json:"timestamp"`
 			} `json:"profile"`
 		} `json:"columns"`
 	}
@@ -368,7 +370,7 @@ func (c *Client) profile(ctx context.Context, tb *Table) {
 	tb.Rows, tb.ProfiledAt = res.Profile.RowCount, res.Profile.Timestamp
 	byName := map[string]*ColumnProfile{}
 	for _, col := range res.Columns {
-		if col.Profile != nil {
+		if col.Profile != nil && col.Profile.Timestamp >= res.Profile.Timestamp-5*60*1000 { // the same run, within minutes
 			byName[col.Name] = &ColumnProfile{NullProportion: col.Profile.NullProportion, Distinct: col.Profile.DistinctCount,
 				Min: col.Profile.Min, Max: col.Profile.Max, Mean: col.Profile.Mean}
 		}

@@ -60,6 +60,18 @@ func fakeCatalog(t *testing.T) *httptest.Server {
 			map[string]any{"name": "sales_orders_id_unique"},
 		}})
 	})
+	// orders' profile: id's from this run, region's left from an earlier one (the run left it out).
+	mux.HandleFunc("GET /api/v1/tables/{fqn}/tableProfile/latest", func(w http.ResponseWriter, r *http.Request) {
+		if r.PathValue("fqn") != "trino.iceberg.sales.orders" {
+			http.NotFound(w, r)
+			return
+		}
+		run := int64(1_800_000_000_000)
+		reply(w, map[string]any{"profile": map[string]any{"rowCount": 7.0, "timestamp": run}, "columns": []any{
+			map[string]any{"name": "id", "profile": map[string]any{"distinctCount": 7.0, "timestamp": run + 1000}},
+			map[string]any{"name": "region", "profile": map[string]any{"distinctCount": 3.0, "timestamp": run - 3_600_000}},
+		}})
+	})
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
 	return ts
@@ -88,8 +100,11 @@ func TestFlow(t *testing.T) {
 	if orders == nil || len(orders.Checks) != 2 || orders.Checks[0].Status != "Failed" || orders.Checks[1].Status != "" {
 		t.Errorf("orders' checks: %+v", orders)
 	}
-	if orders != nil && (len(orders.Columns) != 2 || orders.Columns[0] != (Column{Name: "id", Type: "bigint"}) || orders.Columns[1].Type != "varchar") {
+	if orders != nil && (len(orders.Columns) != 2 || orders.Columns[0].Name != "id" || orders.Columns[0].Type != "bigint" || orders.Columns[1].Type != "varchar") {
 		t.Errorf("orders' columns: %+v, want names and lowercase types", orders.Columns)
+	}
+	if orders != nil && (orders.Rows == nil || *orders.Rows != 7 || orders.Columns[0].Profile == nil || orders.Columns[1].Profile != nil) {
+		t.Errorf("orders' profile: %+v, want id's and not region's (an earlier run's)", orders.Columns)
 	}
 	if external == nil || !external.External {
 		t.Errorf("a table upstream in another project should be in the flow, marked external: %+v", external)
