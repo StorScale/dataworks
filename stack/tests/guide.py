@@ -243,7 +243,8 @@ def lab3():
     check("Data lists the four tables, from the catalog", all(f"uploads_{f[:-4]}" in t for f in FILES), sorted(t))
     prof = wait(lambda: (lambda o: o if o.get("rows") else None)(tables("retail").get("uploads_orders") or {}), 600, every=20) or {}
     region = next((c.get("profile") or {} for c in prof.get("columns", []) if c["name"] == "region"), {})
-    check("... profiled: uploads_orders' row count, region holding 3 distinct values", prof.get("rows") == 305 and region.get("distinct") == 3,
+    check("... profiled: uploads_orders' row count (305, or 297 once Lab 15 erased customer 35 from the file too), region holding 3 distinct values",
+          prof.get("rows") in (305, 297) and region.get("distinct") == 3,
           f"rows {prof.get('rows')}, region {region}")
     # A database where it is.
     pw = env.get("SUPERSET_DB_PASSWORD", "")
@@ -1067,8 +1068,9 @@ def lab11_schedule():
     _, merged = merge(gl, b["mergeRequest"], review=False)
     check("... merged", merged, "")
     state, run = run_pipeline("bob", "retail", "notebook_call_list", timeout=1800)
-    nbrun = j(as_("bob").get(f"{PLATFORM}/api/projects/retail/notebooks/runs/notebook_call_list/{run}", timeout=120)) if run else {}
-    check("Check: notebook_call_list runs as the project's pipelines, and its executed notebook is kept", state == "success" and "CALLS" in json.dumps(nbrun),
+    kept = as_("bob").get(f"{PLATFORM}/api/projects/retail/notebooks/runs/notebook_call_list/{run}", timeout=120).text if run else ""   # the notebook, as a page
+    check("Check: notebook_call_list runs as the project's pipelines, and its executed notebook is kept, its output in it",
+          state == "success" and "CALLS 30 Viktor Schmidt" in kept,
           f"run {state}")
 
 
