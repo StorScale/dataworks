@@ -247,7 +247,7 @@ export type Health = {
   // administrators only:
   services?: HealthService[]; alerts?: HealthAlert[]; findings?: HealthFinding[];
   certificate?: { ends: string; error?: string };
-  targets?: { teams: boolean; email?: string[]; error?: string };
+  targets?: { teams: boolean; slack?: boolean; email?: string[]; error?: string };
   backups?: { configured: boolean; schedule?: string; lastSuccess: string; since: string };
 };
 export const getHealth = () => api<Health>("GET", "/api/health");

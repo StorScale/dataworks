@@ -652,6 +652,20 @@ def run_checks(token):
 
 
 PROFILE_PER_ROUND = int(env.get("PROFILE_PER_ROUND", "3"))
+
+
+def protected_columns(project):
+    """A project's tagged columns (catalog-sync's own classification/<project>.json), by table."""
+    s3 = boto3.client("s3", endpoint_url="http://buckets:9000", region_name="us-east-1",
+                      aws_access_key_id=env["STORE_ACCESS_KEY"], aws_secret_access_key=env["STORE_SECRET_KEY"])
+    try:
+        doc = json.loads(s3.get_object(Bucket="storscale-platform", Key=f"classification/{project}.json")["Body"].read())
+    except Exception:  # noqa: BLE001 (none yet)
+        return {}
+    out = {}
+    for c in doc.get("columns") or []:
+        out.setdefault(c["table"], set()).add(c["column"])
+    return out
 PROFILED = {}   # table FQN -> when this process last profiled it (the catalog's list doesn't carry the profile)
 
 
@@ -659,7 +673,10 @@ def profile_tables(token):
     """Each project's tables that have no profile, or one older than
     PROFILE_EVERY, profiled by OpenMetadata's profiler as the catalog's Trino
     account (row counts; each column's nulls, distinct values, min, max,
-    mean), for the Data page and the catalog's own pages (use case 6.11)."""
+    mean), for the Data page and the catalog's own pages (use case 6.11).
+    Columns the catalog has tagged (personal, financial, health) aren't
+    profiled: the account sees them as they are, for the checks, and their
+    values' ranges would be in the catalog for anyone to read."""
     h = {"Authorization": f"Bearer {token}"}
     stale = time.time() - PROFILE_EVERY
     for p in projects():
@@ -673,13 +690,16 @@ def profile_tables(token):
         due = due[:PROFILE_PER_ROUND]   # a few a round, so a round (and the checks in it) stays short after a restart
         if not due:
             continue
+        tagged = protected_columns(p["metadata"]["name"])
+        skip = [{"fullyQualifiedName": f"{SERVICE}.{catalog}.{namespace}.{t}", "columnConfig": {"excludeColumns": sorted(tagged[t])}}
+                for t in due if tagged.get(t)]
         workflow = ProfilerWorkflow.create({
             "source": {"type": "trino", "serviceName": SERVICE, "serviceConnection": trino_connection(catalog),
                        "sourceConfig": {"config": {"type": "Profiler", "computeTableMetrics": True, "computeColumnMetrics": True,   # the whole table (the default sample)
                                                    "databaseFilterPattern": {"includes": [f"^{catalog}$"]},
                                                    "schemaFilterPattern": {"includes": [f"^{namespace}$"]},
                                                    "tableFilterPattern": {"includes": [f"^{t}$" for t in due]}}}},
-            "processor": {"type": "orm-profiler", "config": {}},
+            "processor": {"type": "orm-profiler", "config": {"tableConfig": skip} if skip else {}},
             "sink": {"type": "metadata-rest", "config": {}},
             "workflowConfig": server_config(token),
         })

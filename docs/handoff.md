@@ -74,10 +74,9 @@ the target cluster. Read this, then [plan.md](plan.md) and the
 - **The lab guide as a suite:** `stack/tests/guide.py` runs [guide.md](guide.md)'s labs through
   the API, as alice, bob and carol, and leaves what it makes. It runs only when named
   (`storscale test --k8s guide`, or `helm test` with the ConfigMap below); its `labs` key picks
-  labs (`"1 2 3"`). Labs 10, 17, 18 and 20 (and 11's schedule) need a GitLab repo: the
-  environment's `GUIDE_REPO` and `GUIDE_GITLAB`, and the connection `retail-dags` holding its
-  token. The chart's test pod doesn't pass those variables yet, so through `helm test` those
-  labs are left out (and, named, find no repo).
+  labs (`"1 2 3"`). Labs 10, 17, 18 and 20 (and 11's schedule) need retail to have a GitLab
+  repo: its pipelines' repo set on its Edit page, and the connection `retail-dags` holding its
+  token; they run (under `helm test` too) when it has one.
 
 ## Install on a real cluster
 

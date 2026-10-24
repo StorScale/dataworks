@@ -459,8 +459,9 @@ func (r *Reconciler) applyRanger(ctx context.Context, p *project.Project, ppl pe
 	// until Ranger has them: it refuses a policy naming a group it doesn't
 	// know, and the next resync adds them. Ranger's public group is everyone.
 	have["public"] = 0
-	policies := append(p.RangerPolicies(), p.ReviewPolicies(reviews)...)
-	policies = append(policies, p.ProtectionPolicies(r.classification(ctx, p), r.Protection, r.ProtectSuggested)...)
+	protection := p.ProtectionPolicies(r.classification(ctx, p), r.Protection, r.ProtectSuggested)
+	policies := append(project.DropCoveredMasks(p.RangerPrefix(), p.RangerPolicies(), protection), p.ReviewPolicies(reviews)...)
+	policies = append(policies, protection...)
 	if err := r.Ranger.syncPolicies(ctx, p.RangerPrefix(), knownGroups(policies, have)); err != nil {
 		return err
 	}

@@ -406,7 +406,7 @@ The body is MLflow's: `{"dataframe_records": [...]}`, `{"dataframe_split": {"col
 | 502 "the model's server isn't answering (starting?)" | The server is starting or down. | Wait a minute; on Kubernetes check the pod `model-<project>-<name>`. |
 | 503 "models aren't served here (no SERVING_URL)" | The install doesn't serve models. | An administrator sets it up. |
 
-- The permission `call-models` appears on the Roles page and in the reader role, but the predict route checks only that the caller is a member of the project: a custom role without `call-models` can still call.
+- A person calls only with a role that gives `call-models` (the built-in reader and editor do): "your role in retail (looker) doesn't let you call its models (call-models)" (HTTP 403), the refusal in the audit log. The project's own accounts (its pipelines, its agents) call as members.
 - A served model's version moves the moment another is approved: tell its callers, or read `version` in each answer.
 
 ---

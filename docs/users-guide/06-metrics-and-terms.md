@@ -158,7 +158,8 @@ of the model whose primary entity it is: with a `customers` model whose primary 
 - **The page shows what it offers.** **The metrics** card lists each metric with its type and what it can be grouped by, and the
   tables the model reads ("over iceberg.retail.uploads_orders"). If the saved model no longer compiles (a shared model it builds on
   changed, say), a red banner says "The definitions don't compile:" and why.
-- **Where it's recorded.** `semanticd`'s log records each save ("bob saved retail's semantic model (4 metrics)"). The questions
+- **Where it's recorded.** Each save is in the platform's audit log as `semantic.saved` on `project:<name>`, with the metrics it
+  added, removed or changed ("metric changed: revenue"), or "saved" when it changed none; `semanticd`'s log has it too. The questions
   asked of it are in Ranger's audit log, which the project's **Audit** tab shows ([Asking for metrics](#asking-for-metrics)). A model applied by
   a release is in the platform's audit log as the release ([History and releases](15-history-and-releases.md)).
 

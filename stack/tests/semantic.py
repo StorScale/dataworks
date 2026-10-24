@@ -182,6 +182,9 @@ def main():
           and "one_order_count" in refused.json().get("error", "") and "order_count" in refused.json().get("error", ""), refused.text[:200])
     saved = bob.put(f"{PLATFORM}/api/projects/sales/semantic", json={"yaml": net}, timeout=60)
     check("bob (an editor) changes revenue, in the platform", saved.ok and net != original, f"HTTP {saved.status_code}")
+    logged = wait(lambda: [e for e in (bob.get(f"{PLATFORM}/api/projects/sales/audit", params={"user": "bob"}, timeout=60).json() or {}).get("events", [])
+                           if e["action"] == "semantic.saved"] or None, 60, every=5)
+    check("... and the save is in sales' audit log", bool(logged), logged[:1] if logged else None)
     after, err = alice.call("query_metrics", project="sales", metrics=["revenue"], group_by=["order__region"])
     new = float(after["rows"][0][1]) if after and after.get("rows") else None
     check("alice's agent's next answer follows the new definition",

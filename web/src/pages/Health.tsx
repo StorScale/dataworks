@@ -95,10 +95,11 @@ export function AdminHealth() {
             <h2>Where alerts go</h2>
             <p className="small" style={{ margin: "6px 0 0" }}>
               Teams: {data.targets?.teams ? "a channel's webhook is set" : "not set"}.{" "}
+              Slack: {data.targets?.slack ? "a channel's webhook is set" : "not set"}.{" "}
               Email: {data.targets?.email?.length ? data.targets.email.join(", ") : "not set"}.
             </p>
             {data.targets?.error && <p className="small muted">{data.targets.error}</p>}
-            <p className="small muted" style={{ margin: "6px 0 0" }}>Set in the platform's Secret <code>storscale-alerts</code> (teamsWebhook, emailTo, smtpServer, smtpFrom).</p>
+            <p className="small muted" style={{ margin: "6px 0 0" }}>Set in the platform's Secret <code>storscale-alerts</code> (teamsWebhook, slackWebhook, emailTo, smtpServer, smtpFrom).</p>
             <button className="btn" onClick={test} data-testid="test-alert">Send a test alert</button>
             {sent && <p className="small" data-testid="test-alert-result">{sent}</p>}
           </div>

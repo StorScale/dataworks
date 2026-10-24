@@ -10,9 +10,10 @@ done is done again where that's harmless.
 
 Which labs: all those that need nothing more than the platform, or those
 named in /etc/storscale-tests/labs (the ConfigMap storscale-tests' key labs:
-"1 2 3"), or GUIDE_LABS. Labs 10, 11's schedule, 17, 18 and 20 need a GitLab
-repo: GUIDE_REPO (its https address), GUIDE_GITLAB (GitLab's address) and the
-connection retail-dags holding its token, made on retail's Connections tab.
+"1 2 3"), or GUIDE_LABS. Labs 10, 11's schedule, 17, 18 and 20 need retail
+to have a GitLab repo (its pipelines' repo, and the connection retail-dags
+holding its token, made on retail's Edit page and Connections tab): they run
+when it has one.
 """
 import io
 import json
@@ -37,7 +38,15 @@ def labs_wanted():
     except OSError:
         pass
     named = [int(x) for x in raw.replace(",", " ").split()]
-    return named or [n for n in ALL if n not in GIT_LABS or os.environ.get("GUIDE_REPO")]
+    return named or [n for n in ALL if n not in GIT_LABS or has_repo()]
+
+
+def has_repo():
+    """Whether retail has a pipelines repo, for the git labs."""
+    try:
+        return bool(((spec("retail") or {}).get("spec", {}).get("pipelines") or {}).get("repo"))
+    except Exception:  # noqa: BLE001 (no retail yet: Lab 1 makes it)
+        return False
 
 
 def lab_data():

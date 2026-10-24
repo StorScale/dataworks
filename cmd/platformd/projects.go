@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/StorScale/storscale-platform/internal/catalog"
 	"github.com/StorScale/storscale-platform/internal/pipelines"
 	"github.com/StorScale/storscale-platform/internal/project"
 	"github.com/StorScale/storscale-platform/internal/store"
@@ -312,10 +313,50 @@ func (s *server) handleFlow(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, http.StatusBadGateway, err.Error())
 			return
 		}
+		if !v.can(project.PermReadAll) && !v.can(project.PermWriteTables) {
+			cls, err := s.classificationOf(r.Context(), v.Name)
+			if err != nil {
+				cls = &project.Classification{}
+			}
+			hideProfiles(flow, t, cls.Columns)
+		}
 		writeJSON(w, http.StatusOK, flow)
 		return
 	}
 	s.fail(w, r, http.StatusNotFound, "no such project")
+}
+
+// hideProfiles leaves out, for someone who reads the tables under the
+// readers' rules, what the profiler found (on every row, as it is) where the
+// rules hide something: a filtered table's counts and figures, a masked or
+// protected column's.
+func hideProfiles(flow *catalog.Flow, t *project.Tables, protected []project.ProtectedColumn) {
+	filtered, masked := map[string]bool{}, map[string]bool{}
+	if t.Readers != nil {
+		for _, f := range t.Readers.RowFilters {
+			filtered[f.Table] = true
+		}
+		for _, m := range t.Readers.Masks {
+			masked[m.Table+"."+m.Column] = true
+		}
+	}
+	for _, c := range protected {
+		masked[c.Table+"."+c.Column] = true
+	}
+	for i := range flow.Tables {
+		tb := &flow.Tables[i]
+		if tb.External {
+			continue
+		}
+		if filtered[tb.Name] {
+			tb.Rows, tb.ProfiledAt = nil, 0
+		}
+		for j := range tb.Columns {
+			if filtered[tb.Name] || masked[tb.Name+"."+tb.Columns[j].Name] {
+				tb.Columns[j].Profile = nil
+			}
+		}
+	}
 }
 
 type errorString string

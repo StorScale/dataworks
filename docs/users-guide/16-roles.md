@@ -69,7 +69,7 @@ permission "(comes with another)".
 | `change-metrics` | Change the project's metrics (its semantic model) and run their tests | semanticd: saving the semantic model |
 | `build` | Build the project's flows, apps, knowledge banks and agents, and schedule notebooks | Flows, apps, knowledge banks, agents (registering, revoking), scheduled notebooks, calling the project's tools, asking for and answering requests for data products |
 | `models` | Track runs and register models in the project's MLflow | MLflow: writing (reading is every member's); scorings' references and runs |
-| `call-models` | Call the project's served models | (see [Limits and gotchas](#limits-and-gotchas)) |
+| `call-models` | Call the project's served models | `POST /api/projects/{name}/serving/{serving}/predict` |
 | `approve` | Approve agents, model versions and deliveries (never one's own) | Approving agents, model versions, deliveries |
 | `classify` | Confirm or remove the catalog's tags on the project's columns | The Data page's classification |
 | `connections` | Give and change the project's credentials (its connections) | The Connections tab; the Imports tab |
@@ -354,8 +354,6 @@ the operator and platformd both read it, and backups keep it with the bucket.
 
 ## Limits and gotchas
 
-- **`call-models` isn't checked yet.** It's listed, and the reader has it, but any member of a project may call its served
-  models whatever their role; a role without `call-models` doesn't stop it.
 - **Approving is never one's own.** `approve` lets someone approve agents, model versions and deliveries, but not one they
   registered or changed themselves, whatever their role: "someone other than who changed what it sends approves it".
 - **A role with `write-tables` reads everything as it is.** There's no "writes but reads as a reader": writing a table

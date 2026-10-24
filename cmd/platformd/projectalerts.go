@@ -36,7 +36,7 @@ type projectAlerts struct {
 	mu       sync.Mutex
 	issues   map[string]map[string]issue // project -> key -> what's wrong now
 	told     map[string]string           // project -> its notify, as last told (a hash)
-	muted    map[string]time.Time        // project/key -> until
+	muted    map[string]time.Time        // project/key -> until (kept in the platform's bucket: mutesKey)
 	unknown  map[string][]string         // project -> what couldn't be looked at, and why
 	checked  bool                        // a first pass done: what was wrong already isn't news
 	down     map[string]time.Time        // project/copy/<source> -> since when its copy isn't running
@@ -168,10 +168,52 @@ func notifyHash(n *project.Notify) string {
 }
 
 // pass looks at every project once, and tells what's new.
+// mutesKey is where the mutes are kept, so a restart (or another of
+// platformd's pods) keeps them.
+const mutesKey = "alerts/mutes.json"
+
+// loadMutes reads the kept mutes, those still running; nothing kept, or no bucket, leaves them as they are.
+func (pa *projectAlerts) loadMutes(ctx context.Context, s *server) {
+	if s.files == nil {
+		return
+	}
+	b, err := s.files.GetFile(ctx, mutesKey)
+	if err != nil || b == nil {
+		return
+	}
+	kept := map[string]time.Time{}
+	if json.Unmarshal(b, &kept) != nil {
+		return
+	}
+	pa.mu.Lock()
+	defer pa.mu.Unlock()
+	pa.muted = map[string]time.Time{}
+	for k, until := range kept {
+		if time.Now().Before(until) {
+			pa.muted[k] = until
+		}
+	}
+}
+
+// saveMutes keeps the running mutes; the caller holds pa.mu.
+func (pa *projectAlerts) saveMutes(ctx context.Context, s *server) error {
+	if s.files == nil {
+		return nil
+	}
+	for k, until := range pa.muted {
+		if !time.Now().Before(until) {
+			delete(pa.muted, k)
+		}
+	}
+	b, _ := json.Marshal(pa.muted)
+	return s.files.PutFile(ctx, mutesKey, b, "application/json")
+}
+
 func (pa *projectAlerts) pass(ctx context.Context, s *server) {
 	if s.store == nil {
 		return
 	}
+	pa.loadMutes(ctx, s)
 	projects, err := s.store.Projects(ctx)
 	if err != nil {
 		return
@@ -333,13 +375,19 @@ func (s *server) handleProjectAlerts(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, http.StatusBadRequest, "want {key, hours}: up to a week")
 			return
 		}
+		pa.loadMutes(r.Context(), s) // another pod's since this one's last pass
 		pa.mu.Lock()
 		if req.Hours == 0 {
 			delete(pa.muted, v.Name+"/"+req.Key)
 		} else {
 			pa.muted[v.Name+"/"+req.Key] = time.Now().Add(time.Duration(req.Hours * float64(time.Hour)))
 		}
+		err := pa.saveMutes(r.Context(), s)
 		pa.mu.Unlock()
+		if err != nil {
+			s.fail(w, r, http.StatusBadGateway, "the mute isn't kept: "+err.Error())
+			return
+		}
 		s.log.Info("project alert muted", "project", v.Name, "key", req.Key, "hours", req.Hours, "by", sess.User.Username)
 		s.record(r, sess.User.Username, "alert.muted", "project:"+v.Name+"/alert:"+req.Key, fmt.Sprintf("for %g hours", req.Hours))
 	}

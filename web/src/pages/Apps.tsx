@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { appData, askApp, deleteApp, getApps, getSemantic, putApp, type App, type AppFilter, type KnowledgeHit } from "../api";
+import { appData, askApp, deleteApp, getApps, getFlow, getSemantic, putApp, type App, type AppFilter, type KnowledgeHit } from "../api";
 import { Empty, Intro } from "../components";
 import { can, ErrorBanner, Spinner, usePoll, useProject } from "../lib";
 
@@ -52,6 +52,8 @@ export default function Apps() {
 // The form an editor makes an app with: what it's of, how it shows, and its filters.
 function AppForm({ project, banks, hasBudget, taken, onDone }: { project: string; banks: string[]; hasBudget: boolean; taken: string[]; onDone: () => void }) {
   const model = usePoll(() => getSemantic(project), [project], 0);
+  // The project's own tables, by the name a table app takes (the model names them in full).
+  const tables = usePoll(() => getFlow(project), [project], 0);
   const [a, setA] = useState<App>({ name: "", kind: "metric", metrics: [], show: "bar", filters: [] });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -93,7 +95,7 @@ function AppForm({ project, banks, hasBudget, taken, onDone }: { project: string
       </>}
       {a.kind === "table" && <div className="fields">
         <label>Table<select value={a.table ?? ""} onChange={(e) => set({ table: e.target.value || undefined })} data-testid="app-table">
-          <option value="">table…</option>{(model.data?.tables ?? []).map((t) => <option key={t}>{t}</option>)}</select></label>
+          <option value="">table…</option>{(tables.data?.tables ?? []).filter((t) => !t.external).map((t) => <option key={t.name}>{t.name}</option>)}</select></label>
         <label className="grow">Columns (none: all)<input className="mono" value={(a.columns ?? []).join(", ")}
           onChange={(e) => set({ columns: e.target.value.split(",").map((c) => c.trim()).filter(Boolean) })} placeholder="order_id, region, amount" /></label>
       </div>}

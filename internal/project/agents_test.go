@@ -40,6 +40,13 @@ func TestAgents(t *testing.T) {
 	if a := changed.AgentOf("nightly"); a.Approved() || a.RegisteredBy != "bob" {
 		t.Errorf("changed tools keep the approval: %+v", a)
 	}
+	// A release's new agent is registered by who planned it; one the project had keeps its own.
+	release, _ := Parse([]byte(strings.Replace(spec, "%s", `{"name":"nightly","owner":"bob","tools":["list_metrics"]},{"name":"fresh","owner":"bob"}`, 1)))
+	KeepAgentState(before, release)
+	RegisterNewAgents(release, "carol", time.Now())
+	if a, f := release.AgentOf("nightly"), release.AgentOf("fresh"); a.RegisteredBy != "bob" || !a.Approved() || f.RegisteredBy != "carol" || f.Approved() {
+		t.Errorf("a release's agents: %+v %+v", a, f)
+	}
 	// What a client may use.
 	p, _ := Parse([]byte(strings.Replace(spec, "%s", `{"name":"nightly","owner":"bob","tools":["list_metrics"],"registeredBy":"bob","approvedBy":"alice","approvedAt":"2026-10-19T10:00:00Z"},{"name":"all","owner":"bob","registeredBy":"bob","approvedBy":"alice"},{"name":"new","owner":"bob"}`, 1)))
 	if tools, ok := p.AgentToolsAllowed("agent-sales-nightly"); !ok || strings.Join(tools, ",") != "list_metrics" {

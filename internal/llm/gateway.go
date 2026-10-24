@@ -65,12 +65,12 @@ func (g *Gateway) call(ctx context.Context, method, path string, in, out any) er
 	return nil
 }
 
-// Generate makes a key with a monthly budget (USD) and an alias naming its owner.
+// Generate makes a key with a monthly budget (USD), reset on the 1st (UTC), and an alias naming its owner.
 func (g *Gateway) Generate(ctx context.Context, alias string, budget float64, meta map[string]any) (string, error) {
 	var out struct {
 		Key string `json:"key"`
 	}
-	err := g.call(ctx, "POST", "/key/generate", map[string]any{"key_alias": alias, "max_budget": budget, "budget_duration": "30d", "metadata": meta}, &out)
+	err := g.call(ctx, "POST", "/key/generate", map[string]any{"key_alias": alias, "max_budget": budget, "budget_duration": "1mo", "metadata": meta}, &out)
 	if err == nil && out.Key == "" {
 		err = errors.New("the LLM gateway gave no key")
 	}

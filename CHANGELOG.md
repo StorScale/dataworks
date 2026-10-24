@@ -7,6 +7,21 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 ### Added
 - **Gong and HighSpot imports** (8.4), from the Imports tab's form as Salesforce's are: an import's source may be `gong` (users, calls, their transcripts, scorecards and answered scorecards; calls, transcripts and answered scorecards copied by what's new, private calls left out) or `highspot` (spots, their items, users), signed in by a connection of the new kind `gong` or `highspot` (an API key and secret; Gong's address if the company has its own, HighSpot's region's). Both wait out the API's rate limit. The `imports` suite plays both APIs.
 
+### Fixed
+- **`call-models` is checked:** a person calls a project's served models only with a role that gives it (the built-in reader and editor do); the refusal names the permission and is in the audit log. The project's own accounts (pipelines, agents) call as before. The `serving` suite checks a role without it is refused.
+- **A release keeps what the platform set:** applying one keeps agents' registrations and approvals (an approval still goes when what it covered changed; a new agent is registered by who planned the release, so someone else approves it) and the Tags tab's tags, as it already kept products' consumers and certification and deliveries' approvals. The plan's changes leave them out too.
+- **A protection tag holds on a column the project masks itself:** the column has one policy, the tag's: the project's readers and consumers get the project's mask (the tag's, if the project's is `MASK_NONE`), everyone else the tag's, and the tag's excepted groups see it as it is. Before, the project's own mask replaced the tag's policy, so a `MASK_NONE` showed a tagged column to readers.
+- **Checks on tagged columns test their values:** the catalog's Trino account sees tagged columns as they are, and its profiler leaves them out, so their values' ranges aren't kept in the catalog.
+- **Profiles under the readers' rules:** someone who reads a project's tables under its readers' rules no longer sees the profiler's figures where the rules hide something (a filtered table's counts, a masked or tagged column's range).
+- **The Apps page saves a table app:** its Table list is the project's own tables by name (it offered the semantic model's full names, which a table app refuses).
+- The data product form suggests a name a product may have (underscores kept).
+- The Health page says whether a Slack webhook is set, and a project's Overview names its Slack channel among where its alerts go.
+- Alert mutes are kept in the platform's bucket, so a restart of platformd (or another of its pods) keeps them.
+- Saving a semantic model is in the audit log (`semantic.saved`, with the metrics it changed); the `semantic` suite checks it.
+- `notify.slack` must be a connection's name, and a connection it names can't be removed while named.
+- LLM keys ask the gateway for a calendar month's budget (`1mo`, reset on the 1st, UTC); LiteLLM already reset `30d` keys on the 1st.
+- The guide suite's git labs run whenever retail has a pipelines repo, under `helm test` too (`GUIDE_REPO` is no longer needed).
+
 ## [0.31.0] - 2026-10-24
 
 A new team's project from a template, its repo copied in the company's GitLab, and the company's shared libraries used without copying; a form to publish a data product; Buckets' drives grown by the chart, more pools, and a project told as its bucket fills; and what running the lab guide end to end found: imported files' dates, an erasure that cleanses the landing files too, editors reading their own tables unfiltered, and pages that no longer break on an empty list.

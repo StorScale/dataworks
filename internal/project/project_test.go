@@ -251,6 +251,7 @@ func TestFreshnessAndWhereAlertsGo(t *testing.T) {
 	}
 	for _, tc := range []struct{ extra, want string }{
 		{`, "notify": {"teams": "Sales Alerts"}`, "isn't a connection's name"},
+		{`, "notify": {"slack": "Sales Alerts"}`, "slack \"Sales Alerts\" isn't a connection's name"},
 		{`, "notify": {"email": ["not-an-address"]}`, "isn't an email address"},
 	} {
 		if err := with(tc.extra); err == nil || !strings.Contains(err.Error(), tc.want) {
@@ -564,5 +565,19 @@ func TestFilesImport(t *testing.T) {
 	}
 	if FileFormat("Prices.XLS") != "xlsx" || FileFormat("a.parquet") != "parquet" || FileFormat("a") != "" {
 		t.Error("formats")
+	}
+}
+
+func TestKeepTags(t *testing.T) {
+	before := &Project{Spec: Spec{Tables: &Tables{Tags: []Tag{{Name: "close-2026-09", Commit: "abc", KeepUntil: "2033-10-03", By: "bob"}}}}}
+	release := &Project{}
+	KeepTags(before, release)
+	if release.Spec.Tables == nil || len(release.Spec.Tables.Tags) != 1 || release.Spec.Tables.Tags[0].By != "bob" {
+		t.Errorf("a release without the tag: %+v", release.Spec.Tables)
+	}
+	both := &Project{Spec: Spec{Tables: &Tables{Namespace: "s", Tags: []Tag{{Name: "close-2026-09", Commit: "zzz"}, {Name: "q3", Commit: "def"}}}}}
+	KeepTags(before, both)
+	if tags := both.Spec.Tables.Tags; len(tags) != 2 || tags[0].Commit != "abc" || tags[1].Name != "q3" || both.Spec.Tables.Namespace != "s" {
+		t.Errorf("a release naming one too: %+v", both.Spec.Tables)
 	}
 }

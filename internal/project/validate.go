@@ -200,6 +200,9 @@ func (p *Project) checkNotify(bad func(format string, a ...any)) {
 		if n.Teams != "" && !secretRE.MatchString(n.Teams) {
 			bad("notify: teams %q isn't a connection's name", n.Teams)
 		}
+		if n.Slack != "" && !secretRE.MatchString(n.Slack) {
+			bad("notify: slack %q isn't a connection's name", n.Slack)
+		}
 		for _, e := range n.Email {
 			if !emailRE.MatchString(e) {
 				bad("notify: %q isn't an email address", e)

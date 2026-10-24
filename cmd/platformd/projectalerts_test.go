@@ -91,3 +91,20 @@ func TestACopyNotRunningIsAnIssueAfterAWhile(t *testing.T) {
 		t.Fatalf("running again: %v %v", got, s.projectAlerts.down)
 	}
 }
+
+// A mute is kept in the platform's bucket: a restarted platformd (a new projectAlerts) still has it; an ended one isn't kept.
+func TestMutesOutliveARestart(t *testing.T) {
+	files := kept{}
+	s := &server{files: files}
+	pa := newProjectAlerts()
+	pa.muted["sales/check/orders/rows"] = time.Now().Add(time.Hour)
+	pa.muted["sales/old"] = time.Now().Add(-time.Hour)
+	if err := pa.saveMutes(context.Background(), s); err != nil {
+		t.Fatal(err)
+	}
+	again := newProjectAlerts()
+	again.loadMutes(context.Background(), s)
+	if !again.isMuted("sales", "check/orders/rows") || len(again.muted) != 1 {
+		t.Errorf("after a restart: %v (kept %q)", again.muted, files[mutesKey])
+	}
+}

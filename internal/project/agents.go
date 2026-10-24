@@ -134,6 +134,17 @@ func KeepAgentState(before, p *Project) {
 	}
 }
 
+// RegisterNewAgents records who registered the agents a release brings
+// that the project hadn't (the person who planned it), so that someone
+// else approves each, as on the Agents tab.
+func RegisterNewAgents(p *Project, by string, at time.Time) {
+	for i := range p.Spec.Agents {
+		if a := &p.Spec.Agents[i]; a.RegisteredBy == "" {
+			a.RegisteredBy, a.RegisteredAt = by, at
+		}
+	}
+}
+
 // AgentOf is the project's agent of that name, or nil.
 func (p *Project) AgentOf(name string) *Agent {
 	for i := range p.Spec.Agents {

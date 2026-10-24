@@ -154,7 +154,7 @@ function ProductForm({ projects, product, onDone }: { projects: string[]; produc
         <label>From the project<select value={project} disabled={!!product} onChange={(e) => { setProject(e.target.value); setTable(""); setColumns([]); }} data-testid="product-project">
           {projects.map((p) => <option key={p}>{p}</option>)}</select></label>
         <label>Its table{tables.length ? (
-          <select value={table} onChange={(e) => { setTable(e.target.value); setColumns([]); if (!name) setName(e.target.value.replace(/^uploads_/, "").replace(/_/g, "-")); }} data-testid="product-table">
+          <select value={table} onChange={(e) => { setTable(e.target.value); setColumns([]); if (!name) setName(e.target.value.replace(/^uploads_/, "")); }} data-testid="product-table">
             <option value="">Pick one</option>
             {tables.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
           </select>) : <input className="mono" value={table} onChange={(e) => setTable(e.target.value)} placeholder="uploads_orders" data-testid="product-table" />}</label>
