@@ -4,51 +4,61 @@ For whoever picks this up next, person or agent, on a machine that can reach
 the target cluster. Read this, then [plan.md](plan.md) and the
 [CHANGELOG](../CHANGELOG.md).
 
-## Where things stand (2026-10-19)
+## Where things stand (2026-10-24)
 
-- **Release 0.31.0** is phases 0–5 of the plan (the platform, its web app, projects, the
-  catalog, the semantic layer with MCP for agents, and the Helm chart), ready for a real
-  cluster: behind an ingress that ends TLS, with a private CA, on Buckets 1.20.4. It adds
-  phase 7's first part: each project's pipelines from its own git repo, in an Airflow of
-  its own on Kubernetes (plan, "Phase 7: pipelines from git, how"), and from phase 6 Keycloak on its own database, limits per project, the platform's health with
-  alerts to its administrators and to each project, `storscale upgrade`, table maintenance
-  (compaction, and Nessie's GC for the tables' history), the audit log, Nessie's catalog in
-  Postgres, backups and restore (with the data, and into a new install), network policies
-  and Pod Security, high availability, the data as it was (6.10), and from phase 8 a
-  project's sources: company databases queried where they are (8.3), and their tables copied
-  into the project's by change capture (8.1), and applications' data imported on a schedule
-  (8.2, dlt); from phase 7, dbt in a project's repo (7.5), and a merge request's dbt change
-  built on a data branch of its own, GitLab told (7.3), the project as code in its repo,
-  planned and applied by another (7.4), a Connections tab (7.6), and a notebook scheduled from
-  JupyterLab (7.7); and from phase 9, file deliveries to clients and partners over SFTP and
-  S3, approved before they run (9.1), and the delivery log searched by a person's ID (9.2);
-  from phase 10, the business layer: the company's terms defined once in a shared semantic
-  model that projects build on (10.1), Superset's datasets on those definitions (10.2), and
-  certified data products with contracts, read in place across projects (10.3); and from
-  phase 8, Salesforce from a connector's form (8.4); from phase 11, the canvas (11.1, 11.2: a flow
-  built from steps, compiled and previewed before it runs, saved as dbt models in a merge request,
-  the company's metrics as a step, uploads as inputs; plan, "A pipeline on a canvas"); and a
-  consolidation pass (plan, "Consolidation"): one error helper with request IDs in platformd, a
-  validator per area of the spec, the Python checked in CI, the suites in two lanes; from phase 12,
-  a new column of personal data protected by its tag (12.5), a metric change tested (12.3), agents
-  of the project's own, run on a schedule from a notebook in the repo, reading its runs and alerts (12.2), and the LLM gateway with budgets (12.1, first part:
-  the stand-in, or LiteLLM on the company's models); and from phase 6, a customer erased under
-  the CCPA, and retention per table (6.9); from phase 11, a prepare step of named column processors (11.3,
-  first part), and an llm step that asks a model about a column (11.3); and the gateway's guardrail (12.1), with LiteLLM on
-  Microsoft Foundry proven on a real cluster, forbidden terms, and a semantic model's tests asked in plain language (12.3);
-  from phase 6, what a table holds (profiling, eight kinds of check, 6.11) and Slack (6.7); from phase 7, the notebook's
-  analysis and ML libraries and VS Code (7.8); and from phase 12, knowledge banks (12.6), agents
-  from a prompt (12.7), each model call (12.8) and the Governance page (12.9); agents as tools and a
-  project's own tools (12.7), knowledge from files, on a schedule and on the canvas (12.6); and phase 13,
-  usage and cost per project with a rate card and budgets (13.1); and from phase 14, the API reference
-  and the Python package (14.3), and a project's apps (14.1); and from phase 15, MLflow per project, approval
-  before use and model cards (15.1, R15.1, R15.2, R15.5), batch scoring with drift (R15.3), a model as an API
-  (R15.4), models in the catalog's lineage (R15.6) and notebook templates for the common models (R15.7); and phase 16,
-  roles of the company's own and platform roles (16.1); and a new team's project from a template, with the company's shared
-  libraries (U.2).
+- **Release 0.31.0** has phases 0 to 5 of the plan (the platform, its web app, projects, the
+  catalog, the semantic layer with MCP for agents, and the Helm chart), ready for a real cluster:
+  behind an ingress that ends TLS, with a private CA, on Buckets 1.20.4. It has these from
+  phases 6 to 16 too ([plan.md](plan.md)'s phase table says what each phase has and lacks,
+  and [use-cases.md](use-cases.md) each requirement, with the date it was built):
+  - **Phase 6, production-ready:** Keycloak on its own database; `storscale upgrade`; the Health
+    page, with alerts to administrators and to each project (Teams, Slack, email); table
+    maintenance and Nessie's GC; the audit log; backups and restore, into a new install too;
+    high availability, network policies and Pod Security; limits per project; the data as it
+    was (6.10); erasure under the CCPA and retention per table (6.9); profiling and more kinds
+    of check (6.11); Buckets' capacity (drives grown by the chart, more pools, a project told as
+    its bucket fills).
+  - **Phase 7, git-native projects:** pipelines from each project's repo, in an Airflow of its own
+    on Kubernetes; dbt in the repo; a merge request's change built on its own data branch,
+    GitLab told (7.3); the project as code, planned and applied by another (7.4); the
+    Connections tab; a notebook scheduled from JupyterLab; VS Code and the ML libraries.
+  - **Phase 8, getting data in:** databases queried where they are (8.3), copied by change
+    capture (8.1), applications' data and uploaded files imported with dlt (8.2), Salesforce
+    from a form (8.4).
+  - **Phase 9, getting data out:** file deliveries over SFTP and S3, approved before they run
+    (9.1), and the delivery log searched by a person's ID (9.2).
+  - **Phase 10, the business layer:** the company's terms in a shared semantic model (10.1),
+    Superset's datasets on it (10.2), certified data products read in place across projects,
+    with a form to publish one (10.3), and assistants over MCP on them (10.4).
+  - **Phase 11, the canvas:** a flow of steps saved as dbt models in a merge request, uploads as
+    inputs, a prepare step and an LLM step.
+  - **Phase 12, governed AI:** the LLM gateway (LiteLLM on Microsoft Foundry, proven on a real
+    cluster, or the stand-in) with budgets and a guardrail; agents of a project's own, from a
+    notebook or a prompt, as tools of each other, with the project's own tools; semantic tests;
+    a new column of personal data protected by its tag; knowledge banks; each model call; the
+    Governance page.
+  - **Phases 13 to 16:** usage and cost per project (13.1); a project's apps, the API reference
+    and the Python package (14.1, 14.3); MLflow per project, approval, batch scoring with
+    drift, a model as an API, models in the catalog (15.1); roles of the company's own, per
+    project and platform-wide (16.1).
+  - **Not yet placed, now built:** a new team's project from a template, and the company's
+    shared libraries (U.2), with the install's GitLab.
+- **What's next** (the "Not yet" of each phase in [plan.md](plan.md), and the open questions in
+  [use-cases.md](use-cases.md)):
+  - **Before real users:** corporate sign-in (Entra ID, brokered by Keycloak) and the example
+    users switched off (`examples.users` exists and nothing reads it yet), access requests,
+    and who approves them (6.1).
+  - **Hardening:** Buckets' encryption at rest, Pod Security's restricted standard, more than one
+    platformd (its sessions are in memory), a version matrix per release.
+  - **Features left in built phases:** shares for partners (9.3); Power BI (10.2, to decide);
+    a Python step and Spark (11.3, 11.6; nothing runs on the Spark Operator yet); the assistant
+    on the SQL page (12.4); Gong, HighSpot and SAP (8.4); a readers' Home per project and the
+    package on PyPI (14); the models on the Governance page; a DAG ID clash refused, not only
+    shown (7.2).
 - **CI passes on every way of running it:**
   - **`platform`** runs the Compose stack and every suite (`stack/tests/run.py`: the suites that
-    share `sales` in a chain, those with projects of their own alongside).
+    share `sales` in a chain, those with projects of their own alongside; the `guide` suite and
+    the restore's run only when named).
   - **`kubernetes`** installs the chart on kind with `storscale up --k8s`, then runs every
     suite with `helm test`, the browser suite included.
   - **`kubernetes-https`** does the same behind HTTPS with a private CA, as on a real cluster
@@ -59,13 +69,25 @@ the target cluster. Read this, then [plan.md](plan.md) and the
 - **Installed on a real cluster:** Kubernetes 1.27, shared with other teams, with
   ingress-nginx and a certificate from a corporate Vault PKI (through cert-manager).
   Every suite but the browser's passes there. That install found the three bugs the
-  `kubernetes-https` job now catches; see the CHANGELOG.
+  `kubernetes-https` job now catches; see the CHANGELOG. The lab guide's labs were run end to end
+  on a real cluster for 0.31.0; running them as the `guide` suite found most of 0.31.0's fixes.
+- **The lab guide as a suite:** `stack/tests/guide.py` runs [guide.md](guide.md)'s labs through
+  the API, as alice, bob and carol, and leaves what it makes. It runs only when named
+  (`storscale test --k8s guide`, or `helm test` with the ConfigMap below); its `labs` key picks
+  labs (`"1 2 3"`). Labs 10, 17, 18 and 20 (and 11's schedule) need a GitLab repo: the
+  environment's `GUIDE_REPO` and `GUIDE_GITLAB`, and the connection `retail-dags` holding its
+  token. The chart's test pod doesn't pass those variables yet, so through `helm test` those
+  labs are left out (and, named, find no repo).
 
 ## Install on a real cluster
 
-Needs about 12–16 GB of memory, 4 or more CPUs, about 60 GB of disk, Helm, and a
-default StorageClass; and for each project with a pipelines repo, its own Airflow's memory
-(`pipelines.memory`, 3 GB unless the project gives another) (or set `storage.storageClassName` and `buckets.storageClassName`).
+Needs about 12–16 GB of memory, 4 or more CPUs, about 60 GB of disk, Helm 3.14 or later
+(`storscale upgrade` uses `--reset-then-reuse-values`), and a default StorageClass (or set
+`storage.storageClassName` and `buckets.storageClassName`); and for each project with a
+pipelines repo, its own Airflow's memory (`pipelines.memory`, 3 GB unless the project gives
+another). Label the namespace for Pod Security, as `storscale up --k8s` does on kind:
+`kubectl label namespace storscale pod-security.kubernetes.io/enforce=baseline
+pod-security.kubernetes.io/warn=restricted`.
 
 With TLS at the Ingress, a certificate from cert-manager, and a private CA, a values file
 such as this one (`platform.yaml`):
@@ -159,13 +181,23 @@ storscale upgrade --context <cluster> --set templates.gitlab.url=https://gitlab.
 Without it, templates are only a spec (no repo), and there are no libraries. A new
 project's repo token lasts a year (GitLab's most); renew it on the project's Connections tab.
 
+**Alerts and the LLM gateway** need nothing at install, and say nothing until set:
+
+- The administrators' alerts go where the Secret `storscale-alerts` says (`teamsWebhook`,
+  `slackWebhook`, `emailTo`, and `smtpServer`, `smtpFrom`, `smtpUser`, `smtpPassword` for
+  email); each project's go where its `notify` says.
+- The gateway is the platform's stand-in (`llm.gateway: stub`) until the company's models are
+  given: make the Secret `storscale-llm` (key `api_key`), then `--set llm.gateway=litellm` with
+  `llm.litellm.models` (the chart's values show Anthropic's models on Microsoft Foundry, and an
+  embedding model for the knowledge banks).
+
 People's password (the example users alice, bob, carol):
 `kubectl -n storscale get secret storscale-env -o jsonpath='{.data.LAKEHOUSE_USER_PASSWORD}' | base64 -d`.
 Every other secret is in the same Secret. They're generated on install and kept on upgrade.
 
 ## On a real cluster
 
-Items 1 and 2 work on one; 3 to 6 are still to do.
+Items 1 to 3 work on one; 4 to 6 are still to do.
 
 1. **One address, inside and out.** Every service uses the platform's public names:
    `domain`, plus `catalog.`, `access.` and `s3.` under it. Keycloak's tokens carry
@@ -186,17 +218,21 @@ Items 1 and 2 work on one; 3 to 6 are still to do.
      service that calls the platform's public names trusts it (Python, Go, curl, Java,
      notebooks, and Buckets through `SSL_CERT_FILE`, since bucketsd uses OpenSSL). The browser
      suite's Chromium doesn't read it yet: it keeps its own trust store (NSS).
-3. **Keycloak runs `start-dev`,** with its database in H2 inside the pod, and imports the
-   realm afresh on each start (`stack/keycloak/realm.json`). Fine for a trial, not for
-   real users: give it a database, and decide who owns the realm.
-4. **The example users** (alice, bob, carol) and their groups come from the realm.
-   `examples.users` exists in values but doesn't switch them off yet.
+3. **Keycloak** runs in production mode on a database of its own (`keycloak`, on the
+   platform's Postgres), and imports the realm (`stack/keycloak/realm.json`) only when there's
+   none. At each install and upgrade a setup step puts back the platform's own parts of it (its
+   clients, service accounts and settings); people, groups and whatever an administrator adds
+   stay (plan, "Phase 6: Keycloak for real use").
+4. **The example users** (alice, bob, carol) and their groups come from the realm, and
+   corporate sign-in (Entra ID) isn't connected yet. `examples.users` exists in values but
+   nothing reads it: it doesn't switch them off yet.
 5. **Sizes:**
    - Buckets is one server with four drives (`buckets.servers`, `volumesPerServer`,
      `storage`). To grow it, see **Buckets' capacity** below.
    - Resource requests are set for a laptop; raise them for real use.
-   - Trino gets 1.5 GB (`trino.memory`).
-6. **No Spark suite yet.** The Spark Operator is installed, but nothing runs on it.
+   - Trino gets 2.5 GB (`trino.memory`, 2560Mi), and no workers unless `trino.workers` says.
+6. **No Spark yet.** The Spark Operator is installed, but nothing runs on it: no suite, no
+   canvas step, no usage counted.
 
 ### Buckets' capacity
 
@@ -270,19 +306,36 @@ the installed values, and a later `-f` without them is refused.
 - **`helm test --logs` also prints the logs of test pods from an earlier run** when an
   early test fails. Read the pod names.
 - **To pick suites:** create the ConfigMap `storscale-tests`, with key `suites` holding the
-  suites' names, space-separated (`shell` is the browser suite). Then run `helm test`.
-  Delete the ConfigMap to run them all.
+  suites' names, space-separated (`shell` is the browser suite; `guide` the lab guide, with
+  key `labs` for its labs). Then run `helm test`. Delete the ConfigMap to run them all (the
+  guide's suite and the restore's run only when named). `storscale test --k8s <suite> ...`
+  does this on kind.
 
 ## Where the code is
 
+- `cmd/platformd`: the platform's backend, its API (`openapi.json`, kept current by a test)
+  and the web app's server; `web/`: the web app (React).
+- `cmd/platform-operator` and `internal/reconcile`: projects applied to Keycloak, Ranger,
+  Buckets, Nessie, Trino, Airflow and the LLM gateway, their scorings and servings, and
+  Buckets' drives grown.
+- `cmd/storscale`: the command (`up`, `test`, `upgrade`, `backup`, `restore`).
+- `internal/`: the project spec and its checks (`project`), the project store (`store`:
+  `Bucket` for Compose, `Kube` and `Mirror` for Kubernetes), the canvas's compiler (`flow`),
+  GitLab (`gitlab`), Airflow (`pipelines`), Trino, the catalog, health, the audit log and the
+  LLM gateway.
 - `deploy/helm/storscale-platform`: the chart. It reads `stack/` through a `files/`
-  link, so Compose and Kubernetes run the same configuration.
-- `deploy/kind`: the kind cluster, its DNS rule, and the image loading
-  (`storscale up --k8s` uses them).
-- `stack/`: the Compose stack, the setup steps (`stack/tools/setup`), and the tests
-  (`stack/tests`).
-- `cmd/platformd`, `cmd/platform-operator`, `internal/store` (`Bucket` for Compose, `Kube`
-  and `Mirror` for Kubernetes), `internal/flow` (the canvas's compiler), and `web/`.
+  link, so Compose and Kubernetes run the same configuration. `deploy/crds/project.yaml`:
+  the Project definition.
+- `deploy/kind`: the kind cluster, its DNS rule, the image loading, and values for CI's
+  variants (`https.yaml`, `ha.yaml`, `templates.yaml`, ...); `storscale up --k8s` uses them.
+- `stack/`: the Compose stack and each service's image and configuration: semanticd and the
+  MCP server (`stack/semantic`), catalog-sync (`stack/catalog/sync`), Airflow's image with the
+  platform's helpers for DAGs (`stack/airflow/image`), the notebook image with `buckets_lake`
+  and the model templates (`stack/jupyterhub/image`), the setup steps (`stack/tools/setup`),
+  and the end-to-end suites (`stack/tests`, `guide.py` among them).
+- `stack/python`: the `storscale` Python package, the API from a script.
+- `docs/`: the [lab guide](guide.md) with its data (`docs/lab/`), the
+  [Users Guide](users-guide/00-index.md), [plan.md](plan.md) and [use-cases.md](use-cases.md).
 
 ## Working conventions
 

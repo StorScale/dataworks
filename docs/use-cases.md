@@ -34,6 +34,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R6.3 A first-run Home for someone in no project, saying how to get access.
 - R6.4 Access requests: ask, approve or refuse in the project, with the result applied by the operator and recorded in the audit log.
 
+**Built (2026-10-07), a little:** Home tells someone in no project that they're in none, and to ask an administrator (R6.3's first part). Not yet: corporate sign-in (R6.1), `examples.users: false` (R6.2: the chart has the setting, and nothing reads it yet) and access requests (R6.4), which wait for real users, as decided below.
+
 **Decided (2026-10-16)**
 - The identity provider will be Entra ID. Until real users come, the platform stays in development: the example people stay, and corporate sign-in (R6.1) and turning the examples off (R6.2) wait.
 - The realm's ownership is split: the platform keeps its own parts (the tools' clients, its service accounts, its signing key, the settings it relies on) and applies them at each upgrade; the company owns the people, their sign-in and its policies, which an upgrade never writes (plan, "Phase 6: Keycloak for real use, how").
@@ -55,6 +57,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R6.6 Backup and restore of every stateful part, tested in CI: a restore onto a fresh install passes the suites.
 - R6.7 Upgrades as one command, with a rollback.
 - R6.8 Keycloak on a real database, in production mode, keeping its sessions and settings through restarts and upgrades.
+
+**Built:** Keycloak in production mode on a database of its own, its realm kept through restarts and upgrades, the platform's parts of it put back at each one (R6.8, 2026-10-16); `storscale upgrade`, one command that applies the release's Project definition, upgrades the chart with the values it was installed with, waits for every service and prints the `helm rollback` that undoes it, `--dry-run` checking first (R6.7, 2026-10-16); backups of every database and of the Projects and Secrets, nightly and encrypted for a key kept off the cluster, with `storscale backup` and `storscale restore` (R6.6, 2026-10-17), and the same day the data copied off the cluster (`backup.data`) and a restore into a new install (`--into-new`). CI upgrades the last release to each commit with a project made under it, and backs up, damages and restores an install, then checks it. Not yet: a version matrix per release (R6.5: the upgrade checks the release's images are published, not each component's version), a backup taken by the upgrade itself, a rollback beyond Helm's, and `--into-new` checked end to end (it's checked in parts).
 
 **Open questions**
 - Where do backups go: a Buckets bucket of the install's own, or somewhere outside it?
@@ -99,7 +103,7 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 
 **Built (2026-10-17), the first part:** each night at `maintenance.at` (UTC) platformd compacts every project's small files (Trino's `optimize`), one project at a time, as Trino's `maintenance` account (Ranger lets it alter and read every table: `optimize` scans the table it rewrites). A project may pause it. Each table's Storage tab shows its files, size and rows and what maintenance last did; editors ask for a run now. A run that fails alerts the project (6.7), and the runs are Prometheus metrics. The `maintenance` suite checks it.
 
-**Found while building it:** Iceberg's own snapshot expiry and orphan-file removal don't apply here. Nessie keeps each table's history as its own commits, on branches and tags that every project shares, and turns those procedures off (a file may be another branch's). What no branch or tag needs any more is collected by Nessie's GC (`nessie-gc`), across the whole install. So how far back the data as it was goes is the install's setting, not a project's (R6.15 becomes per install), and a month-end close kept beyond it is a Nessie tag (6.10), which GC keeps. **Built after (2026-10-17):** Nessie's GC (`nessie-gc`) nightly, after the compaction, as Nessie's own Buckets account: history older than `maintenance.history.keep` (a week) and files no branch or tag needs, deleted, across the install; a CronJob on Kubernetes, whose failed runs the Health page reports, and a daily loop in Compose. The `maintenance` suite checks it deletes the files only old history used and a file nothing used, rows intact. Its live set is kept in memory (Nessie suggests a database for large catalogs). Not yet either: the tables' health on the administrators' Health page, and the last runs kept across a restart of platformd (the tables' files, read from the catalog, are).
+**Found while building it:** Iceberg's own snapshot expiry and orphan-file removal don't apply here. Nessie keeps each table's history as its own commits, on branches and tags that every project shares, and turns those procedures off (a file may be another branch's). What no branch or tag needs any more is collected by Nessie's GC (`nessie-gc`), across the whole install. So how far back the data as it was goes is the install's setting, not a project's (R6.15 becomes per install), and a month-end close kept beyond it is a Nessie tag (6.10), which GC keeps. **Built after (2026-10-17):** Nessie's GC (`nessie-gc`) nightly, after the compaction, as Nessie's own Buckets account: history older than `maintenance.history.keep` (a week) and files no branch or tag needs, deleted, across the install; a CronJob on Kubernetes, whose failed runs the Health page reports, and a daily loop in Compose. The `maintenance` suite checks it deletes the files only old history used and a file nothing used, rows intact. Its live set is kept in memory (Nessie suggests a database for large catalogs). Not yet either: the tables' health on the administrators' Health page, and the last runs kept across a restart of platformd (the tables' files, read from the catalog, are). **Built (2026-10-18):** the branches of closed changes dropped (R6.14's last part): a merge request's data branch and its catalog go when it's closed or merged (7.3), and GC then collects what only they held.
 
 ### 6.6 A node fails
 
@@ -110,6 +114,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 **Requirements**
 - R6.17 Replicas, spread across nodes, for the services that allow them (the gateway, platformd, Keycloak, Trino's workers, Superset), with disruption budgets so a drain never takes them all.
 - R6.18 Hardening: network policies (each service reachable only by those that use it), Pod Security standards, Buckets' encryption at rest (its KMS), and images scanned, with SBOMs, in each release.
+
+**Built (2026-10-17):** replicas of the gateway, Keycloak, Nessie, semanticd, Superset and Airflow's API, spread across nodes with disruption budgets, and Trino workers beside the coordinator (`replicas.*`, `trino.workers`; R6.17), which CI's HTTPS job checks by removing a pod of each; network policies, Pod Security's baseline standard enforced and the restricted one warned of, and every image scanned (Trivy) beside its SBOM and provenance (R6.18). Not yet: platformd, the operator and the databases stay one each (platformd keeps its sessions in memory); Buckets' encryption at rest; the restricted standard (plan, "Pod security: what's left").
 
 **Open questions**
 - Which parts need high availability at first? (Sign-in and the platform's pages, surely; the catalog maybe not.)
@@ -127,7 +133,7 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R6.20 Freshness targets per table, in the project; stale tables shown in the catalog and the project's pages.
 - R6.21 Who's told, set per project; alerts muted for a while, recorded.
 
-**Built (2026-10-16):** platformd looks at every project each minute: its pipelines' latest runs, its tables' checks, and its freshness targets (`tables.freshness`: a table, and how long it may go unchanged, as `30m`, `24h` or `7d`, measured from its current snapshot in Nessie). A project's `notify` says where it's told: `teams`, one of the project's connections holding a channel's Workflows webhook (`webhook`), and `email`, through the install's mail server (`storscale-alerts`). A channel is told when an issue starts, and when a failing check or a stale table comes right; a channel just named is told everything wrong at once. The project's Overview lists what's wrong now and where it's told; editors (and administrators) mute one issue for a day. Administrators set `notify` and freshness in the project's editor. The `project_alerts` suite checks a stale table reaching a project's Teams channel, the page, muting, and the resolve. Not yet: the failing task and its error in a pipeline's alert (the run is named and linked), the failing rows of a check, stale tables shown in the catalog and on the Data tab, Slack, and mutes kept across a restart of platformd (they're recorded in its log).
+**Built (2026-10-16):** platformd looks at every project each minute: its pipelines' latest runs, its tables' checks, and its freshness targets (`tables.freshness`: a table, and how long it may go unchanged, as `30m`, `24h` or `7d`, measured from its current snapshot in Nessie). A project's `notify` says where it's told: `teams`, one of the project's connections holding a channel's Workflows webhook (`webhook`), and `email`, through the install's mail server (`storscale-alerts`). A channel is told when an issue starts, and when a failing check or a stale table comes right; a channel just named is told everything wrong at once. The project's Overview lists what's wrong now and where it's told; editors (and administrators) mute one issue for a day. Administrators set `notify` and freshness in the project's editor. The `project_alerts` suite checks a stale table reaching a project's Teams channel, the page, muting, and the resolve. Not yet: the failing task and its error in a pipeline's alert (the run is named and linked), the failing rows of a check, stale tables shown in the catalog and on the Data tab, and mutes kept across a restart of platformd (they're recorded in its log). Slack came 2026-10-21 (R6.19); a project told as its bucket fills (80% of `limits.storage`, then full) 2026-10-23.
 
 ### 6.8 One project can't slow the others
 
@@ -160,8 +166,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 5. Separately, each night, rows older than a table's retention (say 25 months for campaign responses) are deleted the same way.
 
 **Requirements**
-- R6.25 Each project declares where its consumer data is: the tables, the column that identifies a person, and the files' prefixes; the catalog shows it. Classification (12.5) later finds what's undeclared. (Built 2026-10-18: the tables and their person's column, `tables.people`; not yet the files' prefixes, or the catalog showing it.)
-- R6.26 Erasure by a person's ID across the declared tables and what lineage says came from them, carried through snapshots, data branches and files, within the law's deadline, and recorded without the data; an API for the privacy tool. (Built 2026-10-19 for the declared tables, with the record and the deadline; the old versions age out with the history window; lineage's tables, files, data branches and the tool's own sign-in are left.)
+- R6.25 Each project declares where its consumer data is: the tables, the column that identifies a person, and the files' prefixes; the catalog shows it. Classification (12.5) later finds what's undeclared. (Built 2026-10-18: the tables and their person's column, `tables.people`; the catalog shows those columns tagged `personal`, confirmed, since 2026-10-19 (12.5). Not yet the files' prefixes: the landing files a project's imports read into its people's tables are found from the imports, 2026-10-23.)
+- R6.26 Erasure by a person's ID across the declared tables and what lineage says came from them, carried through snapshots, data branches and files, within the law's deadline, and recorded without the data; an API for the privacy tool. (Built 2026-10-19 for the declared tables, with the record and the deadline; the old versions age out with the history window. 2026-10-23: the landing files the project's imports read into those tables, CSV and JSON lines, written again without the person's rows, an Excel or Parquet file named in the record as not rewritten. Lineage's tables, other files, data branches and the tool's own sign-in are left.)
 - R6.27 Retention per table (rows older than a set age deleted), applied by the maintenance of 6.5. (Built 2026-10-19: `tables.retention`.)
 - R6.28 The erasure's record lists the deliveries that carried the person's data (R9.6). (Built 2026-10-19.)
 
@@ -185,7 +191,7 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R6.31 Tags for moments that matter (a month-end close, a delivery), made by people or by pipelines, kept for a set time beyond the table's retention.
 - R6.32 Each delivery records the snapshot of every table it read, so its files can be made again exactly (with R9.5).
 
-**Built (2026-10-17):** a table is read as it was at a commit of the catalog, `"orders#<commit>"`, under its readers' rules (the operator's Ranger policies name it too). A project's tags (`tables.tags`) keep moments as long as asked: its editors make and remove them on its Tags tab, the operator keeps Nessie's tags as they say, nightly maintenance removes those past their keep, and the audit log records each. Each table's History tab lists its changes (when, rows added and removed, who wrote it, from the audit log, and the tags on it), each readable as it was; the SQL page reads the project's tables as of a tag, a time or a commit. Not yet: a picker in notebooks and dashboards (they name the table at its commit), deliveries recording their commit (R6.32, with 9.1), and the open questions above.
+**Built (2026-10-17):** a table is read as it was at a commit of the catalog, `"orders#<commit>"`, under its readers' rules (the operator's Ranger policies name it too). A project's tags (`tables.tags`) keep moments as long as asked: its editors make and remove them on its Tags tab, the operator keeps Nessie's tags as they say, nightly maintenance removes those past their keep, and the audit log records each. Each table's History tab lists its changes (when, rows added and removed, who wrote it, from the audit log, and the tags on it), each readable as it was; the SQL page reads the project's tables as of a tag, a time or a commit. Not yet: a picker in notebooks and dashboards (they name the table at its commit), and the open questions above. **Built (2026-10-18):** each delivery's manifest records the snapshot of every table it read, and a personal delivery's run tags the catalog at the moment it read (kept `deliveries.keepFor`), so it can be read again as sent (R6.32, with 9.1 and 9.2); an **Open the data as sent** button on the Deliveries tab is left.
 
 **Open questions**
 - Erasure against kept history: erasing a person (6.9) must reach old snapshots, but a tagged close is kept so it can be reproduced. Is a close kept with personal columns erased, or with the person's rows removed and the totals noted as changed? This needs the privacy team's and Finance's answer together.
@@ -219,6 +225,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R7.3 The Pipelines tab: each pipeline's commit and each run's, links to the repo, import errors by file and line.
 - R7.4 A project's pipelines are its bundle's DAGs, not those tagged `project:<name>`.
 
+**Built (2026-10-15 and 16):** `pipelines.repo`, `path`, `ref` and `credentials.secretRef`, applied by the operator as a DAG bundle per project, on Kubernetes in an Airflow of the project's own (R7.1); the Pipelines tab names the repo, each pipeline's and each run's commit, and the files that didn't load (R7.3); a project's pipelines are its bundle's, plus the platform's own tagged for it, never a tag in another project's repo (R7.4). The credential is a token or key the project gives, kept as one of its Secrets (R7.2's second way; given on the Connections tab since 2026-10-18, 7.6). Not yet: a deploy key the platform makes.
+
 ### 7.2 Two projects, one pipeline name
 
 1. The marketing project's repo defines a pipeline `orders_daily`, the same ID as sales'.
@@ -229,6 +237,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R7.5 DAG IDs unique across projects: a clash is refused and reported, never silently replaced.
 - R7.6 Each project's git credential reads its repo only.
 - R7.6a A project's DAG code, as it is parsed and as it runs, reads only its own connections: not another project's, nor the platform's secrets (plan, "Keeping projects' DAG code apart").
+
+**Built (2026-10-15 and 16):** Airflow holds only the keys it needs (2026-10-15), and on Kubernetes each project with a repo gets an Airflow of its own, with its own database, keys and connections, its tasks run as the project's own service account (R7.6a, 2026-10-16); a project names only its own connections (R7.20). A DAG ID two bundles define is shown as a clash on the Pipelines tab, not yet refused (R7.5); in Compose, one shared Airflow still runs every project's code, for one team on one machine.
 
 ### 7.3 A change, tested on its own data first
 
@@ -244,6 +254,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R7.8 The project's pipelines and checks run on the branch; results reported to the pull request (GitHub, GitLab, Gitea status APIs).
 - R7.9 A comparison of the branch against production: row counts, a sample, the metrics that changed.
 - R7.10 Merge publishes data and code together; a failed check blocks it.
+
+**Built (2026-10-18), on GitLab:** for each open merge request (`pipelines.reviews`), a Nessie branch of the project's tables and a Trino catalog on it, made by the operator and removed when it's closed or merged (R7.7); at each new commit the dbt models the change touches and those downstream built and tested there as the project's pipelines, the merge request told by a commit status (`storscale/dbt`) and a note (R7.8); the note holds each model's rows on the branch and in production, a sample of the rows that differ and the metrics that moved (R7.9). The semantic layer's tests became a second status, `storscale/semantic`, on 2026-10-19 (12.3). Not yet: GitHub's and Gitea's statuses; merging publishes the code, and production's next run builds the data (the branch itself isn't merged); a failed status blocks a merge only as far as GitLab's project settings make it.
 
 **Open questions**
 - Which git hosts first? **GitLab** (the company's; decided 2026-10-18).
@@ -263,6 +275,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R7.13 Approval before a production apply, recorded.
 - R7.14 Rollback to an earlier release of a project.
 
+**Built (2026-10-18):** a project's repo holds `storscale/project.yaml` (its spec: members, tables, checks, pipelines and the rest), `semantic.yaml` (its metrics) and `targets/<target>.yaml` for what differs on one install (`install.target`) (R7.11, R7.12); on the Releases tab an editor plans a tag, branch or commit, and the plan lists what would change; an administrator other than who planned it applies it, recorded with both names (R7.13); a rollback is a plan of an earlier tag (R7.14). The `releases` suite checks it end to end.
+
 ### 7.5 bob's transformations in dbt
 
 1. bob keeps the project's SQL transformations as dbt models, in the same repo as its pipelines: `orders_by_region`, `customers_active`. Their tests (unique, not null, accepted values) sit beside them.
@@ -275,6 +289,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R7.15 dbt projects in the project's repo, run by Airflow in Trino (and Spark later), under the project's service account.
 - R7.16 dbt's tests and lineage in the catalog, beside the checks and lineage the platform already reports.
 - R7.17 Runs of only what changed, and what depends on it, for a pull request.
+
+**Built (2026-10-17 and 18):** a repo's DAG calls `storscale.dbt.build(project=..., path="dbt")`, and dbt builds in Trino as the project's pipelines service account, with no settings or secrets in the repo (R7.15); the run's artifacts go to platformd and the catalog describes the models, their columns, lineage and tests' results (R7.16); a merge request builds only the models it touches and those downstream (`state:modified+`, 7.3; R7.17). dbt packages, and so the company's shared libraries, work since 2026-10-23 (U.2). Not yet: Spark.
 
 ### 7.6 bob gives the platform a credential
 
@@ -289,6 +305,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R7.19 The operator keeps them as Secrets the project owns (labelled with it, removed with it), so nobody needs access to the cluster.
 - R7.20 A project names only its own connections: another project's Secret, or the platform's, is refused. (Built, 2026-10-16: a Secret must carry the label `platform.storscale.io/connection=<project>`.)
 
+**Built (2026-10-18):** the Connections tab: its editors add, replace and remove credentials of a kind (a git token, an SSH key, a database user, an API token, an SFTP server, an S3 bucket, a PGP key, a Teams channel; a Slack channel and Salesforce since), each kind's keys checked; members see each one's name, kind, the values that aren't secret, who added and last changed it and what uses it, never a secret; one still named can't be removed; each change in the audit log (R7.18). They're labelled Secrets of the project on Kubernetes (its bucket in Compose), deleted with the project since 2026-10-21 (R7.19).
+
 ### 7.7 dana schedules her notebook
 
 1. dana's notebook `churn_features.ipynb` works. In JupyterLab she chooses **Schedule**: daily at 05:00, in project `sales`.
@@ -299,6 +317,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 **Requirements**
 - R7.21 Scheduling a notebook from JupyterLab: a pipeline in the project's repo that runs it, reviewed like any other change.
 - R7.22 Each run's executed notebook kept, and linked from the run.
+
+**Built (2026-10-18):** JupyterLab's Schedule commits the notebook (outputs cleared) and a small DAG to a branch of the project's repo with a GitLab merge request (R7.21); merged, the project's Airflow runs it with papermill as the project's pipelines, and each run's executed notebook is kept and linked from the run on the Pipelines tab, a failing cell named (R7.22).
 
 **Open questions**
 - The notebook's Python packages: the image's, or an environment per project (see "To decide")? The image's for now (built 2026-10-18): the scheduled run has the notebook image's packages.
@@ -332,6 +352,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 
 **Decided (2026-10-17):** Debezium Server writing to Iceberg, without Kafka (Kafka when streaming needs it); PostgreSQL, SQL Server and MySQL first, Oracle after.
 
+**Built (2026-10-17), on Kubernetes:** a source's tables copied by change capture (`sources[].copy.tables`): Debezium Server with its Iceberg sink, a pod per source, a first copy then every insert, update and delete within `copy.commitEvery` seconds, new columns added as they come, credentials from the project's connections (R8.1, R8.2); the tables are the project's, under its rules, with the source's table upstream of each in the catalog, column by column (R8.3); a copy not running for ten minutes alerts the project, a crashing pod is on the Health page, and since 2026-10-18 the Overview shows when each copied table last committed (R8.4). PostgreSQL, MySQL and SQL Server. Not yet: Oracle, Compose (copies run on Kubernetes only), and a lag measured against the source itself.
+
 ### 8.2 An application's data
 
 1. Marketing's leads are in a SaaS application (a CRM). Their project adds a source: the application, the objects (leads, campaigns), and a token given once and kept as a Secret.
@@ -343,6 +365,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R8.6 Connectors' state kept, so each run copies only what's new.
 
 **Decided (2026-10-18):** dlt, run in the project's Airflow (Airbyte is a service of its own). First: any REST API (dlt's `rest_api`), a database by a cursor column, files in the project's bucket; applications' own sources (HubSpot, Salesforce) by demand.
+
+**Built (2026-10-17):** a project's `imports`: any REST API, or a PostgreSQL or MySQL database by a cursor column, with one of its connections and a schedule, each a pipeline of the project's run by dlt in the platform's Airflow into Iceberg tables (`<import>_<resource>`), merged on a primary key or appended, a failed run its alert, the import upstream of its tables in the catalog (R8.5); each run asks only for what's past its cursor, which dlt keeps beside the data (R8.6). Since: an import's reset (2026-10-18; since 2026-10-23 it makes the tables afresh), files in the project's landing area as a source (`files`: CSV, Excel, JSON lines, Parquet, 2026-10-19; their dates read as dates, 2026-10-23), Salesforce (8.4), and the editors' Imports tab.
 
 ### 8.3 Query a database where it is
 
@@ -359,6 +383,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 
 **Decided:** Trino's dynamic catalogs (made while it runs, by the platform operator), the connection in files Trino reads, never in the statement (docs/plan.md).
 
+**Built (2026-10-17):** a project's `sources` (PostgreSQL, MySQL, SQL Server or Oracle, and one of its connections) are each a read-only Trino catalog of the project's own (`sales_finance`), its credentials in a file Trino reads (R8.7); its editors and pipelines read it, its readers where the source says, nobody writes it; a source names the schemas the project reads, its readers' masks and row filters, and its tables are in the catalog and the SQL page's schema browser (R8.8). A source's queries count against the project's limits as any query does (6.8); nothing yet caps what one query may pull from a source (R8.9).
+
 ### 8.4 One-click connectors
 
 1. Marketing wants Salesforce in their project. On the project's Sources tab, bob picks **Salesforce** from the platform's connectors (Salesforce, Gong, HighSpot, SAP S/4HANA, SAP HANA and BW, any REST API, any database), signs in to Salesforce once (OAuth, or a token on the Connections tab), and ticks the objects he wants: accounts, opportunities, campaigns.
@@ -373,6 +399,8 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R8.12 Each connector's tables described in the catalog, with lineage to the application, and checks on each run (rows copied, deletes carried).
 
 **Decided (2026-10-18):** Salesforce first (dlt has a source); Gong and HighSpot next; SAP both ways, S/4HANA by OData and HANA or BW as a database.
+
+**Built (2026-10-18), Salesforce:** an import of kind `salesforce` (dlt's verified source, pinned), its objects and since when, signed in by a connection of kind salesforce, added, changed and removed by the project's editors on the Imports tab's form, no spec written by hand (R8.10, R8.11's first connector); its tables are the project's, the import upstream of them in the catalog (R8.12's lineage). Not yet: OAuth from the form, Salesforce's deleted records, checks on each run's copy, Gong, HighSpot and SAP.
 
 **Open questions**
 - The company's SAP: which systems, and is its OData gateway reachable from the platform's network?
@@ -399,6 +427,8 @@ The company delivers files to clients and partners, and some carry consumer data
 - R9.4 Approval of what a delivery sends, and again when that changes; personal columns shown, and needing a named approver.
 - R9.5 A delivery log: every file sent, to whom, when, its size and checksum, and the snapshot of each table it read (R6.32), kept with the audit log; retries and alerts.
 
+**Built (2026-10-18), SFTP and S3:** a project's `deliveries`: a table or a query of its own, CSV, Parquet or JSON lines, gzipped if asked, the files' names with `{date}` and `{part}`, a file per value of a column if asked, a schedule, run as the project's pipelines in its Airflow (R9.1); to an SFTP server with its host key checked or an S3 bucket, from the project's connections, PGP-encrypted for the recipient's key, with a manifest of each file's rows, bytes and SHA-256 and the tables' snapshots (R9.2); checks first (rows within a range, the table changed in time, every part there), a failing one sending nothing (R9.3); approved by someone other than who last changed what it sends, a delivery of personal columns by a data-protection approver too, and again after any such change (R9.4); each run in the delivery log on the Deliveries tab, with an audit record, tried three times, a failed run the project's alert (R9.5). Not yet: fixed width, Azure Blob and Google Cloud Storage, the project's own checks before sending.
+
 **Open questions**
 - Which formats and targets do today's deliveries use, and how are they run now (scripts, an MFT product)? **SFTP and S3 first** (decided 2026-10-18).
 - Who is the data-protection approver?
@@ -410,7 +440,7 @@ The company delivers files to clients and partners, and some carry consumer data
 3. The answer goes to the privacy team; with an erasure, the recipients are asked to delete.
 
 **Requirements**
-- R9.6 Deliveries of personal data record whose data they carried (the people's IDs, or enough to find them again from the tables' history), for the legal period, searchable by person.
+- R9.6 Deliveries of personal data record whose data they carried (the people's IDs, or enough to find them again from the tables' history), for the legal period, searchable by person. (Built 2026-10-18: each personal delivery's run keeps the tables as it read them, a Nessie tag kept `deliveries.keepFor`; the data-protection approvers search by a person's ID on the Deliveries tab, each run run again on the tables as they were; the log and the search's audit record hold no one's ID.)
 
 **Open questions**
 - A list of IDs per file is itself personal data: is it kept, or found again by running the delivery's query on the data as it was (Iceberg's time travel), which needs the snapshots kept as long? **Found again from the tables, not kept** (decided 2026-10-18): the delivery log holds no personal data; it keeps each run's snapshots, and a search runs the delivery's query on the tables as they were then. So a delivery of personal data keeps the snapshots it read (tagged) for the legal period. Who searches: the data-protection approvers (`deliveries.approverGroups`); how long: a setting, `deliveries.keepFor`, default 7 years (both decided 2026-10-18).
@@ -445,6 +475,8 @@ What people work with is the business's own words (Customer, Revenue, Campaign, 
 - R10.2 The platform shows entities and metrics first, tables second: search, a page per entity and metric, and where each is used.
 - R10.3 The catalog's glossary terms are the semantic model's entities and metrics, kept in step, linked to the tables and columns they come from.
 
+**Built (2026-10-18):** a project marked `semantic.shared` holds a model others build on (`semantic.uses`), compiled with theirs, never defined again in them, a change that would break one refused naming the project; its editors change it, or release it from its repo as any project (7.4) (R10.1). A model's `terms:` (owner, definition, synonyms) make the Business terms page in the top bar, a page per term with its tables, metrics and the projects using it, and terms first in search (R10.2); OpenMetadata's glossary, Business terms, kept in step, the tables tagged (R10.3, to the table, not yet the column). Lab 6 shares the guide's terms this way.
+
 ### 10.2 Dashboards on the same definitions
 
 1. alice opens Superset in the platform. Its datasets are the semantic model's (Customer, Revenue by month): the metrics come defined, so her chart's Revenue is the governed Revenue, to the cent.
@@ -455,6 +487,8 @@ What people work with is the business's own words (Customer, Revenue, Campaign, 
 - R10.4 Superset's datasets made from the semantic model and kept in step with it, per project and the shared model.
 - R10.5 Power BI over the platform: through Trino (DirectQuery) with the company's sign-in (Keycloak, Entra ID), on views or a semantic endpoint generated from the model, under Ranger's rules for the person.
 - R10.6 One definition: a dashboard's metric and the semantic layer's answer agree, checked by a test.
+
+**Built (2026-10-18), Superset:** `superset-sync` keeps a Superset dataset for each project's semantic model and the shared ones, its metrics defined and the dimensions of the models it joins to, charts running in Trino as the person; a dataset whose model is gone is removed, people's own never touched (R10.4); the `business` suite checks a chart's number against the semantic layer's (R10.6). Power BI (R10.5) is to decide: how people reach it and sign in.
 
 ### 10.3 A certified data product, found
 
@@ -471,6 +505,8 @@ What people work with is the business's own words (Customer, Revenue, Campaign, 
 - R10.10 Contracts checked in pull requests, and those who depend on a product told of its changes.
 - R10.11 A sync to Collibra (products, glossary, lineage), if Collibra is the company's catalog of record.
 
+**Built (2026-10-18):** `spec.products`: a table published with an owner, a version, a contract (its columns, how fresh, its checks passing) and the terms it holds, on a Data products page (certified first), in search and as OpenMetadata's data products (R10.7); certified by the governance group (`products.certifierGroups`, a platform role since 2026-10-23), the certification lapsing when the table, version or contract changes (R10.8); another project's editors ask, the producer's approve, and the consumer reads it in place under the producer's rules, never a copy (R10.9); a merge request that would drop a contracted column fails its review, and a broken contract is the producer's alert naming its consumers (R10.10). Since 2026-10-23, **Publish a data product** on the Data products page, for whoever may write a project's tables, with Change and Remove on each card. Not yet: consumers told of a compatible change, and Collibra (R10.11), which waits on the catalog of record.
+
 **Open questions**
 - OpenMetadata or Collibra as the catalog of record? (Not decided, 2026-10-18: OpenMetadata now, the Collibra sync designed as optional.)
 
@@ -483,6 +519,8 @@ What people work with is the business's own words (Customer, Revenue, Campaign, 
 **Requirements**
 - R10.12 The MCP server's tools reach the company's semantic model and certified data products: find, describe, query (as the person), and cite.
 - R10.13 DevAssist, and any assistant the company approves, registered as an MCP client of the platform, signing in as the person (OAuth), its calls audited (12.1).
+
+**Built (2026-10-19):** the MCP server's `list_terms`, `describe_term`, `search_terms` (which says plainly when no governed definition covers a question), `list_products`, `describe_product` and `query_product` (as the person, under the producer's rules), and every metric answer naming the definitions, terms and products it used, linked (R10.12); administrators register the assistants the company approves (Administration → Assistants), each a Keycloak client `assistant-<name>` signing in as the person, its queries in Ranger's audit under it (R10.13). Not yet: DevAssist's calls through the LLM gateway.
 
 ---
 
@@ -513,6 +551,8 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 - R11.5 The canvas and the code are the same thing: a canvas opens from the repo's models, and a step changed by hand stays code.
 - R11.6 Large data later: the same canvas on Spark, for what Trino can't do in one query.
 
+**Built (2026-10-19), for 11.1 and 11.2:** a project's Flows tab: input, select and rename, retype, filter, join, union, deduplicate, group by, pivot, unpivot, window, formula, a metric step on the company's definitions, and output, each compiled to its columns and SQL before anything runs and previewed on a sample in Trino as the person (R11.1); saved as dbt models and their DAG on a branch of the project's repo with a merge request, reviewed on a data branch (7.3) (R11.2); CSV, Excel, JSON-lines and Parquet uploads to the project's landing area, a CSV previewed, imported as a `files` import and used as an input (R11.3); merged, it runs as a pipeline with its checks as dbt tests and its table in the catalog with its lineage (R11.4); the canvas opens from the repo's models, a model changed by hand a code step from then on (R11.5). Not yet: incremental outputs, and Spark (R11.6).
+
 ### 11.3 alice cleans a column, and asks a model about another (added 2026-10-20)
 
 1. alice adds a **prepare** step: trim `customer_name`, title-case it, parse `ordered_on` as a date, fill `region` with `unknown`. Each is a named processor on a column, compiled to SQL like the formula step; the preview shows the result.
@@ -537,7 +577,7 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 5. The question's cost (LLM tokens, Trino time) counts against the `sales` project's budget.
 
 **Requirements**
-- R12.1 Every answer from the semantic layer, run as the person, with its definitions cited.
+- R12.1 Every answer from the semantic layer, run as the person, with its definitions cited. (Built 2026-10-06, as phase 4: the MCP server's metric answers run in Trino as the person; each names the definitions it used, linked, since 2026-10-19, 10.4.)
 - R12.2 An LLM gateway (LiteLLM) in front of the models: per project and per person budgets, cost recorded, and guardrails (no secrets or masked values sent out). (Built 2026-10-19: the gateway, keys and budgets per project and per agent, spend shown; 2026-10-20: the guardrail, refusing masked values' shapes and the platform's secrets. Per-person budgets left.)
 - R12.3 Agents' calls audited with the person behind them (R6.11).
 - R12.11 Forbidden terms (the install's words and patterns the guardrail refuses: a codename, a client's name), and a moderation guardrail through the gateway itself (toxicity, by a model), each on by a setting. (Added 2026-10-20. Forbidden terms built 2026-10-21: `llm.forbiddenTerms`.)
@@ -592,7 +632,7 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 **Requirements**
 - R12.12 Knowledge banks per project (`spec.knowledge`): bucket prefixes and table columns, embedded through the gateway on the project's key, kept in pgvector in the platform's Postgres, refreshed as the sources change. (Built 2026-10-21 for table columns, kept as an Iceberg table in the project's namespace and searched with Trino's cosine similarity, not pgvector; then text files under a folder of the project's bucket (.txt, .md, .html), and rebuilt on a schedule as the project's pipelines. PDFs left.)
 - R12.13 A `search_documents` MCP tool and a canvas step (nearest passages for a column), as the person or agent, under the project's access; answers cite the passages. (Built 2026-10-21: the tool, and the canvas step as the llm step's mode `nearest`, the passage and its source two new columns.)
-- R12.14 A Q&A app over a knowledge bank and the semantic layer (14.1's apps), as the person.
+- R12.14 A Q&A app over a knowledge bank and the semantic layer (14.1's apps), as the person. (Built 2026-10-22 over a knowledge bank, as R14.6; the semantic layer in the answer left.)
 
 ### 12.7 An agent without a notebook (added 2026-10-20)
 
@@ -620,7 +660,7 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 2. An administrator opens **Agents** (platform-wide): every project's agents, their owners, approval, tools, spend and last run.
 
 **Requirements**
-- R12.20 A Governance page for administrators and the governance group, reading what exists: approvals pending, policies, agents, models, erasures. (Built 2026-10-21: approvals pending, readers' rules per project, the install's masks by tag and each project's tagged columns, agents, products, erasures; the models left, with phase 15.)
+- R12.20 A Governance page for administrators and the governance group, reading what exists: approvals pending, policies, agents, models, erasures. (Built 2026-10-21: approvals pending, readers' rules per project, the install's masks by tag and each project's tagged columns, agents, products, erasures. The models are left: phase 15 built them (2026-10-22), but the page doesn't list them or their approvals yet.)
 - R12.21 A platform-wide Agents page. (Built 2026-10-21 as the Governance page's Agents table: owner, approval, tools, schedule, last run, spend.)
 
 ---
