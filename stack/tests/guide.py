@@ -684,13 +684,14 @@ def lab14():
     ds = {d["name"]: d for d in j(as_("bob").get(f"{PLATFORM}/api/projects/retail/deliveries", timeout=60)).get("deliveries", [])}
     check("the two deliveries, awaiting approval; partner_orders names its personal column customer_id",
           r.ok and "customer_id" in json.dumps((ds.get("partner_orders") or {}).get("personal")), {k: (v.get("approved"), v.get("needs")) for k, v in ds.items()})
+    before = {d["name"]: d.get("approved") for d in j(as_("bob").get(f"{PLATFORM}/api/projects/retail/deliveries", timeout=60)).get("deliveries", [])}
     mine = api("bob", "POST", "/api/projects/retail/deliveries/campaign_results/approve", ok=(403, 409))
     check("bob, who made it, can't approve it", mine.status_code in (403, 409), f"HTTP {mine.status_code}")
     api("alice", "POST", "/api/projects/retail/deliveries/campaign_results/approve")
-    a2 = api("alice", "POST", "/api/projects/retail/deliveries/partner_orders/approve")
+    api("alice", "POST", "/api/projects/retail/deliveries/partner_orders/approve")
     ds = {d["name"]: d for d in j(as_("bob").get(f"{PLATFORM}/api/projects/retail/deliveries", timeout=60)).get("deliveries", [])}
     check("alice approves both as an editor; partner_orders still needs a data-protection approver who didn't make it (unless approved before)",
-          ds["campaign_results"].get("approved") and (not ds["partner_orders"].get("approved") or (a2.status_code == 409)),
+          ds["campaign_results"].get("approved") and (not ds["partner_orders"].get("approved") or before.get("partner_orders")),
           {k: (v.get("approved"), v.get("needs")) for k, v in ds.items()})
     for d in ("campaign_results", "partner_orders"):
         if (ds.get(d) or {}).get("approved"):
@@ -728,7 +729,7 @@ def lab15():
     still = {k: sum(1 for line in v.splitlines()[1:] if line.split(",")[1 if k == "orders.csv" else 0] == "35") for k, v in landing.items()}
     check("... and the landing files are cleansed too: 35 is in neither customers.csv nor orders.csv",
           not any(still.values()) and [f["file"] for f in e.get("files") or []], f"left {still}; erased {[(f['file'], f['rows']) for f in e.get('files') or []]}")
-    er = [x for x in j(as_("bob").get(f"{PLATFORM}/api/projects/retail/audit?source=platform", timeout=60)).get("events", []) if "erasure" in (x.get("action") or "")]
+    er = [x for x in j(as_("bob").get(f"{PLATFORM}/api/projects/retail/audit?source=platform&q=erasure", timeout=60)).get("events", []) if "erasure" in (x.get("action") or "")]
     check("... the Audit tab's erasure entry names the record, not the person", bool(er) and not any('"35"' in json.dumps(x) for x in er), f"{len(er)} entries")
     p = spec("retail")
     p["spec"]["tables"]["retention"] = [{"table": "uploads_campaign_responses", "column": "responded_on", "keep": "730d"}]
@@ -779,10 +780,9 @@ def lab19():
     now = sql("bob", "retail", "SELECT count(*), round(sum(amount), 2) FROM uploads_orders")
     check("Read it as it was: the first commit gives the table as the import left it (305 rows); today's differs",
           isinstance(then, list) and then[0][0] == 305 and then != now, f"then {then}, now {now}")
-    tags = {t["name"] for t in j(as_("bob").get(f"{PLATFORM}/api/projects/retail/tags", timeout=60)).get("tags", [])}
-    if "close-2026-09" not in tags:
-        r = api("bob", "POST", "/api/projects/retail/tags", {"name": "close-2026-09", "at": "now", "keep": "7y", "note": "September's close"})
-        check("a close that's kept: the tag close-2026-09, for seven years", r.ok, f"HTTP {r.status_code}")
+    api("bob", "DELETE", "/api/projects/retail/tags/close-2026-09", ok=(200, 204, 404))   # a run's before names tables since made again
+    r = api("bob", "POST", "/api/projects/retail/tags", {"name": "close-2026-09", "at": "now", "keep": "7y", "note": "September's close"})
+    check("a close that's kept: the tag close-2026-09, for seven years", r.ok, f"HTTP {r.status_code}")
     m = j(as_("bob").get(f"{PLATFORM}/api/projects/retail/asof?at=close-2026-09", timeout=60))
     closed = sql("bob", "retail", f'SELECT count(*) FROM "uploads_orders#{m.get("commit", "")}" WHERE order_id = 306') if m.get("commit") else m
     check("Check: as of close-2026-09 the inserted row counts; as of the first entry, 305", closed == [[1]] and isinstance(then, list) and then[0][0] == 305,
@@ -951,10 +951,9 @@ def lab11():
     sc = j(as_("bob").get(f"{PLATFORM}/api/projects/retail/scoring", timeout=60))
     check("the customers change: the next run's drift names revenue", state == "success" and "revenue" in json.dumps(sc), str(sc)[:300])
     # Version 2, on a version of the data.
-    tags = {t["name"] for t in j(as_("alice").get(f"{PLATFORM}/api/projects/retail/tags", timeout=60)).get("tags", [])}
-    if "churn-v2-data" not in tags:
-        r = api("alice", "POST", "/api/projects/retail/tags", {"name": "churn-v2-data", "at": "now", "keep": "1y", "note": "What churn version 2 learned from"})
-        check("alice tags the data: churn-v2-data", r.ok, f"HTTP {r.status_code}")
+    api("alice", "DELETE", "/api/projects/retail/tags/churn-v2-data", ok=(200, 204, 404))   # a run's before names tables since made again
+    r = api("alice", "POST", "/api/projects/retail/tags", {"name": "churn-v2-data", "at": "now", "keep": "1y", "note": "What churn version 2 learned from"})
+    check("alice tags the data: churn-v2-data", r.ok, f"HTTP {r.status_code}")
     if len((models().get("churn") or {}).get("versions", [])) < 2:
         code, out = notebook("alice", TRAIN_V2)
         check("alice trains version 2 through buckets_lake.sql()", code == 0 and "TRAINED V2" in out, out[-300:])
@@ -977,7 +976,7 @@ def lab11():
         return as_(user).post(f"{PLATFORM}/api/projects/retail/serving/churn/predict", timeout=120,
                               json={"dataframe_records": [{"orders": 1, "revenue": 40.0, "tenure_days": 300}]}) if user != "carol" else platform("carol").post(
             f"{PLATFORM}/api/projects/retail/serving/churn/predict", json={"dataframe_records": [{"orders": 1, "revenue": 40.0, "tenure_days": 300}]}, timeout=120)
-    ans = wait(lambda: (lambda r: r if r.ok else None)(predict("bob")), 600, every=15)
+    ans = wait(lambda: (lambda r: r if r.ok and r.json().get("version") == "2" else None)(predict("bob")), 600, every=15) or predict("bob")
     c = predict("carol")
     check("Check: the web shop's call answers with version 2; carol is refused", ans is not None and '"2"' in ans.text or '"version": 2' in (ans.text if ans else ""),
           f"{ans.text[:160] if ans else 'no answer'}; carol HTTP {c.status_code}")
@@ -1032,6 +1031,11 @@ def lab10():
     heading(10, "The project as code (with a git repo)")
     gl = gitlab()
     check("retail's repo answers GitLab's API with its token", gl("GET").ok, gl("GET").status_code)
+    p = spec("retail")
+    if p["spec"]["pipelines"].get("ref") != target_branch(gl):   # the branch, as Lab 10's Pipelines part has it
+        p["spec"]["pipelines"]["ref"] = target_branch(gl)
+        save_spec(p)
+        ready("retail")
     flow = {**campaign_flow(), "schedule": "0 6 * * 1"}
     r = api("alice", "PUT", "/api/projects/retail/flows/campaign_results", {"flow": flow}, timeout=300)
     saved = j(r)
@@ -1100,8 +1104,8 @@ def lab17():
     call = wait(lambda: agent_mcp(ap.get("clientId", ""), ap.get("secret", "")), 120, every=10) if a.ok else None
     rev = call("query_metrics", project="retail", metrics=["revenue"], group_by=["order__region"]) if call else None
     refused = call("list_products") if call else None
-    check("the agent asks for revenue by region: the whole company; list_products is refused, naming its tools",
-          rev is not None and "APAC" in json.dumps(rev) and "may use" in json.dumps(refused), f"{str(rev)[:120]} / {str(refused)[:120]}")
+    check("the agent asks for revenue by region: the EU's, a reader under the readers' rule; list_products is refused, naming its tools",
+          rev is not None and "EU" in json.dumps(rev) and "APAC" not in json.dumps(rev) and "may use" in json.dumps(refused), f"{str(rev)[:120]} / {str(refused)[:120]}")
     api("bob", "PUT", "/api/projects/retail/agents/nightly-summary", {**agent, "tools": agent["tools"] + ["list_products"]})
     ag = {x["name"]: x for x in j(as_("bob").get(f"{PLATFORM}/api/projects/retail/agents", timeout=60)).get("agents", [])}
     check("its tools changed: the approval is taken away", not (ag.get("nightly-summary") or {}).get("approved"), (ag.get("nightly-summary") or {}).get("approval"))
@@ -1169,6 +1173,9 @@ def lab18():
     pv = as_("bob").post(f"{PLATFORM}/api/projects/retail/flows/preview", json={"flow": flow, "step": "prepare", "limit": 100}, timeout=300)
     masked = [r for r in j(pv).get("rows", []) if "[email]" in json.dumps(r)]
     check("mask first: the prepare step's preview signs the three reviews off with [email]", pv.ok and len(masked) >= 1, f"{len(masked)} masked in the sample")
+    asked = as_("bob").post(f"{PLATFORM}/api/projects/retail/flows/preview", json={"flow": flow, "step": "llm", "limit": 100}, timeout=600)
+    topics = {r[-1] for r in j(asked).get("rows", [])}
+    check("the model step's preview: each review a topic, asked through the gateway", asked.ok and topics and None not in topics, f"{sorted(map(str, topics))}, cost {j(asked).get('cost')}")
     pv = as_("bob").post(f"{PLATFORM}/api/projects/retail/flows/preview", json={"flow": flow, "step": "output", "limit": 100}, timeout=600)
     check("the model classifies the masked reviews: a row per topic in the preview", pv.ok and len(j(pv).get("rows", [])) >= 1, (j(pv).get("rows") or j(pv).get("error") or "")[:5] if pv.ok else pv.text[:200])
     saved = j(api("bob", "PUT", "/api/projects/retail/flows/review_topics", {"flow": {**flow, "schedule": "0 7 * * 1"}}, timeout=300))
@@ -1220,6 +1227,7 @@ def lab20():
         return r, ready, a
     r, ready, a = plan_and_apply("v1.0")
     check("alice plans v1.0, and bob (another administrator) applies it", a is not None and a.ok, f"plan HTTP {r.status_code} {str(ready)[:200]}")
+    was = sum(float(v[1]) for v in by_region(metrics("bob", "retail", ["revenue"], ["order__region"])).values())
     count = sql("bob", "retail", "SELECT count(*) FROM uploads_orders")
     changed = model.replace('expr: "case when not test and not refunded then amount end"', "expr: \"case when not test and not refunded and channel <> 'partner' then amount end\"")
     c = gl("POST", "/repository/commits", json={"branch": branch, "commit_message": "Revenue without partner orders (Lab 20)",
@@ -1234,7 +1242,7 @@ def lab20():
     back = by_region(metrics("bob", "retail", ["revenue"], ["order__region"]))
     total = sum(float(v[1]) for v in back.values()) if back else None
     check("Check: rolled back to v1.0: revenue as before, the orders' count unchanged",
-          a is not None and a.ok and total is not None and abs(total - 22168) < 300 and sql("bob", "retail", "SELECT count(*) FROM uploads_orders") == count, f"revenue {total}")
+          a is not None and a.ok and total is not None and abs(total - was) < 0.01 and sql("bob", "retail", "SELECT count(*) FROM uploads_orders") == count, f"revenue {total}, before v1.1 {was}")
 
 
 LABS = {10: lab10, 17: lab17, 18: lab18, 20: lab20, 1: lab1, 2: lab2, 3: lab3, 4: lab4, 5: lab5, 6: lab6, 7: lab7, 8: lab8, 9: lab9, 11: lab11, 12: lab12, 13: lab13, 14: lab14, 15: lab15, 16: lab16, 19: lab19, 21: lab21, 22: lab22}
