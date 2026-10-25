@@ -21,6 +21,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 - `notify.slack` must be a connection's name, and a connection it names can't be removed while named.
 - LLM keys ask the gateway for a calendar month's budget (`1mo`, reset on the 1st, UTC); LiteLLM already reset `30d` keys on the 1st.
 - The classifier takes back its own suggestions on an import's `_dlt_` columns made before it skipped them (unless someone confirmed one), so those columns are no longer masked or left unprofiled.
+- The Python package's licence is the repository's, AGPL-3.0-or-later (its `pyproject.toml` said Apache-2.0 by mistake).
 - The guide suite's git labs run whenever retail has a pipelines repo, under `helm test` too (`GUIDE_REPO` is no longer needed).
 
 ## [0.31.0] - 2026-10-24
