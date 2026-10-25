@@ -87,8 +87,10 @@ export type Import = {
   salesforce?: ImportApp;
   gong?: ImportApp;
   highspot?: ImportApp;
-  sap?: ImportApp;
+  sap?: ImportApp & { odp?: SAPExtraction[] };
 };
+// An ODP extraction of the company's (a CDS view or an extractor, served by its SAP gateway), copied by SAP's own delta.
+export type SAPExtraction = { name: string; service: string; entitySet: string; primaryKey: string[] };
 // What a connector's import copies: some of its objects, the history from a date.
 export type ImportApp = { objects: string[]; since?: string };
 // The platform's connectors (8.4), and a project's editors' imports.

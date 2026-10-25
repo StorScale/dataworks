@@ -128,8 +128,17 @@ class SAP(_API):
                          "LastChangeDateTime": "Edm.DateTimeOffset"},
         "A_SalesOrderItem": {"SalesOrder": "Edm.String", "SalesOrderItem": "Edm.String", "Material": "Edm.String",
                              "RequestedQuantity": "Edm.Decimal", "NetAmount": "Edm.Decimal"},
+        "EntityOfZCDS_MARGIN": {"SalesOrder": "Edm.String", "SalesOrderItem": "Edm.String", "Margin": "Edm.Decimal",
+                                "ODQ_CHANGEMODE": "Edm.String", "ODQ_ENTITYCNTR": "Edm.Decimal"},
     }
-    SERVICES = {"API_BUSINESS_PARTNER": ["A_BusinessPartner", "A_Customer"], "API_SALES_ORDER_SRV": ["A_SalesOrder", "A_SalesOrderItem"]}
+    SERVICES = {"API_BUSINESS_PARTNER": ["A_BusinessPartner", "A_Customer"], "API_SALES_ORDER_SRV": ["A_SalesOrder", "A_SalesOrderItem"],
+                "ZMARGIN_ODP_SRV": ["EntityOfZCDS_MARGIN"]}
+    # The ODP extraction: its rows now, and the changes since each delta token
+    # (an extractor's way: a before image, -1, ahead of a changed row's after image).
+    odp_rows = [{"SalesOrder": "1", "SalesOrderItem": "10", "Margin": "300.00"}, {"SalesOrder": "1", "SalesOrderItem": "20", "Margin": "50.50"},
+                {"SalesOrder": "2", "SalesOrderItem": "10", "Margin": "20.00"}]
+    odp_changes = []   # (mode, entity counter, row), appended to by the suite; each delta token is an index into it
+    subscribed = []    # the Prefer headers the extraction was asked with
     rows = {
         "A_BusinessPartner": [{"BusinessPartner": f"1000{i}", "BusinessPartnerFullName": n, "LastChangeDate": d}
                               for i, (n, d) in enumerate([("Acme Corp", "2026-09-01"), ("Globex", "2026-09-15"), ("Initech", "2026-10-01")])],
@@ -169,6 +178,30 @@ class SAP(_API):
             return any(row[f] == v for f, v in ors)
         raise ValueError(f"the stand-in doesn't read {flt}")
 
+    def odp(self, es, q):
+        """The ODP extraction: subscribed (Prefer: odata.track-changes), paged
+        by odata.maxpagesize, each read ending in a __delta link; a delta
+        link's read gives the changes since, with ODQ_CHANGEMODE and ODQ_ENTITYCNTR."""
+        prefer = self.headers.get("Prefer") or ""
+        SAP.subscribed.append(prefer)
+        if "odata.track-changes" not in prefer:
+            return self.reply(400, {"error": {"message": {"value": "an ODP extraction is read with Prefer: odata.track-changes"}}})
+        size = int(next((p.split("=")[1] for p in prefer.replace(" ", "").split(",") if p.startswith("odata.maxpagesize=")), 1000))
+        size = min(size, 2)   # the stand-in pages small, so paging is played
+        token = (q.get("!deltatoken") or "").strip("'")
+        if token:
+            rows = [dict(r, ODQ_CHANGEMODE=m, ODQ_ENTITYCNTR=c) for m, c, r in SAP.odp_changes[int(token):]]
+        else:
+            rows = [dict(r, ODQ_CHANGEMODE="", ODQ_ENTITYCNTR="1") for r in SAP.odp_rows]
+        start = int(q.get("$skiptoken") or 0)
+        page = [dict(r, __metadata={"type": "ZMARGIN_ODP_SRV.EntityOfZCDS_MARGINType"}) for r in rows[start:start + size]]
+        body = {"results": page}
+        if start + size < len(rows):
+            body["__next"] = f"{es}?$skiptoken={start + size}&sap-client={SAP_CLIENT}" + (f"&!deltatoken='{token}'" if token else "")
+        else:
+            body["__delta"] = f"{es}?!deltatoken='{len(SAP.odp_changes)}'"
+        self.reply(200, {"d": body})
+
     def route(self, method):
         if not self.signed():
             return
@@ -176,13 +209,15 @@ class SAP(_API):
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         parts = u.path.removeprefix("/sap/opu/odata/sap/").split("/")
         SAP.asked.append((parts[-1], q.get("$filter"), q.get("$skip") or q.get("$skiptoken"), q.get("sap-client")))
-        if q.get("sap-client") != SAP_CLIENT:
+        if q.get("sap-client") != SAP_CLIENT and "!deltatoken" not in q:   # a delta link carries its subscription
             return self.reply(400, {"error": {"message": {"value": "client 000 has no such user"}}})
         if len(parts) != 2 or parts[0] not in SAP.SERVICES:
             return self.reply(404, {"error": {"message": {"value": f"no service {u.path}"}}})
         service, es = parts
         if es == "$metadata":
             return self.metadata(service)
+        if service == "ZMARGIN_ODP_SRV":
+            return self.odp(es, q)
         if es not in SAP.SERVICES[service]:
             return self.reply(404, {"error": {"message": {"value": f"no entity set {es}"}}})
         try:

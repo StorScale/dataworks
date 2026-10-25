@@ -26,6 +26,10 @@ func TestTheConnectorsImports(t *testing.T) {
 		{`{"name":"erp","source":"sap","connection":"sales-sap","sap":{"objects":["sales_orders","sales_order_items","business_partners"],"since":"2025-01-01"}}`, ""},
 		{`{"name":"erp","source":"sap","connection":"sales-sap","sap":{"objects":["A_SalesOrder"]}}`, `"A_SalesOrder" isn't one of SAP S/4HANA's objects`},
 		{`{"name":"erp","source":"sap","sap":{"objects":["products"]}}`, "a sap import names its objects (sap.objects) and a connection (kind sap)"},
+		{`{"name":"erp","source":"sap","connection":"sales-sap","sap":{"objects":[],"odp":[{"name":"sales_items","service":"ZSALES_ODP_SRV","entitySet":"EntityOfZCDS_SALES_ITEM","primaryKey":["SalesOrder","SalesOrderItem"]}]}}`, ""},
+		{`{"name":"erp","source":"sap","connection":"sales-sap","sap":{"objects":[],"odp":[{"name":"sales_items","service":"ZSALES_ODP_SRV","entitySet":"EntityOfZCDS_SALES_ITEM"}]}}`, "merged on (primaryKey)"},
+		{`{"name":"erp","source":"sap","connection":"sales-sap","sap":{"objects":["products"],"odp":[{"name":"products","service":"ZP_SRV","entitySet":"EntityOfZP","primaryKey":["Product"]}]}}`, "a name of its own"},
+		{`{"name":"erp","source":"sap","connection":"sales-sap","sap":{"objects":[],"odp":[{"name":"x","service":"Z SRV; drop","entitySet":"EntityOfZ","primaryKey":["K"]}]}}`, "its service"},
 		{`{"name":"erp","source":"gong","connection":"sales-gong","gong":{"objects":["calls"]},"sap":{"objects":["products"]}}`, "a gong import has no sap part"},
 	} {
 		err := parse(c.im)

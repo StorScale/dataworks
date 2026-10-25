@@ -317,7 +317,11 @@ func (p *Project) checkImports(bad func(format string, a ...any)) {
 			}
 		case "salesforce", "gong", "highspot", "sap":
 			c, app := ConnectorOf(im.Source), im.App()
-			if app == nil || len(app.Objects) == 0 || im.Connection == "" {
+			var odp []SAPExtraction
+			if im.SAP != nil {
+				odp = im.SAP.ODP
+			}
+			if app == nil || len(app.Objects) == 0 && len(odp) == 0 || im.Connection == "" {
 				bad("imports: %s: a %s import names its objects (%s.objects) and a connection (kind %s)", im.Name, im.Source, im.Source, c.Connection)
 				break
 			}
@@ -326,6 +330,17 @@ func (p *Project) checkImports(bad func(format string, a ...any)) {
 					bad("imports: %s: %q isn't one of %s's objects: %s", im.Name, o, c.Label, strings.Join(c.Objects, ", "))
 				}
 				landing(o)
+			}
+			for _, x := range odp {
+				switch {
+				case !identifierRE.MatchString(x.Name) || slices.Contains(app.Objects, x.Name):
+					bad("imports: %s: odp %q: a name of its own, as sales_items (its table %s_<name>)", im.Name, x.Name, im.Name)
+				case !sapServiceRE.MatchString(x.Service) || !sapNameRE.MatchString(x.EntitySet):
+					bad("imports: %s: odp %s: its service (ZSALES_ODP_SRV) and entity set (EntityOfZCDS_SALES), as the gateway names them", im.Name, x.Name)
+				case len(x.PrimaryKey) == 0 || slices.ContainsFunc(x.PrimaryKey, func(f string) bool { return !sapNameRE.MatchString(f) }):
+					bad("imports: %s: odp %s: the fields its rows are merged on (primaryKey), as SAP names them", im.Name, x.Name)
+				}
+				landing(x.Name)
 			}
 			if _, err := time.Parse("2006-01-02", app.Since); app.Since != "" && err != nil {
 				bad("imports: %s: since %q: a date, as 2024-01-01", im.Name, app.Since)

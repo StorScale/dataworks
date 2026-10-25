@@ -6,6 +6,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ### Added
 - **SAP S/4HANA imports** (8.4), from the Imports tab's form as Salesforce's, Gong's and HighSpot's are: an import's source may be `sap`, copying business partners, customers, suppliers, products, sales orders, billing documents and purchase orders with their items from S/4HANA's released OData APIs, signed in as a communication user (a connection of the new kind `sap`: the gateway's or S/4HANA Cloud's address, the user, its password, the SAP client). Columns are typed from each API's `$metadata`; objects SAP stamps with their last change are copied by it and merged on their keys, an order's items with it. The `imports` suite plays the APIs.
+- **SAP ODP extractions** (8.4): an SAP import may name the company's own ODP extractions (`sap.odp`: a CDS view or a classic extractor its gateway serves as OData, made in SEGW), each subscribed and copied whole once, then by SAP's own delta: changed rows merged on the given key, deleted rows (`ODQ_CHANGEMODE` `D`) deleted from the table once the run lands, an extractor's before images left out. The delta link is kept in dlt's state; a reset subscribes again. The Imports tab's SAP form adds them, and the `imports` suite plays an extraction's delta queue.
 
 ## [0.32.0] - 2026-10-25
 
