@@ -534,7 +534,7 @@ def lab8():
 # --- Part III: decisions worth money ------------------------------------------------------
 
 def campaign_flow(first_join=("customer_id", "customer_id")):
-    st = lambda i, kind, x, y, **kw: {"id": i, "kind": kind, "x": x, "y": y, **kw}  # noqa: E731
+    st = lambda i, kind, x, y, **kw: {"id": i, "kind": kind, "x": x * 210, "y": y * 80, **kw}  # noqa: E731  (a column and row on the canvas)
     return {"name": "campaign_results", "steps": [
         st("input", "input", 0, 0, table="uploads_campaign_responses"),
         st("filter", "filter", 1, 0, inputs=["input"], where="converted"),
@@ -1172,7 +1172,7 @@ def lab18():
     state, _ = run_pipeline("bob", "retail", "import_retail_uploads")
     n = sql("bob", "retail", "SELECT count(*) FROM uploads_reviews")
     check("reviews.csv imported: uploads_reviews, 90 rows", state == "success" and n == [[90]], f"run {state}: {n}")
-    st = lambda i, kind, x, **kw: {"id": i, "kind": kind, "x": x, "y": 0, **kw}  # noqa: E731
+    st = lambda i, kind, x, **kw: {"id": i, "kind": kind, "x": x * 210, "y": 0, **kw}  # noqa: E731  (a column on the canvas)
     flow = {"name": "review_topics", "steps": [
         st("input", "input", 0, table="uploads_reviews"),
         st("prepare", "prepare", 1, inputs=["input"], processors=[{"column": "text", "do": "regex_replace", "args": ["[^@\\s]+@[^@\\s]+\\.[a-z]+", "[email]"]}]),

@@ -165,6 +165,46 @@ function freeId(kind: string, steps: FlowStep[]) {
   return i === 1 ? base : `${base}_${i}`;
 }
 
+// arrange lays the steps out left to right as they flow: each a column past its
+// furthest input, ordered in its column near its inputs (steps saved without
+// positions, as models written by hand are, would sit on one another).
+const COL = 210, ROW = 80;
+function arrange(steps: FlowStep[]): FlowStep[] {
+  const byId = new Map(steps.map((s) => [s.id, s]));
+  const depth = new Map<string, number>();
+  const depthOf = (id: string, seen: Set<string>): number => {
+    if (depth.has(id)) return depth.get(id)!;
+    if (seen.has(id)) return 0; // a cycle (the compiler refuses it): as an input
+    seen.add(id);
+    const ins = (byId.get(id)?.inputs ?? []).filter((i) => byId.has(i));
+    const d = ins.length ? 1 + Math.max(...ins.map((i) => depthOf(i, seen))) : 0;
+    depth.set(id, d);
+    return d;
+  };
+  steps.forEach((s) => depthOf(s.id, new Set()));
+  // A step reading nothing (an input) sits just before the first step that reads it, not at the start.
+  const readers = (id: string) => steps.filter((s) => (s.inputs ?? []).includes(id));
+  steps.filter((s) => !(s.inputs ?? []).some((i) => byId.has(i))).forEach((s) => {
+    const ds = readers(s.id).map((r) => depth.get(r.id)!);
+    if (ds.length) depth.set(s.id, Math.max(0, Math.min(...ds) - 1));
+  });
+  const columns: FlowStep[][] = [];
+  steps.forEach((s) => (columns[depth.get(s.id)!] ??= []).push(s));
+  const row = new Map<string, number>();
+  // Each column ordered by its steps' inputs' rows; its inputs after them, in the order their readers come.
+  const first = (id: string) => { const i = steps.findIndex((s) => (s.inputs ?? []).includes(id)); return i < 0 ? steps.length : i; };
+  columns.forEach((col) => {
+    const key = (s: FlowStep) => {
+      const rows = (s.inputs ?? []).map((i) => row.get(i)).filter((r): r is number => r !== undefined);
+      return rows.length ? rows.reduce((a, b) => a + b, 0) / rows.length : steps.length + first(s.id);
+    };
+    col.sort((a, b) => key(a) - key(b)).forEach((s, i) => row.set(s.id, i));
+  });
+  return steps.map((s) => ({ ...s, x: depth.get(s.id)! * COL, y: row.get(s.id)! * ROW }));
+}
+// overlapping is whether any two steps sit (nearly) on one another.
+const overlapping = (steps: FlowStep[]) => steps.some((a, i) => steps.slice(i + 1).some((b) => Math.abs(a.x - b.x) < 150 && Math.abs(a.y - b.y) < 50));
+
 function Canvas({ project, flowName, canEdit, noRepo, onClose }: { project: string; flowName: string; canEdit: boolean; noRepo?: string; onClose: () => void }) {
   const [params] = useSearchParams();
   const [flow, setFlow] = useState<CanvasFlow>();
@@ -183,6 +223,7 @@ function Canvas({ project, flowName, canEdit, noRepo, onClose }: { project: stri
   const [metrics, setMetrics] = useState<SemanticMetric[]>();
   const [processors, setProcessors] = useState<FlowProcessorDef[]>();
   const timer = useRef<number>();
+  const [layout, setLayout] = useState(0); // a new one: the canvas fits the arranged steps to its view
 
   useEffect(() => { // for the step settings' dropdowns: the project's tables (and the products it reads), and its metrics
     getFlow(project).then((f) => setTables(f.tables)).catch(() => setTables([]));
@@ -197,7 +238,7 @@ function Canvas({ project, flowName, canEdit, noRepo, onClose }: { project: stri
       return;
     }
     getFlowView(project, flowName).then((v) => {
-      setFlow(v.flow);
+      setFlow(overlapping(v.flow.steps) ? { ...v.flow, steps: arrange(v.flow.steps) } : v.flow);
       setCompiled(v);
       setProcessors(v.processors ?? []);
       if (v.branch) setSaved({ branch: v.branch, mergeRequest: v.mergeRequest ?? "" });
@@ -316,6 +357,8 @@ function Canvas({ project, flowName, canEdit, noRepo, onClose }: { project: stri
         {saved?.branch && <span className="pill">on {saved.branch}</span>}
         {saved?.mergeRequest && <a href={saved.mergeRequest} target="_blank" rel="noreferrer" className="small" data-testid="merge-request">merge request</a>}
         <span className="grow" />
+        {steps.length > 1 && <button className="btn" onClick={() => { setFlow({ ...flow, steps: arrange(steps) }); setLayout((n) => n + 1); }}
+          title="Lay the steps out left to right, as the data flows" data-testid="arrange">Arrange</button>}
         {canEdit && (
           <select value={adding} onChange={(e) => addStep(e.target.value)} data-testid="add-step" aria-label="Add a step">
             <option value="">Add a step…</option>
@@ -333,7 +376,7 @@ function Canvas({ project, flowName, canEdit, noRepo, onClose }: { project: stri
       {errors.length > 0 && <div className="banner error" data-testid="flow-errors">{errors.map((e) => <div key={e}>{e}</div>)}</div>}
       <div className="split">
         <div className="main canvas" style={{ flex: "999 1 480px" }}>
-          <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
+          <ReactFlow key={layout} nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
             nodesDraggable={canEdit} nodesConnectable={canEdit} elementsSelectable fitView fitViewOptions={{ padding: 0.2, maxZoom: 1.1 }} minZoom={0.25}
             deleteKeyCode={canEdit ? ["Backspace", "Delete"] : null} proOptions={{ hideAttribution: true }}>
             <Background />
