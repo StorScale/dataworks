@@ -4,6 +4,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-10-25
+
+Gong and HighSpot imports from the Imports tab's form, as Salesforce's are; and access made to do what it says: calling a project's models takes call-models, a release keeps agents' approvals and the History tab's tags, a protection tag holds on a column a project masks itself, checks test tagged columns' values, and readers see no profile figures their rules would hide. With them, the page and smaller fixes the Users Guide's writers found.
+
+**Upgrading from 0.31.0:** `storscale upgrade --context <cluster> --version 0.32.0`, after a `--dry-run` (the Project definition gains the gong and highspot import sources). A custom role without `call-models` no longer calls the project's served models: add the permission to roles that should. A column a project masks itself and the catalog has tagged is now masked by the tag's rule for everyone but the project's readers, and a readers' `MASK_NONE` there gives way to the tag's mask. The catalog's Trino account now reads tagged columns as they are (its checks test the values; its profiler leaves those columns out). New LLM keys ask for a `1mo` budget; existing ones keep `30d`, which LiteLLM already resets on the 1st.
+
 ### Added
 - **Gong and HighSpot imports** (8.4), from the Imports tab's form as Salesforce's are: an import's source may be `gong` (users, calls, their transcripts, scorecards and answered scorecards; calls, transcripts and answered scorecards copied by what's new, private calls left out) or `highspot` (spots, their items, users), signed in by a connection of the new kind `gong` or `highspot` (an API key and secret; Gong's address if the company has its own, HighSpot's region's). Both wait out the API's rate limit. The `imports` suite plays both APIs.
 
