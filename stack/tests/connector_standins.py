@@ -102,3 +102,106 @@ class Highspot(_API):
         if rows is None:
             return self.reply(404, {"error": f"no {path}"})
         self.reply(200, {"collection": rows[start:start + limit], "counts": {"total": len(rows)}})
+
+
+SAP_USER, SAP_PASSWORD, SAP_CLIENT = "COMM_STORSCALE", "sap-test-password", "100"
+
+
+def _ms(iso):
+    import datetime
+    return int(datetime.datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp() * 1000)
+
+
+class SAP(_API):
+    """S/4HANA's OData V2 APIs, the little the connector reads: each service's
+    $metadata, its entity sets as V2 JSON (d.results; dates as /Date(ms)/,
+    decimals as text, __metadata and deferred navigation beside the fields),
+    $filter on a change stamp (ge) or on keys (eq ... or ...), $top and $skip,
+    and the server's own paging (__next) on business partners, two a page.
+    Signed in as a communication user, in client 100."""
+    key, secret = SAP_USER, SAP_PASSWORD
+    asked = []
+    TYPES = {   # entity set: {field: Edm type}
+        "A_BusinessPartner": {"BusinessPartner": "Edm.String", "BusinessPartnerFullName": "Edm.String", "LastChangeDate": "Edm.DateTime"},
+        "A_Customer": {"Customer": "Edm.String", "CustomerName": "Edm.String"},
+        "A_SalesOrder": {"SalesOrder": "Edm.String", "SoldToParty": "Edm.String", "TotalNetAmount": "Edm.Decimal",
+                         "LastChangeDateTime": "Edm.DateTimeOffset"},
+        "A_SalesOrderItem": {"SalesOrder": "Edm.String", "SalesOrderItem": "Edm.String", "Material": "Edm.String",
+                             "RequestedQuantity": "Edm.Decimal", "NetAmount": "Edm.Decimal"},
+    }
+    SERVICES = {"API_BUSINESS_PARTNER": ["A_BusinessPartner", "A_Customer"], "API_SALES_ORDER_SRV": ["A_SalesOrder", "A_SalesOrderItem"]}
+    rows = {
+        "A_BusinessPartner": [{"BusinessPartner": f"1000{i}", "BusinessPartnerFullName": n, "LastChangeDate": d}
+                              for i, (n, d) in enumerate([("Acme Corp", "2026-09-01"), ("Globex", "2026-09-15"), ("Initech", "2026-10-01")])],
+        "A_Customer": [{"Customer": "10000", "CustomerName": "Acme Corp"}, {"Customer": "10001", "CustomerName": "Globex"}],
+        "A_SalesOrder": [{"SalesOrder": "1", "SoldToParty": "10000", "TotalNetAmount": "1250.50", "LastChangeDateTime": "2026-09-02T10:00:00Z"},
+                         {"SalesOrder": "2", "SoldToParty": "10001", "TotalNetAmount": "99.99", "LastChangeDateTime": "2026-09-20T15:30:00Z"}],
+        "A_SalesOrderItem": [{"SalesOrder": "1", "SalesOrderItem": "10", "Material": "TENT-2P", "RequestedQuantity": "5.000", "NetAmount": "1000.00"},
+                             {"SalesOrder": "1", "SalesOrderItem": "20", "Material": "STOVE", "RequestedQuantity": "5.000", "NetAmount": "250.50"},
+                             {"SalesOrder": "2", "SalesOrderItem": "10", "Material": "MUG", "RequestedQuantity": "3.000", "NetAmount": "99.99"}],
+    }
+
+    def metadata(self, service):
+        props = lambda es: "".join(f'<Property Name="{f}" Type="{t}"/>' for f, t in SAP.TYPES[es].items())
+        types = "".join(f'<EntityType Name="{es}Type"><Key><PropertyRef Name="{list(SAP.TYPES[es])[0]}"/></Key>{props(es)}</EntityType>'
+                        for es in SAP.SERVICES[service])
+        sets = "".join(f'<EntitySet Name="{es}" EntityType="{service}.{es}Type"/>' for es in SAP.SERVICES[service])
+        body = (f'<?xml version="1.0" encoding="utf-8"?><edmx:Edmx Version="1.0" xmlns:edmx="http://schemas.microsoft.com/ado/2007/06/edmx">'
+                f'<edmx:DataServices><Schema Namespace="{service}" xmlns="http://schemas.microsoft.com/ado/2008/09/edm">{types}'
+                f'<EntityContainer Name="{service}_Entities">{sets}</EntityContainer></Schema></edmx:DataServices></edmx:Edmx>').encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/xml")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    @staticmethod
+    def matches(row, flt):
+        import re
+        if not flt:
+            return True
+        m = re.fullmatch(r"(\w+) ge (datetimeoffset|datetime)'([^']+)'", flt)
+        if m:
+            at = lambda x: _ms(x if "T" in x else x + "T00:00:00Z")
+            return at(row[m.group(1)]) >= at(m.group(3) if m.group(3).endswith("Z") else m.group(3) + "Z")
+        ors = re.findall(r"(\w+) eq '([^']*)'", flt)
+        if ors and len(ors) == flt.count(" eq "):
+            return any(row[f] == v for f, v in ors)
+        raise ValueError(f"the stand-in doesn't read {flt}")
+
+    def route(self, method):
+        if not self.signed():
+            return
+        u = urlparse(self.path)
+        q = {k: v[0] for k, v in parse_qs(u.query).items()}
+        parts = u.path.removeprefix("/sap/opu/odata/sap/").split("/")
+        SAP.asked.append((parts[-1], q.get("$filter"), q.get("$skip") or q.get("$skiptoken"), q.get("sap-client")))
+        if q.get("sap-client") != SAP_CLIENT:
+            return self.reply(400, {"error": {"message": {"value": "client 000 has no such user"}}})
+        if len(parts) != 2 or parts[0] not in SAP.SERVICES:
+            return self.reply(404, {"error": {"message": {"value": f"no service {u.path}"}}})
+        service, es = parts
+        if es == "$metadata":
+            return self.metadata(service)
+        if es not in SAP.SERVICES[service]:
+            return self.reply(404, {"error": {"message": {"value": f"no entity set {es}"}}})
+        try:
+            got = [r for r in SAP.rows[es] if self.matches(r, q.get("$filter"))]
+        except ValueError as e:
+            return self.reply(400, {"error": {"message": {"value": str(e)}}})
+        kinds = SAP.TYPES[es]
+        out = []
+        for r in got:
+            v = {"__metadata": {"uri": f"{es}('x')", "type": f"{service}.{es}Type"}}
+            for f, x in r.items():
+                v[f] = f"/Date({_ms(x if 'T' in x else x + 'T00:00:00Z')})/" if kinds[f] in ("Edm.DateTime", "Edm.DateTimeOffset") else x
+            v["to_Item"] = {"__deferred": {"uri": f"{es}('x')/to_Item"}}
+            out.append(v)
+        if es == "A_BusinessPartner":   # the server's paging: two a page, then __next
+            start = int(q.get("$skiptoken") or 0)
+            page = {"results": out[start:start + 2]}
+            if start + 2 < len(out):
+                page["__next"] = f"{es}?$skiptoken={start + 2}"
+            return self.reply(200, {"d": page})
+        skip, top = int(q.get("$skip") or 0), int(q.get("$top") or 1000)
+        self.reply(200, {"d": {"results": out[skip:skip + top]}})

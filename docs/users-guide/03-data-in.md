@@ -1,6 +1,6 @@
 # 3. Getting data in
 
-This chapter is for the people who bring a project's data onto the platform: an engineer adding a feed from an application or a database, an analyst uploading a spreadsheet, an administrator wiring up a project's sources. It covers every way in: files uploaded to the project's landing area and imported as tables; imports from a REST API, a database, Salesforce, Gong or HighSpot, each on a schedule; a database queried where it is, with no copy; a database copied by change capture; and the connections that hold the credentials all of these sign in with. Who may read what arrives is [chapter 4](04-access-and-protection.md); checking that it's right is [chapter 5](05-quality.md).
+This chapter is for the people who bring a project's data onto the platform: an engineer adding a feed from an application or a database, an analyst uploading a spreadsheet, an administrator wiring up a project's sources. It covers every way in: files uploaded to the project's landing area and imported as tables; imports from a REST API, a database, Salesforce, Gong, HighSpot or SAP S/4HANA, each on a schedule; a database queried where it is, with no copy; a database copied by change capture; and the connections that hold the credentials all of these sign in with. Who may read what arrives is [chapter 4](04-access-and-protection.md); checking that it's right is [chapter 5](05-quality.md).
 
 In this chapter:
 
@@ -13,6 +13,7 @@ In this chapter:
 - [A Salesforce import](#a-salesforce-import)
 - [A Gong import](#a-gong-import)
 - [A HighSpot import](#a-highspot-import)
+- [An SAP S/4HANA import](#an-sap-s4hana-import)
 - [Schedules and runs](#schedules-and-runs)
 - [Reset: copy everything again](#reset-copy-everything-again)
 - [Removing an import](#removing-an-import)
@@ -33,6 +34,7 @@ In this chapter:
 | Salesforce | A **salesforce import**, from the Imports tab's form | `<import>_<object>` | On its schedule; some objects by their changes |
 | Gong (calls, transcripts, scorecards) | A **gong import**, from the Imports tab's form | `<import>_<object>` | On its schedule; calls and answered scorecards by what's new |
 | HighSpot (spots, items, users) | A **highspot import**, from the Imports tab's form | `<import>_<object>` | On its schedule; all of it each run |
+| SAP S/4HANA (partners, products, orders, documents) | An **sap import**, from the Imports tab's form | `<import>_<object>` | On its schedule; most objects by their last change |
 | A database the company runs, needed in queries today | A **source** | A Trino catalog `<project>_<source>`, nothing copied | Always: queried live |
 | A database whose every change should reach the lakehouse | A source with **copy** (Kubernetes only) | `<source>_<table>` | Within `copy.commitEvery` seconds (30) |
 
@@ -100,14 +102,14 @@ An import copies data into the project's tables on a schedule. It's [dlt](https:
 | Field | What |
 |---|---|
 | `name` | 1 to 20 lowercase letters, digits and underscores, starting with a letter. Its tables are `<name>_<resource>` |
-| `source` | `files`, `rest_api`, `sql_database`, `salesforce`, `gong` or `highspot` |
-| `connection` | One of the project's [connections](#connections): `rest_api` an API token, `sql_database` a database user, `salesforce` a Salesforce org, `gong` a Gong API key, `highspot` a HighSpot API key. A files import has none |
+| `source` | `files`, `rest_api`, `sql_database`, `salesforce`, `gong`, `highspot`, `sap` or `files` |
+| `connection` | One of the project's [connections](#connections): `rest_api` an API token, `sql_database` a database user, `salesforce` a Salesforce org, `gong` a Gong API key, `highspot` a HighSpot API key, `sap` an SAP communication user. A files import has none |
 | `schedule` | Cron's five fields, in UTC (`0 * * * *`). Empty: hourly |
-| `files` / `api` / `database` / `salesforce` / `gong` / `highspot` | What it copies, by its source (below); only the one its `source` names |
+| `files` / `api` / `database` / `salesforce` / `gong` / `highspot` / `sap` | What it copies, by its source (below); only the one its `source` names |
 
 ### Three ways to add one
 
-- **From a form.** Files: the Uploads panel's **Import as a table** (above). Salesforce, Gong and HighSpot: Imports → **Add Salesforce**, **Add Gong**, **Add HighSpot** (below). REST APIs and databases: the project's Edit page, section **Imports** → **Add an import** (administrators).
+- **From a form.** Files: the Uploads panel's **Import as a table** (above). Salesforce, Gong, HighSpot and SAP: Imports → **Add Salesforce**, **Add Gong**, **Add HighSpot**, **Add SAP S/4HANA** (below). REST APIs and databases: the project's Edit page, section **Imports** → **Add an import** (administrators).
 - **In the spec**, on the Edit page's **JSON** (administrators).
 - **Through the API**, one import at a time, the rest of the spec as it is:
 
@@ -291,7 +293,7 @@ dlt's Salesforce source, from a form. Pick the objects; those that carry their c
 |---|---|
 | `account`, `campaign_member`, `event`, `opportunity`, `opportunity_contact_role`, `opportunity_line_item`, `task` | `campaign`, `contact`, `lead`, `pricebook_2`, `pricebook_entry`, `product_2`, `sf_user`, `user_role` |
 
-`GET /api/connectors` lists the connectors the forms offer (Salesforce, Gong, HighSpot), each with its objects and those copied by their changes.
+`GET /api/connectors` lists the connectors the forms offer (Salesforce, Gong, HighSpot, SAP S/4HANA), each with its objects and those copied by their changes.
 
 ### How it behaves
 
@@ -390,6 +392,74 @@ Each is replaced on every run.
 
 ---
 
+## An SAP S/4HANA import
+
+S/4HANA's business partners, customers, suppliers, products, sales orders, billing documents and purchase orders, with
+their items, read from its released OData APIs (the ones listed on SAP's Business Accelerator Hub, api.sap.com) as a
+communication user, from a form. It's the platform's own connector: no SAP software runs on the platform.
+
+### Set up
+
+1. In S/4HANA, an SAP administrator makes a **communication arrangement** for the APIs below (in S/4HANA Cloud, from the
+   communication scenarios that include them: `SAP_COM_0008` for business partners, customers and suppliers,
+   `SAP_COM_0009` for products, `SAP_COM_0109` for sales orders, `SAP_COM_0120` for billing documents, `SAP_COM_0053`
+   for purchase orders; on premises, with the services activated in the gateway, `/IWFND/MAINT_SERVICE`), with a
+   **communication user** signed in by user and password, read access being enough. The platform must reach the
+   gateway's address over HTTPS (ask the network team; the open question in [use case 8.4](../use-cases.md)).
+2. On **Connections**, add one of kind **An SAP S/4HANA communication user**: the API's address, the user, its password,
+   the **SAP client** if the system has several (`100`), and, if the gateway's certificate is signed by the company's own
+   CA, that CA's certificate.
+3. Open **Imports** → **Add SAP S/4HANA**. Name (default `erp`), **Sign in with**, the objects (business partners, sales
+   orders and their items ticked to start), **When (cron, UTC)** and **History from** (the objects copied by their changes
+   from that date; empty: all of it). Press **Add**.
+
+```json
+{
+  "name": "erp",
+  "source": "sap",
+  "connection": "retail-sap",
+  "schedule": "0 2 * * *",
+  "sap": {"objects": ["business_partners", "sales_orders", "sales_order_items", "products"], "since": "2026-01-01"}
+}
+```
+
+| Object | API and entity set | Merged on | How |
+|---|---|---|---|
+| `business_partners` ↻ | `API_BUSINESS_PARTNER` `A_BusinessPartner` | `BusinessPartner` | Changed since the last run, by `LastChangeDate` (a day: that day is read again, and merged) |
+| `customers` | `API_BUSINESS_PARTNER` `A_Customer` | `Customer` | Replaced each run (SAP stamps no change on it) |
+| `suppliers` | `API_BUSINESS_PARTNER` `A_Supplier` | `Supplier` | Replaced each run |
+| `products` ↻ | `API_PRODUCT_SRV` `A_Product` | `Product` | By `LastChangeDateTime` |
+| `sales_orders` ↻ | `API_SALES_ORDER_SRV` `A_SalesOrder` | `SalesOrder` | By `LastChangeDateTime` |
+| `sales_order_items` ↻ | `API_SALES_ORDER_SRV` `A_SalesOrderItem` | `SalesOrder`, `SalesOrderItem` | The items of the orders a run copies |
+| `billing_documents` ↻, `billing_document_items` ↻ | `API_BILLING_DOCUMENT_SRV` `A_BillingDocument`, `A_BillingDocumentItem` | `BillingDocument` (and `BillingDocumentItem`) | As sales orders |
+| `purchase_orders` ↻, `purchase_order_items` ↻ | `API_PURCHASEORDER_PROCESS_SRV` `A_PurchaseOrder`, `A_PurchaseOrderItem` | `PurchaseOrder` (and `PurchaseOrderItem`) | As sales orders |
+
+Each lands as `<import>_<object>`, its columns SAP's field names in lower case with underscores (`SalesOrder` becomes
+`sales_order`, `TotalNetAmount` `total_net_amount`).
+
+### How it behaves
+
+- It reads each API's `$metadata` once a run, so the columns have their types: amounts and quantities are decimals, dates
+  and times timestamps, though OData V2 sends them as text and `/Date(…)/`.
+- It reads a thousand rows a request, follows the gateway's own paging (`__next`) when the gateway pages, and waits out
+  a 429 or 503 (the gateway busy) as long as it's told, up to eight tries.
+- Items are asked for forty orders or documents at a time (`SalesOrder eq '…' or …`).
+- Choosing items without their orders still reads the orders (to know which items to ask for), but keeps only the items.
+- Navigation properties (`to_Item`, `to_Partner`) aren't followed: an object is its entity set's own fields.
+
+### Limits and gotchas
+
+- **Deleted in SAP stays here.** A deleted order, or an item taken off an order, isn't seen (the APIs' change stamps
+  don't record deletions): **Copy all again** (a reset) brings the tables back to what SAP has.
+- Customers and suppliers are read whole each run; on a large system, schedule them daily.
+- The communication user sees what its arrangement allows: an API not in the arrangement fails the run with SAP's
+  403 in its log; a wrong password, 401; a wrong client, SAP's own message.
+- Other entity sets and custom CDS views aren't offered yet; a REST API import can read an OData service by hand.
+- "imports: erp: \"A_SalesOrder\" isn't one of SAP S/4HANA's objects: business_partners, customers, …": use the
+  object's name from the table above, not the entity set's.
+
+---
+
 ## Schedules and runs
 
 **Who can do it:** the schedule is part of the import (`connections`); **Run now** takes `run-pipelines`.
@@ -415,7 +485,7 @@ A reset drops the import's tables and where its cursors got to, then copies ever
 
 ### How it behaves
 
-- The run drops every table of the namespace whose name starts with `<import>_`, and dlt's record of them, then copies from the start: from each cursor's `cursorStart`, from Salesforce's or Gong's `since`, every file again.
+- The run drops every table of the namespace whose name starts with `<import>_`, and dlt's record of them, then copies from the start: from each cursor's `cursorStart`, from Salesforce's, Gong's or SAP's `since`, every file again.
 - The tables are made afresh, with their columns' types as the data says now. **Their history before the reset goes with them**: the History tab and reading as it was ([chapter 15](15-history-and-releases.md)) start again at the reset.
 - The audit log records `import.reset`: "its tables and where it got to dropped, all copied again".
 
@@ -594,6 +664,7 @@ Secret fields (marked †) are never shown again. "One of" means at least one of
 | `database` | A database user | Sources, copies and sql_database imports | `host`, `port`, `database`, `username` (required), `password`† (required), `url` (a JDBC URL, in place of host, port and database), `sslmode` (PostgreSQL), `trustServerCertificate` (SQL Server: `true`). One of `host`, `url` |
 | `salesforce` | A Salesforce org | Salesforce imports | `username`, `password`†, `securityToken`†, `consumerKey`†, `consumerSecret`†, `organizationId` (sign-in from trusted IP ranges), `domain` (`login` or `test`), `instanceUrl` (with a session, in place of a user), `sessionId`†, `caCertificate` (multi-line). One of `password`, `sessionId` |
 | `gong` | A Gong account's API key | Gong imports | `accessKey` (required), `accessKeySecret`† (required), `baseUrl` (default `https://api.gong.io`; the company's own, if Gong gave one), `caCertificate` (multi-line) |
+| `sap` | An SAP S/4HANA communication user | SAP imports | `baseUrl` (required: the gateway's address, as `https://sap-gw.example.com:44300`, or S/4HANA Cloud's API address, as `https://my123456-api.s4hana.cloud.sap`), `username` (required), `password`† (required), `client` (the SAP client; empty: the system's default), `caCertificate` (multi-line) |
 | `highspot` | A HighSpot API key | HighSpot imports | `apiKey` (required), `apiSecret`† (required), `baseUrl` (the region's API address, as `https://api-su2.highspot.com`; required), `caCertificate` (multi-line) |
 | `api` | An API token | rest_api imports, and the project's tools (sent as a Bearer) | `token`†, required |
 | `sftp` | An SFTP server | Deliveries' targets | `host` (required), `port`, `username` (required), `password`†, `sshPrivateKey`† (multi-line), `hostKey` (as in known_hosts, required), `path` (folder). One of `password`, `sshPrivateKey` |
@@ -629,7 +700,7 @@ Deliveries' kinds are [chapter 12](12-deliveries.md); the git and ssh kinds [cha
 |---|---|---|
 | `upload` | A file uploaded | Its name and size |
 | `upload.removed` | An upload removed | Its name |
-| `import.saved` | An import added or changed (through the API or a form) | "added: files", the objects for Salesforce, Gong and HighSpot, and whether pipelines were given |
+| `import.saved` | An import added or changed (through the API or a form) | "added: files", the objects for Salesforce, Gong, HighSpot and SAP, and whether pipelines were given |
 | `import.removed` | An import removed | "its tables stay" |
 | `import.reset` | A reset asked for | "its tables and where it got to dropped, all copied again" |
 | `pipeline.started` | **Run now** | The run's ID |

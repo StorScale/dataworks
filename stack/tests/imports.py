@@ -21,7 +21,12 @@ here (a token, a cursor, its leads changing):
      a run copies Gong's users, calls (not the private one) and their
      transcripts, and HighSpot's spots, every item of each (paged) and users
      (stand-ins served here: connector_standins.py); the next Gong run asks
-     only for the calls since the last.
+     only for the calls since the last;
+  9. SAP S/4HANA, from its: with a communication user in client 100, a run
+     copies business partners (paged by the server's __next), customers, the
+     sales orders changed since a date and their items, amounts as decimals
+     (a stand-in of its OData V2 APIs); the next asks only for what changed
+     since, and copies the new order's items.
 
 The sales spec, the connection and the tables are put back after.
 """
@@ -38,7 +43,7 @@ from urllib.parse import parse_qs, urlparse
 
 import k8s
 import requests
-from connector_standins import GONG_KEY, GONG_SECRET, HS_KEY, HS_SECRET, Gong, Highspot
+from connector_standins import GONG_KEY, GONG_SECRET, HS_KEY, HS_SECRET, SAP, SAP_CLIENT, SAP_PASSWORD, SAP_USER, Gong, Highspot
 
 from lakekit import check, denied, env, finish, s3_root, sql
 from projects import platform, wait
@@ -89,7 +94,7 @@ def delete_connection():
         s3_root().delete_object(Bucket="storscale-platform", Key=f"connections/{PROJECT}/{CONNECTION}.json")
 
 
-SF_PORT, GONG_PORT, HS_PORT = 8428, 8429, 8430
+SF_PORT, GONG_PORT, HS_PORT, SAP_PORT = 8428, 8429, 8430, 8431
 
 
 class Salesforce(BaseHTTPRequestHandler):
@@ -153,7 +158,7 @@ def clear_dlt():
     (warehouse/sales/_dlt_*), not tables Trino drops: removed, so a run of
     this suite starts afresh, whatever one before left."""
     s3 = s3_root()
-    for prefix in ("sales/_dlt_", f"sales/{TABLE}", "sales/sf_", "sales/gong_", "sales/hs_"):
+    for prefix in ("sales/_dlt_", f"sales/{TABLE}", "sales/sf_", "sales/gong_", "sales/hs_", "sales/erp_"):
         for page in s3.get_paginator("list_objects_v2").paginate(Bucket="warehouse", Prefix=prefix):
             keys = [{"Key": o["Key"]} for o in page.get("Contents", [])]
             if keys:
@@ -340,16 +345,51 @@ def main():
               state == "success" and got == ([["sp1"], ["sp2"]], [["sp1", 102], ["sp2", 1]], [["hu1"]]), (state, got))
         for sv in servers:
             sv.shutdown()
+
+        # 9. SAP S/4HANA, from its.
+        sap_server = ThreadingHTTPServer(("0.0.0.0", SAP_PORT), SAP)
+        threading.Thread(target=sap_server.serve_forever, daemon=True).start()
+        made = [bob.post(f"{url}/connections", timeout=30, json={"name": "sales-sap", "kind": "sap", "values": {
+                    "baseUrl": f"http://{here}:{SAP_PORT}", "username": SAP_USER, "password": SAP_PASSWORD, "client": SAP_CLIENT}}),
+                bob.put(f"{url}/imports/erp", headers={"X-Platform-Request": "1"}, timeout=30, json={
+                    "source": "sap", "connection": "sales-sap", "schedule": "0 0 1 1 *",
+                    "sap": {"objects": ["business_partners", "customers", "sales_orders", "sales_order_items"], "since": "2026-09-10"}})]
+        check("bob adds an SAP S/4HANA import (a communication user, client 100)", all(m.ok for m in made), [m.text[:150] for m in made if not m.ok])
+        found = wait(lambda: pipeline(bob, "import_sales_erp"), 420, every=10)
+        state = run(bob, "import_sales_erp") if found else "not loaded"
+        try:
+            got = (app_rows("SELECT business_partner FROM erp_business_partners ORDER BY 1")(), app_rows("SELECT count(*) FROM erp_customers")(),
+                   app_rows("SELECT sales_order, total_net_amount, typeof(total_net_amount) FROM erp_sales_orders ORDER BY 1")(),
+                   app_rows("SELECT sales_order, sales_order_item FROM erp_sales_order_items ORDER BY 1, 2")())
+        except Exception as e:  # noqa: BLE001
+            got = str(e)[:200]
+        check("a run copies the partners changed since the date (the server paging), the customers, the order changed since and its item, amounts as decimals",
+              state == "success" and isinstance(got, tuple) and got[0] == [["10001"], ["10002"]] and got[1] == [[2]]
+              and len(got[2]) == 1 and got[2][0][0] == "2" and str(got[2][0][2]).startswith("decimal") and got[3] == [["2", "10"]],
+              (state, got))
+        SAP.asked.clear()
+        SAP.rows["A_SalesOrder"].append({"SalesOrder": "3", "SoldToParty": "10000", "TotalNetAmount": "10.00", "LastChangeDateTime": "2026-10-05T08:00:00Z"})
+        SAP.rows["A_SalesOrderItem"].append({"SalesOrder": "3", "SalesOrderItem": "10", "Material": "LAMP", "RequestedQuantity": "1.000", "NetAmount": "10.00"})
+        state = run(bob, "import_sales_erp")
+        orders_asked = [a[1] for a in SAP.asked if a[0] == "A_SalesOrder"]
+        try:
+            got = app_rows("SELECT sales_order, sales_order_item FROM erp_sales_order_items ORDER BY 1, 2")()
+        except Exception as e:  # noqa: BLE001
+            got = str(e)[:200]
+        check("... and the next asks only for the orders changed since the last, and copies the new order's item",
+              state == "success" and orders_asked and "2026-09-20T15:30:00Z" in orders_asked[0] and got == [["2", "10"], ["3", "10"]],
+              (state, orders_asked, got))
+        sap_server.shutdown()
     finally:
         CRM.down = False
-        for im in ("sf", "gong", "hs"):
+        for im in ("sf", "gong", "hs", "erp"):
             bob.delete(f"{url}/imports/{im}", headers={"X-Platform-Request": "1"}, timeout=30)
         bob.put(url, data=json.dumps(before), timeout=30)
         delete_connection()
-        for c in ("sales-sf", "sales-gong", "sales-hs"):
+        for c in ("sales-sf", "sales-gong", "sales-hs", "sales-sap"):
             bob.delete(f"{url}/connections/{c}", timeout=30)
         try:
-            app_tables = [r[0] for r in sql("bob", "SHOW TABLES", "iceberg", "sales") if r[0].startswith(("gong_", "hs_"))]
+            app_tables = [r[0] for r in sql("bob", "SHOW TABLES", "iceberg", "sales") if r[0].startswith(("gong_", "hs_", "erp_"))]
         except Exception:  # noqa: BLE001
             app_tables = []
         for t in (TABLE, "sf_account", "sf_lead", *app_tables, "_dlt_loads", "_dlt_pipeline_state", "_dlt_version"):

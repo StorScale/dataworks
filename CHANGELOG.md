@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **SAP S/4HANA imports** (8.4), from the Imports tab's form as Salesforce's, Gong's and HighSpot's are: an import's source may be `sap`, copying business partners, customers, suppliers, products, sales orders, billing documents and purchase orders with their items from S/4HANA's released OData APIs, signed in as a communication user (a connection of the new kind `sap`: the gateway's or S/4HANA Cloud's address, the user, its password, the SAP client). Columns are typed from each API's `$metadata`; objects SAP stamps with their last change are copied by it and merged on their keys, an order's items with it. The `imports` suite plays the APIs.
+
 ## [0.32.0] - 2026-10-25
 
 Gong and HighSpot imports from the Imports tab's form, as Salesforce's are; and access made to do what it says: calling a project's models takes call-models, a release keeps agents' approvals and the History tab's tags, a protection tag holds on a column a project masks itself, checks test tagged columns' values, and readers see no profile figures their rules would hide. With them, the page and smaller fixes the Users Guide's writers found.

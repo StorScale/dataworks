@@ -4,7 +4,7 @@ import { getConnections, getConnectors, putImport, removeImport, resetImport, ty
 import { Empty, Intro } from "../components";
 import { can, ErrorBanner, Spinner, useProject } from "../lib";
 
-const sourceLabel: Record<Import["source"], string> = { rest_api: "a REST API", sql_database: "a database", salesforce: "Salesforce", gong: "Gong", highspot: "HighSpot", files: "uploaded files" };
+const sourceLabel: Record<Import["source"], string> = { rest_api: "a REST API", sql_database: "a database", salesforce: "Salesforce", gong: "Gong", highspot: "HighSpot", sap: "SAP S/4HANA", files: "uploaded files" };
 
 // The project's imports: applications' and databases' data copied into its
 // tables on a schedule (dlt). Its editors add one from a connector's form
@@ -28,7 +28,7 @@ export default function Imports() {
       <ErrorBanner error={error} />
       {adding && <ConnectorForm project={name} connector={adding} taken={imports.map((i) => i.name)} onDone={() => { setAdding(undefined); reload(); }} />}
       {imports.length === 0 && !adding && <Empty>No imports yet.</Empty>}
-      {imports.map((im) => { const app = im.salesforce ?? im.gong ?? im.highspot; return (
+      {imports.map((im) => { const app = im.salesforce ?? im.gong ?? im.highspot ?? im.sap; return (
         <div key={im.name} className="card stack" style={{ gap: 6 }} data-testid={`import-${im.name}`}>
           <div className="card-head">
             <h2 className="mono">{im.name}<span className="pill">{sourceLabel[im.source]}</span></h2>
@@ -51,12 +51,18 @@ export default function Imports() {
   );
 }
 
+// What a connector's form ticks to start with: a few of a large application's objects; all of a small one's.
+const STARTING: Partial<Record<Connector["source"], string[]>> = {
+  salesforce: ["account", "opportunity"],
+  sap: ["business_partners", "sales_orders", "sales_order_items"],
+};
+
 function ConnectorForm({ project, connector, taken, onDone }: { project: string; connector: Connector; taken: string[]; onDone: () => void }) {
   const [conns, setConns] = useState<Connection[]>();
   const [kindLabel, setKindLabel] = useState(connector.connection);
-  const [imName, setName] = useState(connector.source === "salesforce" ? "crm" : connector.source);
+  const [imName, setName] = useState(({ salesforce: "crm", sap: "erp" } as Record<string, string>)[connector.source] ?? connector.source);
   const [connection, setConnection] = useState("");
-  const [objects, setObjects] = useState<string[]>(connector.source === "salesforce" ? ["account", "opportunity"] : connector.objects);
+  const [objects, setObjects] = useState<string[]>(STARTING[connector.source] ?? connector.objects);
   const [schedule, setSchedule] = useState("0 * * * *");
   const [since, setSince] = useState("");
   const [busy, setBusy] = useState(false);

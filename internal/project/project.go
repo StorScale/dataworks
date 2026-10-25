@@ -195,19 +195,25 @@ type Import struct {
 	Salesforce *ImportSalesforce `json:"salesforce,omitempty"`
 	Gong       *ImportApp        `json:"gong,omitempty"`
 	Highspot   *ImportApp        `json:"highspot,omitempty"`
+	SAP        *ImportApp        `json:"sap,omitempty"`
 	Files      *ImportFiles      `json:"files,omitempty"`
 }
 
-// App is a connector's import's objects (Salesforce's, Gong's or
-// HighSpot's), or nil for an import of another source.
+// App is a connector's import's objects (Salesforce's, Gong's, HighSpot's
+// or SAP's), or nil for an import of another source.
 func (im Import) App() *ImportApp {
-	return map[string]*ImportApp{"salesforce": im.Salesforce, "gong": im.Gong, "highspot": im.Highspot}[im.Source]
+	return im.Apps()[im.Source]
+}
+
+// Apps are the import's connector parts, by source (nil where it has none).
+func (im Import) Apps() map[string]*ImportApp {
+	return map[string]*ImportApp{"salesforce": im.Salesforce, "gong": im.Gong, "highspot": im.Highspot, "sap": im.SAP}
 }
 
 // ImportSources are dlt's sources an import may be: two general ones, the
 // platform's connectors (use case 8.4), and files uploaded to the project's
 // landing area (11.1's uploads).
-var ImportSources = []string{"rest_api", "sql_database", "salesforce", "gong", "highspot", "files"}
+var ImportSources = []string{"rest_api", "sql_database", "salesforce", "gong", "highspot", "sap", "files"}
 
 // ImportFiles are files of the project's landing area (landing/uploads/ in
 // its bucket, where the canvas's uploads go), each read into a table: CSV,
@@ -263,11 +269,13 @@ type Connector struct {
 }
 
 // Connectors are the platform's (8.4): Salesforce on dlt's verified source;
-// Gong and HighSpot on their REST APIs (stack/airflow/image/sources/storscale_connectors.py).
+// Gong and HighSpot on their REST APIs, SAP S/4HANA on its OData APIs
+// (stack/airflow/image/sources/storscale_connectors.py).
 var Connectors = []Connector{
 	{Source: "salesforce", Label: "Salesforce", Connection: "salesforce", Objects: SalesforceObjects, Incremental: SalesforceIncremental},
 	{Source: "gong", Label: "Gong", Connection: "gong", Objects: GongObjects, Incremental: GongIncremental},
 	{Source: "highspot", Label: "HighSpot", Connection: "highspot", Objects: HighspotObjects, Incremental: []string{}},
+	{Source: "sap", Label: "SAP S/4HANA", Connection: "sap", Objects: SAPObjects, Incremental: SAPIncremental},
 }
 
 // ConnectorOf is the connector a source is, or nil.
@@ -291,6 +299,19 @@ var GongIncremental = []string{"calls", "call_transcripts", "answered_scorecards
 // HighspotObjects are what the HighSpot connector copies: its spots (those
 // its API key may view), their items, and its users; each replaced each run.
 var HighspotObjects = []string{"spots", "items", "users"}
+
+// SAPObjects are what the SAP connector copies, each an entity set of one of
+// S/4HANA's released OData APIs: business partners, customers and suppliers
+// (API_BUSINESS_PARTNER), products (API_PRODUCT_SRV), sales orders, billing
+// documents and purchase orders with their items. Those SAP stamps with
+// their last change are copied by it, from Since; an order's or document's
+// items are those of the orders or documents a run copies. Customers and
+// suppliers carry no such stamp: replaced each run.
+var SAPObjects = []string{"business_partners", "customers", "suppliers", "products", "sales_orders", "sales_order_items",
+	"billing_documents", "billing_document_items", "purchase_orders", "purchase_order_items"}
+
+var SAPIncremental = []string{"business_partners", "products", "sales_orders", "sales_order_items", "billing_documents",
+	"billing_document_items", "purchase_orders", "purchase_order_items"}
 
 // SalesforceObjects are the objects dlt's Salesforce source copies, by its
 // resources' names; Incremental, those copied by their changes and merged

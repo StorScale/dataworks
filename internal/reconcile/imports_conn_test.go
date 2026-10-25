@@ -26,4 +26,12 @@ func TestGongAndHighspotConnections(t *testing.T) {
 	if err != nil || !strings.Contains(c.Extra, `"baseUrl":"https://api-su2.highspot.com"`) {
 		t.Errorf("highspot: %+v %v", c, err)
 	}
+	sap := project.Import{Name: "erp", Source: "sap", Connection: "sales-sap"}
+	if _, err := importConnection(p, sap, map[string]string{"username": "COMM_USER", "password": "pw"}); err == nil || !strings.Contains(err.Error(), "baseUrl") {
+		t.Errorf("sap without its address: %v", err)
+	}
+	c, err = importConnection(p, sap, map[string]string{"baseUrl": "https://gw:44300", "username": "COMM_USER", "password": "pw", "client": "100", "token": "ignored"})
+	if err != nil || !strings.Contains(c.Extra, `"client":"100"`) || !strings.Contains(c.Extra, `"username":"COMM_USER"`) || strings.Contains(c.Extra, "token") {
+		t.Errorf("sap: %+v %v", c, err)
+	}
 }
