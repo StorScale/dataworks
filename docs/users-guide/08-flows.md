@@ -91,6 +91,8 @@ See [Lab 9 in the lab guide](../guide.md#lab-9-which-campaigns-pay-for-themselve
 3. **Add a step…** offers the kinds below. A new step is placed beside the selected one and takes it as its input when it
    takes one. Drag from a node's right edge to another's left edge to connect them; select a connection or a node and press
    Delete to remove it.
+   **Arrange** lays the steps out left to right as the data flows, each input just before the step that reads it; a flow
+   whose steps were saved without places on the canvas (dbt models written by hand) opens arranged. Saving keeps the places.
 4. Select a node to see its settings on the right. Every table, column, step and metric is picked from a dropdown, so what
    you can choose is what exists. Inputs offer the project's tables, and the tables of other projects' data products it
    consumes, under **Products of other projects**.

@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+- **A flow's steps no longer open piled on one another:** a flow whose steps had no places on the canvas, or the same ones (dbt models written by hand, or saved through the API with grid numbers, as the guide's were), opened with every step in one spot. The canvas now lays such a flow out left to right as its data flows, each input just before the step that reads it, and **Arrange** does it on demand; saving keeps the places.
+
 ## [0.33.0] - 2026-10-25
 
 SAP S/4HANA imports from the Imports tab's form: its released OData APIs' business partners, products, sales, billing and purchasing documents, and the company's own ODP extractions (CDS views and classic extractors), copied by SAP's own delta, deletions included.
