@@ -44,7 +44,7 @@ jobs:
   # The whole platform, as `storscale up` starts it, and every suite of checks.
   platform:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 80   # setup ~17 min, then every suite (~45 min and growing)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
