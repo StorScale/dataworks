@@ -447,14 +447,65 @@ Each lands as `<import>_<object>`, its columns SAP's field names in lower case w
 - Choosing items without their orders still reads the orders (to know which items to ask for), but keeps only the items.
 - Navigation properties (`to_Item`, `to_Partner`) aren't followed: an object is its entity set's own fields.
 
+### ODP extractions: CDS views and extractors, by SAP's own delta
+
+The released APIs stamp changes on a few objects and never record deletions. SAP's Operational Data Provisioning (ODP)
+does both: the gateway serves a CDS view (SAP's `I_*` and `C_*` views, or the company's own) or a classic extractor
+(`2LIS_11_VAITM`) as OData, and keeps a **delta queue** for each subscriber, so each read after the first returns what
+was inserted, changed or deleted since. It's the way SAP allows other tools to extract data (SAP Note 3255746 rules
+out ODP over RFC for them, not over OData).
+
+**Set up in SAP** (the SAP team, once per extraction):
+
+1. The CDS view must be delta-enabled: annotated `@Analytics.dataExtraction.enabled: true` with change data capture
+   (`@Analytics.dataExtraction.delta.changeDataCapture.automatic: true`, or its mapping). Classic extractors are
+   delta-enabled already.
+2. In transaction `SEGW`, make a project, then on its Data Model **Redefine → ODP Extraction**: the context **ABAP Core
+   Data Services** (a CDS view, by its SQL view name) or **DataSources/Extractors**. Generate it, and activate the
+   service in `/IWFND/MAINT_SERVICE`. Its entity set is named `EntityOf<view or extractor>` (or `FactsOf…`, `AttrOf…`).
+3. Give the platform's communication user access to the service.
+
+**On the platform:** on the SAP import's form, **Add an ODP extraction**: a name of your own (its table is
+`<import>_<name>`), the **service** (`ZSALES_ODP_SRV`), the **entity set** (`EntityOfZCDS_SALES_ITEM`) and the **key
+fields** its rows are merged on (`SalesOrder, SalesOrderItem`, as SAP names them). An SAP import may have ODP
+extractions alone, with no objects ticked. In the spec:
+
+```json
+"sap": {"objects": [], "odp": [{"name": "sales_items", "service": "ZSALES_ODP_SRV",
+                                 "entitySet": "EntityOfZCDS_SALES_ITEM", "primaryKey": ["SalesOrder", "SalesOrderItem"]}]}
+```
+
+How it behaves:
+
+- The first run subscribes (`Prefer: odata.track-changes`) and copies every row. SAP answers with a delta link, which
+  the platform keeps with the import's own record of where it got to (dlt's state, saved only when a run has landed).
+- Each run after reads the delta since: rows SAP marks deleted (`ODQ_CHANGEMODE` `D`) are deleted from the table by their
+  key once the run has landed; an extractor's before images (`ODQ_ENTITYCNTR` `-1`) are left out; the rest are merged.
+  `ODQ_CHANGEMODE` and `ODQ_ENTITYCNTR` aren't kept as columns.
+- **Copy all again** drops the table and the kept delta link, so the next run subscribes again and copies everything.
+  The old subscription stays in SAP's delta queue until the SAP team ends it (transaction `ODQMON`).
+
+Limits and gotchas:
+
+- **One subscription per user and service.** SAP's delta queue knows a subscriber by its user and service, so two
+  imports reading the same extraction with the same communication user take each other's deltas. Give each import
+  its own user, or each extraction its own service.
+- **A delta not landed is read again.** A run that fails before it lands keeps the old delta link, and SAP repeats that
+  delta. A run that lands and then fails to delete (a message in its log) leaves those rows until the next reset.
+- An entity set that gives no delta link isn't an ODP extraction's: the run copies it whole each time, and says so in
+  its log.
+- "imports: erp: odp sales_items: the fields its rows are merged on (primaryKey), as SAP names them".
+
 ### Limits and gotchas
 
 - **Deleted in SAP stays here.** A deleted order, or an item taken off an order, isn't seen (the APIs' change stamps
-  don't record deletions): **Copy all again** (a reset) brings the tables back to what SAP has.
+  don't record deletions): **Copy all again** (a reset) brings the tables back to what SAP has. An ODP extraction
+  (below) sees deletions.
 - Customers and suppliers are read whole each run; on a large system, schedule them daily.
 - The communication user sees what its arrangement allows: an API not in the arrangement fails the run with SAP's
   403 in its log; a wrong password, 401; a wrong client, SAP's own message.
-- Other entity sets and custom CDS views aren't offered yet; a REST API import can read an OData service by hand.
+- Other entity sets of the released APIs aren't offered; a CDS view of SAP's or the company's comes in as an ODP
+  extraction (below).
 - "imports: erp: \"A_SalesOrder\" isn't one of SAP S/4HANA's objects: business_partners, customers, …": use the
   object's name from the table above, not the entity set's.
 

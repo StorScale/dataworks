@@ -65,7 +65,13 @@ func (s *server) handlePutImport(w http.ResponseWriter, r *http.Request) {
 		what += "; the project runs pipelines now (airflow-pipelines), as imports need"
 	}
 	if app := im.App(); app != nil {
-		what += " (" + strings.Join(app.Objects, ", ") + ")"
+		named := slices.Clone(app.Objects)
+		if im.SAP != nil {
+			for _, x := range im.SAP.ODP {
+				named = append(named, "odp "+x.Name)
+			}
+		}
+		what += " (" + strings.Join(named, ", ") + ")"
 	}
 	s.record(r, sess.User.Username, "import.saved", "project:"+v.Name+"/import:"+im.Name, what)
 	s.kick(r.Context(), v.Name)

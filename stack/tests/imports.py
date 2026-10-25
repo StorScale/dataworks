@@ -26,7 +26,9 @@ here (a token, a cursor, its leads changing):
      copies business partners (paged by the server's __next), customers, the
      sales orders changed since a date and their items, amounts as decimals
      (a stand-in of its OData V2 APIs); the next asks only for what changed
-     since, and copies the new order's items.
+     since, and copies the new order's items; and an ODP extraction (a CDS
+     view's, through the same gateway): subscribed and copied whole, then
+     by SAP's delta, a changed row merged, a deleted one removed.
 
 The sales spec, the connection and the tables are put back after.
 """
@@ -158,7 +160,7 @@ def clear_dlt():
     (warehouse/sales/_dlt_*), not tables Trino drops: removed, so a run of
     this suite starts afresh, whatever one before left."""
     s3 = s3_root()
-    for prefix in ("sales/_dlt_", f"sales/{TABLE}", "sales/sf_", "sales/gong_", "sales/hs_", "sales/erp_"):
+    for prefix in ("sales/_dlt_", f"sales/{TABLE}", "sales/sf_", "sales/gong_", "sales/hs_", "sales/erp_", "sales/odp_"):
         for page in s3.get_paginator("list_objects_v2").paginate(Bucket="warehouse", Prefix=prefix):
             keys = [{"Key": o["Key"]} for o in page.get("Contents", [])]
             if keys:
@@ -379,17 +381,43 @@ def main():
         check("... and the next asks only for the orders changed since the last, and copies the new order's item",
               state == "success" and orders_asked and "2026-09-20T15:30:00Z" in orders_asked[0] and got == [["2", "10"], ["3", "10"]],
               (state, orders_asked, got))
+
+        # An ODP extraction: whole, then by SAP's delta.
+        r = bob.put(f"{url}/imports/odp", headers={"X-Platform-Request": "1"}, timeout=30, json={
+            "source": "sap", "connection": "sales-sap", "schedule": "0 0 1 1 *", "sap": {"objects": [], "odp": [
+                {"name": "margins", "service": "ZMARGIN_ODP_SRV", "entitySet": "EntityOfZCDS_MARGIN", "primaryKey": ["SalesOrder", "SalesOrderItem"]}]}})
+        found = r.ok and wait(lambda: pipeline(bob, "import_sales_odp"), 420, every=10)
+        state = run(bob, "import_sales_odp") if found else f"not loaded: {r.text[:150]}"
+        margins = app_rows("SELECT sales_order, sales_order_item, margin FROM odp_margins ORDER BY 1, 2")
+        try:
+            got = margins()
+        except Exception as e:  # noqa: BLE001
+            got = str(e)[:200]
+        check("an ODP extraction is subscribed (Prefer: odata.track-changes) and copied whole, its decimals decimals",
+              state == "success" and any("odata.track-changes" in p for p in SAP.subscribed) and isinstance(got, list)
+              and [x[:2] for x in got] == [["1", "10"], ["1", "20"], ["2", "10"]] and str(got[0][2]) == "300.000000000", (state, SAP.subscribed[:1], got))
+        SAP.odp_changes += [("U", "-1", {"SalesOrder": "1", "SalesOrderItem": "10", "Margin": "300.00"}),
+                            ("U", "1", {"SalesOrder": "1", "SalesOrderItem": "10", "Margin": "310.00"}),
+                            ("D", "-1", {"SalesOrder": "1", "SalesOrderItem": "20", "Margin": "50.50"}),
+                            ("C", "1", {"SalesOrder": "3", "SalesOrderItem": "10", "Margin": "5.00"})]
+        state = run(bob, "import_sales_odp")
+        try:
+            got = [[a, b, str(c)] for a, b, c in margins()]
+        except Exception as e:  # noqa: BLE001
+            got = str(e)[:200]
+        check("... and the next run takes SAP's delta: the changed row merged, the deleted one removed, the new one added",
+              state == "success" and got == [["1", "10", "310.000000000"], ["2", "10", "20.000000000"], ["3", "10", "5.000000000"]], (state, got))
         sap_server.shutdown()
     finally:
         CRM.down = False
-        for im in ("sf", "gong", "hs", "erp"):
+        for im in ("sf", "gong", "hs", "erp", "odp"):
             bob.delete(f"{url}/imports/{im}", headers={"X-Platform-Request": "1"}, timeout=30)
         bob.put(url, data=json.dumps(before), timeout=30)
         delete_connection()
         for c in ("sales-sf", "sales-gong", "sales-hs", "sales-sap"):
             bob.delete(f"{url}/connections/{c}", timeout=30)
         try:
-            app_tables = [r[0] for r in sql("bob", "SHOW TABLES", "iceberg", "sales") if r[0].startswith(("gong_", "hs_", "erp_"))]
+            app_tables = [r[0] for r in sql("bob", "SHOW TABLES", "iceberg", "sales") if r[0].startswith(("gong_", "hs_", "erp_", "odp_"))]
         except Exception:  # noqa: BLE001
             app_tables = []
         for t in (TABLE, "sf_account", "sf_lead", *app_tables, "_dlt_loads", "_dlt_pipeline_state", "_dlt_version"):

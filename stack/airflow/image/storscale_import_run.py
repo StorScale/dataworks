@@ -183,6 +183,9 @@ if refresh:
         print(f"reset: dropped {'.'.join(t)}")
 info = pipeline.run(sources, table_format="iceberg", refresh=refresh)
 print(info)
+if im["source"] == "sap":   # an ODP extraction's deletions (dlt's Iceberg merge makes none)
+    import storscale_connectors
+    storscale_connectors.apply_sap_deletions(namespace, pipeline.default_schema.naming)
 if refresh and mine:
     # The run after a drop can leave a dropped table unmade (dlt's own record
     # said it was there); an ordinary run makes it, as the next would.

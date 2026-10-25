@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getConnections, getConnectors, putImport, removeImport, resetImport, type Connection, type Connector, type Import } from "../api";
+import { getConnections, getConnectors, putImport, removeImport, resetImport, type Connection, type Connector, type Import, type SAPExtraction } from "../api";
 import { Empty, Intro } from "../components";
 import { can, ErrorBanner, Spinner, useProject } from "../lib";
 
@@ -38,7 +38,8 @@ export default function Imports() {
             </div>
           </div>
           <div className="small">
-            {app && <>Objects: <span className="mono">{app.objects.join(", ")}</span>{app.since ? `, from ${app.since}` : ""}. </>}
+            {app && app.objects.length > 0 && <>Objects: <span className="mono">{app.objects.join(", ")}</span>{app.since ? `, from ${app.since}` : ""}. </>}
+            {(im.sap?.odp ?? []).length > 0 && <>ODP, by SAP's delta: <span className="mono">{im.sap!.odp!.map((x) => `${x.service}/${x.entitySet} → ${im.name}_${x.name}`).join(", ")}</span>. </>}
             {im.api && <>From <span className="mono">{im.api.baseUrl}</span>: {im.api.resources.map((r) => r.name).join(", ")}. </>}
             {im.database && <>Tables: <span className="mono">{im.database.tables.map((t) => t.table).join(", ")}</span>. </>}
             {im.files && <>Files: <span className="mono">{im.files.tables.map((t) => `${t.file} → ${im.name}_${t.name}`).join(", ")}</span> (from the landing area). </>}
@@ -65,6 +66,7 @@ function ConnectorForm({ project, connector, taken, onDone }: { project: string;
   const [objects, setObjects] = useState<string[]>(STARTING[connector.source] ?? connector.objects);
   const [schedule, setSchedule] = useState("0 * * * *");
   const [since, setSince] = useState("");
+  const [odp, setOdp] = useState<SAPExtraction[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   useEffect(() => {
@@ -80,7 +82,7 @@ function ConnectorForm({ project, connector, taken, onDone }: { project: string;
     setError(undefined);
     try {
       await putImport(project, { name: imName, source: connector.source, connection, schedule: schedule || undefined,
-        [connector.source]: { objects, since: since || undefined } });
+        [connector.source]: { objects, since: since || undefined, ...(odp.length ? { odp } : {}) } });
       onDone();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
@@ -105,15 +107,40 @@ function ConnectorForm({ project, connector, taken, onDone }: { project: string;
           ))}
         </div>
       </div>
+      {connector.source === "sap" && <ODPRows rows={odp} prefix={imName} onChange={setOdp} />}
       <div className="fields">
         <label>When (cron, UTC)<input className="mono" value={schedule} onChange={(e) => setSchedule(e.target.value)} /></label>
         {connector.incremental.length > 0 && <label>History from<input type="date" value={since} onChange={(e) => setSince(e.target.value)} /><span className="field-help">Empty: all of it.</span></label>}
       </div>
       <ErrorBanner error={error} />
       <div className="form-actions">
-        <button className="btn primary" disabled={busy || !connection || objects.length === 0} data-testid="save-import">{busy ? "Saving…" : "Add"}</button>
+        <button className="btn primary" disabled={busy || !connection || objects.length === 0 && odp.length === 0} data-testid="save-import">{busy ? "Saving…" : "Add"}</button>
         <button type="button" className="btn" onClick={onDone}>Cancel</button>
       </div>
     </form>
+  );
+}
+
+// The company's own ODP extractions an SAP import copies: each a CDS view or an extractor its gateway serves as OData
+// (made in SEGW: Redefine, ODP Extraction), copied whole once and then by SAP's delta, deletions included.
+function ODPRows({ rows, prefix, onChange }: { rows: SAPExtraction[]; prefix: string; onChange: (rows: SAPExtraction[]) => void }) {
+  const set = (i: number, patch: Partial<SAPExtraction>) => onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  return (
+    <div className="stack" style={{ gap: 8 }} data-testid="odp-rows">
+      <span className="field-label">ODP extractions (CDS views or extractors your gateway serves; copied by SAP's own delta, deletions included)</span>
+      {rows.map((r, i) => (
+        <div key={i} className="fields">
+          <label>Name<input className="mono" value={r.name} placeholder="sales_items" onChange={(e) => set(i, { name: e.target.value })} />
+            <span className="field-help">Its table: {prefix}_{r.name || "name"}</span></label>
+          <label>Service<input className="mono" value={r.service} placeholder="ZSALES_ODP_SRV" onChange={(e) => set(i, { service: e.target.value })} /></label>
+          <label>Entity set<input className="mono" value={r.entitySet} placeholder="EntityOfZCDS_SALES_ITEM" onChange={(e) => set(i, { entitySet: e.target.value })} /></label>
+          <label>Key fields<input className="mono" value={r.primaryKey.join(", ")} placeholder="SalesOrder, SalesOrderItem"
+            onChange={(e) => set(i, { primaryKey: e.target.value.split(",").map((f) => f.trim()).filter(Boolean) })} /></label>
+          <button type="button" className="btn small" onClick={() => onChange(rows.filter((_, j) => j !== i))}>Remove</button>
+        </div>
+      ))}
+      <div><button type="button" className="btn small" onClick={() => onChange([...rows, { name: "", service: "", entitySet: "", primaryKey: [] }])}
+        data-testid="add-odp">Add an ODP extraction</button></div>
+    </div>
   );
 }

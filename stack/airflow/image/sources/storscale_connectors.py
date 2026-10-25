@@ -214,6 +214,9 @@ SAP_ITEMS = {
 }
 SAP_PAGE = 1000
 SAP_KEYS_A_REQUEST = 40   # headers' items asked for at once (an $filter of ors: a URL's length)
+# An ODP extraction's deletions, by table, for the runner to make once the run
+# has landed (dlt's Iceberg merge makes none): {table: (key fields, {key values})}.
+SAP_DELETED = {}
 
 
 def _sap_value(v, kind):
@@ -269,9 +272,9 @@ def sap(im, secret, name):
     since = datetime.datetime.fromisoformat(sp["since"]).replace(tzinfo=datetime.timezone.utc) if sp.get("since") else \
         datetime.datetime(2000, 1, 1, tzinfo=datetime.timezone.utc)
 
-    def get(url, params=None, accept=None):
+    def get(url, params=None, accept=None, headers=None):
         for _ in range(8):
-            r = s.get(url, params=params, timeout=300, headers={"Accept": accept} if accept else None)
+            r = s.get(url, params=params, timeout=300, headers={**({"Accept": accept} if accept else {}), **(headers or {})})
             if r.status_code in (429, 503):   # the gateway's limit, or a moment's overload
                 time.sleep(min(60, float(r.headers.get("Retry-After") or 5)))
                 continue
@@ -347,9 +350,74 @@ def sap(im, secret, name):
                 yield from rows(service, entity_set, key, flt)
         return dlt.transformer(of, data_from=parent, name=obj, table_name=f"{name}_{obj}", primary_key=key, write_disposition="merge")
 
+    def odp(x):
+        """An ODP extraction (a CDS view's or an extractor's, as the company's
+        gateway serves it): subscribed on the first run, every row then; each
+        run after, the delta since the last (its link kept in dlt's state,
+        saved only once a run has landed). Deletions are noted for the runner;
+        an extractor's before images are left out."""
+        service, entity_set, key, table = x["service"], x["entitySet"], x["primaryKey"], f"{name}_{x['name']}"
+        deleted = SAP_DELETED.setdefault(table, (key, set()))[1]
+
+        def extract():
+            state = dlt.current.resource_state()
+            fields = kinds(service, entity_set)
+            track = {"Prefer": f"odata.track-changes, odata.maxpagesize={SAP_PAGE}"}
+            url = urljoin(service_url(service) + "/", state["delta"]) if state.get("delta") else f"{service_url(service)}/{entity_set}"
+            params = None if "sap-client=" in url else {**client, "$format": "json"}
+            while True:
+                body = get(url, params=params, headers=track).json()
+                body = body.get("d", body)
+                for row in body.get("results", []):
+                    row = {k: _sap_value(v, fields.get(k)) for k, v in row.items()
+                           if k != "__metadata" and not (isinstance(v, dict) and "__deferred" in v)}
+                    mode, counter = row.pop("ODQ_CHANGEMODE", "") or "", row.pop("ODQ_ENTITYCNTR", None)
+                    k = tuple(row.get(f) for f in key)
+                    if mode == "D":
+                        deleted.add(k)
+                    elif str(counter).strip() not in ("-1", "-1.0"):   # an extractor's before image: the after image follows
+                        deleted.discard(k)
+                        yield row
+                nxt = body.get("__next") or body.get("__skip")
+                if nxt:
+                    url = urljoin(service_url(service) + "/", nxt)
+                    params = None if "sap-client=" in url else dict(client)
+                    continue
+                if body.get("__delta"):
+                    state["delta"] = body["__delta"]
+                elif not state.get("delta"):
+                    print(f"sap: {service}/{entity_set} gave no delta link: copied whole each run (is it an ODP extraction's entity set?)")
+                return
+        return dlt.resource(extract, name=f"odp_{x['name']}", table_name=table, primary_key=key, write_disposition="merge")
+
     @dlt.source(name=f"sap_{name}")
     def source():
         made = {obj: header(obj) for obj in SAP_OBJECTS}
-        return [*made.values(), *(items(obj, made[SAP_ITEMS[obj][0]]) for obj in SAP_ITEMS)]
+        return [*made.values(), *(items(obj, made[SAP_ITEMS[obj][0]]) for obj in SAP_ITEMS), *(odp(x) for x in sp.get("odp") or [])]
 
-    return [source().with_resources(*sp["objects"])]
+    return [source().with_resources(*sp.get("objects", []), *(f"odp_{x['name']}" for x in sp.get("odp") or []))]
+
+
+def apply_sap_deletions(namespace, naming):
+    """The ODP deletions a run noted, made in its tables (pyiceberg's catalog "default", as the runner sets it up)."""
+    from pyiceberg.catalog import load_catalog
+    from pyiceberg.expressions import And, EqualTo, In, Or
+    pending = {t: (key, keys) for t, (key, keys) in SAP_DELETED.items() if keys}
+    if not pending:
+        return
+    catalog = load_catalog("default")
+    for table, (key, keys) in pending.items():
+        cols = [naming.normalize_identifier(f) for f in key]
+        if not catalog.table_exists((namespace, table)):
+            continue
+        t = catalog.load_table((namespace, table))
+        keys = sorted(keys, key=str)
+        for i in range(0, len(keys), 500):
+            chunk = keys[i:i + 500]
+            if len(cols) == 1:
+                flt = In(cols[0], [k[0] for k in chunk])
+            else:
+                conds = [And(*[EqualTo(c, v) for c, v in zip(cols, k)]) if len(cols) > 1 else EqualTo(cols[0], k[0]) for k in chunk]
+                flt = conds[0] if len(conds) == 1 else Or(*conds)
+            t.delete(delete_filter=flt)
+        print(f"sap: {len(keys)} rows deleted in SAP removed from {namespace}.{table}")

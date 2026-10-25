@@ -195,7 +195,7 @@ type Import struct {
 	Salesforce *ImportSalesforce `json:"salesforce,omitempty"`
 	Gong       *ImportApp        `json:"gong,omitempty"`
 	Highspot   *ImportApp        `json:"highspot,omitempty"`
-	SAP        *ImportApp        `json:"sap,omitempty"`
+	SAP        *ImportSAP        `json:"sap,omitempty"`
 	Files      *ImportFiles      `json:"files,omitempty"`
 }
 
@@ -207,7 +207,11 @@ func (im Import) App() *ImportApp {
 
 // Apps are the import's connector parts, by source (nil where it has none).
 func (im Import) Apps() map[string]*ImportApp {
-	return map[string]*ImportApp{"salesforce": im.Salesforce, "gong": im.Gong, "highspot": im.Highspot, "sap": im.SAP}
+	var sap *ImportApp
+	if im.SAP != nil {
+		sap = &im.SAP.ImportApp
+	}
+	return map[string]*ImportApp{"salesforce": im.Salesforce, "gong": im.Gong, "highspot": im.Highspot, "sap": sap}
 }
 
 // ImportSources are dlt's sources an import may be: two general ones, the
@@ -253,6 +257,31 @@ type ImportApp struct {
 	Objects []string `json:"objects"`
 	Since   string   `json:"since,omitempty"`
 }
+
+// ImportSAP is SAP's: its objects (the released APIs'), and the company's
+// own ODP extractions (a CDS view's or a classic extractor's, served as
+// OData by its gateway), each copied whole once, then by SAP's own delta,
+// deletions included.
+type ImportSAP struct {
+	ImportApp
+	ODP []SAPExtraction `json:"odp,omitempty"`
+}
+
+// An SAPExtraction is an ODP extraction an SAP import copies into
+// <import>_<name>: the OData service the gateway serves it in (made in
+// SEGW: Redefine, ODP Extraction), its entity set (EntityOf<the view or
+// extractor>, FactsOf…, AttrOf…), and the fields its rows are merged on.
+type SAPExtraction struct {
+	Name       string   `json:"name"`
+	Service    string   `json:"service"`   // ZSALES_ODP_SRV
+	EntitySet  string   `json:"entitySet"` // EntityOfZCDS_SALES
+	PrimaryKey []string `json:"primaryKey"`
+}
+
+var (
+	sapServiceRE = regexp.MustCompile(`^[A-Za-z0-9_/]{1,80}$`)
+	sapNameRE    = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,79}$`)
+)
 
 // ImportSalesforce is Salesforce's (dlt's verified Salesforce source).
 type ImportSalesforce = ImportApp
