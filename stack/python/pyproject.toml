@@ -8,7 +8,7 @@ version = "0.31.0"
 description = "StorScale Platform's API, as Python: projects, pipelines, flows, SQL, knowledge banks, usage, and any route by its operation ID."
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "Apache-2.0"}
+license = {text = "AGPL-3.0-or-later"}
 dependencies = ["requests>=2.31"]
 
 [project.urls]
