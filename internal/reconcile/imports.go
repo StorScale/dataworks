@@ -96,6 +96,19 @@ func importConnection(p *project.Project, im project.Import, secret map[string]s
 		}
 		b, _ := json.Marshal(extra)
 		c.Type, c.Extra = "generic", string(b)
+	case "sap":
+		// The runner takes the sign-in from the connection's Extra, as for Salesforce.
+		if secret["baseUrl"] == "" || secret["username"] == "" || secret["password"] == "" {
+			return c, errors.New("its connection needs the API's address (baseUrl), a communication user and its password")
+		}
+		extra := map[string]string{}
+		for _, k := range []string{"baseUrl", "username", "password", "client", "caCertificate"} {
+			if secret[k] != "" {
+				extra[k] = secret[k]
+			}
+		}
+		b, _ := json.Marshal(extra)
+		c.Type, c.Extra = "generic", string(b)
 	case "sql_database":
 		if secret["host"] == "" || secret["username"] == "" || secret["password"] == "" {
 			return c, errors.New("its connection needs a host, username and password")

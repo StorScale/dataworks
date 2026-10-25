@@ -78,7 +78,7 @@ This declares which tables hold people and which column identifies one. The plat
 
 **The moment:** the four files, and the one database that stays where it is.
 
-**Value:** a file becomes a governed table in minutes, with no engineer writing a loader; a database the company already runs is queried where it is, under the project's rules, with no copy; the same forms take applications (Salesforce, Gong, HighSpot) and change capture.
+**Value:** a file becomes a governed table in minutes, with no engineer writing a loader; a database the company already runs is queried where it is, under the project's rules, with no copy; the same forms take applications (Salesforce, Gong, HighSpot, SAP S/4HANA) and change capture.
 
 As **bob**, open `retail` → **Flows** → the **Uploads** panel at the bottom.
 
@@ -93,7 +93,7 @@ As **bob**, open `retail` → **Flows** → the **Uploads** panel at the bottom.
    ```
 
    Save. Within a minute the project has a catalog of its own, `retail_dashboards`, and on the **SQL** tab `SELECT count(*) FROM retail_dashboards.public.dashboards` answers from the database itself: nothing was copied. Its editors and pipelines may read it, no one may write it, and it joins with the lakehouse's tables in the same query. On Kubernetes the same source can be copied into the project's tables by change capture instead (`"copy": {"tables": ["public.dashboards"]}` on the source: inserts, updates and deletes follow within a minute).
-6. Open **Imports**: the uploads import's definition, and where an application is added from a form: **Add Salesforce** (or **Add Gong**, **Add HighSpot**), by its objects and a date to start from. A REST API or a database is an import too, added on the **Edit** page's JSON box or through the API (Users Guide, chapter 3); each runs on a schedule, each run copying only what's new.
+6. Open **Imports**: the uploads import's definition, and where an application is added from a form: **Add Salesforce** (or **Add Gong**, **Add HighSpot**, **Add SAP S/4HANA**), by its objects and a date to start from. A REST API or a database is an import too, added on the **Edit** page's JSON box or through the API (Users Guide, chapter 3); each runs on a schedule, each run copying only what's new.
 
 **Check:** on the SQL tab, as bob, `SELECT count(*) FROM uploads_orders` gives 305; as alice, the same query gives the EU rows only (about a third), because the readers' rule from Lab 2 holds for her: she's a reader.
 

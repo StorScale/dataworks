@@ -9,8 +9,9 @@ where the import runner (storscale_import_run.py) takes them.
 - `salesforce/`: on simple-salesforce; the runner gives it the import's
   objects and the connection's sign-in.
 
-Gong and HighSpot aren't verified sources: their resources are the platform's
-own, in `storscale_connectors.py` (beside the Salesforce sign-in it builds), on
-each API's v2 or v1.0 with an API key.
+Gong, HighSpot and SAP S/4HANA aren't verified sources: their resources are the
+platform's own, in `storscale_connectors.py` (beside the Salesforce sign-in it
+builds): Gong's v2 and HighSpot's v1.0 with an API key, S/4HANA's OData V2 APIs
+as a communication user.
 
 To update one, copy its folder from a newer commit and change the commit above.

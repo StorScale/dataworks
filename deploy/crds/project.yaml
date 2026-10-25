@@ -282,7 +282,7 @@ spec:
                     required: [name, source]
                     properties:
                       name: {type: string, pattern: '^[a-z][a-z0-9_]{0,19}$'}
-                      source: {type: string, enum: [rest_api, sql_database, salesforce, gong, highspot, files]}
+                      source: {type: string, enum: [rest_api, sql_database, salesforce, gong, highspot, sap, files]}
                       connection: {type: string, pattern: '^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$'}
                       schedule: {type: string, description: "Cron (UTC), five fields; default hourly."}
                       api:
@@ -329,6 +329,15 @@ spec:
                           objects:
                             type: array
                             items: {type: string, enum: [spots, items, users]}
+                          since: {type: string, pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'}
+                      sap:
+                        description: "SAP S/4HANA's objects to copy (the platform's connector, on S/4HANA's OData APIs), and how far back those copied by their changes start."
+                        type: object
+                        required: [objects]
+                        properties:
+                          objects:
+                            type: array
+                            items: {type: string, enum: [business_partners, customers, suppliers, products, sales_orders, sales_order_items, billing_documents, billing_document_items, purchase_orders, purchase_order_items]}
                           since: {type: string, pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'}
                       files:
                         description: "Files of the project's landing area (landing/uploads/ in its bucket), each read into a table by its extension (csv, xlsx, jsonl, parquet); no connection: read as the project's pipelines."

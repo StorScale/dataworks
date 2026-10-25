@@ -16,7 +16,7 @@ The examples use the lab's company, Harbor Outfitters, its projects `retail` and
 |---|---|---|
 | 1 | [Concepts and first sign-in](01-concepts.md) | The platform, people and groups, signing in, projects, the tools, what each person sees |
 | 2 | [Projects](02-projects.md) | Making a project, its members, tables, files, pipelines, alerts and limits; project templates |
-| 3 | [Getting data in](03-data-in.md) | Uploads, imports (files, APIs, databases, Salesforce), sources queried in place, change capture, connections |
+| 3 | [Getting data in](03-data-in.md) | Uploads, imports (files, APIs, databases, Salesforce, Gong, HighSpot, SAP S/4HANA), sources queried in place, change capture, connections |
 | 4 | [Access and protection](04-access-and-protection.md) | Readers' rules (tables, row filters, masks), people's data, protection tags, what each role sees |
 | 5 | [Data quality](05-quality.md) | Checks, freshness, profiling, the project's alerts |
 | 6 | [Metrics and business terms](06-metrics-and-terms.md) | The semantic model, asking metrics, tests, sharing a model, business terms |

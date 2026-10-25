@@ -50,6 +50,12 @@ var ConnectionKinds = []ConnectionKind{
 		{Key: "apiSecret", Label: "API secret", Secret: true, Required: true},
 		{Key: "baseUrl", Label: "API address, your region's (as https://api-su2.highspot.com)", Required: true},
 		{Key: "caCertificate", Label: "A CA certificate to trust too (a proxy that inspects TLS)", Multi: true}}},
+	{Kind: "sap", Label: "An SAP S/4HANA communication user", For: "SAP imports (8.4)", Fields: []ConnectionField{
+		{Key: "baseUrl", Label: "The API's address: the gateway's (https://sap-gw.example.com:44300) or S/4HANA Cloud's (https://my123456-api.s4hana.cloud.sap)", Required: true},
+		{Key: "username", Label: "Communication user (its arrangement: the APIs imported)", Required: true},
+		{Key: "password", Label: "Its password", Secret: true, Required: true},
+		{Key: "client", Label: "SAP client (sap-client; empty: the system's default)"},
+		{Key: "caCertificate", Label: "A CA certificate to trust too (the gateway's, if a company CA signs it)", Multi: true}}},
 	{Kind: "salesforce", Label: "A Salesforce org", For: "Salesforce imports (8.4)", Fields: []ConnectionField{
 		{Key: "username", Label: "User"}, {Key: "password", Label: "Password", Secret: true},
 		{Key: "securityToken", Label: "Security token", Secret: true},

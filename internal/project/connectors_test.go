@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Gong and HighSpot are connectors as Salesforce is: an import of each names
+// Gong, HighSpot and SAP are connectors as Salesforce is: an import of each names
 // its objects (from the connector's) and a connection.
 func TestTheConnectorsImports(t *testing.T) {
 	parse := func(im string) error {
@@ -23,6 +23,10 @@ func TestTheConnectorsImports(t *testing.T) {
 		{`{"name":"content","source":"highspot","connection":"sales-hs","highspot":{"objects":["spots"]},"gong":{"objects":["calls"]}}`, "a highspot import has no gong part"},
 		{`{"name":"calls","source":"gong","connection":"sales-gong","gong":{"objects":["calls"],"since":"last year"}}`, "since \"last year\": a date"},
 		{`{"name":"crm","source":"salesforce","connection":"sales-sf","salesforce":{"objects":["account"]}}`, ""},
+		{`{"name":"erp","source":"sap","connection":"sales-sap","sap":{"objects":["sales_orders","sales_order_items","business_partners"],"since":"2025-01-01"}}`, ""},
+		{`{"name":"erp","source":"sap","connection":"sales-sap","sap":{"objects":["A_SalesOrder"]}}`, `"A_SalesOrder" isn't one of SAP S/4HANA's objects`},
+		{`{"name":"erp","source":"sap","sap":{"objects":["products"]}}`, "a sap import names its objects (sap.objects) and a connection (kind sap)"},
+		{`{"name":"erp","source":"gong","connection":"sales-gong","gong":{"objects":["calls"]},"sap":{"objects":["products"]}}`, "a gong import has no sap part"},
 	} {
 		err := parse(c.im)
 		switch {
