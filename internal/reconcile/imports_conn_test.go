@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // A connector's import hands the runner its sign-in in the connection's Extra.

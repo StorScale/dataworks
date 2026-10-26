@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/flow"
-	"github.com/StorScale/storscale-platform/internal/gitlab"
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/flow"
+	"github.com/StorScale/dataworks/internal/gitlab"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // Flows are pipelines built on the canvas (use cases 11.1 and 11.2): dbt

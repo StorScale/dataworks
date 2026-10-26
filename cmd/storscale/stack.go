@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	platform "github.com/StorScale/storscale-platform"
+	platform "github.com/StorScale/dataworks"
 )
 
 // A stack is the platform's Compose project, in a directory on disk.

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	platform "github.com/StorScale/storscale-platform"
+	platform "github.com/StorScale/dataworks"
 )
 
 // The platform on a kind cluster of its own (storscale ... --k8s): the

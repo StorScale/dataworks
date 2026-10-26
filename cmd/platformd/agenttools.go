@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/flow"
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/flow"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // A project's own tools, and its agents as tools (use case 12.7, R12.16,

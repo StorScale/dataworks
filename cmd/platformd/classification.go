@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // Classification (use case 12.5): where a project's personal data is, as the

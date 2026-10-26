@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // A fileReader lists and reads the platform store's files (the assistants

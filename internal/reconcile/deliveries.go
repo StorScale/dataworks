@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/StorScale/storscale-platform/internal/pipelines"
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/pipelines"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // A ProjectDelivery is one of a project's approved deliveries (use case

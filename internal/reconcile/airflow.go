@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/StorScale/storscale-platform/internal/pipelines"
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/pipelines"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // Airflow takes a project's pipelines from its git repo as a DAG bundle of

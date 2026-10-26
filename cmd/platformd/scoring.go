@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // A project's scorings (use case 15.1, R15.3): each run (the DAG file

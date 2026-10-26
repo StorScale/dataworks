@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/llm"
-	"github.com/StorScale/storscale-platform/internal/project"
-	"github.com/StorScale/storscale-platform/internal/store"
+	"github.com/StorScale/dataworks/internal/llm"
+	"github.com/StorScale/dataworks/internal/project"
+	"github.com/StorScale/dataworks/internal/store"
 )
 
 // connStore is the store, in memory: a project's connections.

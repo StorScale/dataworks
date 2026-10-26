@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/catalog"
-	"github.com/StorScale/storscale-platform/internal/health"
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/catalog"
+	"github.com/StorScale/dataworks/internal/health"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // An issue is something wrong in a project that its people should hear of:

@@ -7,10 +7,10 @@ import (
 	"slices"
 	"sort"
 
-	"github.com/StorScale/storscale-platform/internal/gitlab"
-	"github.com/StorScale/storscale-platform/internal/pipelines"
-	"github.com/StorScale/storscale-platform/internal/project"
-	"github.com/StorScale/storscale-platform/internal/trino"
+	"github.com/StorScale/dataworks/internal/gitlab"
+	"github.com/StorScale/dataworks/internal/pipelines"
+	"github.com/StorScale/dataworks/internal/project"
+	"github.com/StorScale/dataworks/internal/trino"
 )
 
 // Reviewer keeps each project's open merge requests' data branches (use case

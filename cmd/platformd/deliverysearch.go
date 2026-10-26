@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
-	"github.com/StorScale/storscale-platform/internal/trino"
+	"github.com/StorScale/dataworks/internal/project"
+	"github.com/StorScale/dataworks/internal/trino"
 )
 
 // What was sent about a person (use case 9.2). The delivery log holds no

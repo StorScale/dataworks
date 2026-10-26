@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/health"
+	"github.com/StorScale/dataworks/internal/health"
 )
 
 // alertsSecret holds where alerts go (health.Targets): the platform's own.

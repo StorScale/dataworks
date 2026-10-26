@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/StorScale/storscale-platform/internal/flow"
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/flow"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // What an agent may read of its project (use case 12.2), by its own token

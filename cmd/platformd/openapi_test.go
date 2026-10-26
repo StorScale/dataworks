@@ -20,7 +20,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // The API reference is made from the routes: each "METHOD /api/..." route in

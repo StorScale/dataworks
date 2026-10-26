@@ -15,8 +15,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/StorScale/storscale-platform/internal/pipelines"
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/pipelines"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // ProjectAirflows gives each project with a pipelines repo an Airflow of

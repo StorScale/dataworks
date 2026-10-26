@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // A serving (use case 15.1, R15.4) is one of a project's models answering

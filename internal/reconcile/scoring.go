@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // A scoring (use case 15.1, R15.3) is a pipeline of the project's: the

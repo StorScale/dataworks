@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
-	"github.com/StorScale/storscale-platform/internal/trino"
+	"github.com/StorScale/dataworks/internal/project"
+	"github.com/StorScale/dataworks/internal/trino"
 )
 
 // fakeTrino keeps catalogs as CREATE and DROP CATALOG say, and fails a

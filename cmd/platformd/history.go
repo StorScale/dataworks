@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/audit"
-	"github.com/StorScale/storscale-platform/internal/catalog"
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/audit"
+	"github.com/StorScale/dataworks/internal/catalog"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // The data as it was (use case 6.10): Nessie keeps the catalog's history as

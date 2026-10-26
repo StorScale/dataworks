@@ -8,7 +8,7 @@ version: 0.33.0
 appVersion: "0.33.0"
 home: https://storscale.io
 sources:
-  - https://github.com/StorScale/storscale-platform
+  - https://github.com/StorScale/dataworks
 annotations:
   licenses: AGPL-3.0-or-later
 dependencies:

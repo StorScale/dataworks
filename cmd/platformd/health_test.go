@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StorScale/storscale-platform/internal/health"
+	"github.com/StorScale/dataworks/internal/health"
 )
 
 func TestTheHealthPageIsAdministratorsAndSaysWhatsAffectedToAll(t *testing.T) {

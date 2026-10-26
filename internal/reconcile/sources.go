@@ -15,8 +15,8 @@ import (
 	"time"
 	"unicode/utf16"
 
-	"github.com/StorScale/storscale-platform/internal/project"
-	"github.com/StorScale/storscale-platform/internal/trino"
+	"github.com/StorScale/dataworks/internal/project"
+	"github.com/StorScale/dataworks/internal/trino"
 )
 
 // TrinoSources keeps a Trino catalog for each of a project's sources (use

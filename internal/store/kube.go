@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // Finalizer keeps a deleted Project until the operator has undone it (taken

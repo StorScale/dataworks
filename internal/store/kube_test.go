@@ -12,7 +12,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // fakeAPI is the Kubernetes API, as far as Projects go: create, read, replace,

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // A project's models answering as an API (use case 15.1, R15.4): each

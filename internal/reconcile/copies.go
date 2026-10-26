@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // Copies copies projects' sources into their tables (use case 8.1), on

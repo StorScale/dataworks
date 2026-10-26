@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
-	"github.com/StorScale/storscale-platform/internal/trino"
+	"github.com/StorScale/dataworks/internal/project"
+	"github.com/StorScale/dataworks/internal/trino"
 )
 
 // Usage and cost per project (use case 13.1, R13.1–R13.3). What a project

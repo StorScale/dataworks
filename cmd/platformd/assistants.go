@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // The assistants the company approved to use the platform over MCP (use case

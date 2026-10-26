@@ -1,4 +1,4 @@
-module github.com/StorScale/storscale-platform
+module github.com/StorScale/dataworks
 
 go 1.26.0
 

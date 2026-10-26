@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // A fake MLflow: what it was asked, in which workspace; a version registered by bob.

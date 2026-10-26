@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/StorScale/storscale-platform/internal/pipelines"
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/pipelines"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // An agent on a schedule (use case 12.2, second part) is a pipeline of the

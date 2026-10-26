@@ -45,7 +45,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 func main() {

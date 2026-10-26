@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // The LLM gateway, as the platform shows it (use case 12.1): a project's

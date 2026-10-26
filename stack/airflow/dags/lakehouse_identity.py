@@ -84,7 +84,7 @@ def report_lineage(pipeline, run_id, inputs, output, columns, sql=None, task=Non
     event = {
         "eventType": "COMPLETE",
         "eventTime": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
-        "producer": "https://github.com/StorScale/storscale-platform",
+        "producer": "https://github.com/StorScale/dataworks",
         "schemaURL": "https://openlineage.io/spec/2-0-2/OpenLineage.json",
         "run": {"runId": str(uuid.uuid5(uuid.NAMESPACE_URL, f"{pipeline}/{run_id}/{task}"))},
         "job": {"namespace": "airflow", "name": pipeline,

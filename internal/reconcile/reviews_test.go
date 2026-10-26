@@ -10,9 +10,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/StorScale/storscale-platform/internal/gitlab"
-	"github.com/StorScale/storscale-platform/internal/pipelines"
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/gitlab"
+	"github.com/StorScale/dataworks/internal/pipelines"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // fakeNessie keeps branches: main, and those made.
