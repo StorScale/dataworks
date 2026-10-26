@@ -1,4 +1,4 @@
-"""semanticd: StorScale DataWorks's semantic layer, and its MCP server for agents.
+"""semanticd: DataWorks' semantic layer, and its MCP server for agents.
 
 Each project can have a semantic model: MetricFlow's YAML (semantic models
 and metrics) over its tables, kept in the project store as
@@ -625,7 +625,7 @@ def tool(fn):
 
 
 mcp = MCPServer(
-    "StorScale DataWorks: metrics",
+    "DataWorks: metrics",
     instructions="Answers questions with the platform's governed definitions: the company's business terms, the "
                  "projects' metrics, and the data products. Start from what the question is about (search_terms), "
                  "then the projects you can use, their metrics and the dimensions to group them by, then query; "

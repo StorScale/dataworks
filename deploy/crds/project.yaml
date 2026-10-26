@@ -1,4 +1,4 @@
-# The Project custom resource: StorScale DataWorks's central object, on
+# The Project custom resource: DataWorks' central object, on
 # Kubernetes. It has the same shape as the projects platformd keeps in its
 # store (internal/project), and the platform operator applies it the same way.
 # The operator reads Projects from Kubernetes from phase 5 (docs/plan.md);

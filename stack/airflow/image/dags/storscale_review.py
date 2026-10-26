@@ -202,7 +202,7 @@ def storscale_review():
                 results = []
             failed = [x for x in results if x.get("status") in ("error", "fail")]
             models = [x["unique_id"].split(".")[-1] for x in results if x["unique_id"].startswith("model.") and x.get("status") == "success"]
-            lines = [f"**StorScale: dbt on the data branch** (`{c['branch']}`, commit `{sha[:8]}`)", ""]
+            lines = [f"**DataWorks: dbt on the data branch** (`{c['branch']}`, commit `{sha[:8]}`)", ""]
             if models:
                 lines += ["| model | rows on the branch | rows in production |", "|---|---|---|"]
                 for m in models:

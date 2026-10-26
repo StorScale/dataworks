@@ -1,4 +1,4 @@
-// Schedule a notebook in a StorScale project (use case 7.7): a button on the
+// Schedule a notebook in a DataWorks project (use case 7.7): a button on the
 // notebook's toolbar, an item on a notebook's menu in the file browser, and a
 // command in the palette. It asks which project and when, and the notebook
 // server's extension (storscale_schedule) sends the notebook to the platform
@@ -79,7 +79,7 @@ async function schedule(path) {
 
 export default {
   id: "storscale-schedule:plugin",
-  description: "Schedule a notebook in a StorScale project.",
+  description: "Schedule a notebook in a DataWorks project.",
   autoStart: true,
   optional: [ICommandPalette, IFileBrowserFactory],
   activate: (app, palette, browsers) => {

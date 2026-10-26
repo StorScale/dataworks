@@ -334,7 +334,7 @@ finds new merge requests and commits at its next pass, within a minute or two.
 4. The run checks the repo out at that commit, fetches production's last manifest, and runs `dbt build --select
    state:modified+` (the models the change touches and those downstream; everything when production has no manifest yet),
    with the project's packages, in the branch's catalog, as the project's pipelines.
-5. It tells the merge request, in one note it updates at each commit ("StorScale: dbt on the data branch"):
+5. It tells the merge request, in one note it updates at each commit ("DataWorks: dbt on the data branch"):
    - each model built, with its rows on the branch and in production, and a sample of the rows that differ;
    - the project's metrics whose values differ on the branch from production's (up to twenty metrics);
    - each failed model or test, with its message;

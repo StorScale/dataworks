@@ -95,7 +95,7 @@ spec:
               # The platform's own account, for the pipelines pages. (create exits 0
               # when the user exists, so the password is set again either way.)
               airflow users create --username storscale-platform --password "$AIRFLOW_PLATFORM_PASSWORD" \
-                --firstname StorScale --lastname Platform --email platform@{{ .Values.global.domain }} --role Op >/dev/null 2>&1;
+                --firstname DataWorks --lastname Platform --email platform@{{ .Values.global.domain }} --role Op >/dev/null 2>&1;
               airflow users reset-password --username storscale-platform --password "$AIRFLOW_PLATFORM_PASSWORD" >/dev/null &&
               airflow connections add keycloak_pipelines --conn-type http \
                 --conn-host {{ .Values.global.domain }}{{ if include "storscale.portSuffix" . }} --conn-port {{ .Values.global.port }}{{ end }} --conn-schema sso \

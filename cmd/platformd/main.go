@@ -1,4 +1,4 @@
-// platformd is StorScale DataWorks's backend for its web app: it signs people
+// platformd is DataWorks' backend for its web app: it signs people
 // in with Keycloak (OpenID Connect, authorization code with PKCE), keeps their
 // sessions, tells the app who they are and which tools they may open, and
 // serves the app itself.
@@ -208,7 +208,7 @@ func configFromEnv(get func(string) string) (config, error) {
 		AirflowURL:  get("AIRFLOW_URL"), AirflowUser: get("AIRFLOW_USER"), AirflowPassword: get("AIRFLOW_PASSWORD"),
 		ProjectAirflows: get("PROJECT_AIRFLOWS") == "true",
 		Health:          get("HEALTH") == "on", MetricsListen: or("METRICS_LISTEN", ":9102"),
-		BrandName: or("BRAND_NAME", "StorScale"), BrandTitle: get("BRAND_TITLE"),
+		BrandName: get("BRAND_NAME"), BrandTitle: get("BRAND_TITLE"),
 		BrandLogo: get("BRAND_LOGO"), BrandIcon: get("BRAND_ICON"),
 	}
 	c.KeycloakDirectURL = strings.TrimRight(or("KEYCLOAK_DIRECT_URL", c.KeycloakURL), "/")

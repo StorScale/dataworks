@@ -1,4 +1,4 @@
-# StorScale DataWorks: use cases and storyboards
+# DataWorks: use cases and storyboards
 
 What people need to do, phase by phase, told as storyboards: who does what, frame by frame, and what they see. Each ends with the requirements it sets (R-numbers, which the phase's work and tests trace back to) and the questions still open. The phases are in [plan.md](plan.md); this is a first draft, to be worked through with the people who'll use the platform.
 

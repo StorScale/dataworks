@@ -1,4 +1,4 @@
-# StorScale DataWorks's chart. The defaults run the whole platform on one
+# DataWorks' chart. The defaults run the whole platform on one
 # kind node (deploy/kind/cluster.yaml); `storscale up --k8s` installs it so.
 
 global:
@@ -19,14 +19,14 @@ global:
     configMap: ""
     key: ca.crt   # the ConfigMap's key
 
-# The platform's brand. In its top bar's corner: StorScale's icon and name;
+# The platform's brand. In its top bar's corner: DataWorks' icon and name;
 # a logo of your own takes their place, and the name becomes its text for
 # screen readers. In the browser's tab: the title ("<name> DataWorks" unless
-# given) and an icon, square, as a tab shows it (StorScale's unless given).
+# given) and an icon, square, as a tab shows it (DataWorks' unless given).
 # Images are SVG, PNG, JPEG, GIF, WebP or ICO, base64:
 #   base64 -w0 logo.svg > logo.b64; --set-file brand.logo=logo.b64
 brand:
-  name: StorScale
+  name: ""   # the tab reads "<name> DataWorks", or "DataWorks" with none
   title: ""
   logo: ""
   icon: ""

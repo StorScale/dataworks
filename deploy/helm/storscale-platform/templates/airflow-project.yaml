@@ -83,7 +83,7 @@ deployment:
               - |
                 airflow db migrate && airflow fab-db migrate &&
                 airflow users create --username storscale-platform --password "$PLATFORM_PASSWORD" \
-                  --firstname StorScale --lastname Platform --email platform@{{ .Values.global.domain }} --role Op >/dev/null 2>&1;
+                  --firstname DataWorks --lastname Platform --email platform@{{ .Values.global.domain }} --role Op >/dev/null 2>&1;
                 airflow users reset-password --username storscale-platform --password "$PLATFORM_PASSWORD" >/dev/null
             resources: {requests: {cpu: 50m, memory: "@REQUEST_API@"}, limits: {memory: "@MEMORY_API@"}}
         containers:

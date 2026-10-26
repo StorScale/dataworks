@@ -1,4 +1,4 @@
-// platform-operator applies StorScale DataWorks's projects to the systems they
+// platform-operator applies DataWorks' projects to the systems they
 // live in: Keycloak, Apache Ranger, Buckets, Nessie and Airflow. It reads projects from
 // the store (a Buckets bucket, which platformd writes to; on Kubernetes,
 // Project resources) and writes back each project's status.
