@@ -703,13 +703,18 @@ def lab14():
     check("alice approves both as an editor; partner_orders still needs a data-protection approver who didn't make it (unless approved before)",
           ds["campaign_results"].get("approved") and (not ds["partner_orders"].get("approved") or before.get("partner_orders")),
           {k: (v.get("approved"), v.get("needs")) for k, v in ds.items()})
+    # campaign_results is the table Lab 10's flow builds: without a repo (or Lab 10 not run yet) there's none to send.
+    built = sql("bob", "retail", "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'retail' AND table_name = 'campaign_results'") == [[1]]
+    if not built:
+        print("    campaign_results isn't built yet (Lab 10's flow builds it, with retail's repo): not sent this time")
     for d in ("campaign_results", "partner_orders"):
-        if (ds.get(d) or {}).get("approved"):
+        if (ds.get(d) or {}).get("approved") and (built or d != "campaign_results"):
             state, _ = run_pipeline("bob", "retail", f"delivery_retail_{d}")
             check(f"{d} runs, and lands in acme's bucket with its manifest", state == "success", state)
-    from lakekit import s3_root
-    files = [o["Key"] for o in s3_root().list_objects_v2(Bucket="acme", Prefix="from-harbor").get("Contents", [])]
-    check("Check: acme's bucket has the files and their manifests", any("harbor_campaigns" in f for f in files), files)
+    if built:
+        from lakekit import s3_root
+        files = [o["Key"] for o in s3_root().list_objects_v2(Bucket="acme", Prefix="from-harbor").get("Contents", [])]
+        check("Check: acme's bucket has the files and their manifests", any("harbor_campaigns" in f for f in files), files)
 
 
 def lab15():
@@ -739,7 +744,10 @@ def lab15():
     still = {k: sum(1 for line in v.splitlines()[1:] if line.split(",")[1 if k == "orders.csv" else 0] == "35") for k, v in landing.items()}
     check("... and the landing files are cleansed too: 35 is in neither customers.csv nor orders.csv",
           not any(still.values()) and [f["file"] for f in e.get("files") or []], f"left {still}; erased {[(f['file'], f['rows']) for f in e.get('files') or []]}")
-    er = [x for x in j(as_("bob").get(f"{PLATFORM}/api/projects/retail/audit?source=platform&q=erasure", timeout=60)).get("events", []) if "erasure" in (x.get("action") or "")]
+    def erasures():   # written in the background, and searchable a moment later
+        return [x for x in j(as_("bob").get(f"{PLATFORM}/api/projects/retail/audit?source=platform&q=erasure", timeout=60)).get("events", [])
+                if "erasure" in (x.get("action") or "")] or None
+    er = wait(erasures, 60, every=5) or []
     check("... the Audit tab's erasure entry names the record, not the person", bool(er) and not any('"35"' in json.dumps(x) for x in er), f"{len(er)} entries")
     p = spec("retail")
     p["spec"]["tables"]["retention"] = [{"table": "uploads_campaign_responses", "column": "responded_on", "keep": "730d"}]
