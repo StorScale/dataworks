@@ -111,7 +111,7 @@ Set up, once, in the GitLab project's or its group's **Settings → CI/CD → Va
 | Variable | What it is |
 |---|---|
 | `HARBOR_REGISTRY` | The registry's host, such as `harbor.example.internal` |
-| `HARBOR_PROJECT` | The Harbor project for the images and the chart |
+| `HARBOR_PROJECT` | The Harbor project for the images and the chart, with a folder in it if wanted (`vericast/dataworks` puts them at `vericast/dataworks/platformd` and so on) |
 | `HARBOR_USER`, `HARBOR_PASSWORD` | A robot account of that project with push (and pull) permission; the password masked |
 | `HARBOR_CA` | A **File** variable: the CA that signed the registry's certificate, when it isn't a public one |
 

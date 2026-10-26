@@ -13,7 +13,8 @@
 #
 # The project's (or its groups') CI/CD variables (Settings > CI/CD > Variables):
 #   HARBOR_REGISTRY   the registry's host (harbor.example.internal)
-#   HARBOR_PROJECT    its project for these images and the chart
+#   HARBOR_PROJECT    its project for these images and the chart, and a folder in
+#                     it if wanted (vericast/dataworks: .../vericast/dataworks/platformd)
 #   HARBOR_USER       a robot account of that project, allowed to push
 #   HARBOR_PASSWORD   its secret (masked)
 #   HARBOR_CA         a File variable: the CA that signed the registry's
