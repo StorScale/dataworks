@@ -4,6 +4,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-10-26
+
+The platform is DataWorks: Vericast's install reads Vericast DataWorks, and the repository is StorScale/dataworks. A company's own build: a GitLab pipeline pushes the images, and on a release the chart, to its Harbor, and `storscale upgrade` takes them from there. A flow's steps open laid out on the canvas, and Arrange lays them out on demand.
+
+**Upgrading from 0.33.0:** `storscale upgrade --context <cluster> --version 0.34.0`, after a `--dry-run`; the Project definition is unchanged. `brand.name` is now empty by default: an install that never set it reads *DataWorks* (it read StorScale Platform); set `brand.name` or `brand.title` to show another. To move an install to a registry of your own, add `--chart oci://<harbor>/<project>/charts/storscale-platform --ca-file <ca.pem> --set images.registry=<harbor>/<project>` (the operating chapter's *From a registry of your own*).
+
 ### Added
 - **`storscale upgrade` from a registry of the company's own:** `--chart oci://...` takes the release's chart from it instead of `ghcr.io`, `--ca-file` trusts its private CA, and the check that a release's images are published asks the registry the install pulls from (`images.registry`), signing in anonymously as any registry asks (Harbor's token service as well as ghcr's).
 - **A GitLab pipeline for an internal registry** (`.gitlab-ci.yml`): on a company's own GitLab runner, the same ten images as GitHub's (linux/amd64, built with rootless BuildKit) pushed to a Harbor project, and on a release tag the chart, naming that project as its images' registry. Its registry, project, robot account and CA are the GitLab project's CI/CD variables.
