@@ -56,7 +56,9 @@ c.JupyterHub.tornado_settings = {"headers": FRAMED_BY}
 NOTEBOOK_ENV = {"BUCKETS_ENDPOINT": "http://buckets:9000", "BUCKETS_REGION": "us-east-1",
                 "STORSCALE_PLATFORMD_URL": "http://platformd:8080"}   # MLflow (15.1), through the platform: buckets_lake.mlflow()
 NOTEBOOK_ARGS = ["--ServerApp.tornado_settings=" + json.dumps({"headers": FRAMED_BY})]
-c.Spawner.start_timeout = 120
+# Starting includes pulling the notebook image where a node has none yet (over a gigabyte;
+# the chart pulls it onto every node ahead of time, notebooks.prePull).
+c.Spawner.start_timeout = int(os.environ.get("NOTEBOOK_START_TIMEOUT", "600"))
 c.Spawner.http_timeout = 120  # a notebook server's first start can be slow on a busy machine
 c.Spawner.notebook_dir = "/home/jovyan/work"
 
