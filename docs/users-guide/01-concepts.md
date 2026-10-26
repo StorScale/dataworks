@@ -90,6 +90,10 @@ beside the form, and the rest is as above:
 
 - **Their username** is their Entra login name's local part: `russell.myers@vericast.com` signs in as `russell.myers`. It's
   the name projects, the audit log and the tools know them by.
+- **Their name and email** are Entra's `given_name`, `family_name` and `email` claims, updated at every sign-in. The app
+  registration must add them to its ID token (*Token configuration*, optional claims); without them Keycloak splits the
+  display name ("Russell Myers (Vericast)" becomes first name "Russell Myers", last name "(Vericast)") and asks the person
+  to correct their profile.
 - **Their groups** come from the app roles Entra gives them on the platform's app registration, mapped to the platform's
   groups: by default `Analyst` puts them in `analysts`, and `Engineer` and `Administrator` in `engineers` (the
   administrators). They're set again at every sign-in, so a role an Entra administrator takes away takes its groups away at

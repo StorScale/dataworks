@@ -23,7 +23,9 @@ neither, but one the install asks for: sign-in with the company's Entra ID
     ENTRA_CLIENT_SECRET (the app registration's), shown on the sign-in page
     as ENTRA_DISPLAY_NAME;
   - a person's username their Entra login name's local part
-    (russell.myers@vericast.com: russell.myers);
+    (russell.myers@vericast.com: russell.myers), and their first name, last
+    name and email from the given_name, family_name and email claims, kept
+    up to date at each sign-in;
   - their groups from the app registration's roles (the token's roles
     claim), as ENTRA_ROLES maps them ({"Analyst": ["analysts"], ...}), set at
     each sign-in: a role taken away in Entra takes its groups away.
@@ -158,6 +160,11 @@ def entra_mappers():
     """The identity provider's mappers the platform keeps: the username, and a group per role."""
     out = [{"name": MINE + "username", "identityProviderAlias": ENTRA, "identityProviderMapper": "oidc-username-idp-mapper",
             "config": {"syncMode": "INHERIT", "template": "${CLAIM.preferred_username | localpart}", "target": "LOCAL"}}]
+    # The name and email from their own claims, at every sign-in: without them Keycloak splits Entra's display name
+    # ("Russell Myers (Vericast)": first name "Russell Myers", last name "(Vericast)") and asks the person to fix it.
+    for claim, attribute in (("given_name", "firstName"), ("family_name", "lastName"), ("email", "email")):
+        out.append({"name": f"{MINE}{attribute}", "identityProviderAlias": ENTRA, "identityProviderMapper": "oidc-user-attribute-idp-mapper",
+                    "config": {"syncMode": "FORCE", "claim": claim, "user.attribute": attribute}})
     roles = json.loads(env.get("ENTRA_ROLES") or "{}")
     for role, groups in sorted(roles.items()):
         for g in groups:
