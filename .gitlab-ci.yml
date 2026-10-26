@@ -67,7 +67,11 @@ build:
       mkdir -p ~/.docker ~/.config/buildkit
       : > ~/.config/buildkit/buildkitd.toml
       if [ -n "${HARBOR_CA:-}" ]; then
+        # The daemon pushes with the registry's CA; buildctl, which fetches the
+        # registry's token, trusts the system's CAs and that one together.
         printf '[registry."%s"]\n  ca = ["%s"]\n' "$HARBOR_REGISTRY" "$HARBOR_CA" > ~/.config/buildkit/buildkitd.toml
+        cat "$(ls /etc/ssl/certs/ca-certificates.crt /etc/ssl/cert.pem 2>/dev/null | head -1)" "$HARBOR_CA" > ~/ca-bundle.pem
+        export SSL_CERT_FILE=~/ca-bundle.pem
       fi
       if [ "$push" = true ]; then
         : "${HARBOR_USER:?set HARBOR_USER}" "${HARBOR_PASSWORD:?set HARBOR_PASSWORD}"
