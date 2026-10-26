@@ -356,6 +356,16 @@ func stuckReason(reason string, restarts int) bool {
 	return false
 }
 
+// stuckFor is how long a pod may stay stuck before waitReady gives up: an
+// image's pull is given longer, as a registry that's slow or drops
+// connections now and then (TLS handshake timeouts) gets there on a retry.
+func stuckFor(why string) time.Duration {
+	if strings.Contains(why, "ErrImagePull") || strings.Contains(why, "ImagePullBackOff") {
+		return 15 * time.Minute
+	}
+	return 5 * time.Minute
+}
+
 // failedJob names a setup step (Job) that has run out of tries, and why.
 func failedJob() (string, string) {
 	out, err := kubeOut("get", "jobs", "-o", "json")
@@ -499,7 +509,7 @@ func waitReady(limit time.Duration) error {
 					delete(stuckSince, p.Metadata.Name)
 				} else if since, ok := stuckSince[p.Metadata.Name]; !ok {
 					stuckSince[p.Metadata.Name] = time.Now()
-				} else if time.Since(since) > 5*time.Minute {
+				} else if time.Since(since) > stuckFor(why) {
 					kubectl("logs", p.Metadata.Name, "--all-containers", "--tail", "40")
 					return fmt.Errorf("%s is stuck: %s", p.Metadata.Name, why)
 				}

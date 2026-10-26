@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 func TestWhySaysACrashingContainerIsStuck(t *testing.T) {
@@ -25,5 +26,16 @@ func TestWhySaysACrashingContainerIsStuck(t *testing.T) {
 		if why, stuck := p.why(); why != tc.want || stuck != tc.stuck {
 			t.Errorf("%s: why() = %q, %v; want %q, %v", tc.status, why, stuck, tc.want, tc.stuck)
 		}
+	}
+}
+
+// An image's pull is given longer than other stuck pods: a registry that drops
+// connections now and then gets there on a retry.
+func TestAPullIsGivenLongerThanACrash(t *testing.T) {
+	if stuckFor("api-server: ErrImagePull") != 15*time.Minute || stuckFor("ImagePullBackOff (0 restarts)") != 15*time.Minute {
+		t.Error("a pull: want 15 minutes")
+	}
+	if stuckFor("CrashLoopBackOff (6 restarts)") != 5*time.Minute {
+		t.Error("a crash: want 5 minutes")
 	}
 }
