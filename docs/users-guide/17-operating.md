@@ -452,6 +452,9 @@ The chart's values that matter most, from `deploy/helm/storscale-platform/values
 |---|---|---|---|
 | `global.domain`, `port`, `scheme` | `storscale.localhost`, `8800`, `http` | `STORSCALE_DOMAIN`, `STORSCALE_PORT` | The platform's one address |
 | `global.ca.certs` / `configMap` | empty | | Private CAs every service trusts |
+| `sso.entra.enabled`, `tenantId`, `clientId`, `secretName` | off | `ENTRA_AUTHORITY`, `ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET` (setup's environment) | Sign-in with Entra ID, brokered by Keycloak (setup makes the identity provider `entra` from the tenant's discovery document). The app registration's redirect URI (Web) is `<platform URL>/sso/realms/lakehouse/broker/entra/endpoint`; its ID token carries `email`, `given_name`, `family_name` and `preferred_username`; its client secret is in the Secret `secretName` (key `client_secret`) |
+| `sso.entra.roles` | `Analyst: [analysts]`, `Engineer: [engineers]`, `Administrator: [engineers]` | `ENTRA_ROLES` | The app roles (the token's `roles` claim) and the platform's groups each puts people in, at every sign-in |
+| `sso.entra.displayName` | *Microsoft Entra ID* | `ENTRA_DISPLAY_NAME` | The button on Keycloak's sign-in page |
 | `brand.name`, `title`, `logo`, `icon` | none: *DataWorks* | `BRAND_NAME`, `BRAND_TITLE`, `BRAND_LOGO`, `BRAND_ICON` (platformd's environment) | The top bar and the browser tab. The title is `<name> DataWorks` unless given (`brand.name: Vericast` shows *Vericast DataWorks*); the catalog's domain of data products takes it too |
 | `gateway.ingress.*`, `gateway.trustedProxies` | off | | The ingress and its TLS |
 | `trino.memory`, `workers`, `workerMemory` | `2560Mi`, `0` | | Trino's size |

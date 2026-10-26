@@ -37,6 +37,14 @@ spec:
             - {name: STORSCALE_REVISION, value: {{ $root.Release.Revision | quote }}}
             - {name: STORSCALE_SAMPLE_TRAFFIC, value: {{ $root.Values.monitoring.sampleTraffic | quote }}}   # the monitoring example's sample buckets
             {{- include "storscale.ca.env" $root | nindent 12 }}
+            {{- with $root.Values.sso.entra }}{{ if .enabled }}
+            # Sign-in with Entra ID (setup/realm.py)
+            - {name: ENTRA_AUTHORITY, value: {{ .authority | default (printf "https://login.microsoftonline.com/%s/v2.0" (required "sso.entra.tenantId" .tenantId)) | quote }}}
+            - {name: ENTRA_CLIENT_ID, value: {{ required "sso.entra.clientId" .clientId | quote }}}
+            - {name: ENTRA_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: {{ .secretName | quote }}, key: client_secret}}}
+            - {name: ENTRA_DISPLAY_NAME, value: {{ .displayName | quote }}}
+            - {name: ENTRA_ROLES, value: {{ .roles | toJson | quote }}}
+            {{- end }}{{ end }}
           volumeMounts:
             - {name: files-tools, mountPath: /tools}
             - {name: files-projects, mountPath: /projects}

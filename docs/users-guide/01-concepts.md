@@ -82,6 +82,20 @@ Anyone with a Keycloak account. Only people in one of the platform's groups (`PL
 4. **Sign out** (the account menu, top right) ends the platform's session and Keycloak's too, so the tools are signed out
    with it.
 
+### With the company's account (Entra ID)
+
+An install can let people sign in with their Microsoft Entra ID account (`sso.entra`, [Operating the
+platform](17-operating.md)). Keycloak's page then has a button for it (*Microsoft Entra ID*, or the install's name for it)
+beside the form, and the rest is as above:
+
+- **Their username** is their Entra login name's local part: `russell.myers@vericast.com` signs in as `russell.myers`. It's
+  the name projects, the audit log and the tools know them by.
+- **Their groups** come from the app roles Entra gives them on the platform's app registration, mapped to the platform's
+  groups: by default `Analyst` puts them in `analysts`, and `Engineer` and `Administrator` in `engineers` (the
+  administrators). They're set again at every sign-in, so a role an Entra administrator takes away takes its groups away at
+  the next one. Someone with no role signs in and gets "No access".
+- **Projects** still say who's a member, by username or by group, as for anyone else.
+
 Sign-ins and sign-outs are in the audit log (`signed.in`, `signed.out`). A sign-in by someone in none of the platform's
 groups is recorded as refused, with "in none of the platform's groups". See [Operating the platform](17-operating.md) for the
 audit log.

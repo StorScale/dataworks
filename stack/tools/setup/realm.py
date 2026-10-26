@@ -13,8 +13,23 @@ what's the platform's:
   - the platform's service accounts: the roles and groups realm.json gives
     them are added, none taken away.
 
-Users, groups' members, identity providers, policies and themes are never
-written. Nor the signing key: the import made it, and the realm keeps it.
+Users, groups' members, policies and themes are never written. Nor the
+signing key: the import made it, and the realm keeps it. Identity providers
+neither, but one the install asks for: sign-in with the company's Entra ID
+(use case 6.1), when ENTRA_AUTHORITY names its tenant:
+
+  - an identity provider, entra (OpenID Connect), its endpoints from the
+    authority's discovery document, its client ENTRA_CLIENT_ID and
+    ENTRA_CLIENT_SECRET (the app registration's), shown on the sign-in page
+    as ENTRA_DISPLAY_NAME;
+  - a person's username their Entra login name's local part
+    (russell.myers@vericast.com: russell.myers);
+  - their groups from the app registration's roles (the token's roles
+    claim), as ENTRA_ROLES maps them ({"Analyst": ["analysts"], ...}), set at
+    each sign-in: a role taken away in Entra takes its groups away.
+
+Mappers someone added to it stay; those the platform made and the mapping no
+longer names go.
 
 REALM_FILE: realm.json (/keycloak/realm.json). Placeholders in it, as
 ${NAME} or ${NAME:default}, are filled from the environment, as Keycloak's
@@ -135,6 +150,75 @@ def apply_service_account(kc, user):
             log(f"realm: {sa['username']}: in group {name}")
 
 
+ENTRA = env.get("ENTRA_ALIAS") or "entra"   # another only for the entra suite's stand-in, so a real one is never touched
+MINE = "dataworks: "   # the prefix of the identity provider's mappers the platform makes
+
+
+def entra_mappers():
+    """The identity provider's mappers the platform keeps: the username, and a group per role."""
+    out = [{"name": MINE + "username", "identityProviderAlias": ENTRA, "identityProviderMapper": "oidc-username-idp-mapper",
+            "config": {"syncMode": "INHERIT", "template": "${CLAIM.preferred_username | localpart}", "target": "LOCAL"}}]
+    roles = json.loads(env.get("ENTRA_ROLES") or "{}")
+    for role, groups in sorted(roles.items()):
+        for g in groups:
+            out.append({"name": f"{MINE}role {role} -> {g}", "identityProviderAlias": ENTRA,
+                        "identityProviderMapper": "oidc-advanced-group-idp-mapper",
+                        "config": {"syncMode": "FORCE", "claims": json.dumps([{"key": "roles", "value": role}]),
+                                   "are.claim.values.regex": "false", "group": "/" + g}})
+    return out
+
+
+def apply_entra(kc):
+    """Sign-in with Entra ID, when the install names its tenant (ENTRA_AUTHORITY)."""
+    authority = (env.get("ENTRA_AUTHORITY") or "").rstrip("/")
+    if not authority:
+        return
+    for k in ("ENTRA_CLIENT_ID", "ENTRA_CLIENT_SECRET"):
+        if not env.get(k):
+            sys.exit(f"realm: sign-in with Entra ID needs {k} (the app registration's)")
+    r = requests.get(authority + "/.well-known/openid-configuration", timeout=30)
+    if not r.ok:
+        sys.exit(f"realm: Entra ID's discovery document at {authority}: HTTP {r.status_code}")
+    d = r.json()
+    want = {"alias": ENTRA, "displayName": env.get("ENTRA_DISPLAY_NAME") or "Microsoft Entra ID", "providerId": "oidc",
+            "enabled": True, "trustEmail": True, "storeToken": False, "firstBrokerLoginFlowAlias": "first broker login",
+            "config": {"clientId": env["ENTRA_CLIENT_ID"], "clientSecret": env["ENTRA_CLIENT_SECRET"],
+                       "clientAuthMethod": "client_secret_post", "issuer": d["issuer"],
+                       "authorizationUrl": d["authorization_endpoint"], "tokenUrl": d["token_endpoint"],
+                       "jwksUrl": d["jwks_uri"], "logoutUrl": d.get("end_session_endpoint", ""),
+                       "useJwksUrl": "true", "validateSignature": "true", "pkceEnabled": "true", "pkceMethod": "S256",
+                       "defaultScope": "openid profile email", "disableUserInfo": "true", "syncMode": "FORCE"}}
+    have = kc("GET", f"/identity-provider/instances/{ENTRA}")
+    if have.status_code == 404:
+        kc("POST", "/identity-provider/instances", json=want)
+        log(f"realm: identity provider {ENTRA} made ({d['issuer']})")
+    else:
+        cur = have.json()
+        merged = overlay(cur, want)
+        # Keycloak hands the secret back masked: it's sent again whenever anything else changed.
+        changed = sorted(k for k in want if k != "config" and not same(cur.get(k), want[k]))
+        changed += sorted("config." + k for k in want["config"] if k != "clientSecret" and cur.get("config", {}).get(k) != want["config"][k])
+        if changed:
+            kc("PUT", f"/identity-provider/instances/{ENTRA}", json=merged)
+            log(f"realm: identity provider {ENTRA}: " + ", ".join(changed))
+    existing = {m["name"]: m for m in kc("GET", f"/identity-provider/instances/{ENTRA}/mappers").json()}
+    wanted = entra_mappers()
+    for g in {grp for groups in json.loads(env.get("ENTRA_ROLES") or "{}").values() for grp in groups}:
+        group_id(kc, g)   # a role's group, made if the realm has none yet
+    for m in wanted:
+        cur = existing.get(m["name"])
+        if cur is None:
+            kc("POST", f"/identity-provider/instances/{ENTRA}/mappers", json=m)
+            log(f"realm: identity provider {ENTRA}: mapper {m['name'][len(MINE):]} added")
+        elif not same(overlay(cur, m), cur):
+            kc("PUT", f"/identity-provider/instances/{ENTRA}/mappers/{cur['id']}", json=overlay(cur, m))
+            log(f"realm: identity provider {ENTRA}: mapper {m['name'][len(MINE):]} put back")
+    for name, cur in existing.items():
+        if name.startswith(MINE) and name not in {m["name"] for m in wanted}:
+            kc("DELETE", f"/identity-provider/instances/{ENTRA}/mappers/{cur['id']}")
+            log(f"realm: identity provider {ENTRA}: mapper {name[len(MINE):]} removed")
+
+
 def main():
     want = load()
     kc = Admin()
@@ -150,6 +234,7 @@ def main():
     for u in want.get("users", []):
         if u.get("serviceAccountClientId"):
             apply_service_account(kc, u)
+    apply_entra(kc)
     log("realm: the platform's parts are as realm.json says")
 
 

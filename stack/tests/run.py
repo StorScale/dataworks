@@ -20,7 +20,7 @@ from lakekit import load_sales_tables
 # The chain, in order; then the suites with projects of their own.
 CHAIN = ["realm", "health", "lakehouse", "superset", "airflow", "jupyterhub", "catalog", "semantic", "projects", "project_alerts",
          "audit", "maintenance", "history", "sources", "copies", "imports", "deliveries", "monitoring"]
-OWN = ["business", "limits", "pipelines_git", "reviews", "releases", "notebooks", "flows", "classification", "agents", "erasure", "gateway", "knowledge", "usage", "api", "apps", "ml", "scoring", "serving", "roles", "templates"]
+OWN = ["business", "entra", "limits", "pipelines_git", "reviews", "releases", "notebooks", "flows", "classification", "agents", "erasure", "gateway", "knowledge", "usage", "api", "apps", "ml", "scoring", "serving", "roles", "templates"]
 SUITES = CHAIN + OWN
 FRESH_TABLES = {"superset", "airflow"}
 # Run only when named, in this order, around storscale backup and restore (restore.py).
