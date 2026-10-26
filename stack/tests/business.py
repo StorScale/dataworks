@@ -4,10 +4,12 @@ The suite makes two projects: company, whose semantic model is shared (the
 company's: customers and bookings, with terms that say what they mean and who
 owns them) and whose tables are its data products, and campaigns, whose model
 builds on it (semantic.uses) with a metric of its own. alice is a reader of
-campaigns only: company's tables are hers through its products.
+campaigns only: company's tables are hers through its products. Its terms
+are the platform's, so their names and synonyms are its own (account_holder,
+not the lab guide's customer): it runs beside the guide's retail project.
 These check (use case 10.1):
 
-  1. the terms are the platform's: Customer and Bookings with their
+  1. the terms are the platform's: Account holder and Bookings with their
      definitions, owners and synonyms, where they come from, and campaigns
      among the projects using them;
   2. alice (a reader of both) asks campaigns' own metric, bookings per
@@ -58,7 +60,7 @@ COMPANY_MODEL = """semantic_model:
   node_relation: {database: iceberg, schema_name: company, alias: customers}
   defaults: {agg_time_dimension: signed_up}
   entities:
-    - {name: customer, type: primary, expr: customer_id}
+    - {name: account_holder, type: primary, expr: customer_id}
   dimensions:
     - {name: segment, type: categorical}
     - {name: signed_up, type: time, type_params: {time_granularity: day}}
@@ -72,7 +74,7 @@ semantic_model:
   defaults: {agg_time_dimension: booked_on}
   entities:
     - {name: booking, type: primary, expr: booking_id}
-    - {name: customer, type: foreign, expr: customer_id}
+    - {name: account_holder, type: foreign, expr: customer_id}
   dimensions:
     - {name: booked_on, type: time, type_params: {time_granularity: day}}
   measures:
@@ -91,11 +93,11 @@ metric:
   type_params: {measure: booking_amount}
 ---
 terms:
-  - name: customer
-    label: Customer
+  - name: account_holder
+    label: Account holder
     owner: bob
     definition: A company or person who has signed a contract with us, active or not.
-    synonyms: [client, account]
+    synonyms: [subscriber, contract holder]
   - name: bookings_total
     label: Bookings
     owner: bob
@@ -116,7 +118,7 @@ def project(name, extra=None, tables=None, alice=True):
             "spec": {"description": f"The business suite's {name}.", "members": members, "tables": tables or {}, **(extra or {})}}
 
 
-PRODUCTS = [{"name": "customers", "table": "customers", "owner": "bob", "version": "1", "terms": ["customer"],
+PRODUCTS = [{"name": "customers", "table": "customers", "owner": "bob", "version": "1", "terms": ["account_holder"],
              "description": "Every customer, one row each.", "contract": {"columns": ["customer_id", "segment"], "within": "30d"}},
             {"name": "bookings", "table": "bookings", "owner": "bob", "version": "1", "terms": ["bookings_total"],
              "description": "Every booking, one row each.", "contract": {"columns": ["booking_id", "customer_id", "amount"]}}]
@@ -180,17 +182,17 @@ def main():
         # 1. The terms.
         r = alice.get(f"{PLATFORM}/api/terms", timeout=60)
         terms = {t["name"]: t for t in (r.json().get("terms", []) if r.ok else [])}
-        c, b = terms.get("customer", {}), terms.get("bookings_total", {})
-        check("the platform's terms: Customer and Bookings, defined, owned, and where they come from",
-              c.get("label") == "Customer" and c.get("owner") == "bob" and "client" in c.get("synonyms", [])
+        c, b = terms.get("account_holder", {}), terms.get("bookings_total", {})
+        check("the platform's terms: Account holder and Bookings, defined, owned, and where they come from",
+              c.get("label") == "Account holder" and c.get("owner") == "bob" and "subscriber" in c.get("synonyms", [])
               and "iceberg.company.customers" in c.get("tables", []) and b.get("label") == "Bookings"
               and b.get("tables") == ["iceberg.company.bookings"] and c.get("kind") == "entity", (r.status_code, c, b))
-        check("... with the metrics on Customer, and campaigns among the projects using them",
+        check("... with the metrics on Account holder, and campaigns among the projects using them",
               "customer_count" in c.get("metrics", []) and CAMPAIGNS in b.get("usedBy", []), (c.get("metrics"), b.get("usedBy")))
 
         # 2. alice asks campaigns' own metric by the company's segment.
         r = alice.post(f"{PLATFORM}/api/projects/{CAMPAIGNS}/semantic/query", headers=H, timeout=120,
-                       json={"metrics": ["bookings_per_customer"], "group_by": ["customer__segment"], "order_by": ["customer__segment"]})
+                       json={"metrics": ["bookings_per_customer"], "group_by": ["account_holder__segment"], "order_by": ["account_holder__segment"]})
         rows = r.json().get("rows") if r.ok else r.text[:300]
         check("alice asks campaigns' bookings per customer by the company's segment, and gets it",
               r.ok and [[x[0], round(float(x[1]))] for x in rows] == [["enterprise", 500], ["small business", 500]], rows)
@@ -211,16 +213,16 @@ def main():
 
         def tagged():
             t = s.get(f"{om.OM}/tables/name/trino.iceberg.company.customers", params={"fields": "tags"}, timeout=30)
-            return t.ok and any(x.get("tagFQN") == "BusinessTerms.customer" for x in t.json().get("tags", []))
+            return t.ok and any(x.get("tagFQN") == "BusinessTerms.account_holder" for x in t.json().get("tags", []))
         def terms():
             glossary = s.get(f"{om.OM}/glossaries/name/BusinessTerms", timeout=30)
             gt = s.get(f"{om.OM}/glossaryTerms", params={"glossary": glossary.json().get("id") if glossary.ok else "", "limit": 100}, timeout=30)
             return sorted(t["name"] for t in (gt.json().get("data", []) if gt.ok else []))
         # Both come with catalog-sync's round (minutes apart, with every project's columns sampled).
-        found = wait(lambda: tagged() and {"customer", "bookings_total"} <= set(terms()), 900, every=15)
+        found = wait(lambda: tagged() and {"account_holder", "bookings_total"} <= set(terms()), 900, every=15)
         names = terms()
-        check("the catalog's glossary has the terms, and the company's customers table is tagged Customer",
-              {"customer", "bookings_total"} <= set(names) and found, (names, found))
+        check("the catalog's glossary has the terms, and the company's customers table is tagged Account holder",
+              {"account_holder", "bookings_total"} <= set(names) and found, (names, found))
 
         # 6. Superset's datasets.
         sup = ss.sign_in("alice")
@@ -231,10 +233,10 @@ def main():
         d = wait(dataset, 300, every=10)
         r = sup.post(f"{ss.SS}/api/v1/chart/data", headers=ss.headers(sup), timeout=120, json={
             "datasource": {"id": d["id"], "type": "table"} if d else {}, "result_format": "json", "result_type": "full",
-            "queries": [{"metrics": ["bookings_total"], "columns": ["customer__segment"], "orderby": [["customer__segment", True]], "row_limit": 100}]})
-        chart = [[x["customer__segment"], round(float(x["bookings_total"]))] for x in r.json()["result"][0]["data"]] if r.ok and d else r.text[:300]
+            "queries": [{"metrics": ["bookings_total"], "columns": ["account_holder__segment"], "orderby": [["account_holder__segment", True]], "row_limit": 100}]})
+        chart = [[x["account_holder__segment"], round(float(x["bookings_total"]))] for x in r.json()["result"][0]["data"]] if r.ok and d else r.text[:300]
         sem = alice.post(f"{PLATFORM}/api/projects/{CAMPAIGNS}/semantic/query", headers=H, timeout=120,
-                         json={"metrics": ["bookings_total"], "group_by": ["customer__segment"], "order_by": ["customer__segment"]})
+                         json={"metrics": ["bookings_total"], "group_by": ["account_holder__segment"], "order_by": ["account_holder__segment"]})
         answer = [[x[0], round(float(x[1]))] for x in sem.json().get("rows", [])] if sem.ok else sem.text[:300]
         check("Superset has the company's bookings as a dataset, and alice's chart there agrees with the semantic layer",
               d is not None and chart == answer == [["enterprise", 1000], ["small business", 500]], (chart, answer))
@@ -247,18 +249,18 @@ def main():
 
         # 10.4: an assistant on the business layer, through the MCP server.
         ag = Agent(agent_token("alice"))
-        found, _ = ag.call("search_terms", question="Which clients' bookings fell most this quarter?")
+        found, _ = ag.call("search_terms", question="Which subscribers' bookings fell most this quarter?")
         names = {t["name"] for t in (found or {}).get("terms", [])}
-        check("alice's assistant finds Customer (by a synonym) and Bookings among the company's terms", names == {"customer", "bookings_total"}, found)
+        check("alice's assistant finds Account holder (by a synonym) and Bookings among the company's terms", names == {"account_holder", "bookings_total"}, found)
         none, _ = ag.call("search_terms", question="What was the weather in Paris?")
         check("... and is told plainly when no governed definition covers a question",
               none is not None and none.get("terms") == [] and "No governed definition" in none.get("note", ""), none)
         pr, _ = ag.call("describe_product", project=COMPANY, product="bookings")
-        res, e = ag.call("query_metrics", project=CAMPAIGNS, metrics=["bookings_per_customer"], group_by=["customer__segment"], order_by=["customer__segment"])
+        res, e = ag.call("query_metrics", project=CAMPAIGNS, metrics=["bookings_per_customer"], group_by=["account_holder__segment"], order_by=["account_holder__segment"])
         used = (res or {}).get("used", {})
         check("it finds bookings certified, and its answer cites the metric, the terms and the product it used",
               (pr or {}).get("certified") is True and e is None and [[x[0], round(float(x[1]))] for x in res["rows"]] == [["enterprise", 500], ["small business", 500]]
-              and [m["name"] for m in used.get("metrics", [])] == ["bookings_per_customer"] and {t["name"] for t in used.get("terms", [])} >= {"customer", "bookings_total"}
+              and [m["name"] for m in used.get("metrics", [])] == ["bookings_per_customer"] and {t["name"] for t in used.get("terms", [])} >= {"account_holder", "bookings_total"}
               and any(p["name"] == "bookings" and p["certified"] for p in used.get("products", [])), (pr, e, used))
         rows, e = ag.call("query_product", project=COMPANY, product="bookings", columns=["booking_id", "amount"])
         check("alice's assistant reads the product in place, under company's rules (no 3000)", e is None and [r[0] for r in rows["rows"]] == [10, 12], (rows, e))
