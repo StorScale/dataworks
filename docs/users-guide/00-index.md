@@ -35,8 +35,9 @@ The examples use the lab's company, Harbor Outfitters, its projects `retail` and
 
 ## Where else to look
 
-- **This guide as one PDF:** each release's is in the GitLab project's package registry (`dataworks-users-guide`), and the
-  latest is the `users-guide` job's artifact on the default branch. Build it yourself with
+- **This guide as one PDF:** [DataWorks-Users-Guide.pdf](DataWorks-Users-Guide.pdf), rebuilt with each release; each
+  release's is also in the GitLab project's package registry (`dataworks-users-guide`), and the latest is the
+  `users-guide` job's artifact on the default branch. Build it yourself with
   `python docs/users-guide/pdf/build.py . guide.pdf` (after `pip install -r docs/users-guide/pdf/requirements.txt`).
 - [The lab guide](../guide.md): the platform end to end, in order, with checks.
 - [The handoff](../handoff.md): how the platform is built and installed, and where the code is.
