@@ -34,7 +34,9 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R6.3 A first-run Home for someone in no project, saying how to get access.
 - R6.4 Access requests: ask, approve or refuse in the project, with the result applied by the operator and recorded in the audit log.
 
-**Built (2026-10-07), a little:** Home tells someone in no project that they're in none, and to ask an administrator (R6.3's first part). Not yet: corporate sign-in (R6.1), `examples.users: false` (R6.2: the chart has the setting, and nothing reads it yet) and access requests (R6.4), which wait for real users, as decided below.
+**Built (2026-10-26):** sign-in with Entra ID (R6.1), brokered by Keycloak: `sso.entra` names the tenant and the app registration, setup makes the identity provider from the tenant's discovery document, a person's username is their Entra login name's local part, and the app registration's roles put them in the platform's groups at each sign-in (Analyst: analysts; Engineer and Administrator: engineers), so a role taken away in Entra takes its groups away. The `entra` suite plays Entra with a stand-in realm. The example people stay beside it.
+
+**Built (2026-10-07), a little:** Home tells someone in no project that they're in none, and to ask an administrator (R6.3's first part). Not yet: `examples.users: false` (R6.2: the chart has the setting, and nothing reads it yet) and access requests (R6.4), which wait for real users, as decided below.
 
 **Decided (2026-10-16)**
 - The identity provider will be Entra ID. Until real users come, the platform stays in development: the example people stay, and corporate sign-in (R6.1) and turning the examples off (R6.2) wait.

@@ -109,6 +109,29 @@ progressDeadlineSeconds: 3600
 secrets: {}
 #  LAKEHOUSE_USER_PASSWORD: ...
 
+# Sign-in with the company's Entra ID (use case 6.1), brokered by Keycloak:
+# its sign-in page offers "displayName" beside the example people's form, and
+# people come in by their Entra login name's local part (russell.myers), in the
+# groups their app roles map to (roles), set again at each sign-in. The app
+# registration's redirect URI (Web):
+#   <the platform's URL>/sso/realms/lakehouse/broker/entra/endpoint
+# with the email, given_name, family_name and preferred_username claims in its
+# ID token, and app roles assigned to people or groups. Its client secret is
+# in the Secret secretName (key client_secret), made beside the release:
+#   kubectl -n <namespace> create secret generic <secretName> --from-literal=client_secret='...'
+sso:
+  entra:
+    enabled: false
+    tenantId: ""
+    clientId: ""
+    secretName: entra-client
+    displayName: Microsoft Entra ID
+    authority: ""   # default https://login.microsoftonline.com/<tenantId>/v2.0 (another OpenID issuer: tests)
+    roles:          # an app role (the token's roles claim) -> the platform's groups it puts people in
+      Analyst: [analysts]
+      Engineer: [engineers]
+      Administrator: [engineers]   # the administrators' groups (PLATFORM_ADMIN_GROUPS: engineers)
+
 # The example people (alice, bob, carol) and their groups, from the realm.
 examples:
   users: true
