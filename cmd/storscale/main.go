@@ -61,6 +61,8 @@ Flags for upgrade:
   --dir DIR          go to a checkout's chart instead; on a cluster, with --image-tag V,
                      published images to run (with --k8s, the checkout's own, built)
   --force            even to an older release
+  --chart oci://...  the release's chart from a registry of your own (default: ghcr.io's)
+  --ca-file PEM      that registry's CA, when its certificate isn't a public CA's
   (backup and restore take --context, --namespace and --yes too, or --k8s for kind's)
 
 Flags for every command:
@@ -110,6 +112,8 @@ func run(args []string) error {
 	fs.BoolVar(&o.test, "test", false, "then run the checks (upgrade)")
 	fs.BoolVar(&o.force, "force", false, "even to an older release (upgrade)")
 	fs.StringVar(&o.imageTag, "image-tag", "", "published images to run with --dir (upgrade)")
+	fs.StringVar(&o.chart, "chart", "", "the chart repository of a published release, oci://... (upgrade; ghcr.io's by default)")
+	fs.StringVar(&o.caFile, "ca-file", "", "the CA of a registry with a private certificate, PEM (upgrade)")
 	fs.StringVar(&o.kubeCtx, "context", "", "kubectl's context (upgrade)")
 	fs.StringVar(&o.kubeNS, "namespace", "storscale", "the namespace (upgrade)")
 	fs.StringVar(&o.kubeRel, "release", "storscale", "the Helm release (upgrade)")

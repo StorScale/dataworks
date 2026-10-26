@@ -5,6 +5,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 ## [Unreleased]
 
 ### Added
+- **`storscale upgrade` from a registry of the company's own:** `--chart oci://...` takes the release's chart from it instead of `ghcr.io`, `--ca-file` trusts its private CA, and the check that a release's images are published asks the registry the install pulls from (`images.registry`), signing in anonymously as any registry asks (Harbor's token service as well as ghcr's).
 - **A GitLab pipeline for an internal registry** (`.gitlab-ci.yml`): on a company's own GitLab runner, the same ten images as GitHub's (linux/amd64, built with rootless BuildKit) pushed to a Harbor project, and on a release tag the chart, naming that project as its images' registry. Its registry, project, robot account and CA are the GitLab project's CI/CD variables.
 
 ### Changed
