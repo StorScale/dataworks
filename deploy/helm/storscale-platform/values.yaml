@@ -64,6 +64,7 @@ upstream:
   prometheus: prom/prometheus:v3.13.4
   grafana: grafana/grafana:13.0.10
   bucketsd: ghcr.io/storscale/bucketsd:1.20.4
+  pause: registry.k8s.io/pause:3.10   # the notebook image's pre-pull (notebooks.prePull)
 
 # The gateway: every address of the platform, as one Service. It listens on
 # its own port over plain HTTP, whatever the platform's address is. The platform's
@@ -401,6 +402,11 @@ notebooks:
   memoryLimit: 1G
   cpuLimit: 2           # CPUs, each person's notebook
   storage: 1Gi
+  # The notebook image (over a gigabyte) pulled onto every node ahead of time, and again
+  # at each upgrade, so no one's notebook waits on the download; a notebook may take up
+  # to startTimeout seconds to start, its image's pull included.
+  prePull: true
+  startTimeout: 600
 
 buckets-operator:
   enabled: true

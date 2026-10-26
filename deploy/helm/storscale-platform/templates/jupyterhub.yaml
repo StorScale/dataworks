@@ -91,6 +91,7 @@ spec:
           env:
             - {name: NOTEBOOK_IMAGE, value: {{ include "storscale.image" (list . "notebook") | quote }}}
             - {name: NOTEBOOK_PULL_POLICY, value: {{ .Values.images.pullPolicy | quote }}}
+            - {name: NOTEBOOK_START_TIMEOUT, value: {{ .Values.notebooks.startTimeout | quote }}}
             - {name: NOTEBOOK_MEMORY, value: {{ .Values.notebooks.memoryLimit | quote }}}
             - {name: NOTEBOOK_CPUS, value: {{ .Values.notebooks.cpuLimit | quote }}}
             - {name: NOTEBOOK_STORAGE, value: {{ .Values.notebooks.storage | quote }}}
@@ -128,3 +129,38 @@ spec:
   ports:
     - {name: http, port: 8000, targetPort: http}
     - {name: api, port: 8081, targetPort: api}   # notebook servers reach the hub here
+{{- if .Values.notebooks.prePull }}
+---
+# The notebook image on every node ahead of time: an init container of it that
+# does nothing, then a pause container keeping the pod (and so the image) there.
+# A new image (an upgrade) is pulled onto every node as the DaemonSet rolls.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: notebook-prepull
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels: {{- include "storscale.selector" (list .Release.Name "notebook-prepull") | nindent 6 }}
+  updateStrategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: "100%"}}
+  template:
+    metadata:
+      labels: {{- include "storscale.selector" (list .Release.Name "notebook-prepull") | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 0
+      securityContext: {runAsNonRoot: true, runAsUser: 65535, runAsGroup: 65535, seccompProfile: {type: RuntimeDefault}}
+      initContainers:
+        - name: pull
+          image: {{ include "storscale.image" (list . "notebook") }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          command: ["true"]
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 1m, memory: 8Mi}, limits: {memory: 64Mi}}
+      containers:
+        - name: pause
+          image: {{ .Values.upstream.pause }}
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 1m, memory: 8Mi}, limits: {memory: 16Mi}}
+{{- end }}

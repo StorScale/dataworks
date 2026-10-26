@@ -514,6 +514,8 @@ Each server start puts them in `work/templates/`: `churn.ipynb`, `propensity.ipy
 | `notebooks.memoryLimit` | `1G` | fixed `1G` in `jupyterhub_config.py` | Each person's notebook server's memory. |
 | `notebooks.cpuLimit` | `2` | 2 (the hub reads `NOTEBOOK_CPUS`, which `compose.yaml` doesn't set) | Each person's notebook server's CPUs. |
 | `notebooks.storage` | `1Gi` | a Docker volume, no size | Each person's `work/` volume. |
+| `notebooks.prePull` | `true` | n/a | The notebook image (over a gigabyte) pulled onto every node ahead of time and at each upgrade (a DaemonSet, `notebook-prepull`), so a first notebook doesn't wait on the download. |
+| `notebooks.startTimeout` | `600` | `600` | Seconds a notebook server may take to start, its image's pull included, before JupyterHub gives up. |
 | `storage.jupyterhub` | `1Gi` | | The hub's own database volume. |
 | `placement.jupyterhub` | `{}` | | A node selector for the hub. |
 | `images.mlflow` | `platform-mlflow` | `mlflow` service | MLflow's image. |
