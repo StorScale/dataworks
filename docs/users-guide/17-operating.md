@@ -106,13 +106,13 @@ runner and pushes the same ten images as the public build (linux/amd64) to a Har
 the chart too, its `images.registry` set to that project. Pushes to the default branch push `<short sha>` and the
 branch's name; a tag `v<version>` pushes `<version>` and `latest`; another branch builds everything without pushing.
 
-Set up, once, in the GitLab project's **Settings → CI/CD → Variables**:
+Set up, once, in the GitLab project's or its group's **Settings → CI/CD → Variables**:
 
 | Variable | What it is |
 |---|---|
 | `HARBOR_REGISTRY` | The registry's host, such as `harbor.example.internal` |
 | `HARBOR_PROJECT` | The Harbor project for the images and the chart |
-| `HARBOR_USERNAME`, `HARBOR_PASSWORD` | A robot account of that project with push (and pull) permission; the password masked |
+| `HARBOR_USER`, `HARBOR_PASSWORD` | A robot account of that project with push (and pull) permission; the password masked |
 | `HARBOR_CA` | A **File** variable: the CA that signed the registry's certificate, when it isn't a public one |
 
 The runner is the one tagged in the file (`default: tags`). Jobs build with rootless BuildKit, so the runner needs no
