@@ -285,8 +285,11 @@ def lab4():
     check("the catalog suggests personal on email and phone; customer_id is personal, declared",
           bool(email and email["tag"] == "personal" and (phone is None or phone["tag"] == "personal") and cid and cid["state"] == "confirmed"),
           {k[1]: (v["tag"], v["state"]) for k, v in cols.items() if k[0] == "uploads_customers"})
-    issues = alerts("retail")
-    check("the Overview lists the email alert", any("email" in (i.get("message") or i.get("what") or json.dumps(i)) for i in issues), [i.get("message", i) for i in issues][:3])
+    def email_alert():   # the alerts are looked for once a minute
+        issues = alerts("retail")
+        return issues if any("email" in json.dumps(i) for i in issues) else None
+    issues = wait(email_alert, 180, every=15) or alerts("retail")
+    check("the Overview lists the email alert", any("email" in json.dumps(i) for i in issues), [i.get("title", i) for i in issues][:3])
     rows = wait(lambda: (lambda x: x if isinstance(x, list) and x and len(str(x[0][1])) == 64 else None)(
         sql("alice", "retail", "SELECT first_name, email, phone FROM uploads_customers LIMIT 3")), 300, every=15)
     check("as alice, email is hashed (and phone, unless its tag was taken off before)", bool(rows) and len(str(rows[0][1])) == 64, rows[:1] if isinstance(rows, list) else rows)
@@ -695,13 +698,16 @@ def lab14():
     check("the two deliveries, awaiting approval; partner_orders names its personal column customer_id",
           r.ok and "customer_id" in json.dumps((ds.get("partner_orders") or {}).get("personal")), {k: (v.get("approved"), v.get("needs")) for k, v in ds.items()})
     before = {d["name"]: d.get("approved") for d in j(as_("bob").get(f"{PLATFORM}/api/projects/retail/deliveries", timeout=60)).get("deliveries", [])}
+    # Lab 21's privacy-office, left from a run before, makes analysts (alice) data-protection approvers too.
+    office = next((x for x in j(as_("bob").get(f"{PLATFORM}/api/roles", timeout=60)).get("roles", []) if x["name"] == "privacy-office"), None)
+    alice_protects = bool(office and "analysts" in (office.get("groups") or []))
     mine = api("bob", "POST", "/api/projects/retail/deliveries/campaign_results/approve", ok=(403, 409))
     check("bob, who made it, can't approve it", mine.status_code in (403, 409), f"HTTP {mine.status_code}")
     api("alice", "POST", "/api/projects/retail/deliveries/campaign_results/approve")
     api("alice", "POST", "/api/projects/retail/deliveries/partner_orders/approve")
     ds = {d["name"]: d for d in j(as_("bob").get(f"{PLATFORM}/api/projects/retail/deliveries", timeout=60)).get("deliveries", [])}
-    check("alice approves both as an editor; partner_orders still needs a data-protection approver who didn't make it (unless approved before)",
-          ds["campaign_results"].get("approved") and (not ds["partner_orders"].get("approved") or before.get("partner_orders")),
+    check("alice approves both as an editor; partner_orders still needs a data-protection approver who didn't make it (unless approved before, or Lab 21's privacy-office makes alice one)",
+          ds["campaign_results"].get("approved") and (not ds["partner_orders"].get("approved") or before.get("partner_orders") or alice_protects),
           {k: (v.get("approved"), v.get("needs")) for k, v in ds.items()})
     # campaign_results is the table Lab 10's flow builds: without a repo (or Lab 10 not run yet) there's none to send.
     built = sql("bob", "retail", "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'retail' AND table_name = 'campaign_results'") == [[1]]

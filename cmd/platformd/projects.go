@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -504,6 +505,49 @@ func (s *server) handleRunLog(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"log": text})
 }
 
+// importApplied waits (up to wait) for the operator to apply an import's
+// latest change: Airflow makes the import's DAG from the spec the operator
+// applied, so a run started a moment after a change (a table added) would
+// otherwise copy what the import was. Any other pipeline: true.
+func (s *server) importApplied(ctx context.Context, v *projectView, dag string, wait time.Duration) bool {
+	if !strings.HasPrefix(dag, "import_") || s.store == nil {
+		return true
+	}
+	var want *project.Import
+	for i, im := range v.Spec.Spec.Imports {
+		if v.Spec.ImportConnID(im) == dag {
+			want = &v.Spec.Spec.Imports[i]
+		}
+	}
+	if want == nil {
+		return true
+	}
+	deadline := time.Now().Add(wait)
+	for {
+		if st, err := s.store.Status(ctx, v.Name); err == nil && st != nil && st.Spec != nil {
+			for _, im := range st.Spec.Spec.Imports {
+				if im.Name == want.Name && sameJSON(im, *want) {
+					return true
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(2 * time.Second):
+		}
+	}
+}
+
+func sameJSON(a, b any) bool {
+	ja, _ := json.Marshal(a)
+	jb, _ := json.Marshal(b)
+	return string(ja) == string(jb)
+}
+
 // handleStartRun starts a run of one of the project's pipelines, for its
 // editors (and administrators). The run itself goes as the pipelines'
 // service account, whoever starts it.
@@ -532,6 +576,9 @@ func (s *server) handleStartRun(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
+	}
+	if !s.importApplied(r.Context(), v, r.PathValue("pipeline"), time.Minute) {
+		s.log.Warn("pipeline run: the import's latest change not applied yet; started anyway", "project", v.Name, "pipeline", r.PathValue("pipeline"))
 	}
 	run, err := af.Start(r.Context(), v.Name, r.PathValue("pipeline"), sess.User.Username)
 	if err != nil {
