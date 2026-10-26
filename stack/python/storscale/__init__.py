@@ -1,4 +1,4 @@
-"""StorScale DataWorks's API, as Python (use case 14.3, R14.8).
+"""DataWorks' API, as Python (use case 14.3, R14.8).
 
     import storscale
     p = storscale.Platform("https://storscale.example.com")
@@ -56,7 +56,7 @@ class Platform:
             if not all(self._client) and not all(self._person):
                 if not sys.stdin.isatty():
                     raise ValueError("sign in: a token, a client and its secret, or a name and password (see the README)")
-                self._person = (input("StorScale user: "), getpass.getpass("Password: "))
+                self._person = (input("DataWorks user: "), getpass.getpass("Password: "))
             self._sign_in()
 
     # --- signing in -----------------------------------------------------------------------

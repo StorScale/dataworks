@@ -99,6 +99,31 @@ How it behaves and what to watch:
 - A Spark Operator another release installed owns the Spark CRDs: install with `--set spark-operator.enabled=false`.
 - Upgrade with `storscale upgrade`, never a bare `helm upgrade` ([Upgrades](#upgrades)).
 
+### From a registry of your own (GitLab and Harbor)
+
+A company that keeps its images in its own registry builds them there: `.gitlab-ci.yml` runs on the company's GitLab
+runner and pushes the same ten images as the public build (linux/amd64) to a Harbor project, and on each release tag
+the chart too, its `images.registry` set to that project. Pushes to the default branch push `<short sha>` and the
+branch's name; a tag `v<version>` pushes `<version>` and `latest`; another branch builds everything without pushing.
+
+Set up, once, in the GitLab project's **Settings → CI/CD → Variables**:
+
+| Variable | What it is |
+|---|---|
+| `HARBOR_REGISTRY` | The registry's host, such as `harbor.example.internal` |
+| `HARBOR_PROJECT` | The Harbor project for the images and the chart |
+| `HARBOR_USERNAME`, `HARBOR_PASSWORD` | A robot account of that project with push (and pull) permission; the password masked |
+| `HARBOR_CA` | A **File** variable: the CA that signed the registry's certificate, when it isn't a public one |
+
+The runner is the one tagged in the file (`default: tags`). Jobs build with rootless BuildKit, so the runner needs no
+privileged pods, but it must reach the base images' registries (Docker Hub, quay.io, gcr.io) and, for the chart,
+`ghcr.io` and `kubeflow.github.io` (its dependencies). Install from it as from the public chart:
+
+```bash
+helm install storscale oci://harbor.example.internal/<project>/charts/storscale-platform --version 0.33.0 \
+  -n storscale --create-namespace -f platform.yaml --set-file global.ca.certs=root-ca.pem
+```
+
 ## Checking an install: storscale test
 
 `storscale test` runs every end-to-end suite, or those named: `shell` (the web app, in a browser), `lakehouse`, `superset`, `airflow`, `jupyterhub`, `catalog`, `semantic`, `projects`, `monitoring`, and the rest in `stack/tests/` (`deliveries`, `erasure`, `health`, `limits`, `usage`, `audit`, ...). On Compose they run in the `test` service; with `--k8s` (or `storscale upgrade --test`) as `helm test`, the ConfigMap `storscale-tests` saying which. The lab guide is a suite too, run only when named (`storscale test --dir stack guide`), and it leaves what it makes.
@@ -415,7 +440,7 @@ The chart's values that matter most, from `deploy/helm/storscale-platform/values
 |---|---|---|---|
 | `global.domain`, `port`, `scheme` | `storscale.localhost`, `8800`, `http` | `STORSCALE_DOMAIN`, `STORSCALE_PORT` | The platform's one address |
 | `global.ca.certs` / `configMap` | empty | | Private CAs every service trusts |
-| `brand.name`, `title`, `logo`, `icon` | `StorScale` | `BRAND_NAME`, `BRAND_TITLE`, `BRAND_LOGO`, `BRAND_ICON` (platformd's environment) | The top bar and the browser tab. The title is `<name> DataWorks` unless given (`brand.name: Vericast` shows *Vericast DataWorks*); the catalog's domain of data products takes it too |
+| `brand.name`, `title`, `logo`, `icon` | none: *DataWorks* | `BRAND_NAME`, `BRAND_TITLE`, `BRAND_LOGO`, `BRAND_ICON` (platformd's environment) | The top bar and the browser tab. The title is `<name> DataWorks` unless given (`brand.name: Vericast` shows *Vericast DataWorks*); the catalog's domain of data products takes it too |
 | `gateway.ingress.*`, `gateway.trustedProxies` | off | | The ingress and its TLS |
 | `trino.memory`, `workers`, `workerMemory` | `2560Mi`, `0` | | Trino's size |
 | `buckets.servers`, `volumesPerServer`, `storage`, `storageClassName`, `pools` | `1`, `4`, `10Gi`, default, `[]` | | Buckets' drives ([Buckets capacity](#buckets-capacity)) |

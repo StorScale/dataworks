@@ -1,4 +1,4 @@
-# Handoff: StorScale DataWorks on a real Kubernetes cluster
+# Handoff: DataWorks on a real Kubernetes cluster
 
 For whoever picks this up next, person or agent, on a machine that can reach
 the target cluster. Read this, then [plan.md](plan.md) and the

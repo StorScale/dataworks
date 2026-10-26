@@ -302,7 +302,7 @@ def product_hash(pr):
 
 def sync_products():
     """OpenMetadata's data products as the projects' (use case 10.3): in the
-    domain StorScale, one per product, its table its asset and its owner the
+    domain StorScale (shown as the install's title, DataWorks by default), one per product, its table its asset and its owner the
     product's; a certified product's table marked Certification.Gold (and
     unmarked when it isn't any more); products gone, removed."""
     h = admin_headers()
@@ -315,7 +315,7 @@ def sync_products():
     if not wanted and requests.get(f"{OM}/v1/domains/name/{DOMAIN}", headers=h, timeout=10).status_code == 404:
         return
     requests.put(f"{OM}/v1/domains", headers=h, timeout=10, json={
-        "name": DOMAIN, "displayName": os.environ.get("BRAND_TITLE") or "StorScale DataWorks", "domainType": "Aggregate",
+        "name": DOMAIN, "displayName": os.environ.get("BRAND_TITLE") or "DataWorks", "domainType": "Aggregate",
         "description": "The data products the platform's projects publish: kept by the platform."}).raise_for_status()
     have = requests.get(f"{OM}/v1/dataProducts", headers=h, timeout=10, params={"domain": DOMAIN, "limit": 1000}).json().get("data", [])
     for d in have:
@@ -480,7 +480,7 @@ def sync_models():
     if not wanted and requests.get(f"{OM}/v1/services/mlmodelServices/name/{ML_SERVICE}", headers=h, timeout=10).status_code == 404:
         return
     requests.put(f"{OM}/v1/services/mlmodelServices", headers=h, timeout=10, json={
-        "name": ML_SERVICE, "displayName": "StorScale MLflow", "serviceType": "Mlflow",
+        "name": ML_SERVICE, "displayName": "DataWorks MLflow", "serviceType": "Mlflow",
         "description": "The projects' registered models, from the platform's MLflow (a workspace per project): kept by the platform."}).raise_for_status()
     have = requests.get(f"{OM}/v1/mlmodels", headers=h, timeout=30, params={"service": ML_SERVICE, "limit": 1000})
     have.raise_for_status()

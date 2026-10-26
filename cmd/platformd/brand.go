@@ -8,29 +8,30 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strings"
 )
 
-// The platform's brand. In the top bar's corner: StorScale's icon and name,
+// The platform's brand. In the top bar's corner: DataWorks' icon and name,
 // or a logo of the deployment's own (BRAND_LOGO) in their place, with
 // BRAND_NAME as its text for screen readers. In the browser's tab: the
-// title (BRAND_TITLE, by default "<name> DataWorks") and an icon
-// (BRAND_ICON, square, as a tab shows it), or StorScale's. Images are SVG,
+// title (BRAND_TITLE, by default "<name> DataWorks", or "DataWorks" with no
+// name) and an icon (BRAND_ICON, square, as a tab shows it), or DataWorks'. Images are SVG,
 // PNG, JPEG, GIF, WebP or ICO.
 
 type brand struct {
 	name, title        string
-	logo, icon         []byte // nil: StorScale's
-	defaultIcon        []byte // StorScale's (the web app's favicon.svg)
+	logo, icon         []byte // nil: DataWorks'
+	defaultIcon        []byte // DataWorks' (the web app's favicon.svg)
 	logoType, iconType string
 }
 
 func loadBrand(name, title, logoFile, iconFile string) (brand, error) {
-	if name == "" {
-		name = "StorScale"
-	}
 	b := brand{name: name, title: title}
 	if b.title == "" {
-		b.title = name + " DataWorks"
+		b.title = strings.TrimSpace(name + " DataWorks")
+	}
+	if b.name == "" { // an install without a brand: the product's own name
+		b.name = "DataWorks"
 	}
 	var err error
 	if b.logo, b.logoType, err = loadImage("BRAND_LOGO", logoFile); err != nil {
@@ -94,7 +95,7 @@ func (b brand) page(index []byte) []byte {
 
 // handleBrandLogo and handleBrandIcon serve the images to anyone: they're
 // on every page, the sign-in's too. Always one: without a logo of the
-// deployment's own, its icon; without an icon, StorScale's (the web app's
+// deployment's own, its icon; without an icon, DataWorks' (the web app's
 // favicon.svg). Other tools show them as theirs (OpenMetadata, through the
 // gateway).
 func (s *server) handleBrandLogo(w http.ResponseWriter, r *http.Request) {

@@ -4,9 +4,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **A GitLab pipeline for an internal registry** (`.gitlab-ci.yml`): on a company's own GitLab runner, the same ten images as GitHub's (linux/amd64, built with rootless BuildKit) pushed to a Harbor project, and on a release tag the chart, naming that project as its images' registry. Its registry, project, robot account and CA are the GitLab project's CI/CD variables.
+
 ### Changed
 - **The repository is `StorScale/dataworks`** (it was `StorScale/storscale-platform`; GitHub redirects the old address), and the Go module is `github.com/StorScale/dataworks` with it. Release images are signed by the new name's workflow from the next release: `cosign verify` takes either name (the regexp in `images.yml`).
-- **The platform is StorScale DataWorks** (it was StorScale Platform): the product's name in the web app's tab, the docs, the CLI's help, the API reference and the catalog. An install shows its brand's name before it, so `brand.name: Vericast` reads *Vericast DataWorks* (`brand.title` still overrides it). The identifiers keep the company's name: the `storscale` command and Python package, the chart `storscale-platform`, the images under `ghcr.io/storscale` and the API group `platform.storscale.io`, so nothing changes for an upgrade.
+- **The platform is DataWorks** (it was StorScale Platform; StorScale publishes it as StorScale DataWorks): the product's name in the web app's tab and top bar, the docs, the CLI's help, the API reference, the catalog and the merge requests' notes. An install shows its brand's name before it, so `brand.name: Vericast` reads *Vericast DataWorks*; one without a brand (`brand.name` is now empty by default) reads *DataWorks*, and `brand.title` still overrides either. The identifiers keep the company's name: the `storscale` command and Python package, the chart `storscale-platform`, the images under `ghcr.io/storscale` and the API group `platform.storscale.io`, so nothing changes for an upgrade.
 
 ### Fixed
 - **A flow's steps no longer open piled on one another:** a flow whose steps had no places on the canvas, or the same ones (dbt models written by hand, or saved through the API with grid numbers, as the guide's were), opened with every step in one spot. The canvas now lays such a flow out left to right as its data flows, each input just before the step that reads it, and **Arrange** does it on demand; saving keeps the places.

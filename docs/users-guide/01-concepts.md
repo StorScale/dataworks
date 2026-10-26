@@ -97,7 +97,7 @@ covers the Python package, which handles tokens for you.
 ### Limits and gotchas
 
 - **"No access".** Signed in, but in none of the platform's groups: the page says "Your account isn't in a group that may
-  use StorScale DataWorks (analysts, engineers)." with the install's groups, and offers **Sign out**. An administrator adds
+  use DataWorks (analysts, engineers)." with the install's groups, and offers **Sign out**. An administrator adds
   the person to a group in Keycloak; then they sign out and in again.
 - **Group changes need a new sign-in for the platform's own checks.** Whether someone is an administrator, may use the
   platform, or has a platform role is read from the groups in their token as they signed in. Project membership is
@@ -304,7 +304,7 @@ See [Lab 1](../guide.md#lab-1-sign-in-and-see-what-each-person-sees) in the lab 
 | Certifying products, Governance | `PRODUCT_CERTIFIER_GROUPS` | `products.certifierGroups` | the administrators' groups |
 | Data-protection approvers | `DELIVERY_APPROVER_GROUPS` (Compose sets `engineers,analysts`) | `deliveries.approverGroups` | the administrators' groups |
 | The platform's address | `STORSCALE_DOMAIN`, `STORSCALE_PORT` in `stack/.env` | `global.domain`, `global.port`, `global.scheme` | `storscale.localhost`, `8800`, `http` |
-| The brand in the top bar and the tab | `BRAND_NAME`, `BRAND_TITLE`, `BRAND_LOGO`, `BRAND_ICON` | `brand.name`, `brand.title`, `brand.logo`, `brand.icon` | `StorScale` |
+| The brand in the top bar and the tab | `BRAND_NAME`, `BRAND_TITLE`, `BRAND_LOGO`, `BRAND_ICON` | `brand.name`, `brand.title`, `brand.logo`, `brand.icon` | none: the tab reads *DataWorks* |
 | The example people | the realm (`stack/keycloak/realm.json`) | `examples.users` | `true` |
 
 ## Limits and gotchas

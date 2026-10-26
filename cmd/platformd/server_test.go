@@ -79,7 +79,7 @@ func newTestServerWith(t *testing.T, k *fakeKeycloak, change func(*config)) *htt
 // newTestPlatform is newTestServerWith, with the server itself.
 func newTestPlatform(t *testing.T, k *fakeKeycloak, change func(*config)) (*httptest.Server, *server) {
 	web := t.TempDir()
-	os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html><title>StorScale DataWorks</title>"), 0o644)
+	os.WriteFile(filepath.Join(web, "index.html"), []byte("<!doctype html><title>DataWorks</title>"), 0o644)
 	cfg := config{
 		PlatformURL: "http://storscale.localhost:8800", KeycloakURL: "http://storscale.localhost:8800/sso",
 		KeycloakDirectURL: k.URL, Realm: "lakehouse", ClientID: "platform", ClientSecret: "s3cret",
@@ -259,7 +259,7 @@ func TestWebAppAndHeaders(t *testing.T) {
 		t.Fatal(err)
 	}
 	body, _ := io.ReadAll(res.Body)
-	if res.StatusCode != http.StatusOK || !strings.Contains(string(body), "StorScale DataWorks") {
+	if res.StatusCode != http.StatusOK || !strings.Contains(string(body), "DataWorks") {
 		t.Errorf("app route: %d %s, want index.html", res.StatusCode, body)
 	}
 	if res.Header.Get("Content-Security-Policy") != "frame-ancestors 'none'" {

@@ -1,7 +1,7 @@
 {
   "name": "storscale-schedule",
   "version": "1.0.0",
-  "description": "Schedule a notebook in a StorScale project: a pipeline in its repo, reviewed as a merge request.",
+  "description": "Schedule a notebook in a DataWorks project: a pipeline in its repo, reviewed as a merge request.",
   "license": "Apache-2.0",
   "private": true,
   "main": "lib/index.js",

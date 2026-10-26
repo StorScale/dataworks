@@ -25,7 +25,7 @@ ingress_nginx=4.15.1   # the chart's version
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-openssl req -x509 -newkey rsa:2048 -nodes -days 7 -subj "/CN=StorScale test CA" \
+openssl req -x509 -newkey rsa:2048 -nodes -days 7 -subj "/CN=DataWorks test CA" \
   -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
   -keyout "$work/ca.key" -out "$work/ca.crt" 2>/dev/null
 openssl req -newkey rsa:2048 -nodes -subj "/CN=$domain" -keyout "$work/tls.key" -out "$work/tls.csr" 2>/dev/null

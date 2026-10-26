@@ -1,6 +1,6 @@
 # The stack
 
-This directory is StorScale DataWorks on one machine: a Docker Compose project. `storscale up` runs it. The `storscale` binary carries a copy of this directory and writes it to your cache directory the first time it runs.
+This directory is DataWorks on one machine: a Docker Compose project. `storscale up` runs it. The `storscale` binary carries a copy of this directory and writes it to your cache directory the first time it runs.
 
 | Service | What it is | At |
 |---|---|---|
@@ -107,7 +107,7 @@ Keycloak's signing key is made once, in the `keycloak-keys` volume, and kept. To
 
 ## Where it comes from
 
-The services and their configuration come from the tested integration guides in [StorScale Buckets](https://github.com/StorScale/buckets/tree/main/examples) (`examples/{common,lakehouse,superset,airflow,jupyterhub,monitoring}`, at Buckets commit `3f3267e`). Buckets' monitoring rules and dashboards come from `operator/helm/buckets-operator/monitoring`. The changes for running them as one platform:
+The services and their configuration come from the tested integration guides in [Buckets](https://github.com/StorScale/buckets/tree/main/examples) (`examples/{common,lakehouse,superset,airflow,jupyterhub,monitoring}`, at Buckets commit `3f3267e`). Buckets' monitoring rules and dashboards come from `operator/helm/buckets-operator/monitoring`. The changes for running them as one platform:
 - **Grafana signs people in with Keycloak:** engineers get Editor, analysts get Viewer, and anyone in neither group is refused. Grafana's `admin` account stays, for when Keycloak is down. Ranger still has only its own `admin` account.
 - **One domain:** the tools' URLs, the Keycloak realm's redirect URIs, and Trino's and Buckets' token issuer.
 - **Policies that add up:** the analysts' and engineers' Buckets policies combine what the lakehouse and the notebooks each need. Ranger gets one list of policies, covering the lakehouse, Superset and Airflow.

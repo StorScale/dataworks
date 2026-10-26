@@ -1,4 +1,4 @@
-# StorScale DataWorks, on one machine: `storscale up` runs this file.
+# DataWorks, on one machine: `storscale up` runs this file.
 #
 # One address: STORSCALE_DOMAIN (storscale.localhost) on STORSCALE_PORT (8800).
 # The tools the platform shows in its frames are on paths of that address, so
@@ -862,7 +862,7 @@ services:
         # The platform's own account, for the pipelines pages. (create exits 0
         # when the user exists, so the password is set again either way.)
         airflow users create --username storscale-platform --password "$$AIRFLOW_PLATFORM_PASSWORD" \
-          --firstname StorScale --lastname Platform --email platform@storscale.localhost --role Op >/dev/null 2>&1;
+          --firstname DataWorks --lastname Platform --email platform@storscale.localhost --role Op >/dev/null 2>&1;
         airflow users reset-password --username storscale-platform --password "$$AIRFLOW_PLATFORM_PASSWORD" >/dev/null &&
         airflow connections add keycloak_pipelines --conn-type http \
           --conn-host ${STORSCALE_DOMAIN} --conn-port ${STORSCALE_PORT} --conn-schema sso \

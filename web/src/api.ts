@@ -11,7 +11,7 @@ export type Tool = {
   embedUrl?: string;
 };
 
-// The top bar's corner: StorScale's icon and name, or the deployment's logo
+// The top bar's corner: DataWorks' icon and name, or the deployment's logo
 // in their place (logo: its address), named for screen readers.
 export type Brand = { name: string; logo: string };
 
@@ -27,7 +27,7 @@ export async function session(): Promise<Session | null> {
   if (res.status === 403) return { state: "refused", user: body.user, error: body.error };
   if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
   return { state: "signed-in", user: body.user, tools: body.tools, admin: !!body.admin, projects: !!body.projects, flow: !!body.flow, semantic: !!body.semantic, pipelines: !!body.pipelines,
-    brand: { name: body.brand?.name || "StorScale", logo: body.brand?.logo || "" } };
+    brand: { name: body.brand?.name || "DataWorks", logo: body.brand?.logo || "" } };
 }
 
 // Set once signing out has begun: a request answered 401 after that (one

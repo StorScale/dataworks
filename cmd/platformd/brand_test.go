@@ -10,24 +10,24 @@ import (
 	"testing"
 )
 
-func TestTheDefaultBrandIsStorScales(t *testing.T) {
+func TestTheDefaultBrandIsDataWorks(t *testing.T) {
 	k := newFakeKeycloak(t)
-	const storscale = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"/>`
+	const dataworks = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"/>`
 	ts := newTestServerWith(t, k, func(c *config) {
-		c.BrandName = "StorScale"
-		os.WriteFile(filepath.Join(c.WebDir, "favicon.svg"), []byte(storscale), 0o644)
+		c.BrandName = ""
+		os.WriteFile(filepath.Join(c.WebDir, "favicon.svg"), []byte(dataworks), 0o644)
 	})
 	c, _ := signIn(t, ts, k, map[string]any{"preferred_username": "alice", "groups": []string{"analysts"}}, "/")
 	_, body := getSession(t, ts, c)
-	if b := body["brand"].(map[string]any); b["name"] != "StorScale" || b["logo"] != "" {
-		t.Errorf("brand %v, want StorScale's name and icon", b)
+	if b := body["brand"].(map[string]any); b["name"] != "DataWorks" || b["logo"] != "" {
+		t.Errorf("brand %v, want DataWorks' name and icon", b)
 	}
-	// Other tools (OpenMetadata) show the logo and icon: StorScale's icon for both.
+	// Other tools (OpenMetadata) show the logo and icon: DataWorks' icon for both.
 	for _, path := range []string{"/brand/logo", "/brand/icon"} {
 		res, _ := http.Get(ts.URL + path)
 		got, _ := io.ReadAll(res.Body)
-		if res.StatusCode != http.StatusOK || string(got) != storscale || res.Header.Get("Content-Type") != "image/svg+xml" {
-			t.Errorf("%s with none: %d %q %s, want StorScale's icon", path, res.StatusCode, got, res.Header.Get("Content-Type"))
+		if res.StatusCode != http.StatusOK || string(got) != dataworks || res.Header.Get("Content-Type") != "image/svg+xml" {
+			t.Errorf("%s with none: %d %q %s, want DataWorks' icon", path, res.StatusCode, got, res.Header.Get("Content-Type"))
 		}
 	}
 }
@@ -82,7 +82,7 @@ func TestALogoThatIsntAnImageIsRefused(t *testing.T) {
 
 const index = `<!doctype html><html><head>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-<title>StorScale DataWorks</title>
+<title>DataWorks</title>
 <script type="module" crossorigin src="/assets/index-x.js"></script>
 </head><body><div id="root"></div></body></html>`
 
@@ -110,7 +110,7 @@ func TestTheTabShowsTheBrand(t *testing.T) {
 		change              func(*config)
 		wantTitle, wantIcon string
 	}{
-		"StorScale's": {func(c *config) { c.BrandName = "StorScale" }, "StorScale DataWorks", `<link rel="icon" href="/favicon.svg" type="image/svg+xml" />`},
+		"no brand": {func(c *config) { c.BrandName = "" }, "DataWorks", `<link rel="icon" href="/favicon.svg" type="image/svg+xml" />`},
 		"a deployment's": {func(c *config) { c.BrandName, c.BrandIcon = "Vericast", icon },
 			"Vericast DataWorks", `<link rel="icon" href="/brand/icon" type="image/png" />`},
 		"a title of its own": {func(c *config) { c.BrandName, c.BrandTitle = "Vericast", "Data & AI <Lab>" },

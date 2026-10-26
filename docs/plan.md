@@ -1,11 +1,11 @@
-# StorScale DataWorks: plan
+# DataWorks: plan
 
-**StorScale DataWorks** is one product over the open-source tools the Buckets integration guides already run and test together. You sign in once, and you get one home, one notion of a *project*, one catalog and one place to grant access. Each tool's own UI stays available underneath.
+**DataWorks** is one product over the open-source tools the Buckets integration guides already run and test together. You sign in once, and you get one home, one notion of a *project*, one catalog and one place to grant access. Each tool's own UI stays available underneath.
 
 - **Repo:** `github.com/StorScale/dataworks` (AGPL-3.0, like Buckets).
 - **Web:** `storscale.io/platform`.
 - **CLI:** `storscale up`.
-- **Naming:** *StorScale Buckets* is the storage; *StorScale DataWorks* is the platform on top (renamed from StorScale Platform on 2026-10-26). An install shows its brand's name before it: Vericast's is *Vericast DataWorks* (`brand.name: Vericast`). The identifiers keep the company's name: the `storscale` command and Python package, the chart `storscale-platform`, the images under `ghcr.io/storscale`, the API group `platform.storscale.io`.
+- **Naming:** the platform is *DataWorks* (renamed from StorScale Platform on 2026-10-26), on *Buckets*, the storage; StorScale, the company, publishes it as StorScale DataWorks (storscale.io). An install shows its brand's name before it: Vericast's is *Vericast DataWorks* (`brand.name: Vericast`); one without a brand reads *DataWorks*. The identifiers keep the company's name: the `storscale` command and Python package, the chart `storscale-platform`, the images under `ghcr.io/storscale`, the API group `platform.storscale.io`.
 
 ## What it's for
 
@@ -114,7 +114,7 @@ The examples already prove every mapping in this list by hand.
 
 ## Matching Dataiku
 
-| Dataiku | StorScale DataWorks | When |
+| Dataiku | DataWorks | When |
 |---|---|---|
 | Projects, permissions, user isolation | `Project` CRD; Keycloak, Ranger and impersonation | MVP |
 | Flow (visual DAG) | A read-only Flow view drawn from OpenLineage and dbt lineage, with links into each job | MVP (view); an editable Flow is a later gap to build |
@@ -153,7 +153,7 @@ A survey of Dataiku and the platforms it's compared with (Databricks, Snowflake,
   5. **Cost visible and controlled:** Fabric's capacity costs are its most common complaint, and spend outruns budgets (dbt 2026: 57% spend more on compute, 36% have more budget).
   6. **Self-service:** visual prep, and simple data apps.
   7. **Low operating burden:** the main objection to assembled open-source stacks is the upgrade treadmill and version skew, separate access and metadata models, and no one accountable. Managed offerings (Datacoves, Astronomer) sell exactly that.
-- **Where StorScale stands:**
+- **Where DataWorks stands:**
   - **Strong already:** the project as the unit, Iceberg and Nessie, Ranger's policies applying to agents as to people, column lineage, and the semantic layer with an MCP server that queries as the user, where Dataiku (15.x), Databricks and Dremio are going.
   - **Where it can lead:** Nessie's catalog-wide branches. A pull request becomes a git branch and a data branch, its pipelines and checks run there, and both merge together (write, audit, publish). Only Palantir does something like it, and no open stack packages it.
   - **To watch:** consolidation. SAP is buying Dremio, Nessie's owner, and Fivetran has merged with dbt Labs and bought SQLMesh's maker. Keep an Iceberg REST alternative to Nessie in view (Apache Polaris, Lakekeeper).
@@ -841,7 +841,7 @@ People define what the business means once: entities (customer, order), dimensio
 7. **Data quality with OpenMetadata's own tests (phase 3), not Soda:** it's one tool fewer, the results show on the tables in the catalog, and projects declare their checks (`spec.tables.checks`). Soda or Great Expectations can post results to the same tests through OpenMetadata's API later.
 8. **The catalog opens in its own tab (phase 3), not in the platform's frame:** OpenMetadata's web app keeps its token in a service worker. Each project's Overview and Data pages show its lineage and checks inside the platform.
 9. **The platform's own pages for everyday work; the tools for depth (added 2026-10-07):** the web app is organised around the project, not the tools. Its own pages cover what people do daily: browsing tables, previewing them, SQL, metrics, pipeline runs and access. They read the same APIs and run queries as the person asking. JupyterLab and Superset dashboards are shown in the frame, as project tabs. Airflow, SQL Lab, the catalog and Ranger stay one click away for authoring and administration.
-10. **The roadmap after phase 5 (added 2026-10-15):** from the research above, in this order: production-ready (6), git-native projects (7), getting data in (8), governed AI (9), usage and cost per project (10), self-service and ML (11). Real people come before new features; then what buyers value most where StorScale can lead (git and data branches together, agents under the same policies).
+10. **The roadmap after phase 5 (added 2026-10-15):** from the research above, in this order: production-ready (6), git-native projects (7), getting data in (8), governed AI (9), usage and cost per project (10), self-service and ML (11). Real people come before new features; then what buyers value most where DataWorks can lead (git and data branches together, agents under the same policies).
 11. **Airflow takes its DAGs from git as DAG bundles, one per project (added 2026-10-15),** not git-sync: bundles version each run by its commit and take several repos, where git-sync takes one repo and keeps no versions.
 12. **What an install needs before real use (added 2026-10-15):** a review of the repo against the research found no ingestion, no Iceberg table maintenance, single replicas and no network policies, no alerts on data problems, and dbt named in the plan but not run. Maintenance, high availability and hardening, and alerts join phase 6; dbt joins phase 7; getting data in becomes phase 8; classification with policies by tag joins governed AI.
 13. **What commercial platforms have that our users need (added 2026-10-16):** the company delivers files to clients and partners, and holds consumer data; a second team may share the install. So: getting data out becomes phase 9 (governed AI, usage and cost, and self-service move to 10, 11 and 12); limits per project, and retention and erasure, join phase 6; a Connections tab (credentials given to the platform, not to the cluster) and scheduling a notebook join phase 7; querying databases in place (Trino's catalogs) starts phase 8. Saved queries, a CLI and API, and disaster recovery stay to decide.
