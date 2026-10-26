@@ -38,6 +38,11 @@ build:
     name: moby/buildkit:v0.23.2-rootless
     entrypoint: [""]
   timeout: 90m
+  # Harbor now and then drops a push (a TLS handshake timeout, "blob upload
+  # unknown to registry"): the job is run again, up to twice.
+  retry:
+    max: 2
+    when: [script_failure, runner_system_failure]
   variables:
     # A pod can't give rootless BuildKit a process sandbox of its own.
     BUILDKITD_FLAGS: --oci-worker-no-process-sandbox --config /home/user/.config/buildkit/buildkitd.toml
