@@ -135,7 +135,8 @@ def main():
         mappers = sorted(m["name"] for m in kc("GET", f"/identity-provider/instances/{ALIAS}/mappers").json()) if idp.ok else []
         check("setup makes the Entra ID provider from the tenant's discovery document, with its mappers (username, a group per role)",
               rc == 0 and idp.ok and idp.json()["config"]["issuer"] == f"{PLATFORM}/sso/realms/{STANDIN}"
-              and mappers == ["dataworks: role Administrator -> engineers", "dataworks: role Analyst -> analysts",
+              and mappers == ["dataworks: email", "dataworks: firstName", "dataworks: lastName",
+                              "dataworks: role Administrator -> engineers", "dataworks: role Analyst -> analysts",
                               "dataworks: role Engineer -> engineers", "dataworks: username"],
               (rc, [x for x in lines if "identity provider" in x or "Entra" in x][-6:], mappers))
         rc, lines = setup()
@@ -146,6 +147,9 @@ def main():
         check("erin (Analyst in Entra) signs in through it: she's erin.test, in analysts, and may use the platform",
               code == 200 and body["user"]["username"] == "erin.test" and "analysts" in body["user"]["groups"] and not body.get("admin"),
               (code, body if code != 200 else {k: body[k] for k in ("user", "admin")}))
+        u = lakehouse_user(kc, "erin.test")
+        check("... her first and last name and email are Entra's own claims (not its display name, split)",
+              u and (u.get("firstName"), u.get("lastName"), u.get("email")) == ("Erin", "Test", "erin.test@harbor.example"), u)
         code, body = sign_in("frank.test")
         check("frank (Engineer) is in engineers: an administrator", code == 200 and "engineers" in body["user"]["groups"] and body.get("admin"),
               (code, body if code != 200 else body["user"]["groups"]))
@@ -153,11 +157,16 @@ def main():
         check("gail (no app role) signs in, and is refused the platform", code == 403 and groups_of(kc, "gail.test") == [],
               (code, body, groups_of(kc, "gail.test")))
 
-        # 3. A role taken away in Entra takes its group away at the next sign-in.
+        # 3. A role taken away in Entra takes its group away at the next sign-in; a name changed there, the name.
         set_roles(kc, "erin.test", [])
+        uid = master(kc, "GET", f"/{STANDIN}/users", params={"username": "erin.test@harbor.example", "exact": "true"}).json()[0]["id"]
+        rep = master(kc, "GET", f"/{STANDIN}/users/{uid}").json()
+        master(kc, "PUT", f"/{STANDIN}/users/{uid}", json={**rep, "lastName": "Testing"}).raise_for_status()
         code, body = sign_in("erin.test")
         check("erin's Analyst role taken away in Entra: her next sign-in takes her out of analysts, and she's refused",
               code == 403 and "analysts" not in (groups_of(kc, "erin.test") or []), (code, groups_of(kc, "erin.test")))
+        check("... and her last name changed in Entra is hers at that sign-in too", (lakehouse_user(kc, "erin.test") or {}).get("lastName") == "Testing",
+              (lakehouse_user(kc, "erin.test") or {}).get("lastName"))
     finally:
         for name in PEOPLE:
             u = lakehouse_user(kc, name)
