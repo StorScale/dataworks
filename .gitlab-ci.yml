@@ -11,10 +11,10 @@
 # the branch's name; tags v<version> <version> and latest. Another branch
 # builds every image without pushing, to check it.
 #
-# The project's CI/CD variables (Settings > CI/CD > Variables):
+# The project's (or its groups') CI/CD variables (Settings > CI/CD > Variables):
 #   HARBOR_REGISTRY   the registry's host (harbor.example.internal)
 #   HARBOR_PROJECT    its project for these images and the chart
-#   HARBOR_USERNAME   a robot account of that project, allowed to push
+#   HARBOR_USER       a robot account of that project, allowed to push
 #   HARBOR_PASSWORD   its secret (masked)
 #   HARBOR_CA         a File variable: the CA that signed the registry's
 #                     certificate (PEM), when it isn't a public one
@@ -70,8 +70,8 @@ build:
         printf '[registry."%s"]\n  ca = ["%s"]\n' "$HARBOR_REGISTRY" "$HARBOR_CA" > ~/.config/buildkit/buildkitd.toml
       fi
       if [ "$push" = true ]; then
-        : "${HARBOR_USERNAME:?set HARBOR_USERNAME}" "${HARBOR_PASSWORD:?set HARBOR_PASSWORD}"
-        auth=$(printf '%s:%s' "$HARBOR_USERNAME" "$HARBOR_PASSWORD" | base64 | tr -d '\n')
+        : "${HARBOR_USER:?set HARBOR_USER}" "${HARBOR_PASSWORD:?set HARBOR_PASSWORD}"
+        auth=$(printf '%s:%s' "$HARBOR_USER" "$HARBOR_PASSWORD" | base64 | tr -d '\n')
         printf '{"auths":{"%s":{"auth":"%s"}}}' "$HARBOR_REGISTRY" "$auth" > ~/.docker/config.json
       fi
       dockerfile=${DOCKERFILE:-$CONTEXT/Dockerfile}
@@ -102,7 +102,7 @@ chart:
       [ -n "${HARBOR_CA:-}" ] && set -- --ca-file "$HARBOR_CA"
       sed -i "s#^  registry: ghcr.io/storscale\$#  registry: $HARBOR_REGISTRY/$HARBOR_PROJECT#" deploy/helm/storscale-platform/values.yaml
       grep -q "^  registry: $HARBOR_REGISTRY/$HARBOR_PROJECT\$" deploy/helm/storscale-platform/values.yaml
-      printf '%s' "$HARBOR_PASSWORD" | helm registry login "$HARBOR_REGISTRY" -u "$HARBOR_USERNAME" --password-stdin "$@"
+      printf '%s' "$HARBOR_PASSWORD" | helm registry login "$HARBOR_REGISTRY" -u "$HARBOR_USER" --password-stdin "$@"
       helm repo add spark-operator https://kubeflow.github.io/spark-operator
       helm dependency build deploy/helm/storscale-platform
       helm package deploy/helm/storscale-platform --version "$version" --app-version "$version"
