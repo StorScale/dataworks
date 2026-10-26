@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { type ColumnProfile, SQLAnswer, TableStats, ago, classify, getClassification, getFlow, getHistory, getMaintenance, runMaintenance, runSQL, when } from "../api";
-import { can, checkName, CheckPill, ErrorBanner, failing, limits, maskLabel, Spinner, usePoll, useProject } from "../lib";
+import { Breakable, can, checkName, CheckPill, ErrorBanner, failing, limits, maskLabel, Spinner, usePoll, useProject } from "../lib";
 import { FlowStrip } from "./Overview";
 
 const TABS = ["columns", "preview", "lineage", "quality", "history", "storage"] as const;
@@ -56,7 +56,7 @@ export default function Data() {
           <p className="eyebrow">Tables</p>
           {tables.map((t) => (
             <button key={t.fqn} className={t === table ? "active" : ""} onClick={() => go(t.name)} data-testid={`table-${t.name}`}>
-              <span className="mono">{t.name}</span>
+              <span className="mono"><Breakable text={t.name} /></span>
               {failing(t.checks).length > 0 ? <span className="dot red" title="a check is failing" /> : limits(spec, t.name).hidden ? <span className="small muted" style={{ whiteSpace: "nowrap" }} title="The project's readers can't read this table">editors</span> : null}
             </button>
           ))}

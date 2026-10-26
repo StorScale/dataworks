@@ -77,6 +77,13 @@ export function CheckPill({ status }: { status: string }) {
   return <span className={cls}>{status === "Success" ? "passing" : status === "Failed" ? "failing" : status ? status.toLowerCase() : "not run yet"}</span>;
 }
 
+// Breakable is a long identifier (a pipeline's dag_id, a table's name) that may wrap after
+// each underscore rather than run out of its card: it has no spaces to wrap at.
+export function Breakable({ text }: { text: string }) {
+  const parts = text.split("_");
+  return <>{parts.map((s, i) => <span key={i}>{s}{i < parts.length - 1 && <>_<wbr /></>}</span>)}</>;
+}
+
 export function StateDot({ state }: { state?: string }) {
   return <span className={`dot ${state === "success" ? "green" : state === "failed" ? "red" : state === "running" || state === "queued" ? "blue" : ""}`} />;
 }

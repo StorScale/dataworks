@@ -202,6 +202,10 @@ table.t.data th { font-weight: 500; }
 .side-list button, .side-list a { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; border: 0; border-radius: 8px; padding: 10px; min-height: 42px; font: inherit; cursor: pointer; background: none; color: var(--ink); }
 .side-list button:hover, .side-list a:hover { background: var(--line-soft); text-decoration: none; }
 .side-list .active { background: var(--accent-soft); }
+/* A long name in a list or a card's title wraps (anywhere, as a last resort) rather than running out of it. */
+.side-list button > span:first-child, .side-list a > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.card-head > :first-child { min-width: 0; }
+.card-head h2.mono { overflow-wrap: anywhere; }
 .side-list .eyebrow { padding: 6px 10px 2px; margin: 0; }
 .side-list .locked { color: var(--faint); cursor: default; }
 

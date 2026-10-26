@@ -8,6 +8,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 - **Sign-in with Entra ID** (use case 6.1): `sso.entra` names the company's tenant and app registration (its client secret in a Secret), and setup makes Keycloak's identity provider for it from the tenant's discovery document: a button on the sign-in page, a person's username their Entra login name's local part, their name and email Entra's own claims (updated at every sign-in), and their groups from the app registration's roles (`sso.entra.roles`: Analyst puts them in analysts, Engineer and Administrator in engineers), set again at every sign-in. A new suite, `entra`, plays Entra with a stand-in realm.
 
 ### Fixed
+- **Long names stay in their cards:** a pipeline's or a table's name (`delivery_retail_campaign_results`), with no spaces to wrap at, ran out of the Pipelines and Data pages' lists and the pipeline's title. They now wrap after an underscore, or anywhere as a last resort.
 - **A first notebook on a node starts:** the notebook image is over a gigabyte, and a node that had never pulled it took longer than JupyterHub's two minutes to start someone's server, which it then gave up on (seen on a fresh install pulling from Harbor). The chart now pulls the notebook image onto every node ahead of time and at each upgrade (`notebooks.prePull`, a DaemonSet), and a server may take up to ten minutes to start (`notebooks.startTimeout`).
 
 ## [0.34.0] - 2026-10-26
