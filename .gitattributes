@@ -1,0 +1,2 @@
+# Built files git should never diff or merge as text.
+*.pdf binary

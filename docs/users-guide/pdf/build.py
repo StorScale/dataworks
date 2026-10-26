@@ -18,6 +18,7 @@ import sys
 import urllib.request
 
 from markdown_it import MarkdownIt
+from reportlab import rl_config
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import letter
@@ -52,6 +53,10 @@ VERSION = sys.argv[3] if len(sys.argv) > 3 else open(os.path.join(REPO, "VERSION
 INK, INK2, MUTED = colors.HexColor("#15191f"), colors.HexColor("#2a323d"), colors.HexColor("#5b6573")
 ACCENT, ACCENT_DARK, ACCENT_SOFT = colors.HexColor("#1a56c4"), colors.HexColor("#123f92"), colors.HexColor("#e7effc")
 LINE, CODE_BG, HEAD_BG = colors.HexColor("#d9dee6"), colors.HexColor("#f3f5f8"), colors.HexColor("#eef2f8")
+
+# Binary streams (not ASCII85: a quarter smaller), and the same bytes for the same guide (no timestamp or random ID).
+rl_config.useA85 = 0
+rl_config.invariant = 1
 
 FONTS = os.environ.get("FONTS_DIR") or os.path.expanduser("~/.cache/dataworks-guide-fonts")
 PLEX = "https://raw.githubusercontent.com/IBM/plex/71f558992315a12ca1f06a2215d57962a1992162/packages/"
