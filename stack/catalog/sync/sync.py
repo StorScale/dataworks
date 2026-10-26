@@ -315,7 +315,7 @@ def sync_products():
     if not wanted and requests.get(f"{OM}/v1/domains/name/{DOMAIN}", headers=h, timeout=10).status_code == 404:
         return
     requests.put(f"{OM}/v1/domains", headers=h, timeout=10, json={
-        "name": DOMAIN, "displayName": "StorScale Platform", "domainType": "Aggregate",
+        "name": DOMAIN, "displayName": os.environ.get("BRAND_TITLE") or "StorScale DataWorks", "domainType": "Aggregate",
         "description": "The data products the platform's projects publish: kept by the platform."}).raise_for_status()
     have = requests.get(f"{OM}/v1/dataProducts", headers=h, timeout=10, params={"domain": DOMAIN, "limit": 1000}).json().get("data", [])
     for d in have:

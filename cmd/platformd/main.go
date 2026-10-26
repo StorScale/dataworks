@@ -1,4 +1,4 @@
-// platformd is StorScale Platform's backend for its web app: it signs people
+// platformd is StorScale DataWorks's backend for its web app: it signs people
 // in with Keycloak (OpenID Connect, authorization code with PKCE), keeps their
 // sessions, tells the app who they are and which tools they may open, and
 // serves the app itself.

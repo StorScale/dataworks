@@ -97,7 +97,7 @@ covers the Python package, which handles tokens for you.
 ### Limits and gotchas
 
 - **"No access".** Signed in, but in none of the platform's groups: the page says "Your account isn't in a group that may
-  use StorScale Platform (analysts, engineers)." with the install's groups, and offers **Sign out**. An administrator adds
+  use StorScale DataWorks (analysts, engineers)." with the install's groups, and offers **Sign out**. An administrator adds
   the person to a group in Keycloak; then they sign out and in again.
 - **Group changes need a new sign-in for the platform's own checks.** Whether someone is an administrator, may use the
   platform, or has a platform role is read from the groups in their token as they signed in. Project membership is

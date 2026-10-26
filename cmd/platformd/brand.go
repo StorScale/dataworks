@@ -13,7 +13,7 @@ import (
 // The platform's brand. In the top bar's corner: StorScale's icon and name,
 // or a logo of the deployment's own (BRAND_LOGO) in their place, with
 // BRAND_NAME as its text for screen readers. In the browser's tab: the
-// title (BRAND_TITLE, by default "<name> Platform") and an icon
+// title (BRAND_TITLE, by default "<name> DataWorks") and an icon
 // (BRAND_ICON, square, as a tab shows it), or StorScale's. Images are SVG,
 // PNG, JPEG, GIF, WebP or ICO.
 
@@ -30,7 +30,7 @@ func loadBrand(name, title, logoFile, iconFile string) (brand, error) {
 	}
 	b := brand{name: name, title: title}
 	if b.title == "" {
-		b.title = name + " Platform"
+		b.title = name + " DataWorks"
 	}
 	var err error
 	if b.logo, b.logoType, err = loadImage("BRAND_LOGO", logoFile); err != nil {

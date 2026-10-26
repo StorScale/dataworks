@@ -1,6 +1,6 @@
 # The stack
 
-This directory is StorScale Platform on one machine: a Docker Compose project. `storscale up` runs it. The `storscale` binary carries a copy of this directory and writes it to your cache directory the first time it runs.
+This directory is StorScale DataWorks on one machine: a Docker Compose project. `storscale up` runs it. The `storscale` binary carries a copy of this directory and writes it to your cache directory the first time it runs.
 
 | Service | What it is | At |
 |---|---|---|

@@ -1,6 +1,6 @@
-# StorScale Platform
+# StorScale DataWorks
 
-StorScale Platform is one open data platform on [StorScale Buckets](https://github.com/StorScale/buckets). People sign in once, to one place, and work in **projects**: a project brings together a team's data, notebooks, pipelines, dashboards, metrics, models and agents, and who may do what with them. Access is granted once, and the platform puts it into every tool underneath.
+StorScale DataWorks is one open data platform on [StorScale Buckets](https://github.com/StorScale/buckets). People sign in once, to one place, and work in **projects**: a project brings together a team's data, notebooks, pipelines, dashboards, metrics, models and agents, and who may do what with them. Access is granted once, and the platform puts it into every tool underneath.
 
 It brings together:
 

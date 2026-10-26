@@ -134,7 +134,7 @@ func (r *Ranger) ensureGroups(ctx context.Context, names []string) (map[string]i
 	for _, n := range names {
 		if _, ok := have[n]; !ok {
 			var g rangerGroup
-			if err := r.do(ctx, "POST", "/service/xusers/groups", map[string]string{"name": n, "description": "a StorScale Platform project's group"}, &g); err != nil {
+			if err := r.do(ctx, "POST", "/service/xusers/groups", map[string]string{"name": n, "description": "a StorScale DataWorks project's group"}, &g); err != nil {
 				return nil, err
 			}
 			have[n] = g.ID

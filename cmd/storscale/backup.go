@@ -52,7 +52,7 @@ func keygen(dir string) error {
 		return err
 	}
 	serial, _ := rand.Int(rand.Reader, big.NewInt(1<<62))
-	tmpl := &x509.Certificate{SerialNumber: serial, Subject: pkix.Name{CommonName: "StorScale Platform backups"},
+	tmpl := &x509.Certificate{SerialNumber: serial, Subject: pkix.Name{CommonName: "StorScale DataWorks backups"},
 		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().AddDate(30, 0, 0),
 		KeyUsage: x509.KeyUsageKeyEncipherment | x509.KeyUsageDataEncipherment}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &priv.PublicKey, priv)

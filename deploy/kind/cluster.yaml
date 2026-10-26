@@ -1,4 +1,4 @@
-# One kind node for StorScale Platform: `storscale up --k8s` (or
+# One kind node for StorScale DataWorks: `storscale up --k8s` (or
 # `kind create cluster --name storscale --config deploy/kind/cluster.yaml`).
 # The host's port 8800 reaches the gateway, and 8443 reaches Trino, as in Compose.
 kind: Cluster

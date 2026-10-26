@@ -1,4 +1,4 @@
-# StorScale Platform: a lab guide
+# StorScale DataWorks: a lab guide
 
 One company's quarter, told in 22 labs: Harbor Outfitters starts with four spreadsheets, three answers to every question and a privacy officer who can't say where the customers' data is, and ends with one revenue number every tool agrees on, campaign decisions made on it, a partner fed on a schedule, a customer erased in minutes, models asked under a budget, and every change released on purpose. Each lab is ten to twenty minutes, opens with the moment in the story that calls for it, says what the business gets, and ends with something you can check. The labs build on each other, in order.
 
