@@ -120,9 +120,19 @@ privileged pods, but it must reach the base images' registries (Docker Hub, quay
 `ghcr.io` and `kubeflow.github.io` (its dependencies). Install from it as from the public chart:
 
 ```bash
-helm install storscale oci://harbor.example.internal/<project>/charts/storscale-platform --version 0.33.0 \
+helm install storscale oci://harbor.example.internal/<project>/charts/storscale-platform --version 0.34.0 \
   -n storscale --create-namespace -f platform.yaml --set-file global.ca.certs=root-ca.pem
 ```
+
+An install from `ghcr.io` moves to Harbor at its next upgrade, its chart and images both:
+
+```bash
+storscale upgrade --context <cluster> --chart oci://harbor.example.internal/<project>/charts/storscale-platform \
+  --version 0.34.0 --ca-file root-ca.pem --set images.registry=harbor.example.internal/<project> --dry-run
+```
+
+The `--set images.registry` is kept with the install's values, so later upgrades take Harbor's images too. The nodes
+pull them anonymously when the Harbor project is public; a private one needs an image pull Secret in the namespace.
 
 ## Checking an install: storscale test
 
@@ -378,11 +388,13 @@ storscale upgrade --context <cluster> --version 0.31.0             # then do it
 | `--yes` | Don't ask; `--test` then runs the end-to-end checks |
 | `--force` | Even to an older release |
 | `--dir DIR` (with `--image-tag V` on a cluster) | A checkout's chart instead |
+| `--chart oci://...` | The chart from a registry of the company's own (Harbor's, as below) instead of `ghcr.io`'s |
+| `--ca-file PEM` | The CA of that registry, when its certificate isn't a public CA's (the chart's pull and the image check) |
 | `--timeout` | How long to wait for the services (60 minutes) |
 
 ### How it behaves
 
-1. It checks the release isn't mid-upgrade (`another install, upgrade or rollback is under way`), isn't going backwards (`... is older than the installed ...`, unless `--force`), that Helm is 3.14 or later, and that the release's images are published.
+1. It checks the release isn't mid-upgrade (`another install, upgrade or rollback is under way`), isn't going backwards (`... is older than the installed ...`, unless `--force`), that Helm is 3.14 or later, and that the release's images are published where the install takes them from (`images.registry`: a `--set`, else the installed value, else the chart's).
 2. It applies the release's **Project definition** (the CRD), which Helm never upgrades. Without it Kubernetes silently drops whatever fields the old definition lacks from every project.
 3. It upgrades the chart keeping the installed values (`--reset-then-reuse-values`, so the new release's defaults apply to new settings), with the images pinned to the release.
 4. It waits for every service to roll out and be ready, then prints `Upgraded storscale from 0.30.0 to 0.31.0 (revision N).` If anything fails it prints the `helm rollback` that undoes it.

@@ -169,7 +169,7 @@ func (k *kube) up(st *stack, ver string) error {
 		return errors.New("--version is for a published release: leave out --dir to install one")
 	}
 	if k.checkout == "" {
-		dir, err := pullChart(ver)
+		dir, err := pullChart(ociChart, ver, "")
 		if err != nil {
 			return err
 		}

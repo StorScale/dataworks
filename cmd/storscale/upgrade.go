@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +31,8 @@ type options struct {
 	test       bool     // upgrade: then run the end-to-end checks
 	force      bool     // upgrade: even to an older version
 	imageTag   string   // upgrade --dir on a cluster: the published images to run
+	chart      string   // upgrade: the chart repository (oci://...) of a published release
+	caFile     string   // upgrade: the CA of a registry with a private certificate
 	kubeCtx    string   // upgrade: the cluster (kubectl's context)
 	kubeNS     string   // upgrade: the namespace
 	kubeRel    string   // upgrade: the Helm release
@@ -47,20 +51,77 @@ type list []string
 func (l *list) String() string     { return strings.Join(*l, ",") }
 func (l *list) Set(v string) error { *l = append(*l, v); return nil }
 
-// pullChart fetches the published chart at a version, into a directory of
-// its own (removed by the caller): its CRDs, and the chart to install.
-func pullChart(ver string) (string, error) {
+// pullChart fetches a published chart (ociChart, or a registry of the
+// company's own) at a version, into a directory of its own (removed by the
+// caller): its CRDs, and the chart to install.
+func pullChart(repo, ver, caFile string) (string, error) {
 	dir, err := os.MkdirTemp("", "storscale-chart-")
 	if err != nil {
 		return "", err
 	}
-	c := exec.Command("helm", "pull", ociChart, "--version", ver, "--untar", "--untardir", dir)
+	args := []string{"pull", repo, "--version", ver, "--untar", "--untardir", dir}
+	if caFile != "" {
+		args = append(args, "--ca-file", caFile)
+	}
+	c := exec.Command("helm", args...)
 	c.Stdout, c.Stderr = os.Stdout, os.Stderr
 	if err := c.Run(); err != nil {
 		os.RemoveAll(dir)
-		return "", fmt.Errorf("the chart %s at %s: %w (is %s a published release?)", ociChart, ver, err, ver)
+		return "", fmt.Errorf("the chart %s at %s: %w (is %s a published release?)", repo, ver, err, ver)
 	}
 	return dir, nil
+}
+
+// registryClient is an HTTP client that also trusts caFile's CAs (a
+// registry with a certificate of the company's own CA).
+func registryClient(caFile string) (*http.Client, error) {
+	if caFile == "" {
+		return http.DefaultClient, nil
+	}
+	pem, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, err
+	}
+	pool, err := x509.SystemCertPool()
+	if err != nil {
+		pool = x509.NewCertPool()
+	}
+	if !pool.AppendCertsFromPEM(pem) {
+		return nil, fmt.Errorf("%s: no PEM certificates", caFile)
+	}
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.TLSClientConfig = &tls.Config{RootCAs: pool}
+	return &http.Client{Transport: t}, nil
+}
+
+// imageRegistry is where the upgrade's images come from (images.registry):
+// a --set, else the value the release was installed with, else the chart's.
+func imageRegistry(o options, chart string) string {
+	reg := ""
+	for _, s := range o.sets {
+		if v, ok := strings.CutPrefix(s, "images.registry="); ok {
+			reg = v
+		}
+	}
+	if reg != "" {
+		return reg
+	}
+	if out, err := exec.Command("helm", helmArgs("get", "values", release, "-o", "json")...).Output(); err == nil {
+		var v struct {
+			Images struct {
+				Registry string `json:"registry"`
+			} `json:"images"`
+		}
+		if json.Unmarshal(out, &v) == nil && v.Images.Registry != "" {
+			return v.Images.Registry
+		}
+	}
+	if data, err := os.ReadFile(filepath.Join(chart, "values.yaml")); err == nil {
+		if m := regexp.MustCompile(`(?m)^images:\n(?:[ #].*\n)*?  registry: *([^\s#]+)`).FindSubmatch(data); m != nil {
+			return string(m[1])
+		}
+	}
+	return "ghcr.io/storscale"
 }
 
 // applyCRDs applies a chart's CRDs (Helm only ever installs them), and
@@ -173,30 +234,40 @@ func helmCanResetValues() error {
 var images = []string{"platformd", "platform-tools", "platform-airflow", "platform-superset", "platform-jupyterhub",
 	"platform-notebook", "platform-opensearch", "platform-semanticd", "platform-catalog-sync", "platform-mlflow"}
 
-// missingImages are the platform's images not published at a tag, on
-// ghcr.io/storscale (anonymously: they're public).
-func missingImages(ctx context.Context, c *http.Client, registry, tag string) ([]string, error) {
+// missingImages are the platform's images not published at a tag, under
+// prefix (storscale on ghcr.io, a project's path on Harbor) at base (the
+// registry's https://host), asked anonymously as the registry says to: a
+// 401's WWW-Authenticate names where to get a token, and for what.
+func missingImages(ctx context.Context, c *http.Client, base, prefix, tag string) ([]string, error) {
 	var missing []string
 	for _, name := range images {
-		repo := "storscale/" + name
-		req, _ := http.NewRequestWithContext(ctx, "GET", registry+"/token?scope="+url.QueryEscape("repository:"+repo+":pull"), nil)
-		res, err := c.Do(req)
+		repo := strings.Trim(prefix+"/"+name, "/")
+		head := func(token string) (*http.Response, error) {
+			req, _ := http.NewRequestWithContext(ctx, "HEAD", base+"/v2/"+repo+"/manifests/"+url.PathEscape(tag), nil)
+			if token != "" {
+				req.Header.Set("Authorization", "Bearer "+token)
+			}
+			req.Header.Set("Accept", "application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json")
+			res, err := c.Do(req)
+			if err != nil {
+				return nil, fmt.Errorf("the image registry: %w", err)
+			}
+			res.Body.Close()
+			return res, nil
+		}
+		res, err := head("")
 		if err != nil {
-			return nil, fmt.Errorf("the image registry: %w", err)
+			return nil, err
 		}
-		var tok struct {
-			Token string `json:"token"`
+		if res.StatusCode == http.StatusUnauthorized {
+			token, err := registryToken(ctx, c, res.Header.Get("WWW-Authenticate"))
+			if err != nil {
+				return nil, fmt.Errorf("the image registry: %s: %w", repo, err)
+			}
+			if res, err = head(token); err != nil {
+				return nil, err
+			}
 		}
-		json.NewDecoder(res.Body).Decode(&tok)
-		res.Body.Close()
-		req, _ = http.NewRequestWithContext(ctx, "HEAD", registry+"/v2/"+repo+"/manifests/"+url.PathEscape(tag), nil)
-		req.Header.Set("Authorization", "Bearer "+tok.Token)
-		req.Header.Set("Accept", "application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json")
-		res, err = c.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("the image registry: %w", err)
-		}
-		res.Body.Close()
 		switch {
 		case res.StatusCode == http.StatusNotFound:
 			missing = append(missing, name)
@@ -205,6 +276,41 @@ func missingImages(ctx context.Context, c *http.Client, registry, tag string) ([
 		}
 	}
 	return missing, nil
+}
+
+// registryToken gets an anonymous pull token as a registry's challenge
+// (Bearer realm="...",service="...",scope="...") says to.
+func registryToken(ctx context.Context, c *http.Client, challenge string) (string, error) {
+	params := map[string]string{}
+	for _, m := range regexp.MustCompile(`(\w+)="([^"]*)"`).FindAllStringSubmatch(challenge, -1) {
+		params[m[1]] = m[2]
+	}
+	if !strings.HasPrefix(strings.ToLower(challenge), "bearer ") || params["realm"] == "" {
+		return "", fmt.Errorf("it asks for a sign-in this check can't give (%q)", challenge)
+	}
+	q := url.Values{}
+	for _, k := range []string{"service", "scope"} {
+		if params[k] != "" {
+			q.Set(k, params[k])
+		}
+	}
+	req, _ := http.NewRequestWithContext(ctx, "GET", params["realm"]+"?"+q.Encode(), nil)
+	res, err := c.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+	var tok struct {
+		Token       string `json:"token"`
+		AccessToken string `json:"access_token"`
+	}
+	if res.StatusCode != http.StatusOK || json.NewDecoder(res.Body).Decode(&tok) != nil {
+		return "", fmt.Errorf("its token service answered HTTP %d", res.StatusCode)
+	}
+	if tok.Token == "" {
+		tok.Token = tok.AccessToken
+	}
+	return tok.Token, nil
 }
 
 // upgrade takes an installed platform to a published release (or, with
@@ -263,7 +369,11 @@ func (k *kube) upgrade(st *stack, o options) error {
 		}
 		target = strings.TrimPrefix(target, "v")
 		tag = target
-		dir, err := pullChart(target)
+		repo := o.chart
+		if repo == "" {
+			repo = ociChart
+		}
+		dir, err := pullChart(repo, target, o.caFile)
 		if err != nil {
 			return err
 		}
@@ -283,15 +393,21 @@ func (k *kube) upgrade(st *stack, o options) error {
 	if back, ok := older(tag, from); ok && back && !o.force {
 		return fmt.Errorf("%s is older than the installed %s: a downgrade isn't tested, and a newer release's database changes may not undo (--force to do it anyway; `helm rollback` returns to an earlier revision)", tag, from)
 	}
+	registry := imageRegistry(o, chart)
 	if tag != "dev" {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		missing, err := missingImages(ctx, http.DefaultClient, "https://ghcr.io", tag)
+		client, err := registryClient(o.caFile)
+		if err != nil {
+			return err
+		}
+		host, prefix, _ := strings.Cut(registry, "/")
+		missing, err := missingImages(ctx, client, "https://"+host, prefix, tag)
 		if err != nil {
 			return err
 		}
 		if len(missing) > 0 {
-			return fmt.Errorf("these images aren't published at %s: %s (a release's images are published before its chart; wait for its images workflow)", tag, strings.Join(missing, ", "))
+			return fmt.Errorf("these images aren't published at %s/*:%s: %s (a release's images are published before its chart; wait for its images pipeline)", registry, tag, strings.Join(missing, ", "))
 		}
 	}
 
@@ -306,7 +422,7 @@ Upgrade the platform
   cluster      %s
   release      %s, in the namespace %s (revision %s, %s)
   from         %s
-  to           %s, its images at %s
+  to           %s, its images %s/*:%s
   values       those it was installed with, then the new release's defaults for new settings%s
 Steps
   1. apply the release's Project definition (CRD), which Helm never upgrades
@@ -314,7 +430,7 @@ Steps
   3. wait for every service to be ready
 To undo: %s (the Project definition stays: its new fields are optional)
 
-`, where, release, namespace, cur.Revision, cur.Status, from, target, tag, strings.Join(append([]string{""}, append(o.values, append(o.sets, o.setFiles...)...)...), "\n               "), undo)
+`, where, release, namespace, cur.Revision, cur.Status, from, target, registry, tag, strings.Join(append([]string{""}, append(o.values, append(o.sets, o.setFiles...)...)...), "\n               "), undo)
 
 	args := []string{"upgrade", release, chart, "--reset-then-reuse-values", "--set", "images.tag=" + tag, "--timeout", "15m"}
 	if tag == "dev" {

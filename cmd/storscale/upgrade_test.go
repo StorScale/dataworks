@@ -31,16 +31,22 @@ func TestOlderKnowsReleasesApart(t *testing.T) {
 }
 
 func TestMissingImagesAreTheOnesNotPublishedAtTheTag(t *testing.T) {
-	reg := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var reg *httptest.Server
+	reg = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.URL.Path == "/token":
-			if !strings.HasPrefix(r.URL.Query().Get("scope"), "repository:storscale/") {
-				t.Errorf("scope %q", r.URL.Query().Get("scope"))
+		case r.URL.Path == "/service/token":
+			// Harbor's way: the challenge names its token service, the service and the scope.
+			if r.URL.Query().Get("service") != "harbor-registry" || !strings.HasPrefix(r.URL.Query().Get("scope"), "repository:vericast/dataworks/") {
+				t.Errorf("token asked for %q", r.URL.RawQuery)
 			}
 			w.Write([]byte(`{"token":"anonymous"}`))
+		case r.Method == "HEAD" && r.Header.Get("Authorization") == "":
+			repo := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/v2/"), "/manifests/"+r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:])
+			w.Header().Set("WWW-Authenticate", `Bearer realm="`+reg.URL+`/service/token",service="harbor-registry",scope="repository:`+repo+`:pull"`)
+			w.WriteHeader(http.StatusUnauthorized)
 		case r.Method == "HEAD" && r.Header.Get("Authorization") == "Bearer anonymous":
 			// Every image but the notebook's is published at 0.7.0.
-			if strings.HasSuffix(r.URL.Path, "/manifests/0.7.0") && !strings.Contains(r.URL.Path, "platform-notebook") {
+			if strings.HasPrefix(r.URL.Path, "/v2/vericast/dataworks/") && strings.HasSuffix(r.URL.Path, "/manifests/0.7.0") && !strings.Contains(r.URL.Path, "platform-notebook") {
 				return
 			}
 			http.NotFound(w, r)
@@ -49,12 +55,30 @@ func TestMissingImagesAreTheOnesNotPublishedAtTheTag(t *testing.T) {
 		}
 	}))
 	defer reg.Close()
-	got, err := missingImages(context.Background(), reg.Client(), reg.URL, "0.7.0")
+	got, err := missingImages(context.Background(), reg.Client(), reg.URL, "vericast/dataworks", "0.7.0")
 	if err != nil || len(got) != 1 || got[0] != "platform-notebook" {
 		t.Errorf("missingImages = %v, %v; want the notebook's", got, err)
 	}
-	if got, err := missingImages(context.Background(), reg.Client(), reg.URL, "0.8.0"); err != nil || len(got) != len(images) {
+	if got, err := missingImages(context.Background(), reg.Client(), reg.URL, "vericast/dataworks", "0.8.0"); err != nil || len(got) != len(images) {
 		t.Errorf("an unpublished release: %v, %v; want every image", got, err)
+	}
+}
+
+// The images' registry: a --set wins; else the chart's own (values.yaml).
+func TestTheImagesRegistryIsTheSetOrTheCharts(t *testing.T) {
+	chart := "../../deploy/helm/storscale-platform"
+	if got := imageRegistry(options{sets: []string{"images.tag=1", "images.registry=harbor.example/vericast/dataworks"}}, chart); got != "harbor.example/vericast/dataworks" {
+		t.Errorf("with a --set: %q", got)
+	}
+	t.Setenv("PATH", t.TempDir()) // no helm: no installed values to read
+	if got := imageRegistry(options{}, chart); got != "ghcr.io/storscale" {
+		t.Errorf("the chart's: %q", got)
+	}
+	dir := t.TempDir()
+	data, _ := os.ReadFile(chart + "/values.yaml")
+	os.WriteFile(dir+"/values.yaml", []byte(strings.Replace(string(data), "  registry: ghcr.io/storscale\n", "  registry: harbor.example/vericast/dataworks\n", 1)), 0o644)
+	if got := imageRegistry(options{}, dir); got != "harbor.example/vericast/dataworks" {
+		t.Errorf("a chart packaged for Harbor: %q", got)
 	}
 }
 
