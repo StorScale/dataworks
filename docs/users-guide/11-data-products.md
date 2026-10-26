@@ -126,7 +126,7 @@ The answer is the product as saved. An unknown field is refused ("a data product
 
 - The product is saved in the project's spec, checked as any spec is; the operator is asked to apply the project at once.
 - The platform's audit log records `product.saved`: "published: table uploads_orders, version 1", or "changed: …".
-- Within a few minutes the catalog (OpenMetadata) has it as a data product in the domain **StorScale Platform**, named
+- Within a few minutes the catalog (OpenMetadata) has it as a data product in the domain **StorScale DataWorks**, named
   `orders (retail)`, with its table as its asset and its owner when the catalog knows that user.
 
 See [Lab 12](../guide.md#lab-12-a-certified-data-product-read-in-place), step 1.
@@ -380,7 +380,7 @@ reads it, saying which ("marketing read it: remove them first").
 |---|---|
 | **Data products** (top bar) | Every project's products, to anyone signed in, certified first, refreshed every 30 seconds; requests only to the publisher's editors |
 | The top bar's search | Products after business terms, certified first ("Product ✓"); picking one opens its card |
-| The catalog (OpenMetadata) | The domain **StorScale Platform**: one data product per product, its table as its asset; a certified one's table marked Certification.Gold |
+| The catalog (OpenMetadata) | The domain **StorScale DataWorks**: one data product per product, its table as its asset; a certified one's table marked Certification.Gold |
 | **Governance** page | Every product with its owner, certification and consumers; requests waiting for an editor ([Operating the platform](17-operating.md)) |
 | Assistants | `list_products`, `describe_product`, `query_product`; answers from metrics cite the products behind the tables they read |
 | A business term's page | The terms ticked on a product link to their pages |

@@ -1,11 +1,11 @@
-# StorScale Platform: plan
+# StorScale DataWorks: plan
 
-**StorScale Platform** is one product over the open-source tools the Buckets integration guides already run and test together. You sign in once, and you get one home, one notion of a *project*, one catalog and one place to grant access. Each tool's own UI stays available underneath.
+**StorScale DataWorks** is one product over the open-source tools the Buckets integration guides already run and test together. You sign in once, and you get one home, one notion of a *project*, one catalog and one place to grant access. Each tool's own UI stays available underneath.
 
 - **Repo:** `github.com/StorScale/storscale-platform` (AGPL-3.0, like Buckets).
 - **Web:** `storscale.io/platform`.
 - **CLI:** `storscale up`.
-- **Naming:** *StorScale Buckets* is the storage; *StorScale Platform* is the platform on top.
+- **Naming:** *StorScale Buckets* is the storage; *StorScale DataWorks* is the platform on top (renamed from StorScale Platform on 2026-10-26). An install shows its brand's name before it: Vericast's is *Vericast DataWorks* (`brand.name: Vericast`). The identifiers keep the company's name: the `storscale` command and Python package, the chart `storscale-platform`, the images under `ghcr.io/storscale`, the API group `platform.storscale.io`.
 
 ## What it's for
 
@@ -114,7 +114,7 @@ The examples already prove every mapping in this list by hand.
 
 ## Matching Dataiku
 
-| Dataiku | StorScale Platform | When |
+| Dataiku | StorScale DataWorks | When |
 |---|---|---|
 | Projects, permissions, user isolation | `Project` CRD; Keycloak, Ranger and impersonation | MVP |
 | Flow (visual DAG) | A read-only Flow view drawn from OpenLineage and dbt lineage, with links into each job | MVP (view); an editable Flow is a later gap to build |

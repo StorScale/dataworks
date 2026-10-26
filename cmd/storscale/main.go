@@ -1,4 +1,4 @@
-// storscale runs StorScale Platform on one machine, with Docker Compose, or
+// storscale runs StorScale DataWorks on one machine, with Docker Compose, or
 // on a kind cluster of its own (--k8s), with the platform's Helm chart.
 //
 //	storscale up                 start the platform (builds its images the first time)
@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-const usage = `storscale runs StorScale Platform on one machine, with Docker Compose, or with
+const usage = `storscale runs StorScale DataWorks on one machine, with Docker Compose, or with
 --k8s on a kind cluster of its own (the platform's Helm chart).
 
 Usage:
@@ -218,7 +218,7 @@ func printURLs(st *stack) {
 		}
 		return fmt.Sprintf("http://%s:%s", host, st.setting("STORSCALE_PORT"))
 	}
-	fmt.Printf("StorScale Platform %s\n\n", version())
+	fmt.Printf("StorScale DataWorks %s\n\n", version())
 	for _, t := range []struct{ name, sub, path string }{
 		{"The platform", "", "/"},
 		{"Notebooks (JupyterHub)", "", "/notebooks/"},

@@ -213,6 +213,7 @@ spec:
           imagePullPolicy: {{ .Values.images.pullPolicy }}
           env:
             - {name: KEYCLOAK_DIRECT_URL, value: "http://keycloak:8080/sso"}
+            - {name: BRAND_TITLE, value: {{ .Values.brand.title | default (printf "%s DataWorks" .Values.brand.name) | quote }}}   # the catalog's domain of data products
             - {name: PIPELINES_URL, value: "{{ include "storscale.url" . }}/pipelines"}
             - {name: OPERATOR_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: storscale-env, key: OPERATOR_CLIENT_SECRET}}}
             - {name: OPENMETADATA_TRINO_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: OPENMETADATA_TRINO_PASSWORD}}}

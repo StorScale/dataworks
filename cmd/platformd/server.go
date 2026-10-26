@@ -388,7 +388,7 @@ func (s *server) handleSession(w http.ResponseWriter, r *http.Request) {
 	}
 	if !s.allowed(sess.User.Groups) {
 		writeJSON(w, http.StatusForbidden, map[string]any{"user": sess.User,
-			"error": "Your account isn't in a group that may use StorScale Platform (" + strings.Join(s.cfg.Groups, ", ") + ")."})
+			"error": "Your account isn't in a group that may use " + s.brand.title + " (" + strings.Join(s.cfg.Groups, ", ") + ")."})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"user": sess.User, "tools": toolsFor(s.cfg.PlatformURL, sess.User.Groups, s.cfg.AdminGroups),

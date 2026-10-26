@@ -1,4 +1,4 @@
-"""StorScale Platform's API, as Python (use case 14.3, R14.8).
+"""StorScale DataWorks's API, as Python (use case 14.3, R14.8).
 
     import storscale
     p = storscale.Platform("https://storscale.example.com")

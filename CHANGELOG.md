@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+- **The platform is StorScale DataWorks** (it was StorScale Platform): the product's name in the web app's tab, the docs, the CLI's help, the API reference and the catalog. An install shows its brand's name before it, so `brand.name: Vericast` reads *Vericast DataWorks* (`brand.title` still overrides it). The identifiers keep the company's name: the `storscale` command and Python package, the chart `storscale-platform`, the images under `ghcr.io/storscale` and the API group `platform.storscale.io`, so nothing changes for an upgrade.
+
 ### Fixed
 - **A flow's steps no longer open piled on one another:** a flow whose steps had no places on the canvas, or the same ones (dbt models written by hand, or saved through the API with grid numbers, as the guide's were), opened with every step in one spot. The canvas now lays such a flow out left to right as its data flows, each input just before the step that reads it, and **Arrange** does it on demand; saving keeps the places.
 

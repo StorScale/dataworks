@@ -1,4 +1,4 @@
-# StorScale Platform, on one machine: `storscale up` runs this file.
+# StorScale DataWorks, on one machine: `storscale up` runs this file.
 #
 # One address: STORSCALE_DOMAIN (storscale.localhost) on STORSCALE_PORT (8800).
 # The tools the platform shows in its frames are on paths of that address, so

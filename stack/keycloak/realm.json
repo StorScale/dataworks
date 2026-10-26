@@ -95,7 +95,7 @@
   "clients": [
     {
       "clientId": "platform",
-      "name": "StorScale Platform",
+      "name": "StorScale DataWorks",
       "enabled": true,
       "publicClient": false,
       "clientAuthenticatorType": "client-secret",
@@ -347,7 +347,7 @@
     },
     {
       "clientId": "platform-operator",
-      "name": "StorScale Platform operator (service account)",
+      "name": "StorScale DataWorks operator (service account)",
       "enabled": true,
       "publicClient": false,
       "clientAuthenticatorType": "client-secret",

@@ -1,4 +1,4 @@
-# StorScale Platform Users Guide
+# StorScale DataWorks Users Guide
 
 How to set up and use each of the platform's features, one at a time. Each section says what a feature is for, who may use it,
 how to set it up (on the platform's pages, in a project's spec, and through the API), how it behaves, the install settings that

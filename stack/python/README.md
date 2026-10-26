@@ -1,6 +1,6 @@
 # storscale
 
-StorScale Platform's API, as Python (use case 14.3). Every call runs as whoever signed in, under their projects' rules, as the web app does.
+StorScale DataWorks's API, as Python (use case 14.3). Every call runs as whoever signed in, under their projects' rules, as the web app does.
 
 ```sh
 pip install "git+https://github.com/StorScale/storscale-platform@v0.31.0#subdirectory=stack/python"

@@ -82,7 +82,7 @@ func TestALogoThatIsntAnImageIsRefused(t *testing.T) {
 
 const index = `<!doctype html><html><head>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-<title>StorScale Platform</title>
+<title>StorScale DataWorks</title>
 <script type="module" crossorigin src="/assets/index-x.js"></script>
 </head><body><div id="root"></div></body></html>`
 
@@ -110,9 +110,9 @@ func TestTheTabShowsTheBrand(t *testing.T) {
 		change              func(*config)
 		wantTitle, wantIcon string
 	}{
-		"StorScale's": {func(c *config) { c.BrandName = "StorScale" }, "StorScale Platform", `<link rel="icon" href="/favicon.svg" type="image/svg+xml" />`},
+		"StorScale's": {func(c *config) { c.BrandName = "StorScale" }, "StorScale DataWorks", `<link rel="icon" href="/favicon.svg" type="image/svg+xml" />`},
 		"a deployment's": {func(c *config) { c.BrandName, c.BrandIcon = "Vericast", icon },
-			"Vericast Platform", `<link rel="icon" href="/brand/icon" type="image/png" />`},
+			"Vericast DataWorks", `<link rel="icon" href="/brand/icon" type="image/png" />`},
 		"a title of its own": {func(c *config) { c.BrandName, c.BrandTitle = "Vericast", "Data & AI <Lab>" },
 			"Data &amp; AI &lt;Lab&gt;", `<link rel="icon" href="/favicon.svg" type="image/svg+xml" />`},
 	} {

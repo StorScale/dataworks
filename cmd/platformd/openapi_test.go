@@ -140,7 +140,7 @@ func apiReference(dir string) ([]byte, error) {
 	}
 	spec := map[string]any{
 		"openapi": "3.1.0",
-		"info": map[string]any{"title": "StorScale Platform API", "version": "1",
+		"info": map[string]any{"title": "StorScale DataWorks API", "version": "1",
 			"description": "platformd's API, as the web app, the MCP server and the Python package (`storscale`) use it. Sign in with a Keycloak token of the realm `lakehouse` as `Authorization: Bearer <token>` (a person's, or a service account's), or with the web app's session, whose changes also send `X-Platform-Request: 1`. Every call runs as whoever signed in, under their projects' rules; a refusal says why, with a request ID."},
 		"servers":    []any{map[string]string{"url": "/"}},
 		"security":   []any{map[string]any{"bearer": []string{}}, map[string]any{"session": []string{}}},

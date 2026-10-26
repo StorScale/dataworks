@@ -415,7 +415,7 @@ The chart's values that matter most, from `deploy/helm/storscale-platform/values
 |---|---|---|---|
 | `global.domain`, `port`, `scheme` | `storscale.localhost`, `8800`, `http` | `STORSCALE_DOMAIN`, `STORSCALE_PORT` | The platform's one address |
 | `global.ca.certs` / `configMap` | empty | | Private CAs every service trusts |
-| `brand.name`, `title`, `logo`, `icon` | `StorScale` | `BRAND_NAME`, `BRAND_TITLE`, `BRAND_LOGO`, `BRAND_ICON` (platformd's environment) | The top bar and the browser tab |
+| `brand.name`, `title`, `logo`, `icon` | `StorScale` | `BRAND_NAME`, `BRAND_TITLE`, `BRAND_LOGO`, `BRAND_ICON` (platformd's environment) | The top bar and the browser tab. The title is `<name> DataWorks` unless given (`brand.name: Vericast` shows *Vericast DataWorks*); the catalog's domain of data products takes it too |
 | `gateway.ingress.*`, `gateway.trustedProxies` | off | | The ingress and its TLS |
 | `trino.memory`, `workers`, `workerMemory` | `2560Mi`, `0` | | Trino's size |
 | `buckets.servers`, `volumesPerServer`, `storage`, `storageClassName`, `pools` | `1`, `4`, `10Gi`, default, `[]` | | Buckets' drives ([Buckets capacity](#buckets-capacity)) |
