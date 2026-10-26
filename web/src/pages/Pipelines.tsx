@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ago, getPipelines, getRunLog, startRun, took, when, type ImportError, type PipelinesRepo } from "../api";
-import { ErrorBanner, Spinner, StateDot, usePoll, useProject } from "../lib";
+import { Breakable, ErrorBanner, Spinner, StateDot, usePoll, useProject } from "../lib";
 
 // Pipelines is a project's Airflow DAGs: those in its pipelines repo, and the
 // platform's own tagged for it. Their recent runs, the newest run's tasks, the
@@ -97,7 +97,7 @@ export default function Pipelines() {
           <p className="eyebrow">Pipelines</p>
           {data.pipelines.map((x) => (
             <button key={x.id} className={x === p ? "active" : ""} onClick={() => setParams({ pipeline: x.id })} data-testid={`pipeline-${x.id}`}>
-              <span className="mono">{x.id}</span><StateDot state={x.runs[0]?.state} />
+              <span className="mono"><Breakable text={x.id} /></span><StateDot state={x.runs[0]?.state} />
             </button>
           ))}
         </nav>
@@ -107,7 +107,7 @@ export default function Pipelines() {
           <div className="card">
             <div className="card-head" style={{ alignItems: "flex-start" }}>
               <div>
-                <h2 className="mono" style={{ fontSize: 18 }}>{p.id}</h2>
+                <h2 className="mono" style={{ fontSize: 18 }}><Breakable text={p.id} /></h2>
                 <p className="muted small" style={{ margin: "4px 0 0" }}>{p.description || "No description."}{p.paused && <> · <span className="pill">paused</span></>}</p>
                 <p className="muted small" style={{ margin: "4px 0 0" }} data-testid="pipeline-source">
                   {p.bundle === "dags-folder" ? "The platform's own, in Airflow's DAGs folder." : <>From the repo, at <code title={p.commit}>{short(p.commit) ?? "–"}</code>.</>}
