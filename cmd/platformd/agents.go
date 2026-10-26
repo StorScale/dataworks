@@ -9,8 +9,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
-	"github.com/StorScale/storscale-platform/internal/store"
+	"github.com/StorScale/dataworks/internal/project"
+	"github.com/StorScale/dataworks/internal/store"
 )
 
 // A project's agents (use case 12.2): registered by its editors (name, owner,

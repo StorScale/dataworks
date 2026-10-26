@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // Data products (use case 10.3): tables projects publish for others, read in

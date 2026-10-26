@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // MLflow (use case 15.1, R15.1, R15.2): one tracking server and model

@@ -3,7 +3,7 @@ package reconcile
 import (
 	"testing"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // A consumer project's group Ranger doesn't have yet (campaigns has no

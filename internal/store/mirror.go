@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // Mirror is a Store (Kube) with a copy of every project and status kept in a

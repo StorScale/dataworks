@@ -6,8 +6,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/catalog"
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/catalog"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // Nessie is the catalog's Iceberg REST API.

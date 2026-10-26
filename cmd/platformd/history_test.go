@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/catalog"
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/catalog"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 func TestDurationsAndKeeps(t *testing.T) {

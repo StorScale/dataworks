@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // The project as code (use case 7.4): its spec and metrics from its repo

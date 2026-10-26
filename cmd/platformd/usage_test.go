@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 func TestTrinosQueriesAreCountedByProjectAndPriced(t *testing.T) {

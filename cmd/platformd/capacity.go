@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // A project's bucket nearing its size limit (its limits.storage, else the

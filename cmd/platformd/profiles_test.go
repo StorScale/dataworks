@@ -3,8 +3,8 @@ package main
 import (
 	"testing"
 
-	"github.com/StorScale/storscale-platform/internal/catalog"
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/catalog"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // A reader under the readers' rules doesn't see what the profiler found on

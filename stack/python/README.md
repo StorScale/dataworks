@@ -3,7 +3,7 @@
 StorScale DataWorks's API, as Python (use case 14.3). Every call runs as whoever signed in, under their projects' rules, as the web app does.
 
 ```sh
-pip install "git+https://github.com/StorScale/storscale-platform@v0.31.0#subdirectory=stack/python"
+pip install "git+https://github.com/StorScale/dataworks@v0.31.0#subdirectory=stack/python"
 ```
 
 Python 3.10 or later; it needs only `requests`. Leave out `@v0.31.0` for the latest from `main`.

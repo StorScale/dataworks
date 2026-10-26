@@ -20,13 +20,13 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
-	"github.com/StorScale/storscale-platform/internal/audit"
-	"github.com/StorScale/storscale-platform/internal/catalog"
-	"github.com/StorScale/storscale-platform/internal/flow"
-	"github.com/StorScale/storscale-platform/internal/llm"
-	"github.com/StorScale/storscale-platform/internal/pipelines"
-	"github.com/StorScale/storscale-platform/internal/project"
-	"github.com/StorScale/storscale-platform/internal/store"
+	"github.com/StorScale/dataworks/internal/audit"
+	"github.com/StorScale/dataworks/internal/catalog"
+	"github.com/StorScale/dataworks/internal/flow"
+	"github.com/StorScale/dataworks/internal/llm"
+	"github.com/StorScale/dataworks/internal/pipelines"
+	"github.com/StorScale/dataworks/internal/project"
+	"github.com/StorScale/dataworks/internal/store"
 )
 
 const (

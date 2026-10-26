@@ -14,8 +14,8 @@ import (
 
 	"github.com/minio/minio-go/v7"
 
-	"github.com/StorScale/storscale-platform/internal/project"
-	"github.com/StorScale/storscale-platform/internal/trino"
+	"github.com/StorScale/dataworks/internal/project"
+	"github.com/StorScale/dataworks/internal/trino"
 )
 
 // Erasure (use case 6.9, under the CCPA): a person's rows deleted from the

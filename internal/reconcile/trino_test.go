@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 func TestTrinosGroupsAreTheProjectsLimits(t *testing.T) {

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StorScale/storscale-platform/internal/audit"
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/audit"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 func TestChangesSayWhatAProjectsChangeTouched(t *testing.T) {

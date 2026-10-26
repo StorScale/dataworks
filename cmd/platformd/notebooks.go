@@ -10,8 +10,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/StorScale/storscale-platform/internal/gitlab"
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/gitlab"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // A notebook scheduled from JupyterLab (use case 7.7): JupyterLab's Schedule

@@ -17,9 +17,9 @@ import (
 
 	"github.com/minio/minio-go/v7"
 
-	"github.com/StorScale/storscale-platform/internal/flow"
-	"github.com/StorScale/storscale-platform/internal/project"
-	"github.com/StorScale/storscale-platform/internal/trino"
+	"github.com/StorScale/dataworks/internal/flow"
+	"github.com/StorScale/dataworks/internal/project"
+	"github.com/StorScale/dataworks/internal/trino"
 )
 
 // Knowledge banks (use case 12.6): a project's text, searched by meaning.

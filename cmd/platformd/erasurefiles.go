@@ -14,7 +14,7 @@ import (
 
 	"github.com/minio/minio-go/v7"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // An erasure reaches the project's landing area too (6.9): the files its

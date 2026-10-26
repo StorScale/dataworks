@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // Ranger is Apache Ranger's admin API, for one service (Trino's).

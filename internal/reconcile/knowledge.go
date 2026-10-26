@@ -4,7 +4,7 @@ import (
 	"context"
 	"sort"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // A knowledge bank on a schedule (use case 12.6) is a pipeline of the

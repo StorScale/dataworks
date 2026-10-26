@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/audit"
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/audit"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // The audit log: what people did in the platform, recorded beside Ranger's

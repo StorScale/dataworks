@@ -39,7 +39,7 @@ export default function Reference() {
         <p style={{ margin: 0 }}>{data?.info.description}</p>
         <p className="small" style={{ margin: 0 }}>The document itself: <a href="/api/openapi.json" className="mono">{origin}/api/openapi.json</a> (OpenAPI 3.1), for any client generator.</p>
         <strong>From Python</strong>
-        <pre className="mono small" style={{ margin: 0, whiteSpace: "pre-wrap" }}>{`pip install "git+https://github.com/StorScale/storscale-platform#subdirectory=stack/python"
+        <pre className="mono small" style={{ margin: 0, whiteSpace: "pre-wrap" }}>{`pip install "git+https://github.com/StorScale/dataworks#subdirectory=stack/python"
 
 import storscale
 p = storscale.Platform("${origin}")          # asks for your name and password, or reads STORSCALE_TOKEN

@@ -15,7 +15,7 @@
 #
 # Verify a release image:
 #   cosign verify ghcr.io/storscale/platformd:<version> \
-#     --certificate-identity-regexp '^https://github.com/StorScale/storscale-platform/\.github/workflows/images\.yml@refs/tags/v' \
+#     --certificate-identity-regexp '^https://github.com/StorScale/(dataworks|storscale-platform)/\.github/workflows/images\.yml@refs/tags/v' \
 #     --certificate-oidc-issuer https://token.actions.githubusercontent.com
 name: images
 

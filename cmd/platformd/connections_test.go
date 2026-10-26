@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
-	"github.com/StorScale/storscale-platform/internal/store"
+	"github.com/StorScale/dataworks/internal/project"
+	"github.com/StorScale/dataworks/internal/store"
 )
 
 // connsKept is a project store with connections, in memory.

@@ -461,7 +461,7 @@ Everything the web app does is an API call, so a script, a scheduled job or the 
 ### The Python package
 
 ```bash
-pip install "git+https://github.com/StorScale/storscale-platform#subdirectory=stack/python"
+pip install "git+https://github.com/StorScale/dataworks#subdirectory=stack/python"
 ```
 
 ```python

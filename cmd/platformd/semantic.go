@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 var semanticClient = &http.Client{Timeout: 120 * time.Second}

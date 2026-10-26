@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/flow"
-	"github.com/StorScale/storscale-platform/internal/project"
-	"github.com/StorScale/storscale-platform/internal/trino"
+	"github.com/StorScale/dataworks/internal/flow"
+	"github.com/StorScale/dataworks/internal/project"
+	"github.com/StorScale/dataworks/internal/trino"
 )
 
 // A project's apps (use case 14.1, R14.1, R14.6): its editors declare them

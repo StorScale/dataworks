@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/StorScale/storscale-platform/internal/pipelines"
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/pipelines"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // A ProjectImport is one of a project's imports (use case 8.2), as the

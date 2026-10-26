@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/catalog"
-	"github.com/StorScale/storscale-platform/internal/pipelines"
-	"github.com/StorScale/storscale-platform/internal/project"
-	"github.com/StorScale/storscale-platform/internal/store"
+	"github.com/StorScale/dataworks/internal/catalog"
+	"github.com/StorScale/dataworks/internal/pipelines"
+	"github.com/StorScale/dataworks/internal/project"
+	"github.com/StorScale/dataworks/internal/store"
 )
 
 // A projectView is a project as the web app shows it: its spec, what the

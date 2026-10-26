@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // Roles of the company's own (use case 16.1): the administrators define a

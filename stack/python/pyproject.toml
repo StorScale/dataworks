@@ -12,7 +12,7 @@ license = {text = "AGPL-3.0-or-later"}
 dependencies = ["requests>=2.31"]
 
 [project.urls]
-Source = "https://github.com/StorScale/storscale-platform"
+Source = "https://github.com/StorScale/dataworks"
 
 [tool.setuptools]
 packages = ["storscale"]

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/StorScale/storscale-platform/internal/project"
+	"github.com/StorScale/dataworks/internal/project"
 )
 
 // servingTemplate is the chart's serving template, cut down to its placeholders.
