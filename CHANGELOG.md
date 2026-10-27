@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+- **A column's "Comes from" lists each source once:** the Data page's Columns tab showed `uploads_campaigns.name` ten times for a column of a flow's table (`campaign_results`, after repeated runs): the catalog held the same column lineage ten times, and platformd passed each on. platformd now merges them: one entry per column, each source column once (the Lineage tab's column counts too).
+
 ## [0.35.0] - 2026-10-27
 
 Sign-in with the company's Entra ID: Keycloak brokers the tenant, and its app roles put people in the platform's groups. A first notebook on a node starts (its image pulled onto every node ahead of time); Run now on an import just changed copies the change; long names stay in their cards; `storscale upgrade` waits out a slow registry.

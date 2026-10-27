@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -278,12 +279,23 @@ func (c *Client) Flow(ctx context.Context, trinoCatalog, namespace string) (*Flo
 					edge.Pipeline = p.Name
 				}
 			}
+			// The catalog may hold the same column's lineage many times
+			// over (seen on a flow's table after repeated runs): one entry
+			// per column, each source column once.
+			at := map[string]int{}
 			for _, cl := range e.Details.Columns {
-				ce := ColumnEdge{To: lastPart(cl.To)}
-				for _, f := range cl.From {
-					ce.From = append(ce.From, lastPart(f))
+				col := lastPart(cl.To)
+				i, ok := at[col]
+				if !ok {
+					i = len(edge.Columns)
+					at[col] = i
+					edge.Columns = append(edge.Columns, ColumnEdge{To: col})
 				}
-				edge.Columns = append(edge.Columns, ce)
+				for _, f := range cl.From {
+					if f = lastPart(f); !slices.Contains(edge.Columns[i].From, f) {
+						edge.Columns[i].From = append(edge.Columns[i].From, f)
+					}
+				}
 			}
 			flow.Edges = append(flow.Edges, edge)
 		}
