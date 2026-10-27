@@ -453,7 +453,8 @@ def dedupe_column_lineage():
                 kept = merge_column_lineage(columns)
                 if len(kept) == len(columns):
                     continue
-                log.info("lineage %s -> %s: %d column entries, %d once merged (source %s, pipeline %s); repeated: %s",
+                # A warning: OpenMetadata's logging leaves catalog-sync's info out.
+                log.warning("lineage %s -> %s: %d column entries, %d once merged (source %s, pipeline %s); repeated: %s",
                             fqn.get(e["fromEntity"], e["fromEntity"]), t["fullyQualifiedName"], len(columns), len(kept),
                             details.get("source"), (details.get("pipeline") or {}).get("fullyQualifiedName"),
                             json.dumps(repeated_column_lineage(columns))[:2000])
