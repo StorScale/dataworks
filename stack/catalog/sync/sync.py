@@ -421,6 +421,64 @@ def import_lineage():
                     log.warning("lineage of %s to %s: HTTP %d %s", dag, name, r.status_code, r.text[:200])
 
 
+def dedupe_column_lineage():
+    """Each edge into a project's tables keeps one entry per column and its
+    sources: the catalog had campaign_results' name from campaigns' name ten
+    times over. What was repeated is logged, with the edge's source and
+    pipeline, so whoever adds the copies can be found."""
+    h = admin_headers()
+    for p in projects():
+        tables = p["spec"].get("tables")
+        if tables is None:
+            continue
+        schema = f"{SERVICE}.{tables.get('catalog') or 'iceberg'}.{tables.get('namespace') or p['metadata']['name'].replace('-', '_')}"
+        r = requests.get(f"{OM}/v1/tables", params={"databaseSchema": schema, "limit": 1000}, headers=h, timeout=30)
+        for t in r.json().get("data", []) if r.ok else []:
+            r = requests.get(f"{OM}/v1/lineage/table/name/{t['fullyQualifiedName']}", headers=h, timeout=30,
+                             params={"upstreamDepth": 1, "downstreamDepth": 0})
+            if not r.ok:
+                continue
+            fqn = {n["id"]: n["fullyQualifiedName"] for n in r.json().get("nodes", [])}
+            for e in r.json().get("upstreamEdges", []):
+                details = e.get("lineageDetails") or {}
+                columns = details.get("columnsLineage") or []
+                kept = merge_column_lineage(columns)
+                if len(kept) == len(columns):
+                    continue
+                log.warning("lineage %s -> %s: %d column entries, %d once merged (source %s, pipeline %s); repeated: %s",
+                            fqn.get(e["fromEntity"], e["fromEntity"]), t["fullyQualifiedName"], len(columns), len(kept),
+                            details.get("source"), (details.get("pipeline") or {}).get("fullyQualifiedName"),
+                            json.dumps(repeated_column_lineage(columns))[:2000])
+                r = requests.patch(f"{OM}/v1/lineage/table/{e['fromEntity']}/table/{e['toEntity']}", timeout=30,
+                                   headers={**h, "Content-Type": "application/json-patch+json"},
+                                   json=[{"op": "replace", "path": "/columnsLineage", "value": kept}])
+                if not r.ok:
+                    log.warning("lineage %s -> %s: merging its columns: HTTP %d %s", e["fromEntity"], t["fullyQualifiedName"],
+                                r.status_code, r.text[:200])
+
+
+def merge_column_lineage(columns):
+    """One entry per column, each source column once, in the order first
+    seen; an entry's other fields (its function) are the last copy's."""
+    out = {}
+    for c in columns:
+        to = c.get("toColumn")
+        if to in out:
+            sources = out[to]["fromColumns"]
+            out[to] = {**c, "fromColumns": sources + [f for f in c.get("fromColumns") or [] if f not in sources]}
+        else:
+            out[to] = {**c, "fromColumns": list(dict.fromkeys(c.get("fromColumns") or []))}
+    return list(out.values())
+
+
+def repeated_column_lineage(columns):
+    """The entries of a column held more than once, as the catalog has them."""
+    count = {}
+    for c in columns:
+        count[c.get("toColumn")] = count.get(c.get("toColumn"), 0) + 1
+    return [c for c in columns if count[c.get("toColumn")] > 1][:6]
+
+
 PLATFORMD_URL = env.get("PLATFORMD_URL", "http://platformd:8080")
 # The platform as people reach it, for the models' links: PIPELINES_URL is <platform>/pipelines.
 PLATFORM_URL = env.get("PLATFORM_URL") or env.get("PIPELINES_URL", "").removesuffix("/pipelines")
@@ -794,6 +852,10 @@ def main():
                 ingest_dbt(token)
                 copy_lineage()
                 import_lineage()
+                try:
+                    dedupe_column_lineage()
+                except Exception as e:  # noqa: BLE001 (the next round tries again)
+                    log.warning("column lineage: %s", e)
                 try:
                     sync_glossary()
                 except Exception as e:  # noqa: BLE001 (the next round tries again)

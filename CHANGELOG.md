@@ -6,6 +6,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ### Fixed
 - **A column's "Comes from" lists each source once:** the Data page's Columns tab showed `uploads_campaigns.name` ten times for a column of a flow's table (`campaign_results`, after repeated runs): the catalog held the same column lineage ten times, and platformd passed each on. platformd now merges them: one entry per column, each source column once (the Lineage tab's column counts too).
+- **The catalog keeps a column's lineage once:** catalog-sync now merges repeated column lineage on every edge into a project's tables each round, and logs what was repeated and the edge's source, so the writer adding copies shows in its log.
 
 ## [0.35.0] - 2026-10-27
 
