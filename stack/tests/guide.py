@@ -768,7 +768,10 @@ def lab16():
     p = spec("retail")
     p["spec"]["llm"] = {"budget": 0.05}
     check("bob gives retail an LLM budget of 0.05", save_spec(p).ok, "")
-    key = wait(lambda: (k8s.get_secret("retail-llm") if k8s.in_cluster() else {}).get("llmKey"), 180, every=10)
+    # The key made for this budget: on an install that ran the guide before, the connection still has the
+    # last run's (budget 1) until the operator replaces it, and a key is replaced when its budget changes.
+    key = wait(lambda: (lambda c: c.get("llmKey") if c.get("llmBudget") == "0.05" else None)(
+        k8s.get_secret("retail-llm") if k8s.in_cluster() else {}), 180, every=10)
     check("... the operator makes its key, the connection retail-llm", bool(key), "")
     url = (k8s.get_secret("retail-llm") if k8s.in_cluster() else {}).get("url") or "http://llm:4000"
     ask = lambda q: requests.post(f"{url.rstrip('/')}/chat/completions", timeout=120, headers={"Authorization": "Bearer " + (key or "")},  # noqa: E731
