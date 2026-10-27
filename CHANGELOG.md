@@ -4,6 +4,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-10-27
+
+Sign-in with the company's Entra ID: Keycloak brokers the tenant, and its app roles put people in the platform's groups. A first notebook on a node starts (its image pulled onto every node ahead of time); Run now on an import just changed copies the change; long names stay in their cards; `storscale upgrade` waits out a slow registry.
+
+**Upgrading from 0.34.0:** `storscale upgrade --context <cluster> --version 0.35.0`, after a `--dry-run` (with `--chart oci://<harbor>/<project>/charts/storscale-platform --ca-file <ca.pem>` for an install on a registry of your own); the Project definition is unchanged. The chart adds a DaemonSet, `notebook-prepull`, on every node (`notebooks.prePull: false` leaves it out). Entra ID sign-in is off until `sso.entra` names a tenant (the operating chapter's settings, `sso.entra`).
+
 ### Added
 - **Sign-in with Entra ID** (use case 6.1): `sso.entra` names the company's tenant and app registration (its client secret in a Secret), and setup makes Keycloak's identity provider for it from the tenant's discovery document: a button on the sign-in page, a person's username their Entra login name's local part, their name and email Entra's own claims (updated at every sign-in), and their groups from the app registration's roles (`sso.entra.roles`: Analyst puts them in analysts, Engineer and Administrator in engineers), set again at every sign-in. A new suite, `entra`, plays Entra with a stand-in realm.
 
