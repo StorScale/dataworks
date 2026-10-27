@@ -99,6 +99,28 @@ trino:
   workers: 0
   workerMemory: ""    # default: memory, above
 
+# Other platforms' Iceberg catalogs, whose tables projects adopt where their
+# files are (a project's tables.adopt: from <store>.<schema>.<table>; the
+# users' guide, Adopting tables). For each store, Trino reads the store's
+# own catalog (ext_<name>, read-only) to find each table's current metadata
+# file, and reads the store's buckets at its endpoint with its key (S3
+# security mapping in the iceberg catalog; every other bucket as before);
+# Nessie reads the tables' metadata there too. Nothing is written to the
+# store: give a key that may only read its buckets (nightly maintenance and
+# Nessie's GC never touch adopted tables, and the key makes sure of it).
+# The store's TLS certificate must be one global.ca trusts.
+externalStores: []
+#  - name: lakehouse                 # [a-z_][a-z0-9_]*: adopt from lakehouse.<schema>.<table>
+#    catalog:
+#      type: hive_metastore          # or rest
+#      uri: thrift://hive-metastore.lakehouse.svc.cluster.local:9083
+#      # warehouse: ...              # rest only: the warehouse to ask for
+#    s3:
+#      endpoint: https://minio.lakehouse.svc.cluster.local
+#      region: us-east-1
+#      buckets: [warehouse]          # the buckets its tables' files are in
+#    secret: lakehouse-store         # a Secret in the release's namespace: accessKey, secretKey
+
 # How long a Deployment may take to become ready before Kubernetes calls its
 # rollout failed (its default is 10 minutes). On a first install, services
 # wait for the setup steps, and those for Keycloak, Buckets, Ranger and

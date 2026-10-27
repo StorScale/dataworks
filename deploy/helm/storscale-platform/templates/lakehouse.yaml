@@ -34,6 +34,9 @@ spec:
       serviceAccountName: storscale
       securityContext: {fsGroup: 185}
       initContainers:
+        {{- if .Values.externalStores }}
+        {{- include "storscale.ca.init" . | nindent 8 }}
+        {{- end }}
         {{- include "storscale.wait" (list . "setup" (list "job" "setup")) | nindent 8 }}
         # Nessie's database on the platform's Postgres, made if it's missing
         # (an install from before 0.9.0 has none), as Postgres' admin.
@@ -98,6 +101,23 @@ spec:
             - {name: nessie.catalog.service.s3.default-options.access-key, value: "urn:nessie-secret:quarkus:nessie.catalog.secrets.access-key"}
             - {name: nessie.catalog.secrets.access-key.name, valueFrom: {secretKeyRef: {name: storscale-env, key: NESSIE_S3_ACCESS_KEY}}}
             - {name: nessie.catalog.secrets.access-key.secret, valueFrom: {secretKeyRef: {name: storscale-env, key: NESSIE_S3_SECRET_KEY}}}
+            {{- /* The external stores' buckets (externalStores): their tables'
+                   metadata, read at the store's endpoint with its key. */}}
+            {{- range $s := .Values.externalStores }}
+            {{- range $i, $b := $s.s3.buckets }}
+            {{- $k := printf "nessie.catalog.service.s3.buckets.ext-%s-%d" $s.name $i }}
+            - {name: {{ $k }}.name, value: {{ $b | quote }}}
+            - {name: {{ $k }}.endpoint, value: {{ $s.s3.endpoint | quote }}}
+            - {name: {{ $k }}.region, value: {{ $s.s3.region | default "us-east-1" | quote }}}
+            - {name: {{ $k }}.path-style-access, value: "true"}
+            - {name: {{ $k }}.access-key, value: "urn:nessie-secret:quarkus:nessie.catalog.secrets.ext-{{ $s.name }}"}
+            {{- end }}
+            - {name: nessie.catalog.secrets.ext-{{ $s.name }}.name, valueFrom: {secretKeyRef: {name: {{ $s.secret }}, key: accessKey}}}
+            - {name: nessie.catalog.secrets.ext-{{ $s.name }}.secret, valueFrom: {secretKeyRef: {name: {{ $s.secret }}, key: secretKey}}}
+            {{- end }}
+            {{- if .Values.externalStores }}
+            {{- include "storscale.ca.env" . | nindent 12 }}
+            {{- end }}
           ports:
             - {name: http, containerPort: 19120}
             - {name: management, containerPort: 9000}
@@ -105,12 +125,18 @@ spec:
             httpGet: {path: /q/health/ready, port: management}
             periodSeconds: 5
             failureThreshold: 60
+          {{- if and .Values.externalStores (include "storscale.ca.enabled" .) }}
+          volumeMounts: {{- include "storscale.ca.mount" . | nindent 12 }}
+          {{- end }}
           {{- include "storscale.resources" (list "50m" "320Mi" "512Mi") | nindent 10 }}
       volumes:
         {{- if eq (include "storscale.replicas" (list . "nessie")) "1" }}
         - {name: data, persistentVolumeClaim: {claimName: nessie-data}}
         {{- end }}
         {{- include "storscale.filesVolume" (list . "tools" "tools") | nindent 8 }}
+        {{- if .Values.externalStores }}
+        {{- include "storscale.ca.volumes" . | nindent 8 }}
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service
@@ -184,10 +210,10 @@ spec:
           securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
           # Its catalogs are made and dropped while it runs (the projects'
           # sources), in a directory of its own: the install's copied in first.
-          command: ["sh", "-c", "mkdir -p /data/trino/catalog && cp /etc/trino/catalog-install/*.properties /data/trino/catalog/ && exec /usr/lib/trino/bin/run-trino"]
+          command: ["sh", "-c", {{ include "storscale.trinoStart" (list . "/data/trino/catalog") | quote }}]
           {{- include "storscale.envFrom" . | nindent 10 }}
           {{- /* It fetches Keycloak's keys at the public address. */}}
-          {{- with include "storscale.ca.env" . }}
+          {{- with (cat (include "storscale.ca.env" .) (include "storscale.externalEnv" .) | trim) }}
           env: {{- . | nindent 12 }}
           {{- end }}
           ports:
@@ -205,6 +231,9 @@ spec:
             - {name: tls, mountPath: /etc/trino/tls}
             - {name: auth, mountPath: /etc/trino/auth}
             - {name: sources, mountPath: /etc/trino/sources, readOnly: true}
+            {{- if .Values.externalStores }}
+            - {name: external, mountPath: /etc/trino/external, readOnly: true}
+            {{- end }}
             {{- include "storscale.ca.mount" . | nindent 12 }}
           resources:
             requests: {cpu: 250m, memory: {{ .Values.trino.memory }}}
@@ -215,6 +244,9 @@ spec:
         - {name: tls, secret: {secretName: trino-tls}}
         - {name: auth, emptyDir: {}}
         - {name: sources, secret: {secretName: trino-sources}}
+        {{- if .Values.externalStores }}
+        - {name: external, configMap: {name: trino-external}}
+        {{- end }}
         {{- include "storscale.ca.volumes" . | nindent 8 }}
 ---
 apiVersion: v1
@@ -289,11 +321,21 @@ spec:
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels: {{- include "storscale.selector" (list .Release.Name "trino-worker") | nindent 14 }}
+      {{- with include "storscale.ca.init" . }}
+      initContainers: {{- . | nindent 8 }}
+      {{- end }}
       containers:
         - name: trino
           image: {{ .Values.upstream.trino }}
           securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          # The catalogs, as the coordinator's: copied in at the start (and the
+          # external stores' S3 mapping written), since the adopted tables'
+          # files are read here too.
+          command: ["sh", "-c", {{ include "storscale.trinoStart" (list . "/etc/trino/catalog") | quote }}]
           {{- include "storscale.envFrom" . | nindent 10 }}
+          {{- with (cat (include "storscale.ca.env" .) (include "storscale.externalEnv" .) | trim) }}
+          env: {{- . | nindent 12 }}
+          {{- end }}
           ports:
             - {name: http, containerPort: 8080}
           readinessProbe:
@@ -303,8 +345,12 @@ spec:
           volumeMounts:
             - {name: config, mountPath: /etc/trino/config.properties, subPath: config.properties}
             - {name: files-trino, mountPath: /etc/trino/jvm.config, subPath: jvm.config}
-            - {name: files-trino, mountPath: /etc/trino/catalog, subPath: catalog}
+            - {name: files-trino, mountPath: /etc/trino/catalog-install, subPath: catalog}
             - {name: sources, mountPath: /etc/trino/sources, readOnly: true}   # a source's connection is read where its catalog is made
+            {{- if .Values.externalStores }}
+            - {name: external, mountPath: /etc/trino/external, readOnly: true}
+            {{- end }}
+            {{- include "storscale.ca.mount" . | nindent 12 }}
           resources:
             requests: {cpu: 250m, memory: {{ .Values.trino.workerMemory | default .Values.trino.memory }}}
             limits: {memory: {{ .Values.trino.workerMemory | default .Values.trino.memory }}}
@@ -312,6 +358,10 @@ spec:
         - {name: config, configMap: {name: trino-worker}}
         {{- include "storscale.filesVolume" (list . "trino" "trino") | nindent 8 }}
         - {name: sources, secret: {secretName: trino-sources}}
+        {{- if .Values.externalStores }}
+        - {name: external, configMap: {name: trino-external}}
+        {{- end }}
+        {{- include "storscale.ca.volumes" . | nindent 8 }}
 {{- end }}
 ---
 # Nessie's GC: the tables' history older than maintenance.history.keep, and

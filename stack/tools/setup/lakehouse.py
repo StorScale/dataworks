@@ -62,6 +62,15 @@ POLICIES = [{**p, "policyItems": p["policyItems"] + ([allow(["execute"], groups=
      "policyItems": [allow(["all"], groups=["engineers"]), allow(["use", "show"], groups=["public"], users=[CATALOG_USER, MAINTENANCE_USER])]},
     {"name": "operator: catalogs", "resources": res(catalog="*"),
      "policyItems": [allow(["create", "drop"], users=[OPERATOR_USER])]},
+    # The external stores' catalogs (ext_<store>, the chart's externalStores):
+    # the operator reads each adopted table's metadata files there, and only
+    # it (no one reads a store's tables but through the projects adopting them).
+    {"name": "operator: external stores", "resources": res(catalog="ext_*"),
+     "policyItems": [allow(["use", "show"], users=[OPERATOR_USER])]},
+    {"name": "operator: external stores' namespaces", "resources": res(catalog="ext_*", schema="*"),
+     "policyItems": [allow(["use", "show"], users=[OPERATOR_USER])]},
+    {"name": "operator: external stores' tables", "resources": res(catalog="ext_*", schema="*", table="*", column="*"),
+     "policyItems": [allow(["select", "show"], users=[OPERATOR_USER])]},
     {"name": "catalog: every namespace", "resources": res(catalog=ICEBERG, schema="*"),
      "policyItems": [allow(["use", "show"], users=[CATALOG_USER, MAINTENANCE_USER])]},
     {"name": "catalog: every table", "resources": res(catalog=ICEBERG, schema="*", table="*", column="*"),

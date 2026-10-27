@@ -140,7 +140,7 @@ func (p *Project) ProductPolicies() []RangerPolicy {
 	var out []RangerPolicy
 	for _, pr := range p.Spec.Products {
 		groups := byTable[pr.Table]
-		if len(groups) == 0 || slices.Contains(listed, pr.Table) || slices.ContainsFunc(out, func(x RangerPolicy) bool {
+		if len(groups) == 0 || slices.Contains(listed, pr.Table) || t.Adopted(pr.Table) || slices.ContainsFunc(out, func(x RangerPolicy) bool {
 			return x.Name == p.RangerPrefix()+"product-table:"+pr.Table
 		}) {
 			continue

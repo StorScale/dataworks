@@ -1,0 +1,58 @@
+{{- /*
+Other platforms' Iceberg catalogs (externalStores), whose tables projects
+adopt where their files are. For Trino: each store's catalog, ext_<name>,
+read-only, which the operator asks for a table's current metadata file; and
+the S3 security mapping of the platform's own iceberg catalog, which reads
+the stores' buckets at their endpoints with their keys (everything else as
+the catalog says: Buckets). The mapping holds the keys, so it's written
+where Trino starts, from its environment (s3-mapping.sh), never into a
+ConfigMap.
+*/ -}}
+{{- if .Values.externalStores }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trino-external
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+data:
+  {{- range $s := .Values.externalStores }}
+  {{- if not (regexMatch "^[a-z_][a-z0-9_]{0,40}$" $s.name) }}{{ fail (printf "externalStores: %q: a store's name is lowercase letters, digits and underscores" $s.name) }}{{ end }}
+  {{- if not $s.secret }}{{ fail (printf "externalStores: %s: secret: the Secret with its accessKey and secretKey" $s.name) }}{{ end }}
+  {{- if not $s.s3.buckets }}{{ fail (printf "externalStores: %s: s3.buckets: the buckets its tables' files are in" $s.name) }}{{ end }}
+  ext_{{ $s.name }}.properties: |
+    # The store {{ $s.name }}: its own catalog, for the metadata files of the
+    # tables projects adopt from it. Read-only: nothing here writes there.
+    connector.name=iceberg
+    iceberg.security=read_only
+    {{- if eq $s.catalog.type "hive_metastore" }}
+    iceberg.catalog.type=hive_metastore
+    hive.metastore.uri={{ $s.catalog.uri }}
+    {{- else if eq $s.catalog.type "rest" }}
+    iceberg.catalog.type=rest
+    iceberg.rest-catalog.uri={{ $s.catalog.uri }}
+    {{- with $s.catalog.warehouse }}
+    iceberg.rest-catalog.warehouse={{ . }}
+    {{- end }}
+    {{- else }}
+    {{- fail (printf "externalStores: %s: catalog.type %q: hive_metastore or rest" $s.name $s.catalog.type) }}
+    {{- end }}
+    fs.s3.enabled=true
+    s3.endpoint={{ $s.s3.endpoint }}
+    s3.region={{ $s.s3.region | default "us-east-1" }}
+    s3.path-style-access=true
+    s3.aws-access-key=${ENV:{{ include "storscale.externalKeyEnv" (list $s.name "ACCESS") }}}
+    s3.aws-secret-key=${ENV:{{ include "storscale.externalKeyEnv" (list $s.name "SECRET") }}}
+  {{- end }}
+  s3-mapping.sh: |
+    #!/bin/sh
+    # The iceberg catalog's S3 security mapping: each store's buckets at its
+    # endpoint, with its key (from the environment); the rest as the catalog
+    # says. Trino matches the entries in order.
+    printf '{"mappings":['
+    {{- range $s := .Values.externalStores }}
+    {{- range $b := $s.s3.buckets }}
+    printf '{"prefix":"s3://%s/","endpoint":"%s","region":"%s","accessKey":"%s","secretKey":"%s"},' {{ $b | quote }} {{ $s.s3.endpoint | quote }} {{ $s.s3.region | default "us-east-1" | quote }} "${{ include "storscale.externalKeyEnv" (list $s.name "ACCESS") }}" "${{ include "storscale.externalKeyEnv" (list $s.name "SECRET") }}"
+    {{- end }}
+    {{- end }}
+    printf '{"useClusterDefault":true}]}'
+{{- end }}

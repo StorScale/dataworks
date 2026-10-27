@@ -337,6 +337,52 @@ It runs by itself. A project's editors (`run-pipelines`) start a round now: **Da
 - Nessie's GC then deletes history older than `history.keep`, and files no branch or tag needs; a tag (a close) keeps what it points to.
 - Each table's **Storage** tab shows its files and snapshots, when it was last kept, and the step that failed if one did; a failed table is the project's alert (`<table>: its maintenance failed`). The page says *Table maintenance isn't set up on this install* when platformd has no maintenance account.
 
+## External stores
+
+### What it's for
+
+Another platform's Iceberg tables (a Hive Metastore and its MinIO, say), which projects adopt where their files are while the move
+to this platform goes on ([Adopted tables](03-data-in.md#adopted-tables-another-platforms-iceberg-tables-where-they-are)).
+
+### Who can do it
+
+Whoever installs the chart.
+
+### Set up
+
+The chart's `externalStores`, one entry per store, and a Secret in the release's namespace with the store's key (`accessKey`,
+`secretKey`): a key that may **only read** the store's buckets. Nothing here writes to the store, and the key makes sure of it.
+
+```yaml
+externalStores:
+  - name: lakehouse                        # projects adopt from lakehouse.<schema>.<table>
+    catalog:
+      type: hive_metastore                 # or rest (with uri and warehouse)
+      uri: thrift://hive-metastore.lakehouse.svc.cluster.local:9083
+    s3:
+      endpoint: https://minio.lakehouse.svc.cluster.local
+      region: us-east-1
+      buckets: [warehouse]                 # the buckets its tables' files are in
+    secret: lakehouse-store
+```
+
+```bash
+kubectl -n <namespace> create secret generic lakehouse-store \
+  --from-literal=accessKey=<read-only key> --from-literal=secretKey=<its secret>
+```
+
+The store's TLS certificate must be one the install trusts (`global.ca`).
+
+### How it behaves
+
+- Trino gets a catalog for each store, `ext_<name>`, read-only (`iceberg.security=read_only`), which only the platform operator
+  may read (Ranger): it finds each adopted table's current metadata file there.
+- The platform's `iceberg` catalog reads the store's buckets at the store's endpoint with its key (Trino's S3 security mapping,
+  written at Trino's start from the Secret, never into a ConfigMap); every other bucket is read as before, in Buckets.
+- Nessie reads the adopted tables' metadata there too (its per-bucket S3 settings, with the same key).
+- Nessie's GC and the nightly maintenance never touch the store: GC reads and deletes in Buckets alone, and maintenance skips
+  adopted tables.
+
 ## Backups and restore
 
 Backups are for Kubernetes installs.

@@ -50,6 +50,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/StorScale/dataworks/internal/catalog"
 	"github.com/StorScale/dataworks/internal/llm"
 	"github.com/StorScale/dataworks/internal/pipelines"
 	"github.com/StorScale/dataworks/internal/project"
@@ -207,6 +208,8 @@ func main() {
 		r.Sources = &reconcile.TrinoSources{Trino: tc, Files: files, Dir: env("TRINO_SOURCES_DIR", "/etc/trino/sources"), FileWait: wait}
 		// Projects' merge requests' data branches, their catalogs made as the same account.
 		r.Reviewer = &reconcile.Reviewer{Trino: tc, Nessie: r.Nessie}
+		r.Adopter = &reconcile.Adopter{Trino: tc, Iceberg: &catalog.Iceberg{HTTP: &http.Client{Timeout: time.Minute},
+			Base: strings.TrimRight(nessieURL, "/") + "/iceberg", Warehouse: env("NESSIE_WAREHOUSE", "warehouse")}}
 	}
 	// On Kubernetes, the projects' sources copied into their tables, a pod
 	// each, from the chart's template (COPY_TEMPLATE).

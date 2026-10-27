@@ -71,6 +71,15 @@ func TestMaintenanceKeepsEveryTableInTurn(t *testing.T) {
 		t.Errorf("metrics:\n%s", got)
 	}
 
+	// An adopted table: left to the platform it came from, which writes it.
+	ran = nil
+	p.Spec.Tables.Adopt = []project.Adoption{{Table: "orders", From: "lakehouse.sales.orders"}}
+	m.keepProject(context.Background(), s, p)
+	if len(ran) != 1 || strings.Contains(ran[0], `"orders"`) {
+		t.Errorf("with orders adopted: %v (want payroll's optimize alone)", ran)
+	}
+	p.Spec.Tables.Adopt = nil
+
 	// Paused.
 	ran = nil
 	p.Spec.Tables.Maintenance = &project.Maintenance{}

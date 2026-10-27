@@ -1,9 +1,11 @@
 package catalog
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -266,4 +268,76 @@ func (ic *Iceberg) Stats(ctx context.Context, namespace, table string) (Stats, e
 func LastChange(ctx context.Context, c *http.Client, base, warehouse, namespace, table string) (time.Time, error) {
 	st, err := (&Iceberg{HTTP: c, Base: base, Warehouse: warehouse}).Stats(ctx, namespace, table)
 	return st.LastChange, err
+}
+
+// MetadataLocation is the table's current metadata file, as the catalog
+// has it ("" and no error when there's no such table).
+func (ic *Iceberg) MetadataLocation(ctx context.Context, namespace, table string) (string, error) {
+	root, err := ic.root(ctx)
+	if err != nil {
+		return "", err
+	}
+	var t struct {
+		Location string `json:"metadata-location"`
+	}
+	if err := ic.get(ctx, root+"namespaces/"+url.PathEscape(namespace)+"/tables/"+url.PathEscape(table), &t); err != nil {
+		if err == errNotFound {
+			return "", nil
+		}
+		return "", err
+	}
+	return t.Location, nil
+}
+
+// Register puts a table in the catalog as its metadata file says, the
+// files staying where they are (the REST API's register: nothing is
+// copied or written).
+func (ic *Iceberg) Register(ctx context.Context, namespace, table, metadataLocation string) error {
+	root, err := ic.root(ctx)
+	if err != nil {
+		return err
+	}
+	body, _ := json.Marshal(map[string]string{"name": table, "metadata-location": metadataLocation})
+	return ic.send(ctx, "POST", root+"namespaces/"+url.PathEscape(namespace)+"/register", body)
+}
+
+// Unregister takes a table out of the catalog and leaves its files alone
+// (purgeRequested=false): what it was registered from keeps them.
+func (ic *Iceberg) Unregister(ctx context.Context, namespace, table string) error {
+	root, err := ic.root(ctx)
+	if err != nil {
+		return err
+	}
+	err = ic.send(ctx, "DELETE", root+"namespaces/"+url.PathEscape(namespace)+"/tables/"+url.PathEscape(table)+"?purgeRequested=false", nil)
+	if err == errNotFound {
+		return nil
+	}
+	return err
+}
+
+func (ic *Iceberg) send(ctx context.Context, method, path string, body []byte) error {
+	var rd io.Reader
+	if body != nil {
+		rd = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, strings.TrimRight(ic.Base, "/")+path, rd)
+	if err != nil {
+		return err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	res, err := ic.HTTP.Do(req)
+	if err != nil {
+		return fmt.Errorf("iceberg: %v", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode == http.StatusNotFound {
+		return errNotFound
+	}
+	if res.StatusCode/100 != 2 {
+		msg, _ := io.ReadAll(io.LimitReader(res.Body, 300))
+		return fmt.Errorf("iceberg: %s %s: HTTP %d %s", method, path, res.StatusCode, msg)
+	}
+	return nil
 }

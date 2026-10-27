@@ -110,6 +110,15 @@ spec:
                           table: {type: string}
                           column: {type: string}
                           keep: {type: string, pattern: '^[1-9][0-9]{0,4}(d|y)$'}
+                    adopt:
+                      description: "Tables of another platform's Iceberg catalog (an external store) taken into the project where their files are: registered from their current metadata file, kept in step, read-only here."
+                      type: array
+                      items:
+                        type: object
+                        required: [table, from]
+                        properties:
+                          table: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}$'}
+                          from: {type: string, pattern: '^[a-z_][a-z0-9_]{0,62}\.[a-z_][a-z0-9_]{0,62}\.[a-z_][a-z0-9_]{0,62}$'}
                     maintenance:
                       description: "How the platform keeps the tables in shape each night: small files compacted."
                       type: object

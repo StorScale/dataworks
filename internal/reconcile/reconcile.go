@@ -39,6 +39,8 @@ type Reconciler struct {
 	Sources *TrinoSources
 	// Reviewer keeps projects' merge requests' data branches; nil: none.
 	Reviewer *Reviewer
+	// Adopter keeps the projects' adopted tables (tables.adopt); nil: none.
+	Adopter *Adopter
 	// kicked are projects to apply at the next pass, whatever their last
 	// (a GitLab merge request's event, through platformd).
 	kicked sync.Map
@@ -115,6 +117,13 @@ func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Sta
 			err = r.Nessie.syncTags(ctx, p)
 		}
 		part("nessie", err)
+	}
+	if r.Adopter != nil {
+		if err := r.Adopter.Apply(ctx, p, prevSpec); p.Spec.Tables != nil && len(p.Spec.Tables.Adopt) > 0 {
+			part("adopt", err)
+		} else if err != nil && r.Log != nil {
+			r.Log.Warn("letting adopted tables go", "project", p.Metadata.Name, "error", err)
+		}
 	}
 	if r.Sources != nil {
 		conns := func(name string) (map[string]string, error) { return r.Store.Connection(ctx, p.Metadata.Name, name) }
@@ -221,6 +230,9 @@ func (r *Reconciler) Delete(ctx context.Context, p *project.Project) error {
 	keep(r.Ranger.syncPolicies(ctx, p.RangerPrefix(), nil))
 	if r.Sources != nil {
 		keep(r.Sources.Remove(ctx, p.Metadata.Name))
+	}
+	if r.Adopter != nil { // its adopted tables: unregistered, their files left to their store
+		keep(r.Adopter.Remove(ctx, p))
 	}
 	if r.Copies != nil { // its tables stay, as its data does
 		keep(r.Copies.Remove(ctx, p))

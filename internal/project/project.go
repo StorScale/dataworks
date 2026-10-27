@@ -554,6 +554,34 @@ type Tables struct {
 	// are deleted by the nightly maintenance (R6.27): 25 months of campaign
 	// responses, say.
 	Retention []Retention `json:"retention,omitempty"`
+	// Adopt: tables of another platform's Iceberg catalog (an external
+	// store the administrator set up: the chart's externalStores) taken
+	// into the project where their files are. The operator registers each
+	// table's current metadata file in the project's namespace, and again
+	// whenever the other platform changes it; nothing is copied. They're
+	// read-only here while the other platform writes them: the project's
+	// writers and pipelines may only read them, and the nightly
+	// maintenance leaves them alone.
+	Adopt []Adoption `json:"adopt,omitempty"`
+}
+
+// An Adoption is a table of an external store taken into the project.
+type Adoption struct {
+	Table string `json:"table"` // its name in the project
+	From  string `json:"from"`  // <store>.<schema>.<table>: where it is now
+}
+
+// Adopted says whether a table of the project's is an adopted one.
+func (t *Tables) Adopted(table string) bool {
+	if t == nil {
+		return false
+	}
+	for _, a := range t.Adopt {
+		if a.Table == table {
+			return true
+		}
+	}
+	return false
 }
 
 // A Retention is how long a table's rows are kept, by the column that dates them.
@@ -1333,13 +1361,40 @@ func (p *Project) tablePolicies() []RangerPolicy {
 	alsoForEach := func(groups []string, table string, accesses ...string) []RangerItem {
 		return alsoForAll(each(groups, accesses...), table)
 	}
+	// Adopted tables are read-only here, for everyone (the platform they
+	// came from still writes them): out of the wildcard, which lets the
+	// writers do anything, and in a policy of their own allowing reads,
+	// which also holds the readers' and consumers' reads of them (Ranger
+	// keeps one policy to a resource).
+	var adopted []string
+	for _, a := range t.Adopt {
+		adopted = append(adopted, a.Table, a.Table+"@*", a.Table+"#*")
+	}
+	if len(adopted) > 0 {
+		tables.Resources["table"] = RangerResource{Values: adopted, IsExcludes: true}
+	}
 	out := []RangerPolicy{schema}
+	for _, a := range t.Adopt {
+		its := append(each(writers, "select", "show"), each(whole, "select", "show")...)
+		if hasPipelines {
+			its = append(its, allow(pipelines, "select", "show"))
+		}
+		if len(view.Tables) == 0 || slices.Contains(view.Tables, a.Table) {
+			its = append(its, each(masked, "select", "show")...)
+		}
+		out = append(out, RangerPolicy{Name: named("adopted:" + a.Table), Description: desc,
+			Resources:   atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", a.Table, "column", "*")),
+			PolicyItems: alsoForAll(its, a.Table)})
+	}
 	if len(view.Tables) == 0 {
 		tables.PolicyItems = append(tables.PolicyItems, each(masked, "select", "show")...)
 		out = append(out, tables)
 	} else {
 		out = append(out, tables)
 		for _, tb := range sorted(view.Tables) {
+			if t.Adopted(tb) {
+				continue
+			}
 			out = append(out, RangerPolicy{Name: named("read:" + tb), Description: desc,
 				Resources:   atAnyRef(resources("catalog", t.Catalog, "schema", t.Namespace, "table", tb, "column", "*")),
 				PolicyItems: alsoForEach(masked, tb, "select", "show")})
