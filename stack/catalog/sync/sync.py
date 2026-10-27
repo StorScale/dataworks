@@ -423,9 +423,11 @@ def import_lineage():
 
 def dedupe_column_lineage():
     """Each edge into a project's tables keeps one entry per column and its
-    sources: the catalog had campaign_results' name from campaigns' name ten
-    times over. What was repeated is logged, with the edge's source and
-    pipeline, so whoever adds the copies can be found."""
+    sources. OpenMetadata's dbt ingestion (ingest_dbt; the edge's source
+    DbtLineage) adds a model's column lineage again, identical, when a run's
+    artifacts arrive: dev's campaign_results had campaigns' name ten times
+    over, review_topics its topic 45. Not on rounds between runs, so once
+    merged it stays merged until the next run. What was repeated is logged."""
     h = admin_headers()
     for p in projects():
         tables = p["spec"].get("tables")
@@ -445,7 +447,7 @@ def dedupe_column_lineage():
                 kept = merge_column_lineage(columns)
                 if len(kept) == len(columns):
                     continue
-                log.warning("lineage %s -> %s: %d column entries, %d once merged (source %s, pipeline %s); repeated: %s",
+                log.info("lineage %s -> %s: %d column entries, %d once merged (source %s, pipeline %s); repeated: %s",
                             fqn.get(e["fromEntity"], e["fromEntity"]), t["fullyQualifiedName"], len(columns), len(kept),
                             details.get("source"), (details.get("pipeline") or {}).get("fullyQualifiedName"),
                             json.dumps(repeated_column_lineage(columns))[:2000])
