@@ -40,6 +40,7 @@ import time
 import boto3
 import classify
 import requests
+from metadata.ingestion.ometa.mixins import lineage_mixin
 from metadata.workflow.data_quality import TestSuiteWorkflow
 from metadata.workflow.metadata import MetadataWorkflow
 from metadata.workflow.profiler import ProfilerWorkflow
@@ -158,6 +159,11 @@ def ingest_dbt(token):
             s3.head_object(Bucket="storscale-platform", Key=f"dbt/{name}/manifest.json")
         except Exception:  # noqa: BLE001 (no dbt run yet)
             continue
+        # The ingestion patches each lineage edge against its own copy of it,
+        # cached for the life of the process (this one: every round), by
+        # position in its column list. A copy older than the catalog's edge
+        # puts entries again where they already are: start from the catalog's.
+        lineage_mixin.search_cache.clear()
         workflow = MetadataWorkflow.create({
             "source": {"type": "dbt", "serviceName": SERVICE, "sourceConfig": {"config": {
                 "type": "DBT", "dbtUpdateDescriptions": True, "includeTags": True,
@@ -423,11 +429,11 @@ def import_lineage():
 
 def dedupe_column_lineage():
     """Each edge into a project's tables keeps one entry per column and its
-    sources. OpenMetadata's dbt ingestion (ingest_dbt; the edge's source
-    DbtLineage) adds a model's column lineage again, identical, when a run's
-    artifacts arrive: dev's campaign_results had campaigns' name ten times
-    over, review_topics its topic 45. Not on rounds between runs, so once
-    merged it stays merged until the next run. What was repeated is logged."""
+    sources. The copies came from OpenMetadata's dbt ingestion (ingest_dbt;
+    the edge's source DbtLineage): dev's campaign_results had campaigns' name
+    ten times over, review_topics its topic 45. Not on every run (a full lab
+    guide's rebuilds added none): likely its stale edge cache, which
+    ingest_dbt now clears. What was repeated is logged."""
     h = admin_headers()
     for p in projects():
         tables = p["spec"].get("tables")

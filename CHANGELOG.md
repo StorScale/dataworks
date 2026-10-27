@@ -6,7 +6,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ### Fixed
 - **A column's "Comes from" lists each source once:** the Data page's Columns tab showed `uploads_campaigns.name` ten times for a column of a flow's table (`campaign_results`, after repeated runs): the catalog held the same column lineage ten times, and platformd passed each on. platformd now merges them: one entry per column, each source column once (the Lineage tab's column counts too).
-- **The catalog keeps a column's lineage once:** OpenMetadata's dbt ingestion added a dbt model's column lineage again, identical, after each run (`campaign_results`' `name` ten times, `review_topics`' `topic` 45), so the catalog's own lineage view repeated it too. catalog-sync now merges repeated column lineage on every edge into a project's tables each round, logging what it merged.
+- **The catalog keeps a column's lineage once:** OpenMetadata's dbt ingestion had added dbt models' column lineage again, identical (`campaign_results`' `name` ten times, `review_topics`' `topic` 45), so the catalog's own lineage view repeated it too. Not on every run: its client patches an edge against a copy of it cached for the life of catalog-sync's process, by position in the column list, and a stale copy puts entries in again. catalog-sync now clears that cache before each project's dbt ingestion, and merges repeated column lineage on every edge into a project's tables each round, logging what it merged.
 
 ## [0.35.0] - 2026-10-27
 
