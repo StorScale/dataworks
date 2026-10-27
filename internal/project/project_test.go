@@ -1,6 +1,7 @@
 package project
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -579,5 +580,56 @@ func TestKeepTags(t *testing.T) {
 	KeepTags(before, both)
 	if tags := both.Spec.Tables.Tags; len(tags) != 2 || tags[0].Commit != "abc" || tags[1].Name != "q3" || both.Spec.Tables.Namespace != "s" {
 		t.Errorf("a release naming one too: %+v", both.Spec.Tables)
+	}
+}
+
+func TestAdoptedTablesAreReadOnly(t *testing.T) {
+	p, _ := Parse([]byte(sales))
+	p.Spec.Tables.Adopt = []Adoption{{Table: "orders", From: "lakehouse.sales.orders"}, {Table: "legacy", From: "lakehouse.sales.legacy"}}
+	if err := p.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]RangerPolicy{}
+	resources := map[string]bool{}
+	for _, rp := range p.RangerPolicies() {
+		byName[strings.TrimPrefix(rp.Name, "project:sales:")] = rp
+		if rp.PolicyType == 0 && rp.Resources["table"].Values != nil {
+			key := strings.Join(rp.Resources["table"].Values, ",") + fmt.Sprint(rp.Resources["table"].IsExcludes) + strings.Join(rp.Resources["column"].Values, ",")
+			if resources[key] {
+				t.Errorf("two access policies on %s: Ranger keeps one to a resource", key)
+			}
+			resources[key] = true
+		}
+	}
+	all := byName["tables"].Resources["table"]
+	if !all.IsExcludes || !slices.Contains(all.Values, "orders") || !slices.Contains(all.Values, "legacy@*") {
+		t.Errorf("the writers' policy should leave the adopted tables out: %+v", all)
+	}
+	if _, ok := byName["read:orders"]; ok {
+		t.Error("orders' readers belong in its adopted policy (one policy to a resource)")
+	}
+	for _, name := range []string{"adopted:orders", "adopted:legacy"} {
+		rp, ok := byName[name]
+		if !ok {
+			t.Fatalf("no %s policy: %v", name, byName)
+		}
+		for _, it := range rp.PolicyItems {
+			for _, a := range it.Accesses {
+				if a.Type != "select" && a.Type != "show" {
+					t.Errorf("%s: %s may %s: an adopted table is read-only here", name, it.Groups, a.Type)
+				}
+			}
+		}
+	}
+	readersOf := func(name string) bool {
+		for _, it := range byName[name].PolicyItems {
+			if it.Groups[0] == "sales-readers" {
+				return true
+			}
+		}
+		return false
+	}
+	if !readersOf("adopted:orders") || readersOf("adopted:legacy") {
+		t.Error("the readers read orders (their table) and not legacy")
 	}
 }

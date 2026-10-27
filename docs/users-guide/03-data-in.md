@@ -19,6 +19,7 @@ In this chapter:
 - [Removing an import](#removing-an-import)
 - [Sources: a database queried in place](#sources-a-database-queried-in-place)
 - [Change-capture copies](#change-capture-copies)
+- [Adopted tables: another platform's Iceberg tables, where they are](#adopted-tables-another-platforms-iceberg-tables-where-they-are)
 - [Connections](#connections)
 - [What the audit log records](#what-the-audit-log-records)
 
@@ -37,6 +38,7 @@ In this chapter:
 | SAP S/4HANA (partners, products, orders, documents) | An **sap import**, from the Imports tab's form | `<import>_<object>` | On its schedule; most objects by their last change |
 | A database the company runs, needed in queries today | A **source** | A Trino catalog `<project>_<source>`, nothing copied | Always: queried live |
 | A database whose every change should reach the lakehouse | A source with **copy** (Kubernetes only) | `<source>_<table>` | Within `copy.commitEvery` seconds (30) |
+| Iceberg tables another platform keeps (a Hive Metastore and its object store) | An **adopted table** (`tables.adopt`; an administrator sets up the store) | The name you give it, its files left where they are | Within a minute of the other platform's change |
 
 Everything that lands is one of the project's Iceberg tables, in its namespace, under its rules ([chapter 4](04-access-and-protection.md)), in the catalog with its lineage. See [Lab 3 in the lab guide](../guide.md#lab-3-get-the-data-in), which does the first and the fifth, and shows where the others start.
 
@@ -673,6 +675,66 @@ The tables land as `dashboards_dashboards` and `dashboards_slices`.
 - Removing `copy` stops the copy; its tables stay. A PostgreSQL replication slot stays too, and the database keeps its log for it until its administrator drops the slot.
 
 ---
+
+## Adopted tables: another platform's Iceberg tables, where they are
+
+**What it's for.** Moving to the platform from another one with Iceberg tables (a Hive Metastore, a MinIO): copying terabytes
+takes days, and the other platform's jobs keep writing meanwhile. An adopted table is the other platform's table, taken into a
+project without copying it: the project's namespace has it, by a name you give it, from the files where they are. Each time the
+other platform changes it, the project sees the change within a minute. It's read and governed like any of the project's tables
+(the Data page, the catalog, SQL, notebooks, dbt, dashboards, the readers' rules), and it's read-only here until it's handed over.
+
+**Who can do it.** An administrator sets up the store once (the chart's `externalStores`: [Operating](17-operating.md#external-stores));
+then whoever changes the project's spec (administrators) lists its tables.
+
+### Set up
+
+In the project's spec, `tables.adopt`: each table's name in the project, and where it is, as `<store>.<schema>.<table>`:
+
+```json
+"tables": {
+  "adopt": [
+    {"table": "orders", "from": "lakehouse.sales.orders"},
+    {"table": "customers", "from": "lakehouse.sales.customers"}
+  ]
+}
+```
+
+| Field | What it is |
+|---|---|
+| `table` | Its name in the project's namespace: lowercase letters, digits and underscores |
+| `from` | Where it is: the store's name (as the administrator set it up), the schema and the table in the store's own catalog |
+
+### How it behaves
+
+- **Nothing is copied.** The operator asks the store's catalog for the table's current metadata file and registers the table from
+  it in the project's namespace (Nessie's Iceberg REST API). Its data files stay in the store's buckets, which Trino reads there.
+- **It follows the other platform.** Each minute the operator looks again; when the store's table has a newer metadata file, the
+  table is registered again from it (for a moment between the two, the table isn't there). The project's history (Nessie's
+  commits) records each step.
+- **Read-only here.** Its Ranger policy lets the project's editors, readers and pipelines read it, and no one write, alter or drop
+  it: the other platform writes it, and a write from here would split its history from theirs. The nightly maintenance leaves it
+  alone, and the store's key is a read-only one.
+- **Readers' rules hold.** Masks, row filters, `readers.tables` and data products apply to it as to the project's other tables.
+- **A table of the project's own by the same name is never replaced:** the project's status shows "the project has a table orders
+  of its own …", and nothing is registered until one of them is renamed.
+- **Taken out of the spec,** it's unregistered: gone from the project, its files untouched in the store. A deleted project's adopted
+  tables are unregistered the same way.
+
+### Handing a table over
+
+While the other platform writes a table, it stays adopted. To make it the project's own: stop the other platform's jobs writing it,
+let the operator register its last change (a minute), then drop it from the other platform's metastore without purging its files
+(a Hive Metastore drop of an external table, or Trino's `unregister_table` there). Copying it into a table of the project's own (a
+`CREATE TABLE ... AS SELECT` from it, then a rename) puts its files in the platform's warehouse; until then they're the store's.
+
+### Limits and gotchas
+
+- **Read-only, all of it.** Retention can't be set on an adopted table (the spec says so), and dbt models, flows and pipelines may
+  read it but not replace it.
+- **One table per entry;** a whole schema is a list of entries.
+- **Erasure** ([Privacy](13-privacy.md)) counts a person's rows in an adopted table listed in `tables.people` but can't delete them here: the erasure's record says so, and they're erased on the platform the table is adopted from (gone here within a minute of that).
+- **The store's credentials are the administrator's**, set once for the install; a project names the store, never a key.
 
 ## Connections
 

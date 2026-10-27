@@ -175,6 +175,12 @@ func (s *server) handleErase(w http.ResponseWriter, r *http.Request) {
 			f, _ := rows[0][0].(float64)
 			n = int64(f)
 		}
+		if n > 0 && t.Adopted(pk.Table) {
+			// Its rows are the other platform's, which writes it: erased
+			// there, and gone here at the next change it makes.
+			e.Errors[pk.Table] = fmt.Sprintf("%d rows in an adopted table (tables.adopt): read-only here, so they're erased on the platform it's adopted from, and gone here within a minute of that", n)
+			continue
+		}
 		if n > 0 {
 			if _, err := s.maintainer.trino.Exec(ctx, "DELETE FROM "+table+where); err != nil {
 				e.Errors[pk.Table] = err.Error()

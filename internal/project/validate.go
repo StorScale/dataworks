@@ -15,7 +15,7 @@ import (
 // validators are the checks, in the order their problems are reported.
 var validators = []func(p *Project, bad func(format string, a ...any)){
 	(*Project).checkMembers, (*Project).checkTables, (*Project).checkFiles, (*Project).checkPipelines,
-	(*Project).productProblems, (*Project).agentProblems, (*Project).checkSemantic, (*Project).checkHistory, (*Project).checkNotify,
+	(*Project).productProblems, (*Project).agentProblems, (*Project).checkSemantic, (*Project).checkHistory, (*Project).checkAdopt, (*Project).checkNotify,
 	(*Project).checkSources, (*Project).checkImports, (*Project).checkDeliveries, (*Project).checkLimits, (*Project).checkLLM,
 	(*Project).checkKnowledge, (*Project).checkTools, (*Project).checkApps, (*Project).checkScoring, (*Project).checkServing,
 }
@@ -502,6 +502,33 @@ func (p *Project) checkLimits(bad func(format string, a ...any)) {
 				bad("limits: storage %q: as 500Gi or 2Ti", l.Storage)
 			} else if p.Spec.Files == nil {
 				bad("limits: storage needs files (a bucket)")
+			}
+		}
+	}
+}
+
+// checkAdopt: each adopted table named once, from <store>.<schema>.<table>,
+// and nothing that would write to it here (retention deletes rows).
+func (p *Project) checkAdopt(bad func(format string, a ...any)) {
+	t := p.Spec.Tables
+	if t == nil {
+		return
+	}
+	seen := map[string]bool{}
+	for _, a := range t.Adopt {
+		parts := strings.Split(a.From, ".")
+		switch {
+		case !identifierRE.MatchString(a.Table):
+			bad("tables: adopt: %q: a table's name (lowercase letters, digits and underscores)", a.Table)
+		case seen[a.Table]:
+			bad("tables: adopt: %s twice", a.Table)
+		case len(parts) != 3 || !identifierRE.MatchString(parts[0]) || !identifierRE.MatchString(parts[1]) || !identifierRE.MatchString(parts[2]):
+			bad("tables: adopt: %s: from %q: where it is, as <store>.<schema>.<table>", a.Table, a.From)
+		}
+		seen[a.Table] = true
+		for _, rt := range t.Retention {
+			if rt.Table == a.Table {
+				bad("tables: adopt: %s: it's read-only here while the other platform writes it, so it can't have a retention", a.Table)
 			}
 		}
 	}

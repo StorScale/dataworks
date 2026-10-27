@@ -187,6 +187,9 @@ func (m *maintainer) keepProject(ctx context.Context, s *server, p *project.Proj
 	}
 	runs := map[string]tableRun{}
 	for _, name := range tables {
+		if t.Adopted(name) { // the platform it came from writes it, and keeps it in shape
+			continue
+		}
 		run := tableRun{Table: name, Started: time.Now().UTC(), Done: []string{}}
 		run.Before, _ = m.iceberg.Stats(ctx, t.Namespace, name)
 		table := strings.Join([]string{trino.Quote(t.Catalog), trino.Quote(t.Namespace), trino.Quote(name)}, ".")

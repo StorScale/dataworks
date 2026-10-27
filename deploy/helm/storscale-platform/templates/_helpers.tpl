@@ -263,3 +263,26 @@ nodeSelector:{{ toYaml . | nindent 2 }}
 {{- end -}}
 {{- if hasSuffix "Ti" $q -}}{{ mul (trimSuffix "Ti" $q | atoi) 1024 }}{{- else -}}{{ trimSuffix "Gi" $q | atoi }}{{- end -}}
 {{- end }}
+
+{{/* The external stores (externalStores): the environment variable holding a
+     store's key, and the environment that sets them from its Secret. */}}
+{{- define "storscale.externalKeyEnv" -}}
+EXT_{{ index . 0 | upper }}_{{ index . 1 }}_KEY
+{{- end }}
+
+{{- define "storscale.externalEnv" -}}
+{{- range $s := .Values.externalStores }}
+- {name: {{ include "storscale.externalKeyEnv" (list $s.name "ACCESS") }}, valueFrom: {secretKeyRef: {name: {{ $s.secret }}, key: accessKey}}}
+- {name: {{ include "storscale.externalKeyEnv" (list $s.name "SECRET") }}, valueFrom: {secretKeyRef: {name: {{ $s.secret }}, key: secretKey}}}
+{{- end }}
+{{- end }}
+
+{{/* Trino's start: the install's catalogs copied into its dynamic catalog
+     store, and with external stores their catalogs too, and the iceberg
+     catalog's S3 security mapping written and switched on. */}}
+{{- define "storscale.trinoStart" -}}
+{{- $cat := index . 1 -}}
+mkdir -p {{ $cat }} /data/trino && cp /etc/trino/catalog-install/*.properties {{ $cat }}/
+{{- if (index . 0).Values.externalStores }} && cp /etc/trino/external/ext_*.properties {{ $cat }}/ && sh /etc/trino/external/s3-mapping.sh > /data/trino/s3-mapping.json && printf '\ns3.security-mapping.enabled=true\ns3.security-mapping.config-file=/data/trino/s3-mapping.json\n' >> {{ $cat }}/iceberg.properties
+{{- end }} && exec /usr/lib/trino/bin/run-trino
+{{- end }}
