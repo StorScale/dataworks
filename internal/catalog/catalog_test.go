@@ -39,6 +39,9 @@ func fakeCatalog(t *testing.T) *httptest.Server {
 		"columnsLineage": []any{
 			map[string]any{"fromColumns": []string{"trino.iceberg.sales.orders.region"}, "toColumn": "trino.iceberg.sales.orders_by_region.region"},
 			map[string]any{"fromColumns": []string{"trino.iceberg.sales.orders.id"}, "toColumn": "trino.iceberg.sales.orders_by_region.orders"},
+			// The same again, as a later run reports it: the catalog appends it.
+			map[string]any{"fromColumns": []string{"trino.iceberg.sales.orders.region"}, "toColumn": "trino.iceberg.sales.orders_by_region.region"},
+			map[string]any{"fromColumns": []string{"trino.iceberg.sales.orders.id", "trino.iceberg.sales.orders.id"}, "toColumn": "trino.iceberg.sales.orders_by_region.orders"},
 		}}}
 	mux.HandleFunc("GET /api/v1/lineage/table/name/{fqn}", func(w http.ResponseWriter, r *http.Request) {
 		nodes := []any{
@@ -118,8 +121,9 @@ func TestFlow(t *testing.T) {
 			made = &flow.Edges[i]
 		}
 	}
-	if made == nil || made.Pipeline != "sales_ingest" || len(made.Columns) != 2 || made.Columns[1].To != "orders" || made.Columns[1].From[0] != "id" {
-		t.Errorf("orders -> orders_by_region: %+v", made)
+	if made == nil || made.Pipeline != "sales_ingest" || len(made.Columns) != 2 || made.Columns[1].To != "orders" ||
+		len(made.Columns[0].From) != 1 || len(made.Columns[1].From) != 1 || made.Columns[1].From[0] != "id" {
+		t.Errorf("orders -> orders_by_region: %+v (each column once, each of its sources once, however often the catalog repeats them)", made)
 	}
 }
 
