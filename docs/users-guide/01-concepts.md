@@ -112,6 +112,18 @@ A change (anything but a `GET`) also needs the header `X-Platform-Request: 1`, w
 account menu's **API reference** (and `GET /api/openapi.json`) lists every route. [Operating the platform](17-operating.md)
 covers the Python package, which handles tokens for you.
 
+A token for a script, as yourself, without a password (an Entra ID sign-in has none to give it): the realm's public client
+`storscale-agent` takes a device code (OAuth's device authorization grant). The script asks for one, you open its link in your
+own browser and approve, and the script gets your token: the Python package does all of it, `storscale.Platform(url)`.
+
+```bash
+curl -s https://<platform>/sso/realms/lakehouse/protocol/openid-connect/auth/device \
+  -d client_id=storscale-agent -d scope=openid -d code_challenge=$CHALLENGE -d code_challenge_method=S256
+# open its verification_uri_complete; then, every interval seconds until it's approved:
+curl -s https://<platform>/sso/realms/lakehouse/protocol/openid-connect/token -d client_id=storscale-agent \
+  -d grant_type=urn:ietf:params:oauth:grant-type:device_code -d device_code=$DEVICE_CODE -d code_verifier=$VERIFIER
+```
+
 ### Limits and gotchas
 
 - **"No access".** Signed in, but in none of the platform's groups: the page says "Your account isn't in a group that may

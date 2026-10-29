@@ -553,7 +553,7 @@ pip install "git+https://github.com/StorScale/dataworks#subdirectory=stack/pytho
 ```python
 import storscale
 
-p = storscale.Platform("https://storscale.example.com")   # or STORSCALE_URL; asks for a name and password at a terminal
+p = storscale.Platform("https://storscale.example.com")   # or STORSCALE_URL; with no credentials, a device code to approve
 p.projects()
 p.sql("retail", "SELECT count(*) FROM uploads_orders")
 run = p.start_run("retail", "delivery_retail_campaign_results")
@@ -562,4 +562,4 @@ p.usage("retail")
 p.call("get_projects_name_deliveries", name="retail")      # any route by its operation ID
 ```
 
-It signs in, in this order, with `token=` (or `STORSCALE_TOKEN`), `client_id=` and `client_secret=` (or `STORSCALE_CLIENT_ID`, `STORSCALE_CLIENT_SECRET`: a service account), `username=` and `password=` (or `STORSCALE_USERNAME`, `STORSCALE_PASSWORD`, through the public client `storscale-agent`), or a prompt. A refusal raises `storscale.Refused` (401, 403) or `storscale.Error`, with the platform's reason and the request's ID. A private CA: set `REQUESTS_CA_BUNDLE`.
+It signs in, in this order, with `token=` (or `STORSCALE_TOKEN`), `client_id=` and `client_secret=` (or `STORSCALE_CLIENT_ID`, `STORSCALE_CLIENT_SECRET`: a service account), `username=` and `password=` (or `STORSCALE_USERNAME`, `STORSCALE_PASSWORD`, through the public client `storscale-agent`), or a device code: it shows a link and a code to approve in your own browser, where you sign in as you always do (Entra ID too, which has no password to give a script), for a notebook, a pod or a terminal without a browser. A refusal raises `storscale.Refused` (401, 403) or `storscale.Error`, with the platform's reason and the request's ID. A private CA: set `REQUESTS_CA_BUNDLE`.
