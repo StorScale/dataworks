@@ -31,7 +31,7 @@ Also by name: `project(name)`, `flows(project)`, `flow(project, name)`, `knowled
 - `token=`, or `STORSCALE_TOKEN`: a Keycloak access token of the realm `lakehouse` (used as it is, never renewed);
 - `client_id=` and `client_secret=`, or `STORSCALE_CLIENT_ID` and `STORSCALE_CLIENT_SECRET`: a service account (an agent of a project's, say), by client credentials;
 - `username=` and `password=`, or `STORSCALE_USERNAME` and `STORSCALE_PASSWORD`: a person, through the public client `storscale-agent`;
-- otherwise, by a device code: it shows a link and a code (`show=`, default `print`), you open the link in your own browser and approve, signing in as you always do (Entra ID included), and it carries on as you. For a notebook, a pod or any terminal without a browser of its own; a renewal that Keycloak refuses (a long idle) asks for approval again.
+- otherwise, by a device code: it shows a link and a code (`show=`, default `print`), you open the link in your own browser, sign in as you always do (Entra ID included) and grant it access, and it carries on as you. For a notebook, a pod or any terminal without a browser of its own; a renewal that Keycloak refuses (a long idle) asks for approval again.
 
 A token it got itself is renewed before it expires. A refusal raises `storscale.Refused` (HTTP 401 or 403), and any other failure `storscale.Error`, each with the platform's reason, the status and the request ID (`.message`, `.status`, `.request_id`). A private CA: set `REQUESTS_CA_BUNDLE`.
 

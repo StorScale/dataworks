@@ -114,7 +114,7 @@ covers the Python package, which handles tokens for you.
 
 A token for a script, as yourself, without a password (an Entra ID sign-in has none to give it): the realm's public client
 `storscale-agent` takes a device code (OAuth's device authorization grant). The script asks for one, you open its link in your
-own browser and approve, and the script gets your token: the Python package does all of it, `storscale.Platform(url)`.
+own browser, sign in and grant it access (Keycloak's page asks), and the script gets your token: the Python package does all of it, `storscale.Platform(url)`.
 
 ```bash
 curl -s https://<platform>/sso/realms/lakehouse/protocol/openid-connect/auth/device \

@@ -20,6 +20,7 @@ import json
 import os
 import re
 import sys
+from urllib.parse import urljoin
 
 import requests
 
@@ -77,10 +78,11 @@ def main():
             r = b.get(link.group(1), timeout=30)   # the code filled in: Keycloak's sign-in, then the device's
             form = re.search(r'<form[^>]*id="kc-form-login"[^>]*action="([^"]+)"', r.text)
             if form:
-                r = b.post(html.unescape(form.group(1)), timeout=60, data={"username": "alice", "password": password, "credentialId": ""})
+                r = b.post(urljoin(r.url, html.unescape(form.group(1))), timeout=60,
+                           data={"username": "alice", "password": password, "credentialId": ""})
             consent = re.search(r'<form[^>]*action="([^"]+)"[^>]*>(?:(?!</form>).)*name="accept"', r.text, re.S)
-            if consent:   # a consent page, if the client asks for one
-                r = b.post(html.unescape(consent.group(1)), timeout=60, data={"accept": "Yes"})
+            if consent:   # Keycloak asks a device sign-in's person to grant the client access (its action is relative)
+                r = b.post(urljoin(r.url, html.unescape(consent.group(1))), timeout=60, data={"accept": "Yes"})
             shown["approved"] = r.status_code
 
         try:
