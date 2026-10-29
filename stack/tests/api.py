@@ -7,12 +7,18 @@ These check (use case 14.3):
   2. with the storscale package, bob signs in by name and password and, as
      himself: makes a project, reads it among his projects, queries it, calls
      a route by its operation ID (its usage), and removes it;
-  3. carol, in none of the platform's groups, is refused, saying so.
+  3. carol, in none of the platform's groups, is refused, saying so;
+  4. alice signs in with the package by a device code (as from a notebook
+     or a pod, and as anyone signed in through Entra ID must): the package
+     shows a link and a code, she approves it in her browser, and the
+     package is her.
 
 The project is removed after.
 """
+import html
 import json
 import os
+import re
 import sys
 
 import requests
@@ -58,6 +64,32 @@ def main():
         except storscale.Refused as e:
             refused = e
         check("carol, in none of the platform's groups, is refused, saying so", refused is not None and refused.status == 403, str(refused))
+
+        # 4. alice, by a device code: what the package shows, approved in "her browser".
+        shown = {}
+
+        def approve(message):
+            shown["message"] = message
+            link = re.search(r"open (\S+) and approve the code (\S+)", message)
+            if not link:
+                return
+            b = requests.Session()
+            r = b.get(link.group(1), timeout=30)   # the code filled in: Keycloak's sign-in, then the device's
+            form = re.search(r'<form[^>]*id="kc-form-login"[^>]*action="([^"]+)"', r.text)
+            if form:
+                r = b.post(html.unescape(form.group(1)), timeout=60, data={"username": "alice", "password": password, "credentialId": ""})
+            consent = re.search(r'<form[^>]*action="([^"]+)"[^>]*>(?:(?!</form>).)*name="accept"', r.text, re.S)
+            if consent:   # a consent page, if the client asks for one
+                r = b.post(html.unescape(consent.group(1)), timeout=60, data={"accept": "Yes"})
+            shown["approved"] = r.status_code
+
+        try:
+            me = storscale.Platform(PLATFORM, show=approve).me()
+        except storscale.Error as e:
+            me = {"error": str(e)}
+        check("alice signs in with the package by a device code: a link and a code, approved in her browser",
+              (me.get("user") or {}).get("username") == "alice" and "approve the code" in shown.get("message", ""),
+              {"shown": shown.get("message"), "me": me.get("user") or me})
     finally:
         bob = platform("bob")
         bob.delete(f"{PLATFORM}/api/projects/{NAME}", headers={"X-Platform-Request": "1"}, timeout=30)

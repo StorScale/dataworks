@@ -10,10 +10,11 @@ their projects' rules. The routes come from the platform's own reference
 (/api/openapi.json), so call() reaches any of them by its operation ID; the
 methods below are the common ones, by name.
 """
-import getpass
+import base64
+import hashlib
 import os
 import re
-import sys
+import secrets
 import time
 from urllib.parse import quote
 
@@ -23,7 +24,15 @@ __all__ = ["Platform", "Error", "Refused"]
 __version__ = "0.35.0"
 
 REALM = "lakehouse"
-PUBLIC_CLIENT = "storscale-agent"   # the realm's public client, for a person's name and password
+PUBLIC_CLIENT = "storscale-agent"   # the realm's public client: a person's sign-in, by device code or name and password
+
+
+def _reason(r):
+    """Keycloak's reason for a refusal."""
+    if r.headers.get("content-type", "").startswith("application/json"):
+        body = r.json()
+        return body.get("error_description") or body.get("error") or r.text[:200]
+    return r.text[:200]
 
 
 class Error(RuntimeError):
@@ -41,7 +50,8 @@ class Refused(Error):
 class Platform:
     """The platform at url (or STORSCALE_URL), signed in as the arguments, the environment or a prompt say."""
 
-    def __init__(self, url=None, *, token=None, client_id=None, client_secret=None, username=None, password=None, timeout=300):
+    def __init__(self, url=None, *, token=None, client_id=None, client_secret=None, username=None, password=None,
+                 timeout=300, show=print):
         self.url = (url or os.environ.get("STORSCALE_URL") or "").rstrip("/")
         if not self.url:
             raise ValueError("the platform's address: Platform('https://...') or STORSCALE_URL")
@@ -51,13 +61,12 @@ class Platform:
         self._token, self._expires, self._refresh = token or os.environ.get("STORSCALE_TOKEN"), float("inf"), None
         self._client = (client_id or os.environ.get("STORSCALE_CLIENT_ID"), client_secret or os.environ.get("STORSCALE_CLIENT_SECRET"))
         self._person = (username or os.environ.get("STORSCALE_USERNAME"), password or os.environ.get("STORSCALE_PASSWORD"))
-        self._ops = None
+        self._ops, self._show = None, show
         if not self._token:
-            if not all(self._client) and not all(self._person):
-                if not sys.stdin.isatty():
-                    raise ValueError("sign in: a token, a client and its secret, or a name and password (see the README)")
-                self._person = (input("DataWorks user: "), getpass.getpass("Password: "))
-            self._sign_in()
+            if all(self._client) or all(self._person):
+                self._sign_in()
+            else:
+                self._sign_in_by_device(show)
 
     # --- signing in -----------------------------------------------------------------------
 
@@ -74,11 +83,44 @@ class Platform:
         r = self.http.post(self._token_url(), data=data, timeout=30)
         if r.status_code in (400, 401) and self._refresh:   # the refresh token has expired: sign in again
             self._refresh = None
+            if not all(self._client) and not all(self._person):   # signed in by a device code: approved again
+                return self._sign_in_by_device(self._show)
             return self._sign_in()
         if not r.ok:
-            raise Refused(r.status_code, "Keycloak refused the sign-in: " + (r.json().get("error_description") if r.headers.get("content-type", "").startswith("application/json") else r.text[:200]))
+            raise Refused(r.status_code, "Keycloak refused the sign-in: " + _reason(r))
         t = r.json()
         self._token, self._expires, self._refresh = t["access_token"], time.time() + t.get("expires_in", 300) - 30, t.get("refresh_token")
+
+    def _sign_in_by_device(self, show):
+        """A person's sign-in by a device code (RFC 8628): a link and a code to approve in their own
+        browser, where they sign in as they always do (Entra ID included), while this waits. For a
+        notebook, a pod or a terminal with no browser of its own; show is told what to open."""
+        verifier = secrets.token_urlsafe(48)
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+        base = f"{self.url}/sso/realms/{REALM}/protocol/openid-connect"
+        r = self.http.post(f"{base}/auth/device", timeout=30, data={
+            "client_id": PUBLIC_CLIENT, "scope": "openid", "code_challenge": challenge, "code_challenge_method": "S256"})
+        if not r.ok:
+            raise Refused(r.status_code, "Keycloak refused a device sign-in: " + _reason(r))
+        d = r.json()
+        show(f"To sign in to DataWorks, open {d.get('verification_uri_complete') or d['verification_uri']}"
+             f" and approve the code {d['user_code']} (within {int(d.get('expires_in', 600)) // 60} minutes).")
+        every, deadline = int(d.get("interval", 5)), time.time() + int(d.get("expires_in", 600))
+        while time.time() < deadline:
+            time.sleep(every)
+            r = self.http.post(self._token_url(), timeout=30, data={
+                "grant_type": "urn:ietf:params:oauth:grant-type:device_code", "client_id": PUBLIC_CLIENT,
+                "device_code": d["device_code"], "code_verifier": verifier})
+            if r.ok:
+                t = r.json()
+                self._token, self._expires, self._refresh = t["access_token"], time.time() + t.get("expires_in", 300) - 30, t.get("refresh_token")
+                return
+            err = r.json().get("error") if r.headers.get("content-type", "").startswith("application/json") else None
+            if err == "slow_down":
+                every += 5
+            elif err != "authorization_pending":
+                raise Refused(r.status_code, "Keycloak refused the device sign-in: " + _reason(r))
+        raise Refused(400, "the device sign-in wasn't approved in time: sign in again")
 
     def _bearer(self):
         if time.time() >= self._expires and (self._refresh or all(self._client) or all(self._person)):
