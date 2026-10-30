@@ -50,6 +50,11 @@ def rest_api():
         if r.get("cursor"):
             endpoint["params"] = {r["cursorParam"]: {"type": "incremental", "cursor_path": r["cursor"],
                                                      "initial_value": r["cursorStart"]}}
+        if paging := r.get("paging"):   # how the answer comes in pages, as dlt's paginators take it
+            endpoint["paginator"] = ({"type": "cursor", "cursor_path": paging["next"], "cursor_param": paging["param"]}
+                                     if paging["type"] == "cursor" else
+                                     {"type": "json_link", "next_url_path": paging["next"]} if paging["type"] == "link" else
+                                     "single_page")
         res = {"name": r["name"], "endpoint": endpoint, "table_name": f"{name}_{r['name']}",
                "write_disposition": disposition(r.get("primaryKey"))}
         if r.get("primaryKey"):

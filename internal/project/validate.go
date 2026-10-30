@@ -313,6 +313,20 @@ func (p *Project) checkImports(bad func(format string, a ...any)) {
 				if (r.Cursor != "") != (r.CursorParam != "") || r.Cursor != "" && r.CursorStart == "" {
 					bad("imports: %s: %s: a cursor names its field, its query parameter and where it starts", im.Name, r.Name)
 				}
+				if pg := r.Paging; pg != nil {
+					switch {
+					case !slices.Contains(PagingTypes, pg.Type):
+						bad("imports: %s: %s: paging %q: %s", im.Name, r.Name, pg.Type, strings.Join(PagingTypes, ", "))
+					case pg.Type == "cursor" && (pg.Next == "" || pg.Param == ""):
+						bad("imports: %s: %s: cursor paging names where the next page's cursor is in the answer (next: nextCursor) and the query parameter it goes back in (param: cursor)", im.Name, r.Name)
+					case pg.Type == "cursor" && pg.Param == r.CursorParam:
+						bad("imports: %s: %s: the paging's parameter %s is the cursor's too: one is the page, the other where the copy got to", im.Name, r.Name, pg.Param)
+					case pg.Type == "link" && pg.Next == "":
+						bad("imports: %s: %s: link paging names where the next page's URL is in the answer (next: next)", im.Name, r.Name)
+					case pg.Type != "cursor" && pg.Param != "" || pg.Type == "single" && pg.Next != "":
+						bad("imports: %s: %s: %s paging takes %s", im.Name, r.Name, pg.Type, map[string]string{"link": "next alone", "single": "nothing else"}[pg.Type])
+					}
+				}
 				landing(r.Name)
 			}
 		case "salesforce", "gong", "highspot", "sap":
