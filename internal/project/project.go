@@ -50,28 +50,28 @@ type Metadata struct {
 }
 
 type Spec struct {
-	Description string          `json:"description,omitempty"`
-	Members     []Member        `json:"members"`
-	Tables      *Tables         `json:"tables,omitempty"`
-	Files       *Files          `json:"files,omitempty"`
-	Pipelines   *Pipelines      `json:"pipelines,omitempty"`
-	Limits      *Limits         `json:"limits,omitempty"`
-	Notify      *Notify         `json:"notify,omitempty"`
-	Sources     []Source        `json:"sources,omitempty"`
-	Imports     []Import        `json:"imports,omitempty"`
-	Deliveries  []Delivery      `json:"deliveries,omitempty"`
-	Semantic    *Semantic       `json:"semantic,omitempty"`
-	Products    []Product       `json:"products,omitempty"`
-	Agents      []Agent         `json:"agents,omitempty"`    // programs of the project's own (12.2)
+	Description string     `json:"description,omitempty"`
+	Members     []Member   `json:"members"`
+	Tables      *Tables    `json:"tables,omitempty"`
+	Files       *Files     `json:"files,omitempty"`
+	Pipelines   *Pipelines `json:"pipelines,omitempty"`
+	Limits      *Limits    `json:"limits,omitempty"`
+	Notify      *Notify    `json:"notify,omitempty"`
+	Sources     []Source   `json:"sources,omitempty"`
+	Imports     []Import   `json:"imports,omitempty"`
+	Deliveries  []Delivery `json:"deliveries,omitempty"`
+	Semantic    *Semantic  `json:"semantic,omitempty"`
+	Products    []Product  `json:"products,omitempty"`
+	Agents      []Agent    `json:"agents,omitempty"` // programs of the project's own (12.2)
 	// ServiceAccounts: applications' identities in the project, each a member in a role.
 	ServiceAccounts []ServiceAccount `json:"serviceAccounts,omitempty"`
-	LLM         *LLM            `json:"llm,omitempty"`       // the project's use of the LLM gateway (12.1)
-	Knowledge   []KnowledgeBank `json:"knowledge,omitempty"` // text the project's people and agents search by meaning (12.6)
-	Tools       []ConnectorTool `json:"tools,omitempty"`     // its own tools for its agents: an API's operations, signed in by a connection (12.7)
-	Cost        *Cost           `json:"cost,omitempty"`      // what it may cost a month, by the install's rate card (13.1)
-	Apps        []App           `json:"apps,omitempty"`      // small pages of its data, shown as whoever opens them (14.1)
-	Scoring     []Scoring       `json:"scoring,omitempty"`   // its approved models scoring its tables on a schedule (15.1)
-	Serving     []Serving       `json:"serving,omitempty"`   // its approved models answering as an API (15.1)
+	LLM             *LLM             `json:"llm,omitempty"`       // the project's use of the LLM gateway (12.1)
+	Knowledge       []KnowledgeBank  `json:"knowledge,omitempty"` // text the project's people and agents search by meaning (12.6)
+	Tools           []ConnectorTool  `json:"tools,omitempty"`     // its own tools for its agents: an API's operations, signed in by a connection (12.7)
+	Cost            *Cost            `json:"cost,omitempty"`      // what it may cost a month, by the install's rate card (13.1)
+	Apps            []App            `json:"apps,omitempty"`      // small pages of its data, shown as whoever opens them (14.1)
+	Scoring         []Scoring        `json:"scoring,omitempty"`   // its approved models scoring its tables on a schedule (15.1)
+	Serving         []Serving        `json:"serving,omitempty"`   // its approved models answering as an API (15.1)
 }
 
 // Semantic is how the project's semantic model stands among the others'

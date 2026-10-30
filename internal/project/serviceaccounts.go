@@ -36,13 +36,17 @@ type ServiceAccount struct {
 func ServiceAccountClientID(project, name string) string { return "svc-" + project + "-" + name }
 
 // ClientID is the service account's Keycloak client, in a project.
-func (sa ServiceAccount) ClientID(project string) string { return ServiceAccountClientID(project, sa.Name) }
+func (sa ServiceAccount) ClientID(project string) string {
+	return ServiceAccountClientID(project, sa.Name)
+}
 
 // ConnectionName is the project's connection holding its secret.
 func (sa ServiceAccount) ConnectionName(project string) string { return project + "-svc-" + sa.Name }
 
 // Username is the name its tokens carry: Keycloak's for a client's service account.
-func (sa ServiceAccount) Username(project string) string { return "service-account-" + sa.ClientID(project) }
+func (sa ServiceAccount) Username(project string) string {
+	return "service-account-" + sa.ClientID(project)
+}
 
 // Approved says whether it may sign in: approved, and not changed since.
 func (sa ServiceAccount) Approved() bool { return sa.ApprovedBy != "" }
