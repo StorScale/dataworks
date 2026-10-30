@@ -1,11 +1,12 @@
 import { Link } from "react-router-dom";
 import { getRoles } from "../api";
 import { grants, maskLabel, namespaceOf, Spinner, usePlatform, usePoll, useProject } from "../lib";
+import ServiceAccounts from "./ServiceAccounts";
 
 // ProjectAccess: who's in the project, how, and what each role may do.
 export default function ProjectAccess() {
   const { name, view } = useProject();
-  const { admin } = usePlatform();
+  const { admin, user } = usePlatform();
   const roles = usePoll(getRoles, [], 60_000);
   if (!view) return <div className="page"><Spinner /></div>;
   const spec = view.spec?.spec;
@@ -27,7 +28,7 @@ export default function ProjectAccess() {
                     <tr key={m.username}>
                       <td>{m.username}</td>
                       <td><span className={`pill ${m.role === "editor" ? "blue" : ""}`}>{m.role}</span></td>
-                      <td className="muted">{m.role === "pipelines" ? "the project's pipelines" : m.via ? `Keycloak group ${m.via}` : "named in the project"}</td>
+                      <td className="muted">{m.role === "pipelines" ? "the project's pipelines" : m.via === "service account" ? "a service account" : m.via ? `Keycloak group ${m.via}` : "named in the project"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -40,6 +41,9 @@ export default function ProjectAccess() {
               </p>
             )}
           </section>
+
+          <ServiceAccounts project={name} user={user.username}
+            roles={["reader", "editor", ...(roles.data?.roles.map((x) => x.name).filter((x) => x !== "reader" && x !== "editor") ?? [])]} />
 
           {spec && (r?.rowFilters?.length || r?.masks?.length || r?.tables?.length) ? (
             <section className="card flush" data-testid="reader-limits">

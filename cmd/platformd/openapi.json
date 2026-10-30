@@ -3576,6 +3576,206 @@
         ]
       }
     },
+    "/api/projects/{name}/serviceaccounts": {
+      "get": {
+        "description": "its members\n\nhandleServiceAccounts lists a project's service accounts, to its members.",
+        "operationId": "get_projects_name_serviceaccounts",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Lists a project's service accounts, to its members",
+        "tags": [
+          "serviceaccounts"
+        ]
+      }
+    },
+    "/api/projects/{name}/serviceaccounts/{account}": {
+      "delete": {
+        "description": "its editors\n\nhandleDeleteServiceAccount revokes a service account: out of the spec,\nits secret gone; the operator removes its client and membership at its\nnext pass, and new tokens are refused.",
+        "operationId": "delete_projects_name_serviceaccounts_account",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Revokes a service account: out of the spec, its secret gone; the operator removes its client and membership at its next pass, and new tokens are refused",
+        "tags": [
+          "serviceaccounts"
+        ]
+      },
+      "put": {
+        "description": "its editors\n\nhandlePutServiceAccount registers a service account, or changes one (a\nchanged owner or role takes its approval away).",
+        "operationId": "put_projects_name_serviceaccounts_account",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Registers a service account, or changes one (a changed owner or role takes its approval away)",
+        "tags": [
+          "serviceaccounts"
+        ]
+      }
+    },
+    "/api/projects/{name}/serviceaccounts/{account}/approve": {
+      "post": {
+        "description": "an administrator, not its registrant\n\nhandleApproveServiceAccount approves a service account (an administrator\nother than the one who registered it), making its secret, shown once.",
+        "operationId": "post_projects_name_serviceaccounts_account_approve",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Approves a service account (an administrator other than the one who registered it), making its secret, shown once",
+        "tags": [
+          "serviceaccounts"
+        ]
+      }
+    },
+    "/api/projects/{name}/serviceaccounts/{account}/rotate": {
+      "post": {
+        "description": "an administrator\n\nhandleRotateServiceAccount gives an approved service account a new secret\n(an administrator), shown once: the old one stops working within a\nminute, when the operator changes the client; tokens already issued last\nuntil they expire.",
+        "operationId": "post_projects_name_serviceaccounts_account_rotate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Gives an approved service account a new secret (an administrator), shown once: the old one stops working within a minute, when the operator changes the client; tokens already issued last until they expire",
+        "tags": [
+          "serviceaccounts"
+        ]
+      }
+    },
     "/api/projects/{name}/serving": {
       "get": {
         "description": "its models answering as an API, and the version each serves\n\nhandleServings are the project's servings, each with the version it\nserves now (or why none) and the address to call: its members.",
@@ -4363,6 +4563,9 @@
     },
     {
       "name": "semantic"
+    },
+    {
+      "name": "serviceaccounts"
     },
     {
       "name": "serving"

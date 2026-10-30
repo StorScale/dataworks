@@ -34,13 +34,22 @@ func (s *server) isAdmin(u user) bool {
 	return slices.ContainsFunc(u.Groups, func(g string) bool { return slices.Contains(s.cfg.AdminGroups, g) })
 }
 
+// isServiceAccount says whether a caller is a project's service account
+// (its client svc-<project>-<name>, signed in with its secret): in none of
+// the platform's groups, it's let in all the same, and what it may do is
+// its role's in the projects it's a member of, as for anyone; it's never an
+// administrator.
+func isServiceAccount(u user) bool {
+	return strings.HasPrefix(u.Username, "service-account-svc-")
+}
+
 // signedIn is the session of someone allowed in, or writes the refusal.
 func (s *server) signedIn(w http.ResponseWriter, r *http.Request) *session {
 	sess := s.session(r)
 	switch {
 	case sess == nil:
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"login": "/auth/login"})
-	case !s.allowed(sess.User.Groups):
+	case !s.allowed(sess.User.Groups) && !isServiceAccount(sess.User):
 		s.fail(w, r, http.StatusForbidden, "no access")
 	case s.store == nil:
 		s.fail(w, r, http.StatusServiceUnavailable, "projects aren't set up (no STORE_URL)")
@@ -186,6 +195,7 @@ func (s *server) handlePutProject(w http.ResponseWriter, r *http.Request) {
 	keepDeliveryApprovals(before, p, sess.User.Username)
 	project.KeepProductState(before, p)
 	project.KeepAgentState(before, p)
+	project.KeepServiceAccountState(before, p)
 	if err := s.store.PutProject(r.Context(), p); err != nil {
 		var refused *store.APIError
 		if errors.As(err, &refused) && refused.Code >= 400 && refused.Code < 500 && refused.Code != http.StatusForbidden {

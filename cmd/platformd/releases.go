@@ -262,6 +262,7 @@ func (s *server) handlePlanFiles(w http.ResponseWriter, r *http.Request) {
 	}
 	// What applying it keeps (below), kept here too, so its changes are what it will change.
 	project.KeepAgentState(before, composed)
+	project.KeepServiceAccountState(before, composed)
 	project.KeepTags(before, composed)
 	changes := project.SpecChanges(before, composed)
 	if text, ok := body.Files["semantic.yaml"]; ok {
@@ -367,7 +368,9 @@ func (s *server) handleApplyPlan(w http.ResponseWriter, r *http.Request) {
 	keepDeliveryApprovals(v.Spec, spec, p.By)
 	project.KeepProductState(v.Spec, spec)
 	project.KeepAgentState(v.Spec, spec)
+	project.KeepServiceAccountState(v.Spec, spec)
 	project.RegisterNewAgents(spec, p.By, s.now().UTC())
+	project.RegisterNewServiceAccounts(spec, p.By, s.now().UTC())
 	project.KeepTags(v.Spec, spec)
 	if err := s.saveSpec(r.Context(), spec); err != nil {
 		s.fail(w, r, http.StatusUnprocessableEntity, err.Error())

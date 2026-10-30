@@ -250,6 +250,11 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("PUT /api/projects/{name}/agents/{agent}", s.handlePutAgent)
 	mux.HandleFunc("POST /api/projects/{name}/agents/{agent}/approve", s.handleApproveAgent)
 	mux.HandleFunc("DELETE /api/projects/{name}/agents/{agent}", s.handleDeleteAgent)
+	mux.HandleFunc("GET /api/projects/{name}/serviceaccounts", s.handleServiceAccounts)                          // its members
+	mux.HandleFunc("PUT /api/projects/{name}/serviceaccounts/{account}", s.handlePutServiceAccount)              // its editors
+	mux.HandleFunc("POST /api/projects/{name}/serviceaccounts/{account}/approve", s.handleApproveServiceAccount) // an administrator, not its registrant
+	mux.HandleFunc("POST /api/projects/{name}/serviceaccounts/{account}/rotate", s.handleRotateServiceAccount)   // an administrator
+	mux.HandleFunc("DELETE /api/projects/{name}/serviceaccounts/{account}", s.handleDeleteServiceAccount)        // its editors
 	mux.HandleFunc("GET /api/projects/{name}/classification", s.handleClassification)
 	mux.HandleFunc("POST /api/projects/{name}/classification", s.handleClassify)
 	mux.HandleFunc("GET /api/projects/{name}/uploads", s.handleUploads)
