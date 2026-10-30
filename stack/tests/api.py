@@ -125,7 +125,7 @@ def main():
               (me or {}).get("username") == f"service-account-svc-{NAME}-provisioner", me)
         mine = next((x for x in (svc.projects() if svc else []) if x["name"] == NAME), {})
         answer = svc.sql(NAME, "SELECT 3 AS three") if svc else {}
-        svc.request("PUT", f"/api/projects/{NAME}/connections/{NAME}-from-svc", json={"kind": "api", "values": {"token": "t"}}) if svc else None
+        svc.request("POST", f"/api/projects/{NAME}/connections", json={"name": f"{NAME}-from-svc", "kind": "api", "values": {"token": "t"}}) if svc else None
         kept = [c["name"] for c in alice.request("GET", f"/api/projects/{NAME}/connections").get("connections", [])]
         check("... a member in its role: it reads the project as an editor, queries it, and keeps a connection there",
               mine.get("role") == "editor" and answer.get("rows") == [[3]] and f"{NAME}-from-svc" in kept, {"role": mine.get("role"), "rows": answer.get("rows"), "kept": kept})
