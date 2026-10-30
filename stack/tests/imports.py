@@ -63,7 +63,7 @@ class CRM(BaseHTTPRequestHandler):
              {"id": 2, "name": "Grace", "updated_at": "2026-10-02T10:00:00Z"},
              {"id": 3, "name": "Edsger", "updated_at": "2026-10-03T10:00:00Z"}]
     asked = []   # (since, signed in)
-    pages = []   # the cursor each request asked with ("" for the first page)
+    pages = []   # (since, the page's cursor: "" for the first) of each request
     down = False
 
     def log_message(self, *args):
@@ -74,7 +74,7 @@ class CRM(BaseHTTPRequestHandler):
         since = parse_qs(url.query).get("since", [""])[0]
         cursor = parse_qs(url.query).get("cursor", [""])[0]
         CRM.asked.append((since, self.headers.get("Authorization") == f"Bearer {TOKEN}"))
-        CRM.pages.append(cursor)
+        CRM.pages.append((since, cursor))
         if CRM.down or url.path != "/v1/leads":
             self.send_response(503 if CRM.down else 404)
             self.end_headers()
@@ -238,13 +238,16 @@ def main():
         check("... and it's one of sales' pipelines", found is not None, found)
 
         # 2. A first run.
-        CRM.pages.clear()
         state = run(bob)
         check("a run copies the leads into sales.crm_leads", state == "success" and rows() == [[1, "Ada"], [2, "Grace"], [3, "Edsger"]],
               f"{state}: {rows()}")
         check("... signed in with the import's token, asking from the cursor's start",
               CRM.asked and all(signed for _, signed in CRM.asked) and CRM.asked[0][0] == "2026-01-01T00:00:00Z", CRM.asked[:3])
-        check("... page by page, following the answer's nextCursor (two leads to a page)", CRM.pages[:2] == ["", "2"], CRM.pages[:4])
+        # Whichever run copied them first (Airflow may start one as the DAG appears), it asked
+        # from the cursor's start for the first page, then for the page the answer's nextCursor named.
+        start = "2026-01-01T00:00:00Z"
+        check("... page by page, following the answer's nextCursor (two leads to a page)",
+              (start, "") in CRM.pages and (start, "2") in CRM.pages, CRM.pages[:6])
 
         # 3. Only what's new, merged.
         CRM.asked.clear()
