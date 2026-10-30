@@ -326,7 +326,7 @@ func (s *server) member(w http.ResponseWriter, r *http.Request) *session {
 	switch {
 	case sess == nil:
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"login": "/auth/login"})
-	case !s.allowed(sess.User.Groups):
+	case !s.mayUse(sess.User):
 		s.fail(w, r, http.StatusForbidden, "no access")
 	default:
 		return sess
