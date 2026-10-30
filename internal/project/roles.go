@@ -221,6 +221,11 @@ func (p *Project) CustomRoles() []string {
 			out = append(out, m.Role)
 		}
 	}
+	for _, sa := range p.Spec.ServiceAccounts { // a service account is a member in its role
+		if !IsBuiltIn(sa.Role) && !slices.Contains(out, sa.Role) {
+			out = append(out, sa.Role)
+		}
+	}
 	sort.Strings(out)
 	return out
 }

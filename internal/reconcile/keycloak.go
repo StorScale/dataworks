@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -235,8 +236,10 @@ func (k *Keycloak) ensureAgentClient(ctx context.Context, clientID, name, secret
 }
 
 // deleteClientsExcept removes the clients whose IDs start with a prefix,
-// but those to keep.
-func (k *Keycloak) deleteClientsExcept(ctx context.Context, prefix string, keep map[string]bool) error {
+// but those to keep and those starting with one of foreign (another
+// project's, whose name starts with this one's: agent-sales-eu-… beside
+// agent-sales-…).
+func (k *Keycloak) deleteClientsExcept(ctx context.Context, prefix string, keep map[string]bool, foreign ...string) error {
 	var clients []struct {
 		ID       string `json:"id"`
 		ClientID string `json:"clientId"`
@@ -245,7 +248,8 @@ func (k *Keycloak) deleteClientsExcept(ctx context.Context, prefix string, keep 
 		return err
 	}
 	for _, c := range clients {
-		if strings.HasPrefix(c.ClientID, prefix) && !keep[c.ClientID] {
+		if strings.HasPrefix(c.ClientID, prefix) && !keep[c.ClientID] &&
+			!slices.ContainsFunc(foreign, func(f string) bool { return strings.HasPrefix(c.ClientID, f) }) {
 			if err := k.do(ctx, "DELETE", "/clients/"+c.ID, nil, nil); err != nil {
 				return fmt.Errorf("client %s: %w", c.ClientID, err)
 			}

@@ -238,12 +238,13 @@ func (r *Reconciler) Delete(ctx context.Context, p *project.Project) error {
 		keep(r.Copies.Remove(ctx, p))
 	}
 	keep(r.removeImports(ctx, p))
-	keep(r.removeDeliveries(ctx, p))                                             // their targets' credentials with them
-	keep(r.removeLLM(ctx, p))                                                    // its keys at the LLM gateway
-	keep(r.removeAgents(ctx, p))                                                 // its scheduled agents\' connections
-	keep(r.Keycloak.deleteClientsExcept(ctx, "agent-"+p.Metadata.Name+"-", nil)) // its agents' clients
-	keep(r.teardownServing(ctx, p))                                              // its models' servers and their clients
-	if r.Reviewer != nil {                                                       // its merge requests' branches and catalogs
+	keep(r.removeDeliveries(ctx, p))                                                                                 // their targets' credentials with them
+	keep(r.removeLLM(ctx, p))                                                                                        // its keys at the LLM gateway
+	keep(r.removeAgents(ctx, p))                                                                                     // its scheduled agents\' connections
+	keep(r.Keycloak.deleteClientsExcept(ctx, "agent-"+p.Metadata.Name+"-", nil, r.longerNames(ctx, p, "agent-")...)) // its agents' clients
+	keep(r.Keycloak.deleteClientsExcept(ctx, "svc-"+p.Metadata.Name+"-", nil, r.longerNames(ctx, p, "svc-")...))     // its service accounts' clients
+	keep(r.teardownServing(ctx, p))                                                                                  // its models' servers and their clients
+	if r.Reviewer != nil {                                                                                           // its merge requests' branches and catalogs
 		if prev, _ := r.Store.Status(ctx, p.Metadata.Name); prev != nil {
 			keep(r.applyReviews(ctx, p, nil, nil, prev.Reviews))
 		}
@@ -403,7 +404,41 @@ func (r *Reconciler) members(ctx context.Context, p *project.Project) (people, e
 		out.list = append(out.list, project.Person{Username: sa.Username, Role: "agent"})
 		agents[clientID] = true
 	}
-	if err := r.Keycloak.deleteClientsExcept(ctx, "agent-"+p.Metadata.Name+"-", agents); err != nil {
+	if err := r.Keycloak.deleteClientsExcept(ctx, "agent-"+p.Metadata.Name+"-", agents, r.longerNames(ctx, p, "agent-")...); err != nil {
+		return out, err
+	}
+	// Its service accounts: an approved one, whose secret the platform kept
+	// at its approval, gets its client, and its service account is a member
+	// in its role (a role nobody defined: no member, as for people).
+	accounts := map[string]bool{}
+	for _, sa := range p.Spec.ServiceAccounts {
+		def, defined := p.RoleOf(sa.Role)
+		if !sa.Approved() || r.Store == nil || !defined {
+			continue
+		}
+		sec, err := r.Store.Connection(ctx, p.Metadata.Name, sa.ConnectionName(p.Metadata.Name))
+		if err != nil || sec == nil || sec["secret"] == "" {
+			continue // approved, its secret not kept yet (or gone): no client
+		}
+		clientID := sa.ClientID(p.Metadata.Name)
+		if err := r.Keycloak.ensureAgentClient(ctx, clientID, sa.Name+", a service account of "+p.Metadata.Name, sec["secret"], r.PlatformURL); err != nil {
+			return out, err
+		}
+		u, err := r.Keycloak.serviceAccount(ctx, clientID)
+		if err != nil {
+			return out, err
+		}
+		if u == nil {
+			continue
+		}
+		if _, ok := wanted[p.Group(sa.Role)]; !ok {
+			wanted[p.Group(sa.Role)] = map[string]kcUser{}
+		}
+		wanted[p.Group(sa.Role)][u.ID] = *u
+		out.list = append(out.list, project.Person{Username: u.Username, Role: sa.Role, Via: "service account", Can: def.Granted()})
+		accounts[clientID] = true
+	}
+	if err := r.Keycloak.deleteClientsExcept(ctx, "svc-"+p.Metadata.Name+"-", accounts, r.longerNames(ctx, p, "svc-")...); err != nil {
 		return out, err
 	}
 	// Its servings' servers (R15.4) read its models as its readers do.
@@ -657,4 +692,27 @@ func (r *Reconciler) syncTrinoLimits(ctx context.Context) error {
 		return err
 	}
 	return r.TrinoLimits.Sync(ctx, statuses)
+}
+
+// longerNames are the client-ID prefixes (kind<project>-) of the other
+// projects whose names start with this one's and a dash (sales-eu beside
+// sales): their clients' IDs start as this one's do, and aren't its to
+// remove.
+func (r *Reconciler) longerNames(ctx context.Context, p *project.Project, kind string) []string {
+	if r.Store == nil {
+		return nil
+	}
+	sts, err := r.Store.Statuses(ctx)
+	if err != nil {
+		// Unknown: no client is this project's to remove but by its exact
+		// name's prefix, and a longer project's name can't be told apart.
+		return []string{kind + p.Metadata.Name + "-"}
+	}
+	var out []string
+	for _, st := range sts {
+		if st.Name != p.Metadata.Name && strings.HasPrefix(st.Name, p.Metadata.Name+"-") {
+			out = append(out, kind+st.Name+"-")
+		}
+	}
+	return out
 }

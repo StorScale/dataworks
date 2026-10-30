@@ -521,6 +521,21 @@ spec:
                       registeredAt: {type: string}
                       approvedBy: {type: string}
                       approvedAt: {type: string}
+                serviceAccounts:
+                  description: "Applications' identities in the project (a CRM, a company system): each a confidential client svc-<project>-<name> signing in with its secret, a member in its role, approved by an administrator other than its registrant; who registered and approved are the platform's."
+                  type: array
+                  items:
+                    type: object
+                    required: [name, owner, role]
+                    properties:
+                      name: {type: string, pattern: '^[a-z][a-z0-9-]{0,30}$'}
+                      description: {type: string}
+                      owner: {type: string}
+                      role: {type: string, pattern: '^[a-z][a-z0-9-]{1,23}$'}
+                      registeredBy: {type: string}
+                      registeredAt: {type: string}
+                      approvedBy: {type: string}
+                      approvedAt: {type: string}
                 sources:
                   type: array
                   description: >-

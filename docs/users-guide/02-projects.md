@@ -11,6 +11,7 @@ In this chapter:
 - [Making a project](#making-a-project)
 - [The spec at a glance](#the-spec-at-a-glance)
 - [Members and roles](#members-and-roles)
+- [Service accounts: applications as members](#service-accounts-applications-as-members)
 - [Tables](#tables)
 - [Files](#files)
 - [Pipelines](#pipelines)
@@ -228,6 +229,63 @@ On the Edit page: **Members**, a row each (**Keycloak group** or **Person**, the
   role that was defined when the project was saved and has since gone. Define it again, or change the members.
 - `pipelines`, `agent`, `serving`, `admin`, `editors` and `readers` aren't roles a member can be given: they're the
   platform's own.
+
+## Service accounts: applications as members
+
+**What it's for.** An application that works with the project as a member would, signed in as itself rather than as a person: a
+CRM that keeps the project's sales metrics (its semantic model) and its import, a company system that reads its tables or queries
+its metrics on a schedule. A service account is that application's identity in the project: a member in a role you choose, here
+and nowhere else, with a secret of its own that can be rotated and revoked, and every call audited under its name.
+
+**Who can do it.** The project's editors register and revoke them. An **administrator other than the one who registered it**
+approves each and rotates its secret: a service account may be an editor, and only administrators make people members.
+
+### Set up
+
+**On the page.** The project's **Access** tab → **Service accounts** → **Register one**: a name (lowercase letters, digits and
+dashes), its role (reader, editor, or one of the company's roles), and what it's for. It waits for approval. An administrator
+presses **Approve**: the page shows its client and secret **once**; give them to the application. **New secret** makes another
+(the old one stops working within a minute); **Revoke** takes it away at once.
+
+**Through the API:**
+
+| Method and path | Who | What it does |
+|---|---|---|
+| `GET /api/projects/{name}/serviceaccounts` | members | The service accounts, each with its client, the name its tokens carry, and whether it's approved |
+| `PUT /api/projects/{name}/serviceaccounts/{account}` | editors | Registers one, or changes it: `{"role": "editor", "description": "...", "owner": "alice"}`. A changed role or owner needs approval again |
+| `POST /api/projects/{name}/serviceaccounts/{account}/approve` | an administrator, not its registrant | Approves it: the answer has `clientId` and `secret` (once) and `tokenUrl` |
+| `POST /api/projects/{name}/serviceaccounts/{account}/rotate` | an administrator | A new secret, shown once |
+| `DELETE /api/projects/{name}/serviceaccounts/{account}` | editors | Revokes it |
+
+**The application signs in** with OAuth's client credentials, and calls the API with the token, as any member does:
+
+```bash
+TOKEN=$(curl -s https://<platform>/sso/realms/lakehouse/protocol/openid-connect/token \
+  -d grant_type=client_credentials -d client_id=svc-crm-provisioner -d client_secret=$SECRET | jq -r .access_token)
+curl -s -X PUT https://<platform>/api/projects/crm/semantic -H "Authorization: Bearer $TOKEN" \
+  -H "X-Platform-Request: 1" -H "Content-Type: application/json" -d @model.json
+```
+
+In Python: `storscale.Platform(url, client_id="svc-crm-provisioner", client_secret=secret)`.
+
+### How it behaves
+
+- Its client is `svc-<project>-<name>` (confidential, client credentials only), made by the operator within a minute of approval;
+  its tokens name it `service-account-svc-<project>-<name>`, which is how the project's **Members** list, the audit log and
+  Ranger's audit show it.
+- It's a member of the project in its role: what that role may do on the pages' API, read in Trino (Ranger) and change, it may;
+  nothing in any other project, and never an administrator's tools.
+- Its secret is kept as the project's connection `<project>-svc-<name>`, which only the platform reads.
+- The platform's audit log records `serviceaccount.registered`, `.approved`, `.rotated` and `.revoked`, and refusals (approving
+  one's own, approving without being an administrator).
+
+### Limits and gotchas
+
+- "a service account is approved by an administrator other than the one who registered it"; "… only administrators make: an
+  administrator approves it" (an editor approving).
+- A service account doesn't register service accounts.
+- Tokens it already has last until they expire (minutes) after a revocation or a rotation; new ones are refused.
+- A role nobody defined gives it nothing, as for people: the project's status says so.
 
 ## Tables
 

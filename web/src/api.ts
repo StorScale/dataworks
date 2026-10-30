@@ -490,6 +490,23 @@ export const approveAgent = (name: string, agent: string) =>
   api<{ approved: boolean; by: string; clientId: string; secret?: string; mcpUrl: string }>("POST", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(agent)}/approve`, {});
 export const removeAgent = (name: string, agent: string) => api<void>("DELETE", `/api/projects/${encodeURIComponent(name)}/agents/${encodeURIComponent(agent)}`);
 
+// --- A project's service accounts: applications' identities in it ----------------------
+export type ServiceAccountView = {
+  name: string; description?: string; owner: string; role: string;
+  registeredBy?: string; registeredAt?: string; approvedBy?: string; approvedAt?: string;
+  clientId: string; username: string; connection: string; approved: boolean; tokenUrl: string;
+};
+export type ServiceAccountSecret = { approved: boolean; by: string; clientId: string; secret?: string; tokenUrl: string; username: string };
+const svcPath = (name: string, account?: string) =>
+  `/api/projects/${encodeURIComponent(name)}/serviceaccounts` + (account ? `/${encodeURIComponent(account)}` : "");
+export const getServiceAccounts = (name: string) =>
+  api<{ serviceAccounts: ServiceAccountView[]; canEdit: boolean; canApprove: boolean }>("GET", svcPath(name));
+export const putServiceAccount = (name: string, a: { name: string; description?: string; owner?: string; role: string }) =>
+  api<ServiceAccountView[]>("PUT", svcPath(name, a.name), { description: a.description, owner: a.owner, role: a.role });
+export const approveServiceAccount = (name: string, account: string) => api<ServiceAccountSecret>("POST", svcPath(name, account) + "/approve", {});
+export const rotateServiceAccount = (name: string, account: string) => api<ServiceAccountSecret>("POST", svcPath(name, account) + "/rotate", {});
+export const removeServiceAccount = (name: string, account: string) => api<void>("DELETE", svcPath(name, account));
+
 // --- A project's apps (use case 14.1) ---------------------------------------------------
 export type AppFilter = { field: string; label?: string; values?: string[] };
 export type App = { name: string; title?: string; description?: string; kind: "metric" | "table" | "qa"; metrics?: string[]; by?: string;

@@ -11,7 +11,12 @@ These check (use case 14.3):
   4. alice signs in with the package by a device code (as from a notebook
      or a pod, and as anyone signed in through Entra ID must): the package
      shows a link and a code, she approves it in her browser, and the
-     package is her.
+     package is her;
+  5. a service account, an application's identity in the project (a CRM's):
+     alice, an editor, registers it as an editor; she can't approve it, bob
+     (an administrator) does and gets its secret once; it signs in with its
+     secret (client credentials) and, as the project's editor, queries it
+     and keeps a connection there; revoked, it signs in no more.
 
 The project is removed after.
 """
@@ -32,7 +37,15 @@ from projects import platform, projects, wait  # noqa: E402
 PLATFORM = os.environ["PLATFORM_URL"]
 NAME = "scripted"
 SPEC = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": NAME},
-        "spec": {"description": "Made from Python: the api suite's.", "members": [{"group": "engineers", "role": "editor"}], "tables": {}}}
+        "spec": {"description": "Made from Python: the api suite's.", "members": [{"group": "engineers", "role": "editor"}, {"group": "analysts", "role": "editor"}], "tables": {}}}
+
+
+def _signs_in(given):
+    """The service account signed in with its secret, or None while Keycloak refuses it."""
+    try:
+        return storscale.Platform(PLATFORM, client_id=given["clientId"], client_secret=given["secret"])
+    except storscale.Error:
+        return None
 
 
 def main():
@@ -92,6 +105,33 @@ def main():
         check("alice signs in with the package by a device code: a link and a code, approved in her browser",
               (me.get("user") or {}).get("username") == "alice" and "approve the code" in shown.get("message", ""),
               {"shown": shown.get("message"), "me": me.get("user") or me})
+
+        # 5. A service account: registered by alice, approved by bob, used with its secret, revoked.
+        alice = storscale.Platform(PLATFORM, username="alice", password=password)
+        alice.request("PUT", f"/api/projects/{NAME}/serviceaccounts/provisioner", json={"role": "editor", "description": "the api suite's"})
+        try:
+            alice.request("POST", f"/api/projects/{NAME}/serviceaccounts/provisioner/approve")
+            refused = None
+        except storscale.Refused as e:
+            refused = e
+        check("alice (an editor) registers a service account, and can't approve it: an administrator does",
+              refused is not None and refused.status == 403 and "administrator" in refused.message, str(refused))
+        given = p.request("POST", f"/api/projects/{NAME}/serviceaccounts/provisioner/approve")
+        check("bob (an administrator) approves it, and gets its client and secret once",
+              given.get("clientId") == f"svc-{NAME}-provisioner" and len(given.get("secret") or "") == 48, {k: v for k, v in given.items() if k != "secret"})
+        svc = wait(lambda: _signs_in(given), 180, every=10)
+        me = svc.me().get("user") if svc else {}
+        check("... it signs in with its secret (client credentials), as itself",
+              (me or {}).get("username") == f"service-account-svc-{NAME}-provisioner", me)
+        mine = next((x for x in (svc.projects() if svc else []) if x["name"] == NAME), {})
+        answer = svc.sql(NAME, "SELECT 3 AS three") if svc else {}
+        svc.request("PUT", f"/api/projects/{NAME}/connections/{NAME}-from-svc", json={"kind": "api", "values": {"token": "t"}}) if svc else None
+        kept = [c["name"] for c in alice.request("GET", f"/api/projects/{NAME}/connections").get("connections", [])]
+        check("... a member in its role: it reads the project as an editor, queries it, and keeps a connection there",
+              mine.get("role") == "editor" and answer.get("rows") == [[3]] and f"{NAME}-from-svc" in kept, {"role": mine.get("role"), "rows": answer.get("rows"), "kept": kept})
+        alice.request("DELETE", f"/api/projects/{NAME}/serviceaccounts/provisioner")
+        gone = wait(lambda: _signs_in(given) is None, 180, every=10)
+        check("revoked, it signs in no more", gone, "")
     finally:
         bob = platform("bob")
         bob.delete(f"{PLATFORM}/api/projects/{NAME}", headers={"X-Platform-Request": "1"}, timeout=30)

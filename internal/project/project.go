@@ -63,6 +63,8 @@ type Spec struct {
 	Semantic    *Semantic       `json:"semantic,omitempty"`
 	Products    []Product       `json:"products,omitempty"`
 	Agents      []Agent         `json:"agents,omitempty"`    // programs of the project's own (12.2)
+	// ServiceAccounts: applications' identities in the project, each a member in a role.
+	ServiceAccounts []ServiceAccount `json:"serviceAccounts,omitempty"`
 	LLM         *LLM            `json:"llm,omitempty"`       // the project's use of the LLM gateway (12.1)
 	Knowledge   []KnowledgeBank `json:"knowledge,omitempty"` // text the project's people and agents search by meaning (12.6)
 	Tools       []ConnectorTool `json:"tools,omitempty"`     // its own tools for its agents: an API's operations, signed in by a connection (12.7)
