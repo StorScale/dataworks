@@ -312,6 +312,14 @@ spec:
                                 cursor: {type: string}
                                 cursorParam: {type: string}
                                 cursorStart: {type: string}
+                                paging:
+                                  description: "How the answer comes in pages: cursor (next: where the next page's cursor is in the answer; param: the query parameter it goes back in), link (next: where the next page's URL is), single. None: as dlt finds them."
+                                  type: object
+                                  required: [type]
+                                  properties:
+                                    type: {type: string, enum: [cursor, link, single]}
+                                    next: {type: string}
+                                    param: {type: string}
                       salesforce:
                         description: "Salesforce's objects to copy (dlt's verified Salesforce source), and how far back the objects copied by their changes start."
                         type: object

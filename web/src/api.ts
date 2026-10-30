@@ -78,7 +78,8 @@ export type Spec = {
   knowledge?: { name: string; description?: string }[];
 };
 // An application's data (or a database's, by a cursor), copied into the project's tables on a schedule (dlt).
-export type APIResource = { name: string; path: string; dataSelector?: string; primaryKey?: string; cursor?: string; cursorParam?: string; cursorStart?: string };
+export type APIPaging = { type: "cursor" | "link" | "single"; next?: string; param?: string };
+export type APIResource = { name: string; path: string; dataSelector?: string; primaryKey?: string; cursor?: string; cursorParam?: string; cursorStart?: string; paging?: APIPaging };
 export type Import = {
   name: string; source: "rest_api" | "sql_database" | "salesforce" | "gong" | "highspot" | "sap" | "files"; connection?: string; schedule?: string;
   files?: { tables: { name: string; file: string; primaryKey?: string }[] };

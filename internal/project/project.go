@@ -355,7 +355,8 @@ var SalesforceIncremental = []string{"account", "campaign_member", "event", "opp
 
 // ImportAPI is a REST API, as dlt's rest_api source takes it: its resources'
 // paths under BaseURL, each a list of objects (at DataSelector, a JSONPath,
-// when they're within the answer); dlt finds the pages itself.
+// when they're within the answer), in pages as Paging says (none: as dlt
+// finds them, which it does for a Link header or a next URL, not a cursor).
 type ImportAPI struct {
 	BaseURL   string        `json:"baseUrl"`
 	Resources []APIResource `json:"resources"`
@@ -372,7 +373,23 @@ type APIResource struct {
 	Cursor      string `json:"cursor,omitempty"`
 	CursorParam string `json:"cursorParam,omitempty"`
 	CursorStart string `json:"cursorStart,omitempty"`
+	// Paging: how the API's answer comes in pages; none: as dlt finds them.
+	Paging *APIPaging `json:"paging,omitempty"`
 }
+
+// APIPaging is how a resource's answer comes in pages, as dlt's paginators
+// take it.
+type APIPaging struct {
+	// Type: cursor (the next page's cursor is in the answer, sent back as
+	// a query parameter), link (the next page's URL is in the answer) or
+	// single (one page: nothing to follow).
+	Type  string `json:"type"`
+	Next  string `json:"next,omitempty"`  // cursor: where the cursor is in the answer (a JSONPath: nextCursor); link: where the URL is (next)
+	Param string `json:"param,omitempty"` // cursor: the query parameter it's sent back in (cursor)
+}
+
+// PagingTypes are the ways a REST API's answer may come in pages.
+var PagingTypes = []string{"cursor", "link", "single"}
 
 // ImportDatabase is a database read by a cursor column (no change capture:
 // its deletes aren't seen; 8.1 for that).

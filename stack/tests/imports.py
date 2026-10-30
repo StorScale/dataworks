@@ -6,7 +6,8 @@ project's pipelines. These check, with sales and a small CRM's API served
 here (a token, a cursor, its leads changing):
 
   1. bob adds the import, and it's one of sales' pipelines;
-  2. a run copies the leads into sales.crm_leads, signed in with the token;
+  2. a run copies the leads into sales.crm_leads, signed in with the token,
+     page by page (the API's cursor in its answer: rest_api paging);
   3. a second run asks only for what's new past the cursor, and merges it
      (a lead changed, one added);
   4. alice (a reader of sales' listed tables) can't read it;
@@ -56,11 +57,13 @@ DAG, TABLE = "import_sales_crm", "crm_leads"
 
 
 class CRM(BaseHTTPRequestHandler):
-    """GET /v1/leads?since=<time>: the leads changed after it, as {"data": [...]}."""
+    """GET /v1/leads?since=<time>: the leads changed after it, two to a page, as
+    {"data": [...], "nextCursor": <the next page's, or null>}; ?cursor= asks for that page."""
     leads = [{"id": 1, "name": "Ada", "updated_at": "2026-10-01T10:00:00Z"},
              {"id": 2, "name": "Grace", "updated_at": "2026-10-02T10:00:00Z"},
              {"id": 3, "name": "Edsger", "updated_at": "2026-10-03T10:00:00Z"}]
     asked = []   # (since, signed in)
+    pages = []   # the cursor each request asked with ("" for the first page)
     down = False
 
     def log_message(self, *args):
@@ -69,12 +72,16 @@ class CRM(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlparse(self.path)
         since = parse_qs(url.query).get("since", [""])[0]
+        cursor = parse_qs(url.query).get("cursor", [""])[0]
         CRM.asked.append((since, self.headers.get("Authorization") == f"Bearer {TOKEN}"))
+        CRM.pages.append(cursor)
         if CRM.down or url.path != "/v1/leads":
             self.send_response(503 if CRM.down else 404)
             self.end_headers()
             return
-        body = json.dumps({"data": [x for x in CRM.leads if x["updated_at"] > since]}).encode()
+        changed = sorted((x for x in CRM.leads if x["updated_at"] > since), key=lambda x: x["updated_at"])
+        start = int(cursor or 0)
+        body = json.dumps({"data": changed[start:start + 2], "nextCursor": str(start + 2) if start + 2 < len(changed) else None}).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
@@ -221,7 +228,8 @@ def main():
         "name": "crm", "source": "rest_api", "connection": CONNECTION, "schedule": "0 0 1 1 *",   # by hand here
         "api": {"baseUrl": f"http://{here}:{PORT}/v1", "resources": [{
             "name": "leads", "path": "leads", "dataSelector": "data", "primaryKey": "id",
-            "cursor": "updated_at", "cursorParam": "since", "cursorStart": "2026-01-01T00:00:00Z"}]}}]}}
+            "cursor": "updated_at", "cursorParam": "since", "cursorStart": "2026-01-01T00:00:00Z",
+            "paging": {"type": "cursor", "next": "nextCursor", "param": "cursor"}}]}}]}}
     try:
         # 1. The import, a pipeline of sales'.
         r = bob.put(url, data=json.dumps(spec), timeout=30)
@@ -230,11 +238,13 @@ def main():
         check("... and it's one of sales' pipelines", found is not None, found)
 
         # 2. A first run.
+        CRM.pages.clear()
         state = run(bob)
         check("a run copies the leads into sales.crm_leads", state == "success" and rows() == [[1, "Ada"], [2, "Grace"], [3, "Edsger"]],
               f"{state}: {rows()}")
         check("... signed in with the import's token, asking from the cursor's start",
               CRM.asked and all(signed for _, signed in CRM.asked) and CRM.asked[0][0] == "2026-01-01T00:00:00Z", CRM.asked[:3])
+        check("... page by page, following the answer's nextCursor (two leads to a page)", CRM.pages[:2] == ["", "2"], CRM.pages[:4])
 
         # 3. Only what's new, merged.
         CRM.asked.clear()

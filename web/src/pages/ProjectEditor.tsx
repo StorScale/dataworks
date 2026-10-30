@@ -270,6 +270,21 @@ export default function ProjectEditor() {
                           <input value={r.cursor ?? ""} placeholder="cursor: updated_at" style={{ width: 150 }} aria-label="Cursor" onChange={(e) => setResource(i, k, { cursor: e.target.value || undefined })} />
                           <input value={r.cursorParam ?? ""} placeholder="its parameter: since" style={{ width: 150 }} aria-label="Cursor parameter" onChange={(e) => setResource(i, k, { cursorParam: e.target.value || undefined })} />
                           <input value={r.cursorStart ?? ""} placeholder="from: 2026-01-01" style={{ width: 140 }} aria-label="Cursor start" onChange={(e) => setResource(i, k, { cursorStart: e.target.value || undefined })} />
+                          <select value={r.paging?.type ?? ""} aria-label="Paging" title="How the answer comes in pages"
+                            onChange={(e) => setResource(i, k, { paging: e.target.value ? { type: e.target.value as "cursor" | "link" | "single", ...(e.target.value === "cursor" ? { next: "nextCursor", param: "cursor" } : e.target.value === "link" ? { next: "next" } : {}) } : undefined })}>
+                            <option value="">pages: as dlt finds them</option>
+                            <option value="cursor">pages: a cursor in the answer</option>
+                            <option value="link">pages: a next URL in the answer</option>
+                            <option value="single">one page</option>
+                          </select>
+                          {(r.paging?.type === "cursor" || r.paging?.type === "link") && (
+                            <input value={r.paging.next ?? ""} placeholder={r.paging.type === "cursor" ? "the cursor in the answer: nextCursor" : "the URL in the answer: next"} style={{ width: 200 }} aria-label="Next page"
+                              onChange={(e) => setResource(i, k, { paging: { ...r.paging!, next: e.target.value } })} />
+                          )}
+                          {r.paging?.type === "cursor" && (
+                            <input value={r.paging.param ?? ""} placeholder="sent back as: cursor" style={{ width: 150 }} aria-label="Paging parameter"
+                              onChange={(e) => setResource(i, k, { paging: { ...r.paging!, param: e.target.value } })} />
+                          )}
                           <button className="btn" onClick={() => setImport(i, { api: { ...im.api!, resources: im.api!.resources.filter((_, j) => j !== k) } })}>Remove</button>
                         </div>
                       ))}

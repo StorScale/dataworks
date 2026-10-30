@@ -209,7 +209,8 @@ dlt's `rest_api` source: each resource is a path under the API's base address an
     "baseUrl": "https://crm.example.com/v1",
     "resources": [
       {"name": "leads", "path": "leads", "dataSelector": "data", "primaryKey": "id",
-       "cursor": "updated_at", "cursorParam": "since", "cursorStart": "2026-01-01T00:00:00Z"}
+       "cursor": "updated_at", "cursorParam": "since", "cursorStart": "2026-01-01T00:00:00Z",
+       "paging": {"type": "cursor", "next": "nextCursor", "param": "cursor"}}
     ]
   }
 }
@@ -223,15 +224,17 @@ dlt's `rest_api` source: each resource is a path under the API's base address an
 | `resources[].dataSelector` | A JSONPath to the list in the answer (`data`), when it isn't the answer itself |
 | `resources[].primaryKey` | Merged on it |
 | `resources[].cursor`, `cursorParam`, `cursorStart` | The objects' field that grows (`updated_at`, an ID); the query parameter the API takes it in (`since`); the first value asked for. All three or none |
+| `resources[].paging` | How the answer comes in pages. `{"type": "cursor", "next": "nextCursor", "param": "cursor"}`: the next page's cursor is in the answer at `next` (a JSONPath), and goes back as the query parameter `param`; the last page's is null. `{"type": "link", "next": "next"}`: the next page's URL is in the answer at `next`. `{"type": "single"}`: one page. None: as dlt finds them, which it does for a `Link` header or a `next` URL, **not for a cursor**: such an API, unpaged here, gives its first page alone |
 
 ### How it behaves
 
-The first run asks for `?since=<cursorStart>`; each run after asks from the largest `updated_at` it saw. [The imports suite](../../stack/tests/imports.py) shows it: a lead changed and one added reach `crm_leads` merged, none twice.
+The first run asks for `?since=<cursorStart>`; each run after asks from the largest `updated_at` it saw. With paging, each page is asked for with the cursor the last one gave (`?since=…&cursor=2`), until it gives none. [The imports suite](../../stack/tests/imports.py) shows it: a lead changed and one added reach `crm_leads` merged, none twice.
 
 ### Limits and gotchas
 
 - "imports: crm: a rest_api import has an api: its baseUrl (http or https) and its resources".
 - "imports: crm: leads: a cursor names its field, its query parameter and where it starts".
+- "imports: crm: leads: cursor paging names where the next page's cursor is in the answer (next: nextCursor) and the query parameter it goes back in (param: cursor)"; "… the paging's parameter since is the cursor's too: one is the page, the other where the copy got to".
 - The token's connection must be of kind `api` with a `token`; the operator otherwise says "import crm: its connection has no token".
 
 ---
