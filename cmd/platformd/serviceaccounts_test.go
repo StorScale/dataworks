@@ -85,6 +85,9 @@ func TestServiceAccountsAreApprovedByAnotherAdministrator(t *testing.T) {
 	if code, body := call(crm, "GET", "/api/projects/sales/serviceaccounts", ""); code != http.StatusOK {
 		t.Errorf("the service account reads its project: %d %s", code, body)
 	}
+	if code, body := call(crm, "GET", "/api/session", ""); code != http.StatusOK || !strings.Contains(body, crm) {
+		t.Errorf("the service account's session (who it is): %d %s", code, body)
+	}
 	if code, _ := call("service-account-platform-operator", "GET", "/api/projects/sales/serviceaccounts", ""); code != http.StatusForbidden {
 		t.Errorf("a client that isn't a project's service account: %d, want 403", code)
 	}

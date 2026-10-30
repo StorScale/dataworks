@@ -43,13 +43,19 @@ func isServiceAccount(u user) bool {
 	return strings.HasPrefix(u.Username, "service-account-svc-")
 }
 
+// mayUse says whether someone may use the platform: in one of its groups,
+// or a project's service account.
+func (s *server) mayUse(u user) bool {
+	return s.allowed(u.Groups) || isServiceAccount(u)
+}
+
 // signedIn is the session of someone allowed in, or writes the refusal.
 func (s *server) signedIn(w http.ResponseWriter, r *http.Request) *session {
 	sess := s.session(r)
 	switch {
 	case sess == nil:
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"login": "/auth/login"})
-	case !s.allowed(sess.User.Groups) && !isServiceAccount(sess.User):
+	case !s.mayUse(sess.User):
 		s.fail(w, r, http.StatusForbidden, "no access")
 	case s.store == nil:
 		s.fail(w, r, http.StatusServiceUnavailable, "projects aren't set up (no STORE_URL)")

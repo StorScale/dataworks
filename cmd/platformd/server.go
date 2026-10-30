@@ -391,7 +391,7 @@ func (s *server) handleSession(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"login": "/auth/login"})
 		return
 	}
-	if !s.allowed(sess.User.Groups) {
+	if !s.mayUse(sess.User) {
 		writeJSON(w, http.StatusForbidden, map[string]any{"user": sess.User,
 			"error": "Your account isn't in a group that may use " + s.brand.title + " (" + strings.Join(s.cfg.Groups, ", ") + ")."})
 		return
