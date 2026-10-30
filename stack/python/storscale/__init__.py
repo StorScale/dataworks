@@ -21,7 +21,7 @@ from urllib.parse import quote
 import requests
 
 __all__ = ["Platform", "Error", "Refused"]
-__version__ = "0.35.0"
+__version__ = "0.36.0"
 
 REALM = "lakehouse"
 PUBLIC_CLIENT = "storscale-agent"   # the realm's public client: a person's sign-in, by device code or name and password

@@ -4,8 +4,8 @@ description: >-
   DataWorks on Kubernetes: projects, a lakehouse (Buckets, Nessie, Trino, Ranger),
   notebooks, dashboards, pipelines, a catalog and a semantic layer, with one sign-in.
 type: application
-version: 0.35.0
-appVersion: "0.35.0"
+version: 0.36.0
+appVersion: "0.36.0"
 home: https://storscale.io
 sources:
   - https://github.com/StorScale/dataworks
