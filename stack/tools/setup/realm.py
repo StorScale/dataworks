@@ -28,7 +28,9 @@ neither, but one the install asks for: sign-in with the company's Entra ID
     up to date at each sign-in;
   - their groups from the app registration's roles (the token's roles
     claim), as ENTRA_ROLES maps them ({"Analyst": ["analysts"], ...}), set at
-    each sign-in: a role taken away in Entra takes its groups away.
+    each sign-in: a role taken away in Entra takes its groups away;
+  - with ENTRA_ON_BEHALF_OF, the JWT authorization grant from it, for
+    applications acting for the people signed in to them (on_behalf_of).
 
 Mappers someone added to it stay; those the platform made and the mapping no
 longer names go.
@@ -175,6 +177,19 @@ def entra_mappers():
     return out
 
 
+def on_behalf_of():
+    """The provider's JWT authorization grant (RFC 7523), when ENTRA_ON_BEHALF_OF is true: an
+    application people sign in to through Entra (a CRM) gets a token for the platform's app on their
+    behalf (Entra's on-behalf-of) and a project's service account exchanges it for theirs. Entra's
+    token has the app as its audience (the provider's client ID), no jti (so it may be used again),
+    and lives an hour or more (ENTRA_ON_BEHALF_OF_MAX_SECONDS). Off, the grant is off."""
+    if (env.get("ENTRA_ON_BEHALF_OF") or "").lower() != "true":
+        return {"jwtAuthorizationGrantEnabled": "false"}
+    return {"jwtAuthorizationGrantEnabled": "true", "allowClientIdAsAudience": "true",
+            "jwtAuthorizationGrantAssertionReuseAllowed": "true",
+            "jwtAuthorizationGrantMaxAllowedAssertionExpiration": env.get("ENTRA_ON_BEHALF_OF_MAX_SECONDS") or "5400"}
+
+
 def apply_entra(kc):
     """Sign-in with Entra ID, when the install names its tenant (ENTRA_AUTHORITY)."""
     authority = (env.get("ENTRA_AUTHORITY") or "").rstrip("/")
@@ -194,7 +209,8 @@ def apply_entra(kc):
                        "authorizationUrl": d["authorization_endpoint"], "tokenUrl": d["token_endpoint"],
                        "jwksUrl": d["jwks_uri"], "logoutUrl": d.get("end_session_endpoint", ""),
                        "useJwksUrl": "true", "validateSignature": "true", "pkceEnabled": "true", "pkceMethod": "S256",
-                       "defaultScope": "openid profile email", "disableUserInfo": "true", "syncMode": "FORCE"}}
+                       "defaultScope": "openid profile email", "disableUserInfo": "true", "syncMode": "FORCE",
+                       **on_behalf_of()}}
     have = kc("GET", f"/identity-provider/instances/{ENTRA}")
     if have.status_code == 404:
         kc("POST", "/identity-provider/instances", json=want)

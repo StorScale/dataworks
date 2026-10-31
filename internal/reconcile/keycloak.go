@@ -209,14 +209,25 @@ func (k *Keycloak) ensurePipelinesClient(ctx context.Context, clientID, name, se
 
 // ensureAgentClient is an agent's client (12.2): confidential, client
 // credentials, with the pipelines' mappers and the MCP server's audience.
-func (k *Keycloak) ensureAgentClient(ctx context.Context, clientID, name, secret, platformURL string) error {
+// EntraAlias is the realm's identity provider for Entra ID (the setup's realm.py makes it).
+const EntraAlias = "entra"
+
+// ensureAgentClient keeps an agent's or a service account's confidential
+// client. onBehalfOf: it may also exchange a person's Entra token (for the
+// platform's app, got on their behalf) for theirs, by Keycloak's JWT
+// authorization grant from the entra provider alone; otherwise it may not.
+func (k *Keycloak) ensureAgentClient(ctx context.Context, clientID, name, secret, platformURL string, onBehalfOf ...bool) error {
 	mappers := append(append([]map[string]any{}, pipelinesMappers...), map[string]any{
 		"name": "audience: the MCP server", "protocol": "openid-connect", "protocolMapper": "oidc-audience-mapper",
 		"config": map[string]string{"included.custom.audience": strings.TrimRight(platformURL, "/") + "/mcp",
 			"access.token.claim": "true", "id.token.claim": "false"}})
 	rep := map[string]any{"clientId": clientID, "name": name, "enabled": true, "publicClient": false,
 		"clientAuthenticatorType": "client-secret", "secret": secret, "standardFlowEnabled": false,
-		"directAccessGrantsEnabled": false, "serviceAccountsEnabled": true, "protocolMappers": mappers}
+		"directAccessGrantsEnabled": false, "serviceAccountsEnabled": true, "protocolMappers": mappers,
+		"attributes": map[string]string{"oauth2.jwt.authorization.grant.enabled": "false", "oauth2.jwt.authorization.grant.idp": ""}}
+	if len(onBehalfOf) > 0 && onBehalfOf[0] {
+		rep["attributes"] = map[string]string{"oauth2.jwt.authorization.grant.enabled": "true", "oauth2.jwt.authorization.grant.idp": EntraAlias}
+	}
 	id, err := k.clientUUID(ctx, clientID)
 	if err != nil {
 		return err

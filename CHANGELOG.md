@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **An application acting for the people signed in to it** (a service account's `onBehalfOf`, `sso.entra.onBehalfOf`): an application people sign in to through Entra ID (the CRM) asks Entra for a token for the platform's app on a person's behalf (OAuth's on-behalf-of), and its project's service account exchanges that with Keycloak (the JWT authorization grant, from the `entra` provider) for the person's own token: their membership, their rules, their row filters and masks. platformd takes such a token (issued to a service account's client) for that project alone, and only while the account is approved to act for people; elsewhere it's refused and audited. The realm setup turns the grant on for the `entra` provider (the app registration's client ID as the audience, Entra's tokens' lifetime, no `jti`); the operator turns it on for the clients of service accounts that may act for people, and off for all others. Proven with a real Entra account against dataworks: the CRM's app's on-behalf-of token became the person's token, and a metric came back under their rules.
+
 ### Fixed
 - **A secret shown once fits its card:** approving a service account (or an agent) showed its client, secret and token URL run together in one line of a banner whose parts were laid out side by side, so the long values broke the card. Each is now a row of its own, label, value (wrapping within the card) and a Copy button, at a phone's width too.
 

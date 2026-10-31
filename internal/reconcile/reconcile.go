@@ -421,7 +421,7 @@ func (r *Reconciler) members(ctx context.Context, p *project.Project) (people, e
 			continue // approved, its secret not kept yet (or gone): no client
 		}
 		clientID := sa.ClientID(p.Metadata.Name)
-		if err := r.Keycloak.ensureAgentClient(ctx, clientID, sa.Name+", a service account of "+p.Metadata.Name, sec["secret"], r.PlatformURL); err != nil {
+		if err := r.Keycloak.ensureAgentClient(ctx, clientID, sa.Name+", a service account of "+p.Metadata.Name, sec["secret"], r.PlatformURL, sa.OnBehalfOf); err != nil {
 			return out, err
 		}
 		u, err := r.Keycloak.serviceAccount(ctx, clientID)

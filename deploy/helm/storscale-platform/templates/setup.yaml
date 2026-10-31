@@ -44,6 +44,8 @@ spec:
             - {name: ENTRA_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: {{ .secretName | quote }}, key: client_secret}}}
             - {name: ENTRA_DISPLAY_NAME, value: {{ .displayName | quote }}}
             - {name: ENTRA_ROLES, value: {{ .roles | toJson | quote }}}
+            - {name: ENTRA_ON_BEHALF_OF, value: {{ (.onBehalfOf | default dict).enabled | default false | toString | quote }}}
+            - {name: ENTRA_ON_BEHALF_OF_MAX_SECONDS, value: {{ (.onBehalfOf | default dict).maxAssertionSeconds | default 5400 | toString | quote }}}
             {{- end }}{{ end }}
           volumeMounts:
             - {name: files-tools, mountPath: /tools}

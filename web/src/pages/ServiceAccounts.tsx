@@ -51,6 +51,7 @@ export default function ServiceAccounts({ project, user, roles }: { project: str
           <div key={s.name} className="row small" style={{ flexWrap: "wrap", gap: 8, alignItems: "center" }} data-testid={`service-account-${s.name}`}>
             <span className="mono"><strong>{s.name}</strong></span>
             <span className={`pill ${s.role === "editor" ? "blue" : ""}`}>{s.role}</span>
+            {s.onBehalfOf && <span className="pill" title="It may act for people signed in to it through Entra ID, with their token, for this project alone">acts for people</span>}
             <span className={"pill " + (s.approved ? "green" : "amber")}>{s.approved ? `approved by ${s.approvedBy}` : "awaiting an administrator's approval"}</span>
             <span className="muted">{s.description ? `${s.description}; ` : ""}owner {s.owner}; client <span className="mono">{s.clientId}</span></span>
             <span style={{ marginLeft: "auto" }} className="row">
@@ -76,13 +77,14 @@ function Register({ project, roles, taken, onDone }: { project: string; roles: s
   const [name, setName] = useState("");
   const [role, setRole] = useState("reader");
   const [description, setDescription] = useState("");
+  const [onBehalfOf, setOnBehalfOf] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const ok = /^[a-z][a-z0-9-]{0,30}$/.test(name) && !taken.includes(name);
   const save = async () => {
     setBusy(true);
     setError(undefined);
-    try { await putServiceAccount(project, { name, role, description: description || undefined }); onDone(); }
+    try { await putServiceAccount(project, { name, role, description: description || undefined, onBehalfOf }); onDone(); }
     catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
   return (
@@ -95,6 +97,10 @@ function Register({ project, roles, taken, onDone }: { project: string; roles: s
         </select></label>
         <label className="grow">What it's for<input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="The CRM: keeps the sales metrics" /></label>
       </div>
+      <label className="row small" style={{ gap: 8 }}>
+        <input type="checkbox" checked={onBehalfOf} onChange={(e) => setOnBehalfOf(e.target.checked)} data-testid="service-account-on-behalf" />
+        It may also act for the people who sign in to it through Entra ID, with their own token and rules, in this project alone
+      </label>
       <div className="form-actions">
         <button className="btn primary" type="submit" disabled={!ok || busy} data-testid="register-service-account">{busy ? "Saving…" : "Register"}</button>
         <button className="btn" type="button" onClick={onDone}>Cancel</button>

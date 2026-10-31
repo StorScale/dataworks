@@ -540,6 +540,7 @@ spec:
                       description: {type: string}
                       owner: {type: string}
                       role: {type: string, pattern: '^[a-z][a-z0-9-]{1,23}$'}
+                      onBehalfOf: {type: boolean, description: "It may act for people who sign in to it through Entra ID (on-behalf-of, then Keycloak's JWT authorization grant): their token, for this project alone."}
                       registeredBy: {type: string}
                       registeredAt: {type: string}
                       approvedBy: {type: string}

@@ -279,6 +279,36 @@ In Python: `storscale.Platform(url, client_id="svc-crm-provisioner", client_secr
 - The platform's audit log records `serviceaccount.registered`, `.approved`, `.rotated` and `.revoked`, and refusals (approving
   one's own, approving without being an administrator).
 
+### Acting for the people signed in to it (onBehalfOf)
+
+An application people sign in to through Entra ID (the CRM) can also ask for the project's data **as each of them**, under their
+own rules, in place of its own: a forecast panel showing a seller their own pipeline, a manager their team's.
+
+- **Set up, once per install:** in Entra, the platform's app registration exposes a scope (`access_as_user`) and issues v2 access
+  tokens, and the application's own app registration is granted delegated permission to it; the chart's `sso.entra.onBehalfOf`
+  turns Keycloak's side on ([Operating](17-operating.md)).
+- **Per project:** the service account is registered with **It may also act for the people who sign in to it through Entra ID**
+  (`"onBehalfOf": true`), and approved by an administrator as any service account is (a change to it needs approval again).
+- **How the application does it:** for the person signed in to it, it asks Entra for a token for the platform's app on their
+  behalf (OAuth's on-behalf-of, scope `api://<the platform's app>/access_as_user`), then gives that to Keycloak with its own
+  client ID and secret:
+
+```bash
+curl -s https://<platform>/sso/realms/lakehouse/protocol/openid-connect/token \
+  -d grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer -d assertion=$ENTRA_ON_BEHALF_OF_TOKEN \
+  -d client_id=svc-crm-crm -d client_secret=$SECRET -d scope=openid
+```
+
+  The answer is a token **for that person** (their username and groups), which the API takes as theirs: their membership, their
+  readers' rules, their row filters and masks.
+- **For this project alone.** platformd refuses such a token (its `azp` the service account's client) anywhere but the project's
+  routes (`/api/projects/<project>/...`) and `/api/session`, and while the account is approved to act for people: "this token was
+  got on alice's behalf by svc-crm-crm, a project's service account: it's for that project alone". The audit log records each
+  refusal (`onbehalf.refused`).
+- **People must have signed in to the platform once:** Keycloak finds them by their Entra link, made then. Until they have, the
+  exchange answers "User not found": the application can tell them to open the platform once.
+- The token lasts as long as the platform's do (minutes), with no refresh token: the application asks again.
+
 ### Limits and gotchas
 
 - "a service account is approved by an administrator other than the one who registered it"; "… only administrators make: an
