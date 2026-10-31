@@ -154,6 +154,16 @@ sso:
       Analyst: [analysts]
       Engineer: [engineers]
       Administrator: [engineers]   # the administrators' groups (PLATFORM_ADMIN_GROUPS: engineers)
+    # Applications people sign in to through Entra (a CRM) acting for them here:
+    # the app gets a token for this app registration on their behalf (Entra's
+    # on-behalf-of: expose a scope on it, access_as_user, with v2 access
+    # tokens, and grant the application delegated permission to it), and a
+    # project's service account with onBehalfOf exchanges it for theirs
+    # (Keycloak's JWT authorization grant). Their token is for that project
+    # alone. Users must have signed in here once (their Entra link).
+    onBehalfOf:
+      enabled: false
+      maxAssertionSeconds: 5400   # Entra's tokens live 60 to 90 minutes
 
 # The example people (alice, bob, carol) and their groups, from the realm.
 examples:

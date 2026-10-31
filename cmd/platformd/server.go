@@ -42,6 +42,10 @@ type session struct {
 	IDToken string        // for Keycloak's logout (id_token_hint)
 	Token   *oauth2.Token // their access token (refreshed as needed), for calls made as them
 	Expires time.Time
+	// For: the project service account's client that got this token on the
+	// person's behalf (its azp), or "": such a token is for that project
+	// alone (fenceOnBehalf).
+	For string
 }
 
 type user struct {
@@ -316,7 +320,7 @@ func (s *server) routes() http.Handler {
 		s.fail(w, r, http.StatusNotFound, "not found")
 	})
 	mux.Handle("/", s.web())
-	return securityHeaders(requestIDs(mux))
+	return securityHeaders(requestIDs(s.fenceOnBehalf(mux)))
 }
 
 // handleLogin sends the browser to Keycloak.
@@ -455,7 +459,7 @@ func (s *server) bearerSession(r *http.Request) *session {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		if sess := s.sessions[name]; err == nil && sess != nil {
-			return &session{User: sess.User, Token: &oauth2.Token{AccessToken: raw}, Expires: sess.Expires}
+			return &session{User: sess.User, Token: &oauth2.Token{AccessToken: raw}, Expires: sess.Expires, For: sess.For}
 		}
 		return nil
 	}
@@ -471,11 +475,18 @@ func (s *server) bearerSession(r *http.Request) *session {
 		Name     string   `json:"name"`
 		Email    string   `json:"email"`
 		Groups   []string `json:"groups"`
+		Azp      string   `json:"azp"`
 	}
 	if tok.Claims(&claims) != nil || claims.Username == "" {
 		return nil
 	}
-	return &session{User: user{claims.Username, claims.Name, claims.Email, claims.Groups}, Token: &oauth2.Token{AccessToken: raw}, Expires: tok.Expiry}
+	sess := &session{User: user{claims.Username, claims.Name, claims.Email, claims.Groups}, Token: &oauth2.Token{AccessToken: raw}, Expires: tok.Expiry}
+	// A person's token that a project's service account got for them (on
+	// their behalf, Keycloak's JWT authorization grant): not the account's own.
+	if strings.HasPrefix(claims.Azp, "svc-") && claims.Username != "service-account-"+claims.Azp {
+		sess.For = claims.Azp
+	}
+	return sess
 }
 
 func (s *server) allowed(groups []string) bool {

@@ -493,7 +493,7 @@ export const removeAgent = (name: string, agent: string) => api<void>("DELETE", 
 
 // --- A project's service accounts: applications' identities in it ----------------------
 export type ServiceAccountView = {
-  name: string; description?: string; owner: string; role: string;
+  name: string; description?: string; owner: string; role: string; onBehalfOf?: boolean;
   registeredBy?: string; registeredAt?: string; approvedBy?: string; approvedAt?: string;
   clientId: string; username: string; connection: string; approved: boolean; tokenUrl: string;
 };
@@ -502,8 +502,8 @@ const svcPath = (name: string, account?: string) =>
   `/api/projects/${encodeURIComponent(name)}/serviceaccounts` + (account ? `/${encodeURIComponent(account)}` : "");
 export const getServiceAccounts = (name: string) =>
   api<{ serviceAccounts: ServiceAccountView[]; canEdit: boolean; canApprove: boolean }>("GET", svcPath(name));
-export const putServiceAccount = (name: string, a: { name: string; description?: string; owner?: string; role: string }) =>
-  api<ServiceAccountView[]>("PUT", svcPath(name, a.name), { description: a.description, owner: a.owner, role: a.role });
+export const putServiceAccount = (name: string, a: { name: string; description?: string; owner?: string; role: string; onBehalfOf?: boolean }) =>
+  api<ServiceAccountView[]>("PUT", svcPath(name, a.name), { description: a.description, owner: a.owner, role: a.role, onBehalfOf: a.onBehalfOf || undefined });
 export const approveServiceAccount = (name: string, account: string) => api<ServiceAccountSecret>("POST", svcPath(name, account) + "/approve", {});
 export const rotateServiceAccount = (name: string, account: string) => api<ServiceAccountSecret>("POST", svcPath(name, account) + "/rotate", {});
 export const removeServiceAccount = (name: string, account: string) => api<void>("DELETE", svcPath(name, account));

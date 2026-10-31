@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -119,4 +120,54 @@ func TestServiceAccountsAreApprovedByAnotherAdministrator(t *testing.T) {
 func editorRole() project.Role {
 	r, _ := (&project.Project{}).RoleOf(project.Editor)
 	return r
+}
+
+// A person's token got on their behalf by a project's service account (azp
+// svc-sales-crm, Keycloak's JWT authorization grant) reaches that project's
+// routes alone, and only while the account is approved to act for people.
+func TestATokenGotOnSomeonesBehalfIsForItsProjectAlone(t *testing.T) {
+	spec := func(onBehalf bool) *project.Project {
+		p, err := project.Parse([]byte(fmt.Sprintf(`{"metadata":{"name":"sales"},"spec":{"members":[{"user":"alice","role":"editor"}],"tables":{},
+			"serviceAccounts":[{"name":"crm","owner":"bob","role":"editor","onBehalfOf":%v,"registeredBy":"bob","approvedBy":"dave"}]}}`, onBehalf)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	retail, _ := project.Parse([]byte(`{"metadata":{"name":"retail"},"spec":{"members":[{"user":"alice","role":"editor"}],"tables":{}}}`))
+	members := []project.Person{{Username: "alice", Role: "editor"}}
+	st := &connsKept{projectsKept: projectsKept{statuses: statuses{list: []*project.Status{{Name: "sales", Members: members}, {Name: "retail", Members: members}}},
+		specs: map[string]*project.Project{"sales": spec(true), "retail": retail}}, conns: map[string]store.StoredConnection{}}
+	s := &server{cfg: config{Groups: []string{"analysts", "engineers"}, AdminGroups: []string{"engineers"}}, store: st, now: time.Now,
+		log: slog.New(slog.NewTextHandler(io.Discard, nil)), tokenUser: func(raw string) (string, error) { return raw, nil }, sessions: map[string]*session{
+			"alice":          {User: user{Username: "alice", Groups: []string{"analysts", "sales-editors", "retail-editors"}}, Expires: time.Now().Add(time.Hour)},
+			"alice-from-crm": {User: user{Username: "alice", Groups: []string{"analysts", "sales-editors", "retail-editors"}}, Expires: time.Now().Add(time.Hour), For: "svc-sales-crm"},
+		}}
+	h := s.routes()
+	call := func(who, method, path string) int {
+		r := httptest.NewRequest(method, path, nil)
+		r.Header.Set("Authorization", "Bearer "+who)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code
+	}
+	for _, c := range []struct {
+		who, path string
+		want      int
+	}{
+		{"alice-from-crm", "/api/session", http.StatusOK},
+		{"alice-from-crm", "/api/projects/sales/serviceaccounts", http.StatusOK},
+		{"alice-from-crm", "/api/projects/retail/serviceaccounts", http.StatusForbidden}, // her other project
+		{"alice-from-crm", "/api/projects", http.StatusForbidden},
+		{"alice-from-crm", "/api/products", http.StatusForbidden},
+		{"alice", "/api/projects/retail/serviceaccounts", http.StatusOK}, // her own token, everywhere she is
+	} {
+		if got := call(c.who, "GET", c.path); got != c.want {
+			t.Errorf("%s GET %s: %d, want %d", c.who, c.path, got, c.want)
+		}
+	}
+	st.specs["sales"] = spec(false) // no longer allowed to act for people: refused there too
+	if got := call("alice-from-crm", "GET", "/api/projects/sales/serviceaccounts"); got != http.StatusForbidden {
+		t.Errorf("after onBehalfOf is taken away: %d, want 403", got)
+	}
 }

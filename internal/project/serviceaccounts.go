@@ -25,6 +25,13 @@ type ServiceAccount struct {
 	Description string `json:"description,omitempty"`
 	Owner       string `json:"owner"` // a person: who answers for it
 	Role        string `json:"role"`  // reader, editor or a custom role (16.1)
+	// OnBehalfOf: it may also act for people who sign in to it through Entra
+	// ID, exchanging the token Entra gave it on their behalf (OAuth's
+	// on-behalf-of, for the platform's app) for a token of the platform's for
+	// them (Keycloak's JWT authorization grant). That token is for this
+	// project alone (platformd refuses it anywhere else), and under the
+	// person's own rules there. Needs sso.entra.onBehalfOf on the install.
+	OnBehalfOf bool `json:"onBehalfOf,omitempty"`
 	// The platform's, kept as they were on each save.
 	RegisteredBy string    `json:"registeredBy,omitempty"`
 	RegisteredAt time.Time `json:"registeredAt,omitzero"`
@@ -52,10 +59,26 @@ func (sa ServiceAccount) Username(project string) string {
 func (sa ServiceAccount) Approved() bool { return sa.ApprovedBy != "" }
 
 // Fingerprint is what approval covers: a change to it needs approval again.
-func (sa ServiceAccount) Fingerprint() string { return sa.Owner + "|" + sa.Role }
+func (sa ServiceAccount) Fingerprint() string {
+	return sa.Owner + "|" + sa.Role + "|" + fmt.Sprint(sa.OnBehalfOf)
+}
+
+// ActsFor says whether a client of the project's may act for people: an
+// approved service account of it that may (OnBehalfOf).
+func (p *Project) ActsFor(clientID string) bool {
+	for _, sa := range p.Spec.ServiceAccounts {
+		if sa.ClientID(p.Metadata.Name) == clientID && sa.OnBehalfOf && sa.Approved() {
+			return true
+		}
+	}
+	return false
+}
 
 // String is the service account in words, for the audit log.
 func (sa ServiceAccount) String() string {
+	if sa.OnBehalfOf {
+		return fmt.Sprintf("%s (owner %s; role %s; acts for people signed in through Entra ID)", sa.Name, sa.Owner, sa.Role)
+	}
 	return fmt.Sprintf("%s (owner %s; role %s)", sa.Name, sa.Owner, sa.Role)
 }
 
