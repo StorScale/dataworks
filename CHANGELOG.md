@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+- **A secret shown once fits its card:** approving a service account (or an agent) showed its client, secret and token URL run together in one line of a banner whose parts were laid out side by side, so the long values broke the card. Each is now a row of its own, label, value (wrapping within the card) and a Copy button, at a phone's width too.
+
 ## [0.36.0] - 2026-10-30
 
 Applications as members of a project: service accounts, an application's own identity in one project, in the role chosen, approved by an administrator other than its registrant. A token for a script by a device code, for people who sign in through Entra ID. Adopted tables: another platform's Iceberg tables taken into a project where their files are, followed as that platform writes them. REST API imports follow a cursor's pages; a column's lineage is kept once.

@@ -180,6 +180,11 @@ a.card:hover { border-color: var(--accent); text-decoration: none; }
 .banner.error { background: var(--bad-soft); color: var(--bad-ink); }
 .banner.warn { background: var(--warn-soft); color: var(--warn-ink); }
 .banner.info { background: var(--accent-soft); color: var(--accent-dark); }
+/* A secret shown once: label, value (wrapping anywhere, as a 48-character secret and a token URL can't otherwise), copy. */
+.secret-rows { display: grid; grid-template-columns: max-content minmax(0, 1fr) max-content; gap: 6px 12px; align-items: center; }
+.secret-rows > .mono { overflow-wrap: anywhere; user-select: all; }
+.secret-rows > .btn { width: auto; justify-self: end; }
+@media (max-width: 560px) { .secret-rows { grid-template-columns: minmax(0, 1fr) max-content; } .secret-rows > .small { grid-column: 1 / -1; } }
 .empty { border: 1.5px dashed var(--line); border-radius: var(--radius); padding: 24px; color: var(--muted); text-align: center; }
 .empty.inline { border: 0; padding: 4px 0; text-align: left; font-size: 13px; }
 
