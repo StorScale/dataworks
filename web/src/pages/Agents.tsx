@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useState } from "react";
 import { approveAgent, buildKnowledge, deleteKnowledge, getAgents, getKnowledge, getLLM, getLLMCalls, putAgent, putKnowledge, removeAgent, searchKnowledge, type KnowledgeHit, type LLMUse } from "../api";
 import { Empty, Intro } from "../components";
+import { Copyable } from "./ServiceAccounts";
 import { can, ErrorBanner, Spinner, usePlatform, usePoll, useProject } from "../lib";
 
 // Agents are programs of the project's own (use case 12.2): each with an
@@ -30,9 +31,15 @@ export default function Agents() {
       <ErrorBanner error={error} />
       {secret && (
         <div className="banner info" data-testid="agent-secret">
-          <strong>{secret.agent} is approved.</strong> Its client is <span className="mono">{secret.clientId}</span>, its secret <span className="mono">{secret.secret}</span>
-          {" "}(shown once: give it to the agent now), and it talks to <span className="mono">{secret.mcpUrl}</span> with a token from Keycloak (client credentials).
-          <div><button className="btn small" onClick={() => setSecret(undefined)}>Done</button></div>
+          <div className="stack" style={{ gap: 8, minWidth: 0, flex: 1 }}>
+            <div><strong>{secret.agent} is approved.</strong> Its secret is shown once: give it to the agent now. It talks to the MCP server with a token from Keycloak (client credentials).</div>
+            <div className="secret-rows">
+              <Copyable label="Client ID" value={secret.clientId} />
+              <Copyable label="Secret" value={secret.secret} />
+              <Copyable label="MCP server" value={secret.mcpUrl} />
+            </div>
+            <div><button className="btn small" onClick={() => setSecret(undefined)}>Done</button></div>
+          </div>
         </div>
       )}
       {adding && <AgentForm project={name} tools={[...list.data.tools, ...(list.data.grants ?? [])]} taken={list.data.agents.map((a) => a.name)} owner={user.username} onDone={() => { setAdding(false); list.reload(); }} />}

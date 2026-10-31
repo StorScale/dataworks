@@ -32,11 +32,17 @@ export default function ServiceAccounts({ project, user, roles }: { project: str
         <ErrorBanner error={error} />
         {shown && (
           <div className="banner info" data-testid="service-account-secret">
-            <strong>{shown.account}'s secret</strong>, shown once: give it to the application now. Client <span className="mono">{shown.clientId}</span>,
-            secret <span className="mono">{shown.secret}</span>; it gets a token at <span className="mono">{shown.tokenUrl}</span> with{" "}
-            <span className="mono">grant_type=client_credentials</span>, and calls the API as <span className="mono">{shown.username}</span>.
-            The operator makes its client within a minute.
-            <div><button className="btn small" onClick={() => setShown(undefined)}>Done</button></div>
+            <div className="stack" style={{ gap: 8, minWidth: 0, flex: 1 }}>
+              <div><strong>{shown.account}'s secret, shown once:</strong> give it to the application now. The operator makes its client within a minute.</div>
+              <div className="secret-rows">
+                <Copyable label="Client ID" value={shown.clientId} />
+                <Copyable label="Secret" value={shown.secret!} testid="service-account-secret-value" />
+                <Copyable label="Token URL" value={shown.tokenUrl} />
+                <Copyable label="Signs in as" value={shown.username} />
+              </div>
+              <div className="small">It gets a token at the token URL with <span className="mono">grant_type=client_credentials</span>, its client ID and secret.</div>
+              <div><button className="btn small" onClick={() => setShown(undefined)}>Done</button></div>
+            </div>
           </div>
         )}
         {adding && <Register project={project} roles={roles} taken={serviceAccounts.map((s) => s.name)} onDone={() => { setAdding(false); list.reload(); }} />}
@@ -95,5 +101,22 @@ function Register({ project, roles, taken, onDone }: { project: string; roles: s
         <span className="field-help">You're its owner. Its client is <span className="mono">svc-{project}-{name || "<name>"}</span>.</span>
       </div>
     </form>
+  );
+}
+
+// A value to hand on, with a button to copy it (selecting the text if the browser refuses).
+export function Copyable({ label, value, testid }: { label: string; value: string; testid?: string }) {
+  const [copied, setCopied] = useState(false);
+  const id = `copy-${label.toLowerCase().replace(/\W+/g, "-")}`;
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1500); }
+    catch { const el = document.getElementById(id); if (el) window.getSelection()?.selectAllChildren(el); }
+  };
+  return (
+    <>
+      <span className="small muted">{label}</span>
+      <span id={id} className="mono" data-testid={testid}>{value}</span>
+      <button className="btn small" type="button" onClick={copy}>{copied ? "Copied" : "Copy"}</button>
+    </>
   );
 }
