@@ -72,6 +72,7 @@ export type Spec = {
     reviews?: { gitlab?: string; project?: string; dbt?: string } };
   limits?: { queries?: number; queued?: number; queryMemory?: string; storage?: string };
   notify?: { teams?: string; slack?: string; email?: string[] };
+  llm?: { budget: number };   // USD a month at the LLM gateway: the project's key
   sources?: Source[];
   imports?: Import[];
   deliveries?: { name: string }[];

@@ -203,6 +203,18 @@ export default function ProjectEditor() {
             );
           })()}
 
+          <h2>LLM budget</h2>
+          <p className="field-help">
+            What the project may spend a month at the platform's LLM gateway, in USD: its key, which its flows' model steps, question apps, knowledge banks
+            and questions asked of a model on its behalf use. Empty: no key. The gateway stops answering it at the budget until the 1st of the month (UTC);
+            the project is alerted at 80% and 100%. A changed budget makes a new key, whose spend starts at nothing. Agents have budgets of their own (the Agents tab).
+          </p>
+          <label>USD a month
+            <input type="number" min={0} max={1000000} step="any" style={{ width: 160 }} value={spec.llm?.budget ?? ""} placeholder="none"
+              onChange={(e) => { const v = Number(e.target.value); set({ llm: e.target.value !== "" && v > 0 ? { budget: v } : undefined }); }}
+              data-testid="llm-budget" />
+          </label>
+
           <h2>Alerts</h2>
           <p className="field-help">
             Where the project is told when a pipeline's run fails, a check fails, or a table isn't changed in time.
