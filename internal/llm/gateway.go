@@ -146,8 +146,10 @@ type Call struct {
 	EndTime          time.Time `json:"endTime"`
 	Model            string    `json:"model"`
 	ModelGroup       string    `json:"model_group"`
-	User             string    `json:"user"`
-	Status           string    `json:"status"`
+	// EndUser is whom the call was for: the request's user, which LiteLLM
+	// keeps as end_user (its user is the key's own user_id).
+	EndUser string `json:"end_user"`
+	Status  string `json:"status"`
 }
 
 // Calls are a key's calls between two days (UTC, from and to included), newest first.

@@ -61,7 +61,7 @@ def log_call(info, call_type, body, cost, tokens):
     now = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
     info.setdefault("logs", []).append({"request_id": secrets.token_hex(8), "call_type": call_type, "spend": cost, "total_tokens": tokens,
                                         "prompt_tokens": tokens, "completion_tokens": 0, "startTime": now, "endTime": now,
-                                        "model": body.get("model", "stub"), "model_group": body.get("model", "stub"), "user": body.get("user") or "",
+                                        "model": body.get("model", "stub"), "model_group": body.get("model", "stub"), "user": "", "end_user": body.get("user") or "",
                                         "status": "success"})
     del info["logs"][:-1000]   # the newest thousand a key
 

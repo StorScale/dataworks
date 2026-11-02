@@ -193,7 +193,7 @@ func (s *server) handleLLMCalls(w http.ResponseWriter, r *http.Request) {
 			if status == "" {
 				status = "success"
 			}
-			calls = append(calls, llmCall{At: c.StartTime, Who: whose, User: c.User, Kind: kind, Model: model, Tokens: c.TotalTokens,
+			calls = append(calls, llmCall{At: c.StartTime, Who: whose, User: c.EndUser, Kind: kind, Model: model, Tokens: c.TotalTokens,
 				Cost: c.Spend, Seconds: c.EndTime.Sub(c.StartTime).Seconds(), Status: status})
 		}
 	}
