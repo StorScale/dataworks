@@ -607,8 +607,27 @@ func (s *server) handleProjectUsage(w http.ResponseWriter, r *http.Request) {
 	}
 	t, _ := time.Parse("2006-01", month)
 	prev := s.usageOf(r.Context(), p, t.AddDate(0, -1, 0).Format("2006-01"))
-	writeJSON(w, http.StatusOK, map[string]any{"usage": s.usageOf(r.Context(), p, month), "before": map[string]any{"month": prev.Month, "cost": prev.Cost},
-		"rates": s.cfg.Rates})
+	out := map[string]any{"usage": s.usageOf(r.Context(), p, month), "before": map[string]any{"month": prev.Month, "cost": prev.Cost},
+		"rates": s.cfg.Rates}
+	// The month's model calls by who asked (the request's user, which the
+	// platform's own routes set to the caller), as the gateway's logs keep them.
+	if s.gateway != nil && s.store != nil {
+		to := t.AddDate(0, 1, -1)
+		if now := time.Now().UTC(); to.After(now) {
+			to = now
+		}
+		if !t.After(to) {
+			calls, errs, err := s.llmCalls(r.Context(), p, t, to)
+			if err != nil {
+				errs = append(errs, err.Error())
+			}
+			out["llmByUser"] = sumCalls(calls, func(c llmCall) string { return c.User })
+			if len(errs) > 0 {
+				out["llmErrors"] = errs
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // projectViewable is projectRole, letting the install's usage viewers (and administrators) in without being members.

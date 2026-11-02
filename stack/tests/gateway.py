@@ -136,6 +136,9 @@ def main():
         theirs = wait(lambda: (lambda c: c if "alice" in (c.get("byUser") or {}) else None)(calls()), 120, every=5) or calls()
         check("... the OpenAI route's calls are alice's on the project's model calls, whatever the request said",
               "alice" in (theirs.get("byUser") or {}) and "someone-else" not in (theirs.get("byUser") or {}), sorted(theirs.get("byUser") or {}))
+        month = (bob.get(f"{PLATFORM}/api/projects/{NAME}/usage", timeout=60).json() or {}).get("llmByUser") or {}
+        check("... and on the project's Usage page, the month's model calls by who asked (alice's among them, with their cost)",
+              (month.get("alice") or {}).get("calls", 0) >= 1 and "someone-else" not in month, month)
         check("the project's model calls (12.8): the call, whose key, the model, tokens, cost and time, never the question",
               (seen.get("total") or {}).get("calls", 0) >= 1 and first.get("who") == NAME and first.get("model") and first.get("tokens", 0) > 0
               and "orders came in" not in json.dumps(seen), (seen.get("total"), first, seen.get("errors")))

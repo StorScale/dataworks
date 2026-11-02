@@ -74,6 +74,19 @@ export function ProjectUsage() {
                   <td>{money((x.cpuSeconds / 3600) * data.rates.cpuHour, u.currency)}</td></tr>))}</tbody>
             </table>)}
         </div>
+        {data.llmByUser && (
+          <div className="card stack" style={{ gap: 8 }}>
+            <h2>Who asked the model</h2>
+            {Object.keys(data.llmByUser).length === 0 ? <Empty inline>No model calls this month.</Empty> : (
+              <table className="t" data-testid="usage-llm-users">
+                <thead><tr><th>Who</th><th>Calls</th><th>Tokens</th><th>Cost</th></tr></thead>
+                <tbody>{Object.entries(data.llmByUser).sort((a, b) => b[1].cost - a[1].cost).slice(0, 15).map(([who, x]) => (
+                  <tr key={who}><td className={who ? "mono small" : "muted small"}>{who || "no one named (calls on a key directly)"}</td><td>{x.calls}</td>
+                    <td>{x.tokens.toLocaleString()}</td><td>{money(x.cost, u.currency)}</td></tr>))}</tbody>
+              </table>)}
+            {(data.llmErrors ?? []).length > 0 && <div className="small muted">The gateway didn't answer for: {(data.llmErrors ?? []).join("; ")}</div>}
+            <div className="small muted">From the gateway's call logs. Through the platform (its OpenAI route, agents, the llm step) a call is the signed-in caller's; a call made on a key directly names whoever the request said, or no one.</div>
+          </div>)}
         {(u.trino.top ?? []).length > 0 && (
           <div className="card stack" style={{ gap: 8 }}>
             <h2>The costliest queries</h2>

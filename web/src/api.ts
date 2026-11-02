@@ -553,7 +553,7 @@ export type UsageMonth = {
 };
 export type Rates = { currency: string; cpuHour: number; storageGBMonth: number };
 export const getProjectUsage = (name: string, month?: string) =>
-  api<{ usage: UsageMonth; before: { month: string; cost: UsageMonth["cost"] }; rates: Rates }>("GET", `/api/projects/${encodeURIComponent(name)}/usage${month ? `?month=${month}` : ""}`);
+  api<{ usage: UsageMonth; before: { month: string; cost: UsageMonth["cost"] }; rates: Rates; llmByUser?: Record<string, LLMTotal>; llmErrors?: string[] }>("GET", `/api/projects/${encodeURIComponent(name)}/usage${month ? `?month=${month}` : ""}`);
 export const getUsage = (month?: string) => api<{ month: string; projects: (UsageMonth & { before: number })[]; rates: Rates }>("GET", `/api/usage${month ? `?month=${month}` : ""}`);
 
 // --- Governance across projects (use case 12.9) ---------------------------------------

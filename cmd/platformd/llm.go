@@ -155,10 +155,34 @@ func (s *server) handleLLMCalls(w http.ResponseWriter, r *http.Request) {
 	}
 	to := time.Now().UTC()
 	from := to.AddDate(0, 0, -(days - 1))
-	conns, err := s.store.Connections(r.Context(), p.Metadata.Name)
+	calls, errs, err := s.llmCalls(r.Context(), p, from, to)
 	if err != nil {
 		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
+	}
+	sum := func(key func(llmCall) string) map[string]*llmTotal { return sumCalls(calls, key) }
+	all := sum(func(llmCall) string { return "all" })["all"]
+	if all == nil {
+		all = &llmTotal{}
+	}
+	recent := calls
+	if len(recent) > 200 {
+		recent = recent[:200]
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"days": days, "total": all, "calls": recent, "errors": errs,
+		"byDay":   sum(func(c llmCall) string { return c.At.Format("2006-01-02") }),
+		"byUser":  sum(func(c llmCall) string { return c.User }),
+		"byModel": sum(func(c llmCall) string { return c.Model }),
+		"byWho":   sum(func(c llmCall) string { return c.Who })})
+}
+
+// llmCalls are a project's calls of the gateway between two days (UTC, both
+// included), on its key and its agents' keys, newest first; errs are the keys
+// the gateway couldn't answer for.
+func (s *server) llmCalls(ctx context.Context, p *project.Project, from, to time.Time) (calls []llmCall, errs []string, err error) {
+	conns, err := s.store.Connections(ctx, p.Metadata.Name)
+	if err != nil {
+		return nil, nil, err
 	}
 	keys := map[string]string{} // whose -> key
 	for _, c := range conns {
@@ -172,10 +196,9 @@ func (s *server) handleLLMCalls(w http.ResponseWriter, r *http.Request) {
 			keys[whose] = k
 		}
 	}
-	calls := []llmCall{}
-	var errs []string
+	calls = []llmCall{}
 	for whose, key := range keys {
-		cs, err := s.gateway.Calls(r.Context(), key, from, to)
+		cs, err := s.gateway.Calls(ctx, key, from, to)
 		if err != nil {
 			errs = append(errs, whose+": "+err.Error())
 			continue
@@ -198,35 +221,27 @@ func (s *server) handleLLMCalls(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sort.Slice(calls, func(i, j int) bool { return calls[i].At.After(calls[j].At) })
-	type total struct {
-		Calls  int     `json:"calls"`
-		Tokens int     `json:"tokens"`
-		Cost   float64 `json:"cost"`
-	}
-	sum := func(key func(llmCall) string) map[string]*total {
-		out := map[string]*total{}
-		for _, c := range calls {
-			k := key(c)
-			if out[k] == nil {
-				out[k] = &total{}
-			}
-			out[k].Calls++
-			out[k].Tokens += c.Tokens
-			out[k].Cost += c.Cost
+	return calls, errs, nil
+}
+
+// llmTotal is some calls' count, tokens and cost.
+type llmTotal struct {
+	Calls  int     `json:"calls"`
+	Tokens int     `json:"tokens"`
+	Cost   float64 `json:"cost"`
+}
+
+// sumCalls totals calls by a key of each.
+func sumCalls(calls []llmCall, key func(llmCall) string) map[string]*llmTotal {
+	out := map[string]*llmTotal{}
+	for _, c := range calls {
+		k := key(c)
+		if out[k] == nil {
+			out[k] = &llmTotal{}
 		}
-		return out
+		out[k].Calls++
+		out[k].Tokens += c.Tokens
+		out[k].Cost += c.Cost
 	}
-	all := sum(func(llmCall) string { return "all" })["all"]
-	if all == nil {
-		all = &total{}
-	}
-	recent := calls
-	if len(recent) > 200 {
-		recent = recent[:200]
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"days": days, "total": all, "calls": recent, "errors": errs,
-		"byDay":   sum(func(c llmCall) string { return c.At.Format("2006-01-02") }),
-		"byUser":  sum(func(c llmCall) string { return c.User }),
-		"byModel": sum(func(c llmCall) string { return c.Model }),
-		"byWho":   sum(func(c llmCall) string { return c.Who })})
+	return out
 }
