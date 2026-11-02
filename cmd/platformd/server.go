@@ -247,6 +247,8 @@ func (s *server) routes() http.Handler {
 	// What an agent reads of its project with its own token (the MCP server's list_runs, list_alerts).
 	mux.HandleFunc("GET /api/agent/projects/{name}/runs", s.handleAgentRuns)
 	mux.HandleFunc("GET /api/agent/projects/{name}/alerts", s.handleAgentAlerts)
+	mux.HandleFunc("POST /api/projects/{name}/llm/v1/{op...}", s.handleLLMProxy)           // the project's gateway as OpenAI's API (chat/completions, embeddings), for any OpenAI client
+	mux.HandleFunc("GET /api/projects/{name}/llm/v1/{op...}", s.handleLLMProxy)            // its models
 	mux.HandleFunc("POST /api/agent/projects/{name}/ask", s.handleAgentAsk)                // a question to the model, on the project's key (12.3's plain-language tests)
 	mux.HandleFunc("GET /api/agent/projects/{name}/tools", s.handleListTools)              // what the caller may call and ask (12.7)
 	mux.HandleFunc("POST /api/agent/projects/{name}/tools/{tool}/call", s.handleCallTool)  // a tool of the project's: its editors, the agents given it

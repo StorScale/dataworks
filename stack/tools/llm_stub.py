@@ -123,6 +123,19 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def stream(self, reply, model, cost):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("x-litellm-response-cost", f"{cost:.6f}")
+        self.end_headers()
+        cid, half = "chatcmpl-" + secrets.token_hex(6), max(1, len(reply) // 2)
+        for piece, finish in ((reply[:half], None), (reply[half:], "stop")):
+            chunk = {"id": cid, "object": "chat.completion.chunk", "model": model,
+                     "choices": [{"index": 0, "delta": {"content": piece}, "finish_reason": finish}]}
+            self.wfile.write(f"data: {json.dumps(chunk)}\n\n".encode())
+            self.wfile.flush()
+        self.wfile.write(b"data: [DONE]\n\n")
+
     def bearer(self):
         h = self.headers.get("Authorization", "")
         return h[7:] if h.startswith("Bearer ") else ""
@@ -137,6 +150,11 @@ class Handler(BaseHTTPRequestHandler):
         if u.path in ("/health/liveliness", "/healthz", "/health"):
             return self.answer(200, {"status": "alive"})
         tok = self.bearer()
+        if u.path in ("/models", "/v1/models"):   # the models a key may ask for, as OpenAI lists them
+            with lock:
+                if tok not in keys and tok != MASTER:
+                    return self.answer(401, {"error": {"message": "Authentication Error: invalid key"}})
+            return self.answer(200, {"object": "list", "data": [{"id": m, "object": "model", "owned_by": "storscale"} for m in ("default", "embedding")]})
         if u.path == "/key/info":
             key = (q.get("key") or [tok])[0]
             with lock:
@@ -244,6 +262,8 @@ class Handler(BaseHTTPRequestHandler):
                 labels = re.search(r"exactly one of: (.+?)\.\n", text)
                 one = labels.group(1).split(",")[0].strip() if labels else "ok"
                 reply = json.dumps([one] * int(shaped.group(1)))
+            if b.get("stream"):   # as LiteLLM streams: server-sent events, the answer in pieces, then [DONE]
+                return self.stream(reply, b.get("model", "stub"), cost)
             return self.answer(200, {"id": "chatcmpl-" + secrets.token_hex(6), "object": "chat.completion", "model": b.get("model", "stub"),
                                      "choices": [{"index": 0, "message": {"role": "assistant", "content": reply}, "finish_reason": "stop"}],
                                      "usage": {"prompt_tokens": len(text) // 4, "completion_tokens": len(reply) // 4, "total_tokens": (len(text) + len(reply)) // 4}}, cost=cost)

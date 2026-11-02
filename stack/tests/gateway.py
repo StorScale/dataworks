@@ -24,13 +24,16 @@ The master key is LLM_MASTER_KEY (the install's). The project is removed after.
 """
 import json
 import os
+import sys
 import time
 
 import k8s
 import requests
 
-from lakekit import check, finish, s3_root
-from projects import platform, projects, wait
+sys.path.insert(0, "/python")
+import storscale  # noqa: E402
+from lakekit import check, env, finish, s3_root  # noqa: E402
+from projects import platform, projects, wait  # noqa: E402
 
 PLATFORM = os.environ["PLATFORM_URL"]
 MASTER = os.environ.get("LLM_MASTER_KEY") or "sk-storscale-local"
@@ -108,9 +111,31 @@ def main():
         a = ask(gateway, key, "How many orders came in yesterday?")
         content = (a.json() if a.ok else {}).get("choices", [{}])[0].get("message", {}).get("content", "")
         check("the key answers a completion", a.ok and (bool(content.strip()) if REAL else "orders" in content), (a.status_code, a.text[:200]))   # a real model's words are its own
+
+        # 1b. The same, as OpenAI's API through the platform, as alice (an OpenAI client's base URL
+        # <platform>/api/projects/<name>/llm/v1, a DataWorks token as its key): the project's key at
+        # the gateway, the spend hers whatever the request says, streamed when asked.
+        tok = storscale.Platform(PLATFORM, username="alice", password=env["LAKEHOUSE_USER_PASSWORD"])._bearer()
+        base, h = f"{PLATFORM}/api/projects/{NAME}/llm/v1", {"Authorization": f"Bearer {tok}"}
+        ask_oa = {"messages": [{"role": "system", "content": "Answer in a few words."}, {"role": "user", "content": "How many orders came in today?"}],
+                  "user": "someone-else"}
+        c = requests.post(f"{base}/chat/completions", headers=h, json=ask_oa, timeout=300)
+        said = ((c.json() if c.ok else {}).get("choices") or [{}])[0].get("message", {}).get("content", "")
+        check("the project's gateway as OpenAI's API, through the platform, as alice: a chat completion, system and user messages",
+              c.ok and c.json().get("object") == "chat.completion" and (bool(said.strip()) if REAL else "orders" in said), (c.status_code, c.text[:200]))
+        st = requests.post(f"{base}/chat/completions", headers=h, json={**ask_oa, "stream": True}, stream=True, timeout=300)
+        events = [x for x in st.iter_lines() if x.startswith(b"data: ")] if st.ok else []
+        check("... streamed when asked: server-sent chunks, then [DONE]",
+              st.ok and st.headers.get("Content-Type", "").startswith("text/event-stream") and len(events) >= 2 and events[-1] == b"data: [DONE]",
+              (st.status_code, events[:2], events[-1:]))
+        ms = requests.get(f"{base}/models", headers=h, timeout=60)
+        check("... and its models listed (default among them)", ms.ok and "default" in [x.get("id") for x in ms.json().get("data", [])], (ms.status_code, ms.text[:200]))
         calls = lambda: bob.get(f"{PLATFORM}/api/projects/{NAME}/llm/calls", timeout=60).json() or {}
         seen = wait(lambda: (lambda c: c if (c.get("total") or {}).get("calls") else None)(calls()), 120, every=5) or calls()   # LiteLLM writes its logs a moment later
         first = (seen.get("calls") or [{}])[-1]
+        theirs = wait(lambda: (lambda c: c if "alice" in (c.get("byUser") or {}) else None)(calls()), 120, every=5) or calls()
+        check("... the OpenAI route's calls are alice's on the project's model calls, whatever the request said",
+              "alice" in (theirs.get("byUser") or {}) and "someone-else" not in (theirs.get("byUser") or {}), sorted(theirs.get("byUser") or {}))
         check("the project's model calls (12.8): the call, whose key, the model, tokens, cost and time, never the question",
               (seen.get("total") or {}).get("calls", 0) >= 1 and first.get("who") == NAME and first.get("model") and first.get("tokens", 0) > 0
               and "orders came in" not in json.dumps(seen), (seen.get("total"), first, seen.get("errors")))

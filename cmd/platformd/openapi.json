@@ -2648,6 +2648,86 @@
         ]
       }
     },
+    "/api/projects/{name}/llm/v1/{op}": {
+      "get": {
+        "description": "its models",
+        "operationId": "get_projects_name_llm_v1_op",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "op",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "L l m proxy",
+        "tags": [
+          "llm"
+        ]
+      },
+      "post": {
+        "description": "the project's gateway as OpenAI's API (chat/completions, embeddings), for any OpenAI client",
+        "operationId": "post_projects_name_llm_v1_op",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "op",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "L l m proxy",
+        "tags": [
+          "llm"
+        ]
+      }
+    },
     "/api/projects/{name}/maintenance": {
       "get": {
         "description": "handleMaintenance is a project's tables as maintenance keeps them, for its\npeople; its editors (and administrators) ask for it now.",
