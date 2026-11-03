@@ -62,7 +62,7 @@ func TestBaseOf(t *testing.T) {
 		"https://gitlab.com":                                  "https://gitlab.com",
 		"https://gitlab.example.com/":                         "https://gitlab.example.com",
 		"https://gitlab.example.com/gitlab":                   "https://gitlab.example.com/gitlab", // a relative root
-		"https://gitlab.com/acme/group/sales-data.git":    "https://gitlab.com",                // the repo's address, pasted
+		"https://gitlab.com/acme/group/sales-data.git":        "https://gitlab.com",                // the repo's address, pasted
 		"http://gitlab.example.com/data/sales-pipelines.git/": "http://gitlab.example.com",
 	} {
 		if got := BaseOf(in); got != want {

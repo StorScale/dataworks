@@ -134,7 +134,7 @@ secrets: {}
 
 # Sign-in with the company's Entra ID (use case 6.1), brokered by Keycloak:
 # its sign-in page offers "displayName" beside the example people's form, and
-# people come in by their Entra login name's local part (russell.myers), in the
+# people come in by their Entra login name's local part (jane.doe), in the
 # groups their app roles map to (roles), set again at each sign-in. The app
 # registration's redirect URI (Web):
 #   <the platform's URL>/sso/realms/lakehouse/broker/entra/endpoint
