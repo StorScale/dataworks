@@ -215,6 +215,16 @@ func TestATakenOverTableIsTheProjectsOwn(t *testing.T) {
 	if got := f.took(); len(got) != 0 || f.registered["retail.orders"] != "s3://lake/sales.db/orders/metadata/00005-e.metadata.json" {
 		t.Errorf("the project's changes were replaced: %v %v", got, f.registered["retail.orders"])
 	}
+	// Taken out of the store's catalog at the takeover: fine, nothing there writes it.
+	delete(f.store, "sales.orders")
+	if err := a.Apply(ctx, p, nil); err != nil {
+		t.Errorf("gone from its store: %v", err)
+	}
+	// And one there by its name again, not this one: a second writer.
+	f.store["sales.orders"] = "s3://lake/sales.db/orders/metadata/00001-new.metadata.json"
+	if err := a.Apply(ctx, p, nil); err == nil || !strings.Contains(err.Error(), "written it since") {
+		t.Errorf("a table of the store's by its name again: %v", err)
+	}
 	// Out of the spec, and the project gone: the table stays, as its others do.
 	prev := *p
 	pt := *p.Spec.Tables

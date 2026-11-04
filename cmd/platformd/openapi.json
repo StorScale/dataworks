@@ -4070,6 +4070,52 @@
         ]
       }
     },
+    "/api/projects/{name}/tables/{table}/giveback": {
+      "post": {
+        "description": "one taken over, back to its store, adopted again\n\nhandleGiveBack gives a table taken over back to the platform it came from\n(the project's editors): its current metadata file, everything written\nhere included, is registered in the store's own catalog again (nothing\ncopied), and the project adopts it as before, read-only and followed.\nRefused unless the platform may write the store's catalog, while the\nproject still writes it (its last change must be TakeoverQuiet old), and\nwhen the store has a table by its name again.",
+        "operationId": "post_projects_name_tables_table_giveback",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "table",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Gives a table taken over back to the platform it came from (the project's editors): its current metadata file, everything written here included, is registered in the store's own catalog again (nothing copied), and the project adopts it as before, read-only and followed",
+        "tags": [
+          "tables"
+        ]
+      }
+    },
     "/api/projects/{name}/tables/{table}/takeover": {
       "post": {
         "description": "an adopted table, the project's own from now\n\nhandleTakeover takes one of a project's adopted tables over (its editors,\nwho may write its tables): the table, which the other platform kept\nwriting until now, becomes the project's own where its files are, from\nits store's newest metadata file. From then on it's written, maintained\nand erased here as the project's other tables are, and no longer followed.\n\nRefused unless its store takes takeovers (the chart's externalStores[]\n.takeover: a key that may write its buckets), and while the other\nplatform still writes it: its last change there must be TakeoverQuiet\nold (default a day). Two writers would lose each other's changes, so the\noperator also says so, on the project's page, if the other platform\nwrites it after all.",

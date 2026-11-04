@@ -281,6 +281,13 @@ EXT_{{ index . 0 | upper }}_{{ index . 1 }}_KEY
 {{- end }}
 {{- end }}
 
+{{/* The external stores whose own catalog the platform may write (externalStores[].catalog.write), comma-separated. */}}
+{{- define "storscale.catalogWriteStores" -}}
+{{- $out := list }}
+{{- range $s := .Values.externalStores }}{{ if $s.catalog.write }}{{ $out = append $out $s.name }}{{ end }}{{ end }}
+{{- join "," $out }}
+{{- end }}
+
 {{/* The external stores whose adopted tables projects may take over (externalStores[].takeover), comma-separated. */}}
 {{- define "storscale.takeoverStores" -}}
 {{- $out := list }}
@@ -294,7 +301,7 @@ EXT_{{ index . 0 | upper }}_{{ index . 1 }}_KEY
 {{- define "storscale.trinoStart" -}}
 {{- $cat := index . 1 -}}
 mkdir -p {{ $cat }} /data/trino && cp /etc/trino/catalog-install/*.properties {{ $cat }}/
-{{- if (index . 0).Values.externalStores }} && cp /etc/trino/external/ext_*.properties {{ $cat }}/ && sh /etc/trino/external/s3-mapping.sh > /data/trino/s3-mapping.json && printf '\ns3.security-mapping.enabled=true\ns3.security-mapping.config-file=/data/trino/s3-mapping.json\n' >> {{ $cat }}/iceberg.properties
+{{- if (index . 0).Values.externalStores }} && cp /etc/trino/external/ext_*.properties {{ $cat }}/ && { ! ls /etc/trino/external/extw_*.properties >/dev/null 2>&1 || cp /etc/trino/external/extw_*.properties {{ $cat }}/; } && sh /etc/trino/external/s3-mapping.sh > /data/trino/s3-mapping.json && printf '\ns3.security-mapping.enabled=true\ns3.security-mapping.config-file=/data/trino/s3-mapping.json\n' >> {{ $cat }}/iceberg.properties
 {{- end }} && exec /usr/lib/trino/bin/run-trino
 {{- end }}
 

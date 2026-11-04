@@ -752,13 +752,27 @@ curl -X POST -H "Authorization: Bearer $TOKEN" -H "X-Platform-Request: 1" \
 - **Then it's one of the project's tables:** its editors and pipelines write it under the project's roles, the nightly maintenance
   keeps it in shape (compaction, old snapshots and their files expired, in its store's bucket), erasure deletes a person's rows
   in it, and a retention may be set on it. The operator no longer follows the store.
-- **A second writer is an error.** If the other platform writes the table after all, the project's status says so ("the other
-  platform has written it since it was taken over …"): its change isn't here, and two writers lose each other's changes. Stop its
-  writer there, and copy across what it wrote.
-- **It stays.** Taken out of `tables.adopt`, or with the project deleted, it stays as the project's other tables do. Drop it from
-  the other platform's metastore when that platform is retired (without purging its files: they're the project's now).
+- **Its writers there are stopped,** where the platform may write the store's own catalog (`externalStores[].catalog.write`): the
+  takeover also takes the table out of it (Iceberg's `unregister_table`, which moves no file), so the other platform's jobs no
+  longer find it. If that fails, nothing is taken over. Without it, stopping them is the other platform's to do.
+- **A second writer is an error.** If the other platform writes the table after all (or makes one by its name again), the
+  project's status says so ("the other platform has written it since it was taken over …"): its change isn't here, and two
+  writers lose each other's changes. Stop its writer there, and copy across what it wrote.
+- **It stays.** Taken out of `tables.adopt`, or with the project deleted, it stays as the project's other tables do.
 - **Its files stay in the store's bucket.** Copying the table into the platform's own warehouse (`CREATE TABLE … AS SELECT`, then a
   rename) moves them, if wanted.
+
+### Giving a table back
+
+A table taken over can be given back to the platform it came from, where the platform may write that store's catalog: on its
+page, **Give back…**, then **Give it back** (or `POST /api/projects/<project>/tables/<table>/giveback`). Its project's editors.
+
+- **Its current state goes back:** its newest metadata file, everything written here included, is registered in the store's own
+  catalog under its old name (Iceberg's `register_table`; nothing copied), for the other platform's jobs to write again.
+- **This project must have stopped writing it:** its last change here must be a day old (`TAKEOVER_QUIET`), and the store must
+  have no table by its name again; otherwise it's refused, saying which.
+- **Adopted again:** the project's entry is as before the takeover (no `takenOver`): read-only here, followed, the nightly
+  maintenance off. Stop adopting it if the project doesn't need it any more. In the audit log: `table.givenback`.
 
 ### Limits and gotchas
 

@@ -126,6 +126,9 @@ externalStores: []
 #    # tables still adopted stay read-only (the projects' Ranger policies).
 #    takeover:
 #      secret: lakehouse-store-write
+#    # And the platform may write the store's own catalog (with takeover):
+#    # a table taken over is taken out of it, so its writers there no longer
+#    # find it, and one given back is put back in (catalog.write: true).
 
 # How long a Deployment may take to become ready before Kubernetes calls its
 # rollout failed (its default is 10 minutes). On a first install, services

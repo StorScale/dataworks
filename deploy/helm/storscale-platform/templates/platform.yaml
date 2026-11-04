@@ -65,6 +65,9 @@ spec:
             {{- with .Values.externalStores }}
             - {name: EXTERNAL_STORES, value: {{ $names := list }}{{ range . }}{{ $names = append $names .name }}{{ end }}{{ join "," $names | quote }}}   # projects adopt their tables
             {{- end }}
+            {{- with include "storscale.catalogWriteStores" . }}
+            - {name: CATALOG_WRITE_STORES, value: {{ . | quote }}}   # whose own catalog a takeover takes a table out of, a give-back puts it back in
+            {{- end }}
             {{- with include "storscale.takeoverStores" . }}
             - {name: TAKEOVER_STORES, value: {{ . | quote }}}   # whose adopted tables projects may take over (externalStores[].takeover)
             {{- end }}

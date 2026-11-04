@@ -112,6 +112,9 @@ func (a *Adopter) follow(ctx context.Context, namespace string, ad project.Adopt
 // here, and two writers lose each other's changes.
 func (a *Adopter) owned(ctx context.Context, namespace string, ad project.Adoption) error {
 	latest, err := a.latest(ctx, ad.From)
+	if catalog.IsNotFound(err) {
+		return nil // taken out of the store's catalog at the takeover: nothing there writes it
+	}
 	if err != nil {
 		return err
 	}

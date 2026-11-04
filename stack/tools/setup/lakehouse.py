@@ -73,6 +73,17 @@ POLICIES = [{**p, "policyItems": p["policyItems"] + ([allow(["execute"], groups=
      "policyItems": [allow(["use", "show"], users=[OPERATOR_USER, MAINTENANCE_USER])]},
     {"name": "operator: external stores' tables", "resources": res(catalog="ext_*", schema="*", table="*", column="*"),
      "policyItems": [allow(["select", "show"], users=[OPERATOR_USER, MAINTENANCE_USER])]},
+    # The stores' own catalogs written (extw_<store>, externalStores[].catalog.write): the table maintenance
+    # account alone takes a table taken over out of its store's catalog, and puts one given back in
+    # (unregister_table, register_table: they move no file), and nothing else there.
+    {"name": "maintenance: stores' catalogs written", "resources": res(catalog="extw_*"),
+     "policyItems": [allow(["use", "show"], users=[MAINTENANCE_USER])]},
+    {"name": "maintenance: stores' catalogs written: schemas", "resources": res(catalog="extw_*", schema="*"),
+     "policyItems": [allow(["use", "show"], users=[MAINTENANCE_USER])]},
+    {"name": "maintenance: stores' catalogs written: tables", "resources": res(catalog="extw_*", schema="*", table="*", column="*"),
+     "policyItems": [allow(["create", "drop", "show"], users=[MAINTENANCE_USER])]},
+    {"name": "maintenance: stores' catalogs written: procedures", "resources": res(catalog="extw_*", schema="system", procedure=["register_table", "unregister_table"]),
+     "policyItems": [allow(["execute"], users=[MAINTENANCE_USER])]},
     {"name": "catalog: every namespace", "resources": res(catalog=ICEBERG, schema="*"),
      "policyItems": [allow(["use", "show"], users=[CATALOG_USER, MAINTENANCE_USER])]},
     {"name": "catalog: every table", "resources": res(catalog=ICEBERG, schema="*", table="*", column="*"),

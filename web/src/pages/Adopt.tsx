@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { type AdoptableTable, type Adoption, adoptTables, ago, getAdoptableSchemas, getAdoptableStores, getAdoptableTables, stopAdopting, takeOver } from "../api";
+import { type AdoptableTable, type Adoption, adoptTables, ago, getAdoptableSchemas, getAdoptableStores, getAdoptableTables, giveBack, stopAdopting, takeOver } from "../api";
 import { ErrorBanner, Spinner } from "../lib";
 
 // Adopting another platform's Iceberg tables where they are (tables.adopt),
@@ -130,11 +130,27 @@ export function Adopted({ project, adoption, canWrite, onChanged }: { project: s
   };
   if (adoption.takenOver) {
     return (
-      <div className="banner info" style={{ marginBottom: 12 }} data-testid="adopted">
+      <div className="banner info stack" style={{ marginBottom: 12, gap: 8 }} data-testid="adopted">
         <div>
           <strong>Taken over</strong> from <code>{adoption.from}</code>{adoption.takenOverBy && <> by {adoption.takenOverBy}</>} on {new Date(adoption.takenOver).toLocaleDateString()}:
           it's this project's own now, where its files are.
         </div>
+        {error && <ErrorBanner error={error} />}
+        {canWrite && !confirm && (
+          <div><button className="btn small" onClick={() => setConfirm(true)} data-testid="giveback">Give back…</button></div>
+        )}
+        {canWrite && confirm && (
+          <div className="stack" style={{ gap: 8 }} data-testid="giveback-confirm">
+            <div className="small">
+              Giving it back puts it in its store's catalog again as it is now, everything written here included, for the platform it came
+              from to write. This project adopts it again: read-only here, and followed. Its pipelines here must have stopped writing it.
+            </div>
+            <div className="row" style={{ gap: 12 }}>
+              <button className="btn small primary" disabled={busy} onClick={() => run(() => giveBack(project, adoption.table))} data-testid="giveback-go">Give it back</button>
+              <button className="btn small" disabled={busy} onClick={() => setConfirm(false)}>Cancel</button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -154,7 +170,8 @@ export function Adopted({ project, adoption, canWrite, onChanged }: { project: s
         <div className="stack" style={{ gap: 8 }} data-testid="takeover-confirm">
           <div className="small">
             Taking it over makes it this project's own, where its files are: written, maintained and erased here, and no longer followed.
-            The other platform must have stopped writing it: if it writes it again, its change won't be here. It can't be undone here.
+            The other platform must have stopped writing it. Where the platform may write that store's catalog, the table is taken out of
+            it too, so its writers there no longer find it. It can be given back later.
           </div>
           <div className="row" style={{ gap: 12 }}>
             <button className="btn small primary" disabled={busy} onClick={() => run(() => takeOver(project, adoption.table))} data-testid="takeover-go">Take it over</button>

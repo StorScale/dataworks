@@ -290,6 +290,8 @@ export const getAdoptableTables = (name: string, store: string, schema: string) 
     `${adoptPath(name)}/adoptable?store=${encodeURIComponent(store)}&schema=${encodeURIComponent(schema)}`);
 export const adoptTables = (name: string, tables: { table: string; from: string }[]) => api<{ adopt: Adoption[] }>("POST", `${adoptPath(name)}/adopt`, { tables });
 export const stopAdopting = (name: string, table: string) => api<void>("DELETE", `${adoptPath(name)}/adopt/${encodeURIComponent(table)}`);
+export const giveBack = (name: string, table: string) =>
+  api<{ table: string; from: string; metadata: string }>("POST", `${adoptPath(name)}/tables/${encodeURIComponent(table)}/giveback`, {});
 export const takeOver = (name: string, table: string) =>
   api<{ table: string; from: string; takenOver: string; by: string; lastChangeThere: string }>("POST", `${adoptPath(name)}/tables/${encodeURIComponent(table)}/takeover`, {});
 

@@ -384,6 +384,21 @@ over](03-data-in.md#taking-a-table-over)), give the store a second key, one that
 The platform's own catalog then uses it for the store's buckets (Trino's S3 mapping, Nessie's per-bucket settings); the store's
 `ext_<name>` catalog keeps the read-only key, and the tables still adopted stay read-only by the projects' Ranger policies.
 
+And for a takeover to **stop the other platform's writers**, and for tables to be **given back**, let the platform write the
+store's own catalog (with `takeover`):
+
+```yaml
+    catalog:
+      type: hive_metastore
+      uri: thrift://hive-metastore.lakehouse.svc.cluster.local:9083
+      write: true
+```
+
+Trino then has a second catalog for the store, `extw_<name>`, which only the table maintenance account may use (Ranger), for
+Iceberg's `unregister_table` (a takeover takes the table out of the store's catalog) and `register_table` (a give-back puts it
+back): they move no file. The store's catalog must accept those writes from Trino (a Hive Metastore without authentication, or
+one that lets it).
+
 ### How it behaves
 
 - Trino gets a catalog for each store, `ext_<name>`, read-only (`iceberg.security=read_only`), which only the platform operator

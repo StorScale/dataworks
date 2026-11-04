@@ -318,6 +318,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/projects/{name}/adopt", s.handleAdopt)                      // tables of a store, adopted where they are
 	mux.HandleFunc("DELETE /api/projects/{name}/adopt/{table}", s.handleUnadopt)          // one no longer adopted (not one taken over)
 	mux.HandleFunc("POST /api/projects/{name}/tables/{table}/takeover", s.handleTakeover) // an adopted table, the project's own from now
+	mux.HandleFunc("POST /api/projects/{name}/tables/{table}/giveback", s.handleGiveBack) // one taken over, back to its store, adopted again
 	mux.HandleFunc("GET /api/projects/{name}/alerts", s.handleProjectAlerts)
 	mux.HandleFunc("POST /api/projects/{name}/alerts/mute", s.handleProjectAlerts)
 	mux.HandleFunc("GET /api/health", s.handleHealth)
