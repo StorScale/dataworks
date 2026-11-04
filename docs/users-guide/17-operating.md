@@ -426,6 +426,12 @@ MINIO_IDENTITY_OPENID_CLAIM_NAME=groups
 A store signing people in through LDAP keeps doing so: LDAP and OpenID work side by side (MinIO RELEASE.2024-10-13 and
 later). The store reads its OpenID settings as it starts, so the platform's Keycloak must answer by then.
 
+For people to sign in to the store's own console through the platform (its "Log in with SSO"), give the chart its address too,
+`storage.external.console` (`https://minio-console.example.com`, as the store's `MINIO_BROWSER_REDIRECT_URL` has it): the
+platform lets Keycloak's `lakehouse` client send people back to `<console>/oauth_callback`, at every install and upgrade.
+They see the buckets their groups' policies allow. The store must trust the platform's certificate (MinIO Operator: the
+tenant's `externalCaCertSecret`), since it fetches Keycloak's settings and keys itself.
+
 ### How it behaves
 
 - Every service reaches the store at `buckets:9000`, as it does Buckets: a forwarder there (`store-forwarder`) passes each

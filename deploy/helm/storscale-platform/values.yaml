@@ -210,6 +210,10 @@ storage:
   external:
     endpoint: ""
     secret: ""   # replicas.store-forwarder: its forwarder's pods
+    # The store's console (https://minio-console.example.com), where people sign
+    # in with "Log in with SSO" through the platform's Keycloak: its callback
+    # (<console>/oauth_callback) is one the lakehouse client may send them back to.
+    console: ""
 
 # Where the stateful pods run (their volumes follow them): a node selector
 # per workload, by name, for a cluster whose storage driver mounts a volume

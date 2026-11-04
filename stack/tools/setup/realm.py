@@ -35,6 +35,10 @@ neither, but one the install asks for: sign-in with the company's Entra ID
 Mappers someone added to it stay; those the platform made and the mapping no
 longer names go.
 
+STORE_CONSOLE_URL: an external store's console (storage.external.console),
+where people sign in through the lakehouse client: its callback,
+<console>/oauth_callback, is among that client's redirect addresses.
+
 REALM_FILE: realm.json (/keycloak/realm.json). Placeholders in it, as
 ${NAME} or ${NAME:default}, are filled from the environment, as Keycloak's
 own import fills them.
@@ -242,8 +246,22 @@ def apply_entra(kc):
             log(f"realm: identity provider {ENTRA}: mapper {name[len(MINE):]} removed")
 
 
+def with_store_console(want):
+    """The lakehouse client may send people back to an external store's console
+    (STORE_CONSOLE_URL), which signs them in with its tokens."""
+    console = env.get("STORE_CONSOLE_URL", "").rstrip("/")
+    if not console:
+        return want
+    if not re.match(r"^https?://[^/]+$", console):
+        sys.exit(f"realm: STORE_CONSOLE_URL {console!r}: http(s)://host[:port], nothing after")
+    for c in want.get("clients", []):
+        if c.get("clientId") == "lakehouse":
+            c["redirectUris"] = [*c.get("redirectUris", []), f"{console}/oauth_callback"]
+    return want
+
+
 def main():
-    want = load()
+    want = with_store_console(load())
     kc = Admin()
     have = kc("GET", "")
     if have.status_code == 404:
