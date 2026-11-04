@@ -375,9 +375,11 @@ def s3_as(user, web_token=None):
     """Buckets credentials for a person (or, given its token, a service
     account): their Keycloak token through STS."""
     import boto3
-    sts = boto3.client("sts", endpoint_url=BUCKETS, region_name="us-east-1",
+    from botocore.config import Config
+    # No RoleArn: MinIO, signing people in by their groups claim, refuses a role it doesn't know (Buckets takes either); boto3 wants one unless told not to check.
+    sts = boto3.client("sts", endpoint_url=BUCKETS, region_name="us-east-1", config=Config(parameter_validation=False),
                        aws_access_key_id="unused", aws_secret_access_key="unused")
-    c = sts.assume_role_with_web_identity(RoleArn="arn:minio:iam:::role/lakehouse", RoleSessionName=user,
+    c = sts.assume_role_with_web_identity(RoleSessionName=user,
                                           WebIdentityToken=web_token or token(user), DurationSeconds=900)["Credentials"]
     return s3(aws_access_key_id=c["AccessKeyId"], aws_secret_access_key=c["SecretAccessKey"],
               aws_session_token=c["SessionToken"])

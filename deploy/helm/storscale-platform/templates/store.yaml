@@ -49,7 +49,7 @@ spec:
       containers:
         - name: caddy
           image: {{ .Values.upstream.caddy }}
-          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL], add: [NET_BIND_SERVICE]}, seccompProfile: {type: RuntimeDefault}}   # its binary carries that capability: without it, it can't start
           args: ["caddy", "run", "--config", "/etc/storscale/Caddyfile", "--adapter", "caddyfile"]
           env:
             - {name: STORE_ENDPOINT, value: {{ .Values.storage.external.endpoint | quote }}}

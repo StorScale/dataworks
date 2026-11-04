@@ -40,9 +40,10 @@ def token():
 
 
 def _fetch():
-    sts = boto3.client("sts", endpoint_url=ENDPOINT, region_name=REGION,
+    # No RoleArn: MinIO, signing people in by their groups claim, refuses a role it doesn't know (Buckets takes either); boto3 wants one unless told not to check.
+    sts = boto3.client("sts", endpoint_url=ENDPOINT, region_name=REGION, config=Config(parameter_validation=False),
                        aws_access_key_id="unused", aws_secret_access_key="unused")
-    c = sts.assume_role_with_web_identity(RoleArn="arn:minio:iam:::role/airflow", RoleSessionName="notebook",
+    c = sts.assume_role_with_web_identity(RoleSessionName="notebook",
                                           WebIdentityToken=token(), DurationSeconds=DURATION)["Credentials"]
     return {"access_key": c["AccessKeyId"], "secret_key": c["SecretAccessKey"], "token": c["SessionToken"],
             "expiry_time": c["Expiration"].astimezone(datetime.timezone.utc).isoformat()}

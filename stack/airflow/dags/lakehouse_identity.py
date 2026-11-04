@@ -39,9 +39,10 @@ def token():
 
 
 def buckets_s3(access_token=None):
-    sts = boto3.client("sts", endpoint_url=BUCKETS, region_name="us-east-1",
+    # No RoleArn: MinIO, signing people in by their groups claim, refuses a role it doesn't know (Buckets takes either); boto3 wants one unless told not to check.
+    sts = boto3.client("sts", endpoint_url=BUCKETS, region_name="us-east-1", config=Config(parameter_validation=False),
                        aws_access_key_id="unused", aws_secret_access_key="unused")
-    c = sts.assume_role_with_web_identity(RoleArn="arn:minio:iam:::role/airflow", RoleSessionName="airflow",
+    c = sts.assume_role_with_web_identity(RoleSessionName="airflow",
                                           WebIdentityToken=access_token or token(), DurationSeconds=900)["Credentials"]
     return boto3.client("s3", endpoint_url=BUCKETS, region_name="us-east-1",
                         aws_access_key_id=c["AccessKeyId"], aws_secret_access_key=c["SecretAccessKey"],

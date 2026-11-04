@@ -383,6 +383,63 @@ The store's TLS certificate must be one the install trusts (`global.ca`).
 - Nessie's GC and the nightly maintenance never touch the store: GC reads and deletes in Buckets alone, and maintenance skips
   adopted tables.
 
+## The platform's files on a company's store
+
+### What it's for
+
+Keeping the platform's files (its tables, projects' files, notebooks' homes, models) on an S3 store the company already runs (a
+MinIO), in place of the platform's own Buckets: one store for both while another platform's data moves to this one.
+
+### Who can do it
+
+Whoever installs the chart, with an administrator's key for the store from the store's administrators.
+
+### Set up
+
+An administrator's key for the store in a Secret in the release's namespace (`accessKey`, `secretKey`), then the chart's
+`storage.external`, with the platform's own Buckets off:
+
+```bash
+kubectl -n <namespace> create secret generic company-store \
+  --from-literal=accessKey=<an administrator's key> --from-literal=secretKey=<its secret>
+```
+
+```yaml
+storage:
+  external:
+    endpoint: https://minio.lakehouse.svc.cluster.local   # its certificate one global.ca trusts
+    secret: company-store
+buckets-operator:
+  enabled: false
+```
+
+On the store, the platform's Keycloak as an OpenID provider, so people's tokens get them keys for what their groups may
+(notebooks, the `s3.` address, the store's own console): its settings (here as MinIO's environment, or with
+`mc admin config set <alias> identity_openid ...`), then the store started afresh, once:
+
+```
+MINIO_IDENTITY_OPENID_CONFIG_URL=<the platform's URL>/sso/realms/lakehouse/.well-known/openid-configuration
+MINIO_IDENTITY_OPENID_CLIENT_ID=lakehouse
+MINIO_IDENTITY_OPENID_CLAIM_NAME=groups
+```
+
+A store signing people in through LDAP keeps doing so: LDAP and OpenID work side by side (MinIO RELEASE.2024-10-13 and
+later). The store reads its OpenID settings as it starts, so the platform's Keycloak must answer by then.
+
+### How it behaves
+
+- Every service reaches the store at `buckets:9000`, as it does Buckets: a forwarder there (`store-forwarder`) passes each
+  request to the endpoint as it came, so its signature holds.
+- What the platform makes there it marks as its own: a bucket's tag `dataworks=owned`, a policy's ID `dataworks`. It changes
+  nothing that isn't marked. A project whose bucket is already the store's (another's) is refused, naming the bucket (give the
+  project another, `files.bucket`); so is one of its groups whose policy name is taken. Removing a project leaves the store's
+  other policies as they are.
+- Its own accounts there (Trino's, Nessie's, the backups', MLflow's, the copies', Prometheus's, its own) are named
+  `dataworks-<name>`, apart from the store's others.
+- The platform never restarts or reconfigures the store. If people's tokens don't get them keys (its OpenID settings missing),
+  the install's setup stops and says so.
+- Buckets capacity (below) is the store's administrators' to watch: its drives aren't the platform's.
+
 ## Backups and restore
 
 Backups are for Kubernetes installs.
