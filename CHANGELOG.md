@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **Taking an adopted table over** (`POST /api/projects/{name}/tables/{table}/takeover`): once the other platform has stopped writing a table a project adopted, one of its editors makes it the project's own where its files are, nothing copied: written, maintained, erased and given a retention as its other tables are, no longer followed. Refused unless its store takes takeovers (`externalStores[].takeover.secret`, a key that may write its buckets) and while the table was written there in the last day (`TAKEOVER_QUIET`); recorded on its `tables.adopt` entry (`takenOver`, `takenOverBy`, kept on every save) and in the audit log; and the project says so if the other platform writes it again. A table taken over stays when it leaves the spec or the project goes.
+
 ### Security
 - **The setup step's errors show no credentials:** an `mc` command that failed was printed whole, so `mc alias set` and `mc admin user add` put the store's root (or an external store's administrator) key and secret in the setup job's log. Keys, secrets and the administrator's key ID show as `<key>`, `<secret>` and `<administrator>` now. An install whose setup failed that way should rotate the key.
 

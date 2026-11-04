@@ -103,6 +103,12 @@ type config struct {
 	// DeliveryApproverGroups approve deliveries that send personal data (use
 	// case 9.1), beside the project's editors; default the administrators.
 	DeliveryApproverGroups []string
+	// TakeoverStores are the external stores whose adopted tables a project
+	// may take over (externalStores[].takeover: their buckets written with a
+	// key that may); TakeoverQuiet how long a table must have gone unwritten
+	// there first.
+	TakeoverStores []string
+	TakeoverQuiet  time.Duration
 	// DeliveryKeepFor is how long a personal delivery's read is kept, so the
 	// log can be searched by a person's ID (9.2): 7y, or days as 400d.
 	DeliveryKeepFor string
@@ -192,6 +198,8 @@ func configFromEnv(get func(string) string) (config, error) {
 		Groups:                 list("PLATFORM_GROUPS", "analysts,engineers"),
 		AdminGroups:            list("PLATFORM_ADMIN_GROUPS", "engineers"),
 		DeliveryApproverGroups: list("DELIVERY_APPROVER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers")),
+		TakeoverStores:         list("TAKEOVER_STORES", ""),
+		TakeoverQuiet:          durationOr(or("TAKEOVER_QUIET", "24h"), 24*time.Hour),
 		DeliveryKeepFor:        or("DELIVERY_KEEP_FOR", "7y"),
 		ProductCertifierGroups: list("PRODUCT_CERTIFIER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers")),
 		ErasureDeadlineDays:    atoi(or("ERASURE_DEADLINE_DAYS", "45"), 45),
@@ -247,4 +255,12 @@ func atoi(s string, def int) int {
 		return def
 	}
 	return n
+}
+
+// durationOr is a duration as Go writes them (24h, 90m), else def.
+func durationOr(v string, def time.Duration) time.Duration {
+	if d, err := time.ParseDuration(v); err == nil && d >= 0 {
+		return d
+	}
+	return def
 }

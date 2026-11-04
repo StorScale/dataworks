@@ -62,6 +62,9 @@ spec:
             - {name: TRINO_URL, value: "https://trino:8443"}
             - {name: TRINO_CA, value: /trino-cert/cert.pem}
             - {name: MAINTENANCE_TRINO_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: MAINTENANCE_TRINO_PASSWORD}}}
+            {{- with include "storscale.takeoverStores" . }}
+            - {name: TAKEOVER_STORES, value: {{ . | quote }}}   # whose adopted tables projects may take over (externalStores[].takeover)
+            {{- end }}
             - {name: MAINTENANCE_AT, value: {{ .Values.maintenance.at | quote }}}
             {{- with .Values.deliveries.approverGroups }}
             - {name: DELIVERY_APPROVER_GROUPS, value: {{ . | quote }}}   # who approves deliveries of personal data

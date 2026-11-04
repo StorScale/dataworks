@@ -120,6 +120,12 @@ externalStores: []
 #      region: us-east-1
 #      buckets: [warehouse]          # the buckets its tables' files are in
 #    secret: lakehouse-store         # a Secret in the release's namespace: accessKey, secretKey
+#    # Projects may take its adopted tables over (their takeover action, once
+#    # the other platform has stopped writing them): a key that may also
+#    # write its buckets, which the platform's catalog then uses there. The
+#    # tables still adopted stay read-only (the projects' Ranger policies).
+#    takeover:
+#      secret: lakehouse-store-write
 
 # How long a Deployment may take to become ready before Kubernetes calls its
 # rollout failed (its default is 10 minutes). On a first install, services

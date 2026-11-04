@@ -90,6 +90,7 @@ func (s *server) handlePutServiceAccount(w http.ResponseWriter, r *http.Request)
 		p.Spec.ServiceAccounts[i] = sa
 	}
 	project.KeepServiceAccountState(v.Spec, &p)
+	project.KeepAdoptionState(v.Spec, &p)
 	if added {
 		got := p.ServiceAccountOf(sa.Name)
 		got.RegisteredBy, got.RegisteredAt = sess.User.Username, s.now().UTC()

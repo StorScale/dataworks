@@ -125,7 +125,11 @@ type Stats struct {
 }
 
 type tableMetadata struct {
+	Location string `json:"metadata-location"`
 	Metadata struct {
+		Log []struct {
+			File string `json:"metadata-file"`
+		} `json:"metadata-log"`
 		CurrentSchema int `json:"current-schema-id"`
 		Schemas       []struct {
 			ID     int `json:"schema-id"`
@@ -287,6 +291,20 @@ func (ic *Iceberg) MetadataLocation(ctx context.Context, namespace, table string
 		return "", err
 	}
 	return t.Location, nil
+}
+
+// MetadataFiles are the table's metadata files, its current one first and
+// then those before it, newest first, as its metadata keeps them.
+func (ic *Iceberg) MetadataFiles(ctx context.Context, namespace, table string) ([]string, error) {
+	t, err := ic.load(ctx, namespace, table)
+	if err != nil {
+		return nil, err
+	}
+	out := []string{t.Location}
+	for i := len(t.Metadata.Log) - 1; i >= 0; i-- {
+		out = append(out, t.Metadata.Log[i].File)
+	}
+	return out, nil
 }
 
 // Register puts a table in the catalog as its metadata file says, the

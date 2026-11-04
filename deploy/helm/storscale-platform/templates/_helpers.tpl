@@ -274,7 +274,18 @@ EXT_{{ index . 0 | upper }}_{{ index . 1 }}_KEY
 {{- range $s := .Values.externalStores }}
 - {name: {{ include "storscale.externalKeyEnv" (list $s.name "ACCESS") }}, valueFrom: {secretKeyRef: {name: {{ $s.secret }}, key: accessKey}}}
 - {name: {{ include "storscale.externalKeyEnv" (list $s.name "SECRET") }}, valueFrom: {secretKeyRef: {name: {{ $s.secret }}, key: secretKey}}}
+{{- with ($s.takeover | default dict).secret }}
+- {name: {{ include "storscale.externalKeyEnv" (list $s.name "TAKEOVER_ACCESS") }}, valueFrom: {secretKeyRef: {name: {{ . }}, key: accessKey}}}
+- {name: {{ include "storscale.externalKeyEnv" (list $s.name "TAKEOVER_SECRET") }}, valueFrom: {secretKeyRef: {name: {{ . }}, key: secretKey}}}
 {{- end }}
+{{- end }}
+{{- end }}
+
+{{/* The external stores whose adopted tables projects may take over (externalStores[].takeover), comma-separated. */}}
+{{- define "storscale.takeoverStores" -}}
+{{- $out := list }}
+{{- range $s := .Values.externalStores }}{{ if ($s.takeover | default dict).secret }}{{ $out = append $out $s.name }}{{ end }}{{ end }}
+{{- join "," $out }}
 {{- end }}
 
 {{/* Trino's start: the install's catalogs copied into its dynamic catalog

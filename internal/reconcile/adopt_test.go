@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/StorScale/dataworks/internal/catalog"
 	"github.com/StorScale/dataworks/internal/project"
@@ -19,8 +20,9 @@ import (
 // metadata file) and Nessie's Iceberg REST API (what's registered).
 type fakeAdoption struct {
 	mu         sync.Mutex
-	store      map[string]string // "schema.table" -> its newest metadata file
-	registered map[string]string // "namespace.table" -> its metadata file
+	store      map[string]string   // "schema.table" -> its newest metadata file
+	registered map[string]string   // "namespace.table" -> its metadata file
+	logs       map[string][]string // "namespace.table" -> its metadata files before, oldest first
 	calls      []string
 }
 
@@ -77,7 +79,11 @@ func (f *fakeAdoption) servers(t *testing.T) (*trino.Client, *catalog.Iceberg) {
 				http.NotFound(w, r)
 				return
 			}
-			json.NewEncoder(w).Encode(map[string]any{"metadata-location": loc})
+			log := []map[string]string{}
+			for _, f := range f.logs[key] {
+				log = append(log, map[string]string{"metadata-file": f})
+			}
+			json.NewEncoder(w).Encode(map[string]any{"metadata-location": loc, "metadata": map[string]any{"metadata-log": log}})
 		case "DELETE":
 			if r.URL.Query().Get("purgeRequested") != "false" {
 				t.Errorf("%s dropped with purgeRequested=%q: its files are the store's", key, r.URL.Query().Get("purgeRequested"))
@@ -171,5 +177,52 @@ func TestAdoptedTablesFollowTheirStore(t *testing.T) {
 	}
 	if got := f.took(); len(got) != 0 {
 		t.Errorf("a missing store table: %v", got)
+	}
+}
+
+// A table taken over is the project's own: no longer followed, kept when
+// it leaves the spec (or the project goes), and an error the moment the
+// other platform writes it again (two writers lose each other's changes).
+func TestATakenOverTableIsTheProjectsOwn(t *testing.T) {
+	src := "s3://lake/sales.db/orders/metadata/00004-d.metadata.json"
+	f := &fakeAdoption{store: map[string]string{"sales.orders": src}, registered: map[string]string{"retail.orders": src}, logs: map[string][]string{}}
+	tr, ic := f.servers(t)
+	a := &Adopter{Trino: tr, Iceberg: ic}
+	p := &project.Project{}
+	p.Metadata.Name = "retail"
+	p.Spec.Tables = &project.Tables{Catalog: "iceberg", Namespace: "retail", Adopt: []project.Adoption{
+		{Table: "orders", From: "lakehouse.sales.orders", TakenOver: time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC), TakenOverBy: "bob"}}}
+	ctx := context.Background()
+
+	if err := a.Apply(ctx, p, nil); err != nil {
+		t.Fatalf("just taken over: %v", err)
+	}
+	// The project wrote it: a metadata file of its own, the store's before it.
+	f.registered["retail.orders"] = "s3://lake/sales.db/orders/metadata/00005-e.metadata.json"
+	f.logs["retail.orders"] = []string{"s3://lake/sales.db/orders/metadata/00003-a.metadata.json", src}
+	if err := a.Apply(ctx, p, nil); err != nil {
+		t.Errorf("written here since: %v", err)
+	}
+	if got := f.took(); len(got) != 0 {
+		t.Errorf("a table taken over was followed: %v", got)
+	}
+	// The other platform wrote it too: an error, and nothing replaced.
+	f.store["sales.orders"] = "s3://lake/sales.db/orders/metadata/00005-x.metadata.json"
+	err := a.Apply(ctx, p, nil)
+	if err == nil || !strings.Contains(err.Error(), "written it since it was taken over") || !strings.Contains(err.Error(), "00005-x.metadata.json") {
+		t.Errorf("a second writer: %v", err)
+	}
+	if got := f.took(); len(got) != 0 || f.registered["retail.orders"] != "s3://lake/sales.db/orders/metadata/00005-e.metadata.json" {
+		t.Errorf("the project's changes were replaced: %v %v", got, f.registered["retail.orders"])
+	}
+	// Out of the spec, and the project gone: the table stays, as its others do.
+	prev := *p
+	pt := *p.Spec.Tables
+	prev.Spec.Tables = &pt
+	p.Spec.Tables = &project.Tables{Catalog: "iceberg", Namespace: "retail"}
+	a.Apply(ctx, p, &prev)
+	a.Remove(ctx, &prev)
+	if got := f.took(); len(got) != 0 {
+		t.Errorf("a table taken over was let go: %v", got)
 	}
 }

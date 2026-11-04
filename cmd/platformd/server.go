@@ -314,6 +314,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/audit", s.handleAudit)
 	mux.HandleFunc("GET /api/projects/{name}/maintenance", s.handleMaintenance)
 	mux.HandleFunc("POST /api/projects/{name}/maintenance", s.handleMaintenance)
+	mux.HandleFunc("POST /api/projects/{name}/tables/{table}/takeover", s.handleTakeover) // an adopted table, the project's own from now
 	mux.HandleFunc("GET /api/projects/{name}/alerts", s.handleProjectAlerts)
 	mux.HandleFunc("POST /api/projects/{name}/alerts/mute", s.handleProjectAlerts)
 	mux.HandleFunc("GET /api/health", s.handleHealth)

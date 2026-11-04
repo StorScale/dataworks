@@ -112,8 +112,10 @@ spec:
             - {name: {{ $k }}.path-style-access, value: "true"}
             - {name: {{ $k }}.access-key, value: "urn:nessie-secret:quarkus:nessie.catalog.secrets.ext-{{ $s.name }}"}
             {{- end }}
-            - {name: nessie.catalog.secrets.ext-{{ $s.name }}.name, valueFrom: {secretKeyRef: {name: {{ $s.secret }}, key: accessKey}}}
-            - {name: nessie.catalog.secrets.ext-{{ $s.name }}.secret, valueFrom: {secretKeyRef: {name: {{ $s.secret }}, key: secretKey}}}
+            {{- /* A store that takes takeovers: the key that may write its buckets (a table taken over is committed to here). */}}
+            {{- $key := ($s.takeover | default dict).secret | default $s.secret }}
+            - {name: nessie.catalog.secrets.ext-{{ $s.name }}.name, valueFrom: {secretKeyRef: {name: {{ $key }}, key: accessKey}}}
+            - {name: nessie.catalog.secrets.ext-{{ $s.name }}.secret, valueFrom: {secretKeyRef: {name: {{ $key }}, key: secretKey}}}
             {{- end }}
             {{- if .Values.externalStores }}
             {{- include "storscale.ca.env" . | nindent 12 }}

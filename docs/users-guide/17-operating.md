@@ -373,6 +373,17 @@ kubectl -n <namespace> create secret generic lakehouse-store \
 
 The store's TLS certificate must be one the install trusts (`global.ca`).
 
+For projects to **take** adopted tables **over** once the other platform stops writing them ([Taking a table
+over](03-data-in.md#taking-a-table-over)), give the store a second key, one that may also write its buckets:
+
+```yaml
+    takeover:
+      secret: lakehouse-store-write          # accessKey, secretKey: read and write on s3.buckets
+```
+
+The platform's own catalog then uses it for the store's buckets (Trino's S3 mapping, Nessie's per-bucket settings); the store's
+`ext_<name>` catalog keeps the read-only key, and the tables still adopted stay read-only by the projects' Ranger policies.
+
 ### How it behaves
 
 - Trino gets a catalog for each store, `ext_<name>`, read-only (`iceberg.security=read_only`), which only the platform operator

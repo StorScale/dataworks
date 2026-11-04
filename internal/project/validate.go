@@ -541,8 +541,8 @@ func (p *Project) checkAdopt(bad func(format string, a ...any)) {
 		}
 		seen[a.Table] = true
 		for _, rt := range t.Retention {
-			if rt.Table == a.Table {
-				bad("tables: adopt: %s: it's read-only here while the other platform writes it, so it can't have a retention", a.Table)
+			if rt.Table == a.Table && a.TakenOver.IsZero() {
+				bad("tables: adopt: %s: it's read-only here while the other platform writes it, so it can't have a retention (take it over first)", a.Table)
 			}
 		}
 	}

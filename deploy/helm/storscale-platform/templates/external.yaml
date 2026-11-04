@@ -51,7 +51,10 @@ data:
     printf '{"mappings":['
     {{- range $s := .Values.externalStores }}
     {{- range $b := $s.s3.buckets }}
-    printf '{"prefix":"s3://%s/","endpoint":"%s","region":"%s","accessKey":"%s","secretKey":"%s"},' {{ $b | quote }} {{ $s.s3.endpoint | quote }} {{ $s.s3.region | default "us-east-1" | quote }} "${{ include "storscale.externalKeyEnv" (list $s.name "ACCESS") }}" "${{ include "storscale.externalKeyEnv" (list $s.name "SECRET") }}"
+    {{- /* A store that takes takeovers: its buckets with the key that may write them (the tables taken over are
+           written; those still adopted stay read-only by the project's Ranger policies). */}}
+    {{- $w := ternary "TAKEOVER_" "" (not (empty ($s.takeover | default dict).secret)) }}
+    printf '{"prefix":"s3://%s/","endpoint":"%s","region":"%s","accessKey":"%s","secretKey":"%s"},' {{ $b | quote }} {{ $s.s3.endpoint | quote }} {{ $s.s3.region | default "us-east-1" | quote }} "${{ include "storscale.externalKeyEnv" (list $s.name (print $w "ACCESS")) }}" "${{ include "storscale.externalKeyEnv" (list $s.name (print $w "SECRET")) }}"
     {{- end }}
     {{- end }}
     printf '{"useClusterDefault":true}]}'

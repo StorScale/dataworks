@@ -202,6 +202,7 @@ func (s *server) handlePutProject(w http.ResponseWriter, r *http.Request) {
 	project.KeepProductState(before, p)
 	project.KeepAgentState(before, p)
 	project.KeepServiceAccountState(before, p)
+	project.KeepAdoptionState(before, p)
 	if err := s.store.PutProject(r.Context(), p); err != nil {
 		var refused *store.APIError
 		if errors.As(err, &refused) && refused.Code >= 400 && refused.Code < 500 && refused.Code != http.StatusForbidden {

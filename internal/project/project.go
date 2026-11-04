@@ -581,6 +581,12 @@ type Tables struct {
 	// read-only here while the other platform writes them: the project's
 	// writers and pipelines may only read them, and the nightly
 	// maintenance leaves them alone.
+	//
+	// Until one is taken over (the project's takeover action, when the
+	// other platform has stopped writing it and its store takes
+	// takeovers): from then on it's the project's own, where its files
+	// are, written, maintained and erased here as any of its tables, and
+	// no longer followed.
 	Adopt []Adoption `json:"adopt,omitempty"`
 }
 
@@ -588,19 +594,56 @@ type Tables struct {
 type Adoption struct {
 	Table string `json:"table"` // its name in the project
 	From  string `json:"from"`  // <store>.<schema>.<table>: where it is now
+	// The platform's, set by the takeover alone and kept on every save:
+	// when the table became the project's own, and who took it over.
+	TakenOver   time.Time `json:"takenOver,omitzero"`
+	TakenOverBy string    `json:"takenOverBy,omitempty"`
 }
 
-// Adopted says whether a table of the project's is an adopted one.
+// Adopted says whether a table of the project's is an adopted one that's
+// still the other platform's (followed, read-only here): not one taken over.
 func (t *Tables) Adopted(table string) bool {
+	a := t.Adoption(table)
+	return a != nil && a.TakenOver.IsZero()
+}
+
+// TakenOver says whether a table of the project's was adopted and then taken over.
+func (t *Tables) TakenOver(table string) bool {
+	a := t.Adoption(table)
+	return a != nil && !a.TakenOver.IsZero()
+}
+
+// Adoption is the project's adoption of that table, or nil.
+func (t *Tables) Adoption(table string) *Adoption {
 	if t == nil {
-		return false
+		return nil
 	}
-	for _, a := range t.Adopt {
-		if a.Table == table {
-			return true
+	for i := range t.Adopt {
+		if t.Adopt[i].Table == table {
+			return &t.Adopt[i]
 		}
 	}
-	return false
+	return nil
+}
+
+// KeepAdoptionState keeps what only the takeover sets on a project's
+// adopted tables across a save: a spec can't claim a takeover, nor lose one
+// (the same table, from the same place, stays taken over).
+func KeepAdoptionState(before, p *Project) {
+	if p == nil || p.Spec.Tables == nil {
+		return
+	}
+	var prev *Tables
+	if before != nil {
+		prev = before.Spec.Tables
+	}
+	for i := range p.Spec.Tables.Adopt {
+		a := &p.Spec.Tables.Adopt[i]
+		a.TakenOver, a.TakenOverBy = time.Time{}, ""
+		if old := prev.Adoption(a.Table); old != nil && old.From == a.From {
+			a.TakenOver, a.TakenOverBy = old.TakenOver, old.TakenOverBy
+		}
+	}
 }
 
 // A Retention is how long a table's rows are kept, by the column that dates them.
