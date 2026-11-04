@@ -1,0 +1,84 @@
+{{- if include "storscale.store.external" . }}
+# The platform's files on an external S3 store (storage.external): the
+# Service buckets, on port 9000 as the platform's own Buckets is, forwarding
+# to the store's endpoint. Every service keeps its one address for the
+# store; the forwarder passes each request on as it came, Host included,
+# so the signatures made for buckets:9000 (and for s3.<domain> through the
+# gateway) hold at the store. It trusts the store's certificate through
+# global.ca.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: store-forwarder
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+data:
+  Caddyfile: |
+    {
+      admin off
+      auto_https off
+      persist_config off
+    }
+    :9000 {
+      reverse_proxy {$STORE_ENDPOINT} {
+        flush_interval -1
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: store-forwarder
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  replicas: {{ include "storscale.replicas" (list . "store-forwarder") }}
+  progressDeadlineSeconds: {{ .Values.progressDeadlineSeconds }}
+  selector:
+    matchLabels: {{- include "storscale.selector" (list .Release.Name "store-forwarder") | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "storscale.selector" (list .Release.Name "store-forwarder") | nindent 8 }}
+      annotations:
+        checksum/config: {{ printf "%s|%s" .Values.storage.external.endpoint (include "storscale.ca.configMap" .) | sha256sum }}
+    spec:
+      {{- include "storscale.spread" (list . "store-forwarder") | nindent 6 }}
+      enableServiceLinks: false
+      {{- with include "storscale.ca.init" . }}
+      initContainers:
+        {{- . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: caddy
+          image: {{ .Values.upstream.caddy }}
+          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          args: ["caddy", "run", "--config", "/etc/storscale/Caddyfile", "--adapter", "caddyfile"]
+          env:
+            - {name: STORE_ENDPOINT, value: {{ .Values.storage.external.endpoint | quote }}}
+            - {name: XDG_DATA_HOME, value: /tmp}
+            - {name: XDG_CONFIG_HOME, value: /tmp}
+            {{- include "storscale.ca.env" . | nindent 12 }}
+          ports:
+            - {name: s3, containerPort: 9000}
+          readinessProbe:
+            httpGet: {path: /minio/health/live, port: s3}   # the store, through it
+            periodSeconds: 10
+            failureThreshold: 6
+          volumeMounts:
+            - {name: config, mountPath: /etc/storscale/Caddyfile, subPath: Caddyfile}
+            - {name: tmp, mountPath: /tmp}
+            {{- include "storscale.ca.mount" . | nindent 12 }}
+          {{- include "storscale.resources" (list "50m" "64Mi" "512Mi") | nindent 10 }}
+      volumes:
+        - {name: config, configMap: {name: store-forwarder}}
+        - {name: tmp, emptyDir: {}}
+        {{- include "storscale.ca.volumes" . | nindent 8 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: buckets
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "storscale.selector" (list .Release.Name "store-forwarder") | nindent 4 }}
+  ports:
+    - {name: s3, port: 9000, targetPort: s3}
+{{- end }}

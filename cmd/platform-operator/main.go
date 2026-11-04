@@ -8,6 +8,7 @@
 //	PROJECT_STORE                        bucket (the default), or kubernetes: Project resources
 //	                                     in the pod's namespace, with a copy kept in the bucket
 //	STORE_URL, STORE_BUCKET              the store: Buckets, and the bucket (storscale-platform)
+//	STORE_EXTERNAL                       "true": the store is a company's (storage.external): only what the platform marked is changed there
 //	BUCKETS_ACCESS_KEY, BUCKETS_SECRET_KEY  Buckets credentials that may make buckets and policies
 //	KEYCLOAK_DIRECT_URL, KEYCLOAK_REALM  Keycloak, as the operator reaches it, and the realm
 //	OPERATOR_CLIENT_ID, OPERATOR_CLIENT_SECRET  the operator's Keycloak client (a service account)
@@ -107,7 +108,7 @@ func main() {
 			ClientID: env("OPERATOR_CLIENT_ID", "platform-operator"), Secret: kcSecret},
 		Ranger: &reconcile.Ranger{URL: strings.TrimRight(rangerURL, "/"), User: env("RANGER_USER", "admin"),
 			Password: rangerPassword, Service: env("RANGER_SERVICE", "lakehouse")},
-		Buckets:            &reconcile.Buckets{URL: strings.TrimRight(storeURL, "/"), AccessKey: accessKey, SecretKey: secretKey},
+		Buckets:            &reconcile.Buckets{URL: strings.TrimRight(storeURL, "/"), AccessKey: accessKey, SecretKey: secretKey, External: os.Getenv("STORE_EXTERNAL") == "true"},
 		Nessie:             &reconcile.Nessie{URL: strings.TrimRight(nessieURL, "/"), Warehouse: env("NESSIE_WAREHOUSE", "warehouse")},
 		Store:              st,
 		PlatformURL:        os.Getenv("PLATFORM_URL"),

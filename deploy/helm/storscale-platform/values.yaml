@@ -196,6 +196,20 @@ storage:
   nessie: 2Gi
   jupyterhub: 1Gi
   opensearch: 4Gi
+  # The platform's files on a company's own S3 store (a MinIO) in place of
+  # its Buckets: endpoint its address (https://minio.lakehouse.svc.cluster.local;
+  # its certificate one global.ca trusts), secret a Secret in the release's
+  # namespace holding an administrator's accessKey and secretKey. Set
+  # buckets-operator.enabled: false with it. Everything still reaches the
+  # store at buckets:9000, which forwards to the endpoint (Host and so S3's
+  # signatures kept). The platform marks what it makes there (a bucket's tag
+  # dataworks=owned, a policy's ID dataworks) and refuses to change or remove
+  # anything not marked; its own accounts there are named dataworks-<name>.
+  # The store's people sign in with the platform's Keycloak (its OpenID
+  # settings, the users' guide's Operating section), each group naming a policy.
+  external:
+    endpoint: ""
+    secret: ""   # replicas.store-forwarder: its forwarder's pods
 
 # Where the stateful pods run (their volumes follow them): a node selector
 # per workload, by name, for a cluster whose storage driver mounts a volume

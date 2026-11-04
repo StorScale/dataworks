@@ -22,6 +22,11 @@ RANGER = "http://ranger-admin:6080"
 RANGER_SERVICE = "lakehouse"
 PLUGIN_USER = "trino-plugin"  # Trino's Ranger plugin signs in as this user
 BUCKETS = "http://buckets:9000"
+# The platform's files on a company's store (storage.external), reached at
+# BUCKETS all the same: only what the platform marked as its own is changed
+# there (a bucket's tag dataworks=owned, a policy's ID dataworks).
+EXTERNAL = os.environ.get("STORE_EXTERNAL") == "true"
+OWNER_TAG, OWNER_ID = "dataworks=owned", "dataworks"
 
 
 def log(msg):
@@ -76,16 +81,57 @@ def bucket_rw(bucket):
     ]
 
 
+def _marked(value):
+    """Whether mc's JSON (a bucket's tags, a policy's info) carries the platform's mark."""
+    if isinstance(value, dict):
+        if value.get("ID") == OWNER_ID or value.get("Id") == OWNER_ID or value.get("dataworks") == "owned":
+            return True
+        return any(_marked(v) for v in value.values())
+    if isinstance(value, list):
+        return any(_marked(v) for v in value)
+    return False
+
+
+def _mc_json(*args):
+    r = mc(*args, "--json", check=False)
+    try:
+        return r.returncode, json.loads(r.stdout.strip().splitlines()[-1]) if r.stdout.strip() else {}
+    except ValueError:
+        return r.returncode, {}
+
+
+def ensure_bucket(b):
+    """A bucket of the platform's; on an external store, marked as its own,
+    and one already there must be marked so."""
+    if not EXTERNAL:   # the platform's own Buckets: everything there is its own, unmarked
+        mc("mb", "--ignore-existing", f"buckets/{b}")
+    elif mc("stat", f"buckets/{b}", check=False).returncode != 0:
+        mc("mb", f"buckets/{b}")
+        mc("tag", "set", f"buckets/{b}", OWNER_TAG)
+    elif not _marked(_mc_json("tag", "list", f"buckets/{b}")[1]):
+        sys.exit(f"setup: the store already has a bucket {b} that isn't the platform's (no tag {OWNER_TAG})")
+
+
+def ensure_policy(name, statements):
+    """A policy of the platform's; on an external store, marked with its ID,
+    and one already there must be the platform's."""
+    if EXTERNAL:
+        code, info = _mc_json("admin", "policy", "info", "buckets", name)
+        if code == 0 and info.get("status") == "success" and not _marked(info):
+            sys.exit(f"setup: the store already has a policy {name} that isn't the platform's (its ID isn't {OWNER_ID})")
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+        json.dump({"Version": "2012-10-17", "Statement": statements, **({"Id": OWNER_ID} if EXTERNAL else {})}, f)
+    mc("admin", "policy", "create", "buckets", name, f.name)
+
+
 def setup_buckets(buckets, policies, accounts):
     """buckets: names; policies: {name: statements}; accounts: [(access key, secret, policy)]."""
     wait_for("Buckets", f"{BUCKETS}/minio/health/live")
     mc("alias", "set", "buckets", BUCKETS, env["BUCKETS_ROOT_USER"], env["BUCKETS_ROOT_PASSWORD"])
     for b in buckets:
-        mc("mb", "--ignore-existing", f"buckets/{b}")
+        ensure_bucket(b)
     for name, statements in policies.items():
-        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
-            json.dump({"Version": "2012-10-17", "Statement": statements}, f)
-        mc("admin", "policy", "create", "buckets", name, f.name)
+        ensure_policy(name, statements)
     for user, secret, pol in accounts:
         mc("admin", "user", "add", "buckets", user, secret)
         mc("admin", "policy", "attach", "buckets", pol, "--user", user, check=False)  # fails if attached
@@ -368,6 +414,9 @@ def ensure_buckets_identity(timeout=600):
         return
     if state is None:
         sys.exit("setup: Buckets isn't answering")
+    if EXTERNAL:   # a company's store: its settings are its own, never restarted from here
+        sys.exit("setup: the store doesn't take the platform's Keycloak tokens (STS): give it the platform's "
+                 "Keycloak as its OpenID provider (claim groups; the users' guide, Operating: an external store)")
     log("Buckets: its Keycloak sign-in settings didn't load (it started before Keycloak); starting it again")
     import k8s
     if k8s.in_cluster():

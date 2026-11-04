@@ -10,6 +10,7 @@
 # upgrade, storscale upgrade --dry-run) this refuses what would lose data
 # or stop Buckets' operator: a pool removed, a pool's shape changed, its
 # drives smaller or on another storage class.
+{{- if not (include "storscale.store.external" .) }}
 {{- $pools := include "storscale.buckets.pools" . | fromJsonArray }}
 {{- $made := list }}
 {{- with (lookup "buckets.io/v1alpha1" "BucketsCluster" .Release.Namespace "buckets") }}{{ $made = .spec.pools | default list }}{{ end }}
@@ -71,3 +72,4 @@ spec:
   volumeMounts:
     - {name: storscale-ca, mountPath: /etc/storscale/ca, readOnly: true}
   {{- end }}
+{{- end }}

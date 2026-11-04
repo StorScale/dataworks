@@ -286,3 +286,12 @@ mkdir -p {{ $cat }} /data/trino && cp /etc/trino/catalog-install/*.properties {{
 {{- if (index . 0).Values.externalStores }} && cp /etc/trino/external/ext_*.properties {{ $cat }}/ && sh /etc/trino/external/s3-mapping.sh > /data/trino/s3-mapping.json && printf '\ns3.security-mapping.enabled=true\ns3.security-mapping.config-file=/data/trino/s3-mapping.json\n' >> {{ $cat }}/iceberg.properties
 {{- end }} && exec /usr/lib/trino/bin/run-trino
 {{- end }}
+
+{{/* "true" when the platform's files are on an external S3 store (storage.external), not its Buckets. */}}
+{{- define "storscale.store.external" -}}
+{{- if .Values.storage.external.endpoint }}
+{{- if not .Values.storage.external.secret }}{{ fail "storage.external: give its secret (accessKey, secretKey) with its endpoint" }}{{ end }}
+{{- if not (regexMatch "^https?://[^/]+$" .Values.storage.external.endpoint) }}{{ fail "storage.external.endpoint: http(s)://host[:port], nothing after" }}{{ end }}
+true
+{{- end }}
+{{- end }}

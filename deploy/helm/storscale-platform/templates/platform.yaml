@@ -225,10 +225,15 @@ spec:
             # Projects' models answering as an API (templates/serving.yaml): a server each.
             - {name: SERVING_TEMPLATE, value: /etc/storscale/serving/template.json}
             - {name: SERVING_DEFAULT_MEMORY, value: {{ .Values.serving.memory | quote }}}
+            {{- if include "storscale.store.external" . }}
+            # The store is a company's (storage.external): only what the platform marked as its own is changed there.
+            - {name: STORE_EXTERNAL, value: "true"}
+            {{- else }}
             # Buckets' drives grown to each pool's size (templates/buckets.yaml).
             {{- $drives := dict }}
             {{- range $i, $p := include "storscale.buckets.pools" . | fromJsonArray }}{{ $_ := set $drives (printf "pool-%d" $i) $p.storage }}{{ end }}
             - {name: BUCKETS_DRIVES, value: {{ toJson $drives | quote }}}
+            {{- end }}
           volumeMounts:
             - {name: airflow-project, mountPath: /etc/storscale/airflow-project, readOnly: true}
             - {name: trino-cert, mountPath: /trino-cert, readOnly: true}
