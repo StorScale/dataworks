@@ -179,9 +179,14 @@ def main():
         check("a failed drive shows up as offline", offline,
               f"drives online {value('max(minio_cluster_drive_online_total)'):.0f}, offline "
               f"{value('max(minio_cluster_drive_offline_total)'):.0f}")
-        started = wait(lambda: (lambda a: a if {"BucketsDriveOffline", "BucketsErasureSetDegraded"} <= set(a) else None)(alerts()), 180)
-        check("the drive-offline and degraded-set alerts start", started,
-              ", ".join(f"{k} {v}" for k, v in sorted((started or alerts()).items())) or "no alerts")
+        # The degraded-set alert is for a set down to its write quorum: one drive lost does that
+        # in a small set (CI's four drives), not in a big one (sixteen keep well above it).
+        online = value("min(minio_cluster_health_erasure_set_online_drives)") or 0
+        quorum = value("max(minio_cluster_health_erasure_set_write_quorum)") or 0
+        expected = {"BucketsDriveOffline"} | ({"BucketsErasureSetDegraded"} if online <= quorum else set())
+        started = wait(lambda: (lambda a: a if expected <= set(a) else None)(alerts()), 180)
+        check(f"the {' and '.join(sorted(expected))} alerts start (the set: {online:.0f} drives online, write quorum {quorum:.0f})",
+              started, ", ".join(f"{k} {v}" for k, v in sorted((started or alerts()).items())) or "no alerts")
     finally:
         drive(0o755)
     online = wait(lambda: value("max(minio_cluster_drive_offline_total)") == 0, 180)
