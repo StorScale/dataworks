@@ -4,6 +4,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-11-04
+
+Applications acting for the people signed in to them: a project's service account exchanges the token Entra gave it on a person's behalf for one of the platform's, under that person's own rules and for that project alone. A project's LLM gateway as OpenAI's API, any OpenAI client's base URL, its calls the caller's; and who asked the model, by person, on the Usage page. The platform's files on a company's own S3 store (a MinIO) in place of its own Buckets, people signing in to it, and to its console, with the platform's Keycloak.
+
+**Upgrading from 0.36.0:** `storscale upgrade --context <cluster> --version 0.37.0`, after a `--dry-run` (with `--chart oci://<harbor>/<project>/charts/storscale-platform --ca-file <ca.pem>` for an install on a registry of your own). The Project definition gains a service account's `onBehalfOf`, which the upgrade applies first. Nothing changes for an install on its own Buckets; `storage.external` is for a new one, or one moving its files (the users' guide, Operating: the platform's files on a company's store).
+
 ### Added
 - **The project's LLM gateway as OpenAI's API** (`/api/projects/{name}/llm/v1`: `chat/completions`, streamed too, `embeddings`, `models`): any OpenAI client, its base URL the project and a DataWorks token as its key, asks the project's model through the platform, on the project's key, budget and guardrail; the request and the answer pass as they are, but for `user`, always the caller, and `model` when missing. For the CRM and scripts that need system prompts, turns, tools or streaming where the ask route takes one prompt.
 - **The platform's files on a company's own S3 store** (`storage.external`): an install keeps its files on an existing MinIO in place of its own Buckets, with an administrator's key in a Secret. Every service reaches it at `buckets:9000` as before, through a forwarder that keeps each request's signature; what the platform makes there is marked as its own (a bucket's tag `dataworks=owned`, a policy's ID `dataworks`) and nothing unmarked is changed or removed; its accounts there are named `dataworks-<name>`; people sign in to the store with the platform's Keycloak beside its LDAP, its own console too (`storage.external.console`). The users' guide, Operating: the platform's files on a company's store.
