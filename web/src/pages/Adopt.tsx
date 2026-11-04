@@ -90,9 +90,9 @@ export function AdoptPanel({ project, adopted, onClose, onAdopted }: { project: 
                     <td><input type="checkbox" disabled={!can} checked={on} aria-label={`Adopt ${t.name}`} data-testid={`adopt-pick-${t.name}`}
                       onChange={(e) => setPicked((p) => { const n = { ...p }; if (e.target.checked) n[t.from] = tableName(t.name); else delete n[t.from]; return n; })} /></td>
                     <td className="mono">{t.name}</td>
-                    <td>{t.note ? "" : t.rows.toLocaleString()}</td>
-                    <td>{t.note ? "" : size(t.bytes)}</td>
-                    <td className="small">{t.lastChange ? <span title={new Date(t.lastChange).toLocaleString()}>{ago(new Date(t.lastChange))}</span> : ""}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{t.note ? "" : t.rows.toLocaleString()}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{t.note ? "" : size(t.bytes)}</td>
+                    <td className="small" style={{ whiteSpace: "nowrap" }}>{t.lastChange ? <span title={new Date(t.lastChange).toLocaleString()}>{ago(new Date(t.lastChange))}</span> : ""}</td>
                     <td>
                       {t.adoptedAs ? <span className="small">adopted as <code>{t.adoptedAs}</code></span>
                         : t.note ? <span className="small">{t.note}</span>

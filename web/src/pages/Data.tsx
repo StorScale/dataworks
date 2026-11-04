@@ -72,7 +72,11 @@ export default function Data() {
       <div className="split">
         <nav className="side side-list" aria-label="Tables" data-testid="tables">
           <p className="eyebrow">Tables</p>
-          {adoptButton && <div style={{ padding: "0 8px 8px" }}>{adoptButton}</div>}
+          {canWrite && !adopting && (
+            <div style={{ padding: "0 12px 8px" }}>
+              <button className="linkish small" onClick={() => setAdopting(true)} data-testid="adopt">+ Adopt tables</button>
+            </div>
+          )}
           {tables.map((t) => (
             <button key={t.fqn} className={t === table ? "active" : ""} onClick={() => go(t.name)} data-testid={`table-${t.name}`}>
               <span className="mono"><Breakable text={t.name} /></span>
