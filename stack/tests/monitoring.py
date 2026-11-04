@@ -23,7 +23,7 @@ import k8s
 import requests
 from botocore.exceptions import ClientError
 
-from lakekit import check, env, finish, s3, s3_root
+from lakekit import EXTERNAL, check, env, finish, s3, s3_root
 
 
 def drive(mode):
@@ -167,7 +167,12 @@ def main():
           roles["bob"] == "Editor" and roles["alice"] == "Viewer", f"bob {roles['bob']}, alice {roles['alice']}")
     check("people in neither group can't sign in to Grafana", roles["carol"] is None, f"carol {roles['carol']}")
 
-    # 5. A failed drive, and its recovery. Unreadable until it's restored.
+    # 5. A failed drive, and its recovery. Unreadable until it's restored. A company's store
+    # (storage.external) has drives of its own, not the platform's to fail.
+    if EXTERNAL:
+        print("skip a failed drive: the store is a company's (storage.external), its drives its own")
+        finish()
+        return
     drive(0o000)
     try:
         offline = wait(lambda: (value("max(minio_cluster_drive_offline_total)") or 0) >= 1, 180)

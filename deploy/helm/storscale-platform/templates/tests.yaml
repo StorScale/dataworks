@@ -96,7 +96,11 @@ spec:
           exec python -u /tests/run.py $picked
       {{- include "storscale.envFrom" . | nindent 6 }}
       env:
+        {{- if include "storscale.store.external" . }}
+        - {name: STORE_EXTERNAL, value: "true"}   # a company's store: the suites skip what's Buckets' own (its drives)
+        {{- else }}
         - {name: BUCKETS_DRIVE, value: "buckets-pool-0-0/data2-buckets-pool-0-0"}
+        {{- end }}
         - {name: STORSCALE_TOOLS_IMAGE, value: {{ include "storscale.image" (list . "tools") | quote }}}
         {{- include "storscale.ca.env" . | nindent 8 }}
       volumeMounts:

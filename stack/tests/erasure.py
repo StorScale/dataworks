@@ -12,7 +12,7 @@ under the CCPA):
   2. carol can't ask (no access), and a project with no tables of people's
      data has nothing to erase from;
   3. retention: an order older than 30 days goes at the next maintenance
-     round; a fresh one stays.
+     round; a fresh one (days old, whenever the suite runs) stays.
 
 The project is removed after.
 """
@@ -46,8 +46,8 @@ def main():
         sql("bob", "DROP TABLE IF EXISTS orders", "iceberg", NAME)
         sql("bob", "CREATE TABLE customers AS SELECT * FROM (VALUES (1, 'Ana', 'ana@example.com'), (2, 'Ben', 'ben@example.org'), (3, 'Cy', 'cy@example.net')) "
                    "AS t (customer_id, name, email)", "iceberg", NAME)
-        sql("bob", "CREATE TABLE orders AS SELECT * FROM (VALUES (1, 1, 10.0, TIMESTAMP '2026-10-01 10:00:00'), (2, 2, 7.5, TIMESTAMP '2026-10-02 10:00:00'), "
-                   "(3, 2, 3.0, TIMESTAMP '2026-10-03 10:00:00'), (4, 3, 9.0, TIMESTAMP '2020-01-01 10:00:00')) AS t (order_id, customer_id, amount, ordered_on)", "iceberg", NAME)
+        sql("bob", "CREATE TABLE orders AS SELECT * FROM (VALUES (1, 1, 10.0, localtimestamp(6) - INTERVAL '3' DAY), (2, 2, 7.5, localtimestamp(6) - INTERVAL '2' DAY), "
+                   "(3, 2, 3.0, localtimestamp(6) - INTERVAL '1' DAY), (4, 3, 9.0, TIMESTAMP '2020-01-01 10:00:00.000000')) AS t (order_id, customer_id, amount, ordered_on)", "iceberg", NAME)
         check("bob makes a project declaring customers and orders as people's data, with 30 days' retention on orders", r.ok and ready is not None and rows("orders") == 4, r.text[:200])
 
         # 1. Erased.

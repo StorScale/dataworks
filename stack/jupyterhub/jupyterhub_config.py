@@ -74,6 +74,9 @@ if os.environ.get("STORSCALE_K8S") == "true":
     c.KubeSpawner.cpu_guarantee = 0.1   # without it, Kubernetes reserves the whole limit for each notebook
     c.KubeSpawner.mem_guarantee = "256M"
     c.KubeSpawner.environment = NOTEBOOK_ENV
+    # Not Kubernetes' variables for every Service in the namespace (<NAME>_SERVICE_HOST, ...): a notebook reaches
+    # what it uses by name, and its environment holds only what the platform gives it.
+    c.KubeSpawner.extra_pod_config = {"enableServiceLinks": False}
     # KubeSpawner passes args only with a command of its own (otherwise it
     # runs the image's and drops them): the CSP header lets the platform frame it.
     c.KubeSpawner.cmd = ["start-singleuser.py"]   # the image's own start, with its hooks
