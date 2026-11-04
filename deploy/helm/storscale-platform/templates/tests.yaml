@@ -101,6 +101,9 @@ spec:
         {{- else }}
         - {name: BUCKETS_DRIVE, value: "buckets-pool-0-0/data2-buckets-pool-0-0"}
         {{- end }}
+        {{- with .Values.storage.external.console }}
+        - {name: STORE_CONSOLE_URL, value: {{ . | quote }}}   # the realm suite runs the realm step: its callback stays
+        {{- end }}
         - {name: STORSCALE_TOOLS_IMAGE, value: {{ include "storscale.image" (list . "tools") | quote }}}
         {{- include "storscale.ca.env" . | nindent 8 }}
       volumeMounts:

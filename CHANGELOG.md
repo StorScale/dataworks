@@ -10,7 +10,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 ### Fixed
 - **A company's store over HTTPS:** the store forwarder sent an HTTPS store its own name as the `Host`, so every request signed for `buckets:9000` was refused ("the request signature … does not match"); it keeps the request's `Host` and names the store for TLS.
 - **A company's store that signs people in through LDAP:** MinIO makes no users of its own then ("Specified IAM action is not allowed"), so the platform's accounts there are access keys of the administrator's, each with its policy, and named within MinIO's 20 characters (`dataworks-platform`, not `dataworks-platform-store`).
-- **A company store's console without the store:** `storage.external.console` adds the console's sign-in callback on its own, for a store the platform doesn't keep its files on yet; and its OpenID settings name their scopes (`openid,profile,email`), without which the console's sign-in asked for `service_account` and was refused (`invalid_scope`).
+- **A company store's console without the store:** `storage.external.console` adds the console's sign-in callback on its own, for a store the platform doesn't keep its files on yet; kept by the realm suite too (it runs the realm step, which had reset the client to realm.json's addresses); and its OpenID settings name their scopes (`openid,profile,email`), without which the console's sign-in asked for `service_account` and was refused (`invalid_scope`).
 - **Back on its own Buckets, an install has Buckets' key again:** the root account comes from `buckets-root`, which Helm keeps, not from settings an external store had replaced.
 
 ## [0.37.0] - 2026-11-04
