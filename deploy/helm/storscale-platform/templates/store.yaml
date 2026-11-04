@@ -1,4 +1,5 @@
 {{- if include "storscale.store.external" . }}
+{{- $store := urlParse .Values.storage.external.endpoint }}
 # The platform's files on an external S3 store (storage.external): the
 # Service buckets, on port 9000 as the platform's own Buckets is, forwarding
 # to the store's endpoint. Every service keeps its one address for the
@@ -20,7 +21,15 @@ data:
     }
     :9000 {
       reverse_proxy {$STORE_ENDPOINT} {
+        # The request's own Host (buckets:9000, s3.<domain>), which its signature covers: Caddy would
+        # otherwise send an HTTPS upstream's name instead, and the store refuse the signature.
+        header_up Host {hostport}
         flush_interval -1
+        {{- if eq $store.scheme "https" }}
+        transport http {
+          tls_server_name {{ regexReplaceAll ":[0-9]+$" $store.host "" }}   # the store's own name, for its certificate
+        }
+        {{- end }}
       }
     }
 ---

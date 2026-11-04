@@ -38,9 +38,9 @@ spec:
             - {name: STORSCALE_SAMPLE_TRAFFIC, value: {{ $root.Values.monitoring.sampleTraffic | quote }}}
             {{- if include "storscale.store.external" $root }}
             - {name: STORE_EXTERNAL, value: "true"}   # a company's store: only what's marked as the platform's is changed there
-            {{- with $root.Values.storage.external.console }}
-            - {name: STORE_CONSOLE_URL, value: {{ . | quote }}}   # its console: people sign in there through Keycloak
             {{- end }}
+            {{- with $root.Values.storage.external.console }}
+            - {name: STORE_CONSOLE_URL, value: {{ . | quote }}}   # a company store's console: people sign in there through Keycloak
             {{- end }}   # the monitoring example's sample buckets
             {{- include "storscale.ca.env" $root | nindent 12 }}
             {{- with $root.Values.sso.entra }}{{ if .enabled }}

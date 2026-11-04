@@ -104,8 +104,10 @@ def main():
     check("the sales project is ready in every system",
           p and all(part["ok"] for part in p["status"]["parts"]),
           ", ".join(f"{x['system']} {'ok' if x['ok'] else x['message']}" for x in (p or {}).get("status", {}).get("parts", [])))
+    # Its own members as the example has them; on a shared install people may have added others.
+    want = {"alice": "reader", "bob": "editor", "service-account-airflow-pipelines": "pipelines"}
     check("... with its members: alice reads, bob edits, the pipelines run",
-          members == {"alice": "reader", "bob": "editor", "service-account-airflow-pipelines": "pipelines"}, members)
+          {u: members.get(u) for u in want} == want, members)
 
     # 2. Who may change projects, and who sees which.
     mine = projects(alice)

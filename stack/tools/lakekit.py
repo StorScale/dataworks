@@ -66,7 +66,15 @@ DefaultCookiePolicy.return_ok_secure = _localhost_is_secure
 def mc(*args, check=True):
     r = subprocess.run(["mc", "--no-color", *args], capture_output=True, text=True)
     if check and r.returncode != 0:
-        sys.exit(f"setup: mc {' '.join(args)} failed:\n{r.stdout}{r.stderr}")
+        # Never the credentials: `mc alias set <alias> <url> <key> <secret>`, `mc admin user add <alias> <user> <secret>`.
+        shown = list(args)
+        if shown[:2] == ["alias", "set"]:
+            shown = shown[:4] + ["<key>", "<secret>"] * (len(shown) > 4)
+        elif shown[:3] == ["admin", "user", "add"]:
+            shown = shown[:5] + ["<secret>"] * (len(shown) > 5)
+        shown = ["<secret>" if i and shown[i - 1] == "--secret-key" else a for i, a in enumerate(shown)]
+        shown = ["<administrator>" if a == env.get("BUCKETS_ROOT_USER") else a for a in shown]   # nor its key's ID
+        sys.exit(f"setup: mc {' '.join(shown)} failed:\n{r.stdout}{r.stderr}")
     return r
 
 
@@ -124,6 +132,19 @@ def ensure_policy(name, statements):
     mc("admin", "policy", "create", "buckets", name, f.name)
 
 
+def ensure_access_key(key, secret, statements):
+    """On an external store, one of the platform's accounts as an access key of the administrator's
+    (MinIO signing people in through LDAP makes no users of its own), its policy its own: made, or
+    its secret and policy put back."""
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+        json.dump({"Version": "2012-10-17", "Statement": statements}, f)
+    if mc("admin", "user", "svcacct", "info", "buckets", key, check=False).returncode == 0:
+        mc("admin", "user", "svcacct", "edit", "buckets", key, "--secret-key", secret, "--policy", f.name)
+    else:
+        mc("admin", "user", "svcacct", "add", "buckets", env["BUCKETS_ROOT_USER"], "--access-key", key,
+           "--secret-key", secret, "--policy", f.name, "--name", key, "--description", "the platform's (DataWorks)")
+
+
 def setup_buckets(buckets, policies, accounts):
     """buckets: names; policies: {name: statements}; accounts: [(access key, secret, policy)]."""
     wait_for("Buckets", f"{BUCKETS}/minio/health/live")
@@ -133,6 +154,9 @@ def setup_buckets(buckets, policies, accounts):
     for name, statements in policies.items():
         ensure_policy(name, statements)
     for user, secret, pol in accounts:
+        if EXTERNAL:
+            ensure_access_key(user, secret, policies[pol])
+            continue
         mc("admin", "user", "add", "buckets", user, secret)
         mc("admin", "policy", "attach", "buckets", pol, "--user", user, check=False)  # fails if attached
     log(f"Buckets: buckets {', '.join(buckets)}; policies {', '.join(policies)}; "

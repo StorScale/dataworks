@@ -421,7 +421,11 @@ On the store, the platform's Keycloak as an OpenID provider, so people's tokens 
 MINIO_IDENTITY_OPENID_CONFIG_URL=<the platform's URL>/sso/realms/lakehouse/.well-known/openid-configuration
 MINIO_IDENTITY_OPENID_CLIENT_ID=lakehouse
 MINIO_IDENTITY_OPENID_CLAIM_NAME=groups
+MINIO_IDENTITY_OPENID_SCOPES=openid,profile,email
 ```
+
+The scopes matter for the console's sign-in: without them MinIO asks for every scope Keycloak lists, `service_account`
+among them, which the lakehouse client doesn't have, and Keycloak refuses with `invalid_scope`.
 
 A store signing people in through LDAP keeps doing so: LDAP and OpenID work side by side (MinIO RELEASE.2024-10-13 and
 later). The store reads its OpenID settings as it starts, so the platform's Keycloak must answer by then.
