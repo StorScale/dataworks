@@ -314,6 +314,9 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("GET /api/audit", s.handleAudit)
 	mux.HandleFunc("GET /api/projects/{name}/maintenance", s.handleMaintenance)
 	mux.HandleFunc("POST /api/projects/{name}/maintenance", s.handleMaintenance)
+	mux.HandleFunc("GET /api/projects/{name}/adoptable", s.handleAdoptable)               // the stores, their schemas and tables, to adopt from
+	mux.HandleFunc("POST /api/projects/{name}/adopt", s.handleAdopt)                      // tables of a store, adopted where they are
+	mux.HandleFunc("DELETE /api/projects/{name}/adopt/{table}", s.handleUnadopt)          // one no longer adopted (not one taken over)
 	mux.HandleFunc("POST /api/projects/{name}/tables/{table}/takeover", s.handleTakeover) // an adopted table, the project's own from now
 	mux.HandleFunc("GET /api/projects/{name}/alerts", s.handleProjectAlerts)
 	mux.HandleFunc("POST /api/projects/{name}/alerts/mute", s.handleProjectAlerts)

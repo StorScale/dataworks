@@ -66,6 +66,7 @@ export type Spec = {
     freshness?: { table: string; within: string }[];
     checks?: { table: string; column?: string; check: string }[];
     maintenance?: { paused?: boolean };
+    adopt?: Adoption[];
   };
   files?: { bucket?: string };
   pipelines?: { serviceAccount: string; repo?: string; path?: string; ref?: string; credentials?: { secretRef: string }; memory?: string;
@@ -277,6 +278,21 @@ export type Maintenance = {
   keepHistory?: string; // ISO 8601, as P7D: how far back the data as it was goes
   tables: { name: string; now?: TableStats; lastRun?: TableRun }[];
 };
+// Another platform's Iceberg tables, adopted where they are (tables.adopt), and taken over once that platform stops writing them.
+export type Adoption = { table: string; from: string; takenOver?: string; takenOverBy?: string };
+export type AdoptableTable = { name: string; from: string; rows: number; bytes: number; lastChange?: string; adoptedAs?: string; note?: string };
+const adoptPath = (name: string) => `/api/projects/${encodeURIComponent(name)}`;
+export const getAdoptableStores = (name: string) => api<{ stores: { name: string; takeover: boolean }[] }>("GET", `${adoptPath(name)}/adoptable`);
+export const getAdoptableSchemas = (name: string, store: string) =>
+  api<{ store: string; schemas: string[] }>("GET", `${adoptPath(name)}/adoptable?store=${encodeURIComponent(store)}`);
+export const getAdoptableTables = (name: string, store: string, schema: string) =>
+  api<{ store: string; schema: string; tables: AdoptableTable[]; takeover: boolean; quiet: string }>("GET",
+    `${adoptPath(name)}/adoptable?store=${encodeURIComponent(store)}&schema=${encodeURIComponent(schema)}`);
+export const adoptTables = (name: string, tables: { table: string; from: string }[]) => api<{ adopt: Adoption[] }>("POST", `${adoptPath(name)}/adopt`, { tables });
+export const stopAdopting = (name: string, table: string) => api<void>("DELETE", `${adoptPath(name)}/adopt/${encodeURIComponent(table)}`);
+export const takeOver = (name: string, table: string) =>
+  api<{ table: string; from: string; takenOver: string; by: string; lastChangeThere: string }>("POST", `${adoptPath(name)}/tables/${encodeURIComponent(table)}/takeover`, {});
+
 export const getMaintenance = (name: string) => api<Maintenance>("GET", `/api/projects/${encodeURIComponent(name)}/maintenance`);
 // A run's log: each task's last try, so a failed run says why in the words of what ran.
 export const getRunLog = (name: string, pipeline: string, run: string) =>

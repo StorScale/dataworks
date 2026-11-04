@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { type ColumnProfile, SQLAnswer, TableStats, ago, classify, getClassification, getFlow, getHistory, getMaintenance, runMaintenance, runSQL, when } from "../api";
 import { Breakable, can, checkName, CheckPill, ErrorBanner, failing, limits, maskLabel, Spinner, usePoll, useProject } from "../lib";
 import { FlowStrip } from "./Overview";
+import { Adopted, AdoptPanel } from "./Adopt";
 
 const TABS = ["columns", "preview", "lineage", "quality", "history", "storage"] as const;
 type Tab = (typeof TABS)[number];
@@ -22,20 +23,37 @@ function holds(p?: ColumnProfile, type?: string) {
 }
 
 export default function Data() {
-  const { name, view } = useProject();
+  const { name, view, reload } = useProject();
   const spec = view?.spec?.spec;
   const [params, setParams] = useSearchParams();
   const flow = usePoll(() => getFlow(name), [name], 30_000);
   const klass = usePoll(() => getClassification(name), [name], 30_000);
   const [klassError, setKlassError] = useState<string>();
+  const [adopting, setAdopting] = useState(false);
   const tables = flow.data?.tables.filter((t) => !t.external) ?? [];
   const table = tables.find((t) => t.name === params.get("table")) ?? tables[0];
   const tab: Tab = (TABS as readonly string[]).includes(params.get("tab") ?? "") ? (params.get("tab") as Tab) : "columns";
   const go = (t: string, tb: Tab = "columns") => setParams(tb === "columns" ? { table: t } : { table: t, tab: tb });
+  // Adopted tables (tables.adopt), and adopting more: the project's editors, who may write its tables.
+  const adopts = spec?.tables?.adopt ?? [];
+  const canWrite = can(view, "write-tables");
+  const waiting = adopts.filter((a) => !tables.some((t) => t.name === a.table));
+  const changed = () => { reload(); flow.reload(); };
+  const adoptPanel = adopting && <AdoptPanel project={name} adopted={adopts} onClose={() => setAdopting(false)} onAdopted={() => { setAdopting(false); changed(); }} />;
+  const adoptButton = canWrite && !adopting && <button className="btn small" onClick={() => setAdopting(true)} data-testid="adopt">Adopt tables</button>;
 
   if (flow.error && !flow.data) return <div className="page"><ErrorBanner error={flow.error} /></div>;
   if (!flow.data) return <div className="page"><Spinner /></div>;
-  if (tables.length === 0) return <div className="page"><div className="empty">The catalog hasn't seen this project's tables yet. It looks every minute.</div></div>;
+  if (tables.length === 0) return (
+    <div className="page stack">
+      <div className="empty">
+        The catalog hasn't seen this project's tables yet. It looks every minute.
+        {waiting.length > 0 && <div className="small" style={{ marginTop: 8 }}>Adopted, coming: {waiting.map((a) => <code key={a.table} style={{ marginRight: 6 }}>{a.table}</code>)}</div>}
+        {adoptButton && <div style={{ marginTop: 12 }}>{adoptButton}</div>}
+      </div>
+      {adoptPanel}
+    </div>
+  );
 
   const reader = !!view?.role && !can(view, "read-all"); // under the readers' rules
   const lim = limits(spec, table.name);
@@ -54,15 +72,22 @@ export default function Data() {
       <div className="split">
         <nav className="side side-list" aria-label="Tables" data-testid="tables">
           <p className="eyebrow">Tables</p>
+          {adoptButton && <div style={{ padding: "0 8px 8px" }}>{adoptButton}</div>}
           {tables.map((t) => (
             <button key={t.fqn} className={t === table ? "active" : ""} onClick={() => go(t.name)} data-testid={`table-${t.name}`}>
               <span className="mono"><Breakable text={t.name} /></span>
               {failing(t.checks).length > 0 ? <span className="dot red" title="a check is failing" /> : limits(spec, t.name).hidden ? <span className="small muted" style={{ whiteSpace: "nowrap" }} title="The project's readers can't read this table">editors</span> : null}
             </button>
           ))}
+          {waiting.map((a) => (
+            <div key={a.table} className="small muted" style={{ padding: "6px 12px" }} title="Adopted: the catalog lists it within a few minutes" data-testid={`adopt-waiting-${a.table}`}>
+              <span className="mono">{a.table}</span> · coming
+            </div>
+          ))}
         </nav>
 
         <section className="main stack">
+          {adoptPanel}
           <div className="card flush">
             <div style={{ padding: "18px 20px 0" }}>
               <div className="card-head" style={{ marginBottom: 4 }}>
@@ -73,6 +98,9 @@ export default function Data() {
                 {table.description || `${table.fqn.split(".").slice(1).join(".")}`} · {table.columns.length} columns
                 {into[0]?.pipeline && <> · made by <Link to={`../pipelines?pipeline=${into[0].pipeline}`} relative="path" className="mono">{into[0].pipeline}</Link></>}
               </p>
+              {adopts.find((a) => a.table === table.name) && (
+                <Adopted key={table.name} project={name} adoption={adopts.find((a) => a.table === table.name)!} canWrite={canWrite} onChanged={changed} />
+              )}
               {narrowed && (
                 <div className={`banner ${reader ? "warn" : "info"}`} style={{ marginBottom: 12 }} data-testid="limits">
                   <div>

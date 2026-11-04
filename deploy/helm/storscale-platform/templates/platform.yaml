@@ -62,6 +62,9 @@ spec:
             - {name: TRINO_URL, value: "https://trino:8443"}
             - {name: TRINO_CA, value: /trino-cert/cert.pem}
             - {name: MAINTENANCE_TRINO_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: MAINTENANCE_TRINO_PASSWORD}}}
+            {{- with .Values.externalStores }}
+            - {name: EXTERNAL_STORES, value: {{ $names := list }}{{ range . }}{{ $names = append $names .name }}{{ end }}{{ join "," $names | quote }}}   # projects adopt their tables
+            {{- end }}
             {{- with include "storscale.takeoverStores" . }}
             - {name: TAKEOVER_STORES, value: {{ . | quote }}}   # whose adopted tables projects may take over (externalStores[].takeover)
             {{- end }}

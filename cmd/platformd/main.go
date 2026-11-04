@@ -109,6 +109,8 @@ type config struct {
 	// there first.
 	TakeoverStores []string
 	TakeoverQuiet  time.Duration
+	// ExternalStores are the external stores projects adopt tables from.
+	ExternalStores []string
 	// DeliveryKeepFor is how long a personal delivery's read is kept, so the
 	// log can be searched by a person's ID (9.2): 7y, or days as 400d.
 	DeliveryKeepFor string
@@ -199,6 +201,7 @@ func configFromEnv(get func(string) string) (config, error) {
 		AdminGroups:            list("PLATFORM_ADMIN_GROUPS", "engineers"),
 		DeliveryApproverGroups: list("DELIVERY_APPROVER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers")),
 		TakeoverStores:         list("TAKEOVER_STORES", ""),
+		ExternalStores:         list("EXTERNAL_STORES", ""),
 		TakeoverQuiet:          durationOr(or("TAKEOVER_QUIET", "24h"), 24*time.Hour),
 		DeliveryKeepFor:        or("DELIVERY_KEEP_FOR", "7y"),
 		ProductCertifierGroups: list("PRODUCT_CERTIFIER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers")),
