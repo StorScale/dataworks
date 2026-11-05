@@ -23,7 +23,7 @@ from http.server import ThreadingHTTPServer
 import k8s
 from health import Teams
 
-from lakekit import check, finish, s3_root
+from lakekit import STORE_BUCKET, check, finish, s3_root
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
@@ -35,14 +35,14 @@ def put_connection(data):
     if k8s.in_cluster():
         k8s.put_secret(CONNECTION, data, labels={"platform.storscale.io/connection": PROJECT})
     else:
-        s3_root().put_object(Bucket="storscale-platform", Key=f"connections/{PROJECT}/{CONNECTION}.json", Body=json.dumps(data).encode())
+        s3_root().put_object(Bucket=STORE_BUCKET, Key=f"connections/{PROJECT}/{CONNECTION}.json", Body=json.dumps(data).encode())
 
 
 def delete_connection():
     if k8s.in_cluster():
         k8s._api("DELETE", f"secrets/{CONNECTION}")
     else:
-        s3_root().delete_object(Bucket="storscale-platform", Key=f"connections/{PROJECT}/{CONNECTION}.json")
+        s3_root().delete_object(Bucket=STORE_BUCKET, Key=f"connections/{PROJECT}/{CONNECTION}.json")
 
 
 def cards():

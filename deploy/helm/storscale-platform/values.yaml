@@ -211,6 +211,12 @@ buckets:
 
 storage:
   storageClassName: ""   # for the databases, Nessie, JupyterHub and the catalog
+  # The platform's own bucket (its projects and their status, the semantic
+  # models, dbt's artifacts). Empty: dataworks-platform for a new install; one
+  # made before 0.39.0 keeps storscale-platform (the install's config
+  # remembers which). Set it only before the first install: the data doesn't move.
+  buckets:
+    platform: ""
   postgres: 8Gi
   nessie: 2Gi
   jupyterhub: 1Gi
@@ -431,7 +437,9 @@ backup:
   certificate: ""
   schedule: "0 4 * * *"
   keep: 14
-  bucket: storscale-backups
+  # The backups' bucket. Empty: dataworks-backups for a new install; one made
+  # before 0.39.0 keeps storscale-backups (the install's config remembers which).
+  bucket: ""
   s3:
     endpoint: ""
     region: us-east-1

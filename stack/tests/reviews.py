@@ -28,7 +28,7 @@ from urllib.parse import unquote
 import requests
 
 import pipelines_git as pg
-from lakekit import check, finish, sql
+from lakekit import STORE_BUCKET, check, finish, sql
 from projects import platform, projects, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
@@ -178,7 +178,7 @@ def main():
         pg.k8s.put_secret(pg.SECRET, {"username": pg.USER, "password": pg.TOKEN, "webhookToken": WEBHOOK_TOKEN},
                           labels={"platform.storscale.io/connection": NAME})
     else:
-        pg.s3_root().put_object(Bucket="storscale-platform", Key=f"connections/{NAME}/{pg.SECRET}.json",
+        pg.s3_root().put_object(Bucket=STORE_BUCKET, Key=f"connections/{NAME}/{pg.SECRET}.json",
                                 Body=json.dumps({"username": pg.USER, "password": pg.TOKEN, "webhookToken": WEBHOOK_TOKEN}).encode())
     spec = {"apiVersion": "platform.storscale.io/v1alpha1", "kind": "Project", "metadata": {"name": NAME},
             "spec": {"description": "Merge requests on data branches: the reviews suite's.",

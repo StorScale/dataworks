@@ -208,7 +208,7 @@ resources:
 {{- define "storscale.backup.env" -}}
 - {name: STORSCALE_K8S, value: "true"}
 - {name: STORSCALE_VERSION, value: {{ .Chart.AppVersion | quote }}}
-- {name: BACKUP_BUCKET, value: {{ .Values.backup.bucket | quote }}}
+- {name: BACKUP_BUCKET, value: {{ include "storscale.bucket.backups" . | quote }}}
 - {name: BACKUP_KEEP, value: {{ .Values.backup.keep | quote }}}
 - {name: BACKUP_ENDPOINT, value: {{ .Values.backup.s3.endpoint | default "http://buckets:9000" | quote }}}
 - {name: BACKUP_REGION, value: {{ .Values.backup.s3.region | quote }}}
@@ -326,4 +326,33 @@ mkdir -p {{ $cat }} /data/trino && cp /etc/trino/catalog-install/*.properties {{
 {{- if not (regexMatch "^https?://[^/]+$" .Values.storage.external.endpoint) }}{{ fail "storage.external.endpoint: http(s)://host[:port], nothing after" }}{{ end }}
 true
 {{- end }}
+{{- end }}
+
+{{- /* The platform's own buckets' names: the platform's (projects, their
+     status, the semantic models, dbt's artifacts) and the backups'. A name
+     given (storage.buckets.platform, backup.bucket) is used. Otherwise the
+     one the install already has (storscale-config keeps it), then
+     storscale-platform / storscale-backups for an install made before the
+     names were DataWorks' (its Secret storscale-env is there, its config
+     doesn't name them), and dataworks-platform / dataworks-backups for a new
+     one. A bucket's name never changes under an install: its data stays. */}}
+{{- define "storscale.bucket" -}}
+{{- $root := index . 0 -}}{{- $key := index . 1 -}}{{- $given := index . 2 -}}{{- $old := index . 3 -}}{{- $new := index . 4 -}}
+{{- if $given -}}{{ $given }}
+{{- else -}}
+{{- $config := lookup "v1" "ConfigMap" $root.Release.Namespace "storscale-config" -}}
+{{- $kept := "" -}}{{- if $config -}}{{- $kept = index ($config.data | default dict) $key | default "" -}}{{- end -}}
+{{- if $kept -}}{{ $kept }}
+{{- else if lookup "v1" "Secret" $root.Release.Namespace "storscale-env" -}}{{ $old }}
+{{- else -}}{{ $new }}
+{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{- define "storscale.bucket.platform" -}}
+{{- include "storscale.bucket" (list . "STORE_BUCKET" .Values.storage.buckets.platform "storscale-platform" "dataworks-platform") -}}
+{{- end }}
+
+{{- define "storscale.bucket.backups" -}}
+{{- include "storscale.bucket" (list . "BACKUP_BUCKET" .Values.backup.bucket "storscale-backups" "dataworks-backups") -}}
 {{- end }}

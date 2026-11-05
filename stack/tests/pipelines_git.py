@@ -47,7 +47,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import k8s
 import requests
 
-from lakekit import check, env, finish, s3_root, sql
+from lakekit import STORE_BUCKET, check, env, finish, s3_root, sql
 from projects import platform, projects, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
@@ -225,14 +225,14 @@ def put_secret(project=NAME):
     if k8s.in_cluster():
         k8s.put_secret(SECRET, data, labels={"platform.storscale.io/connection": project})
     else:
-        s3_root().put_object(Bucket="storscale-platform", Key=f"connections/{project}/{SECRET}.json", Body=json.dumps(data).encode())
+        s3_root().put_object(Bucket=STORE_BUCKET, Key=f"connections/{project}/{SECRET}.json", Body=json.dumps(data).encode())
 
 
 def delete_secret(project=NAME):
     if k8s.in_cluster():
         k8s._api("DELETE", f"secrets/{SECRET}")
     else:
-        s3_root().delete_object(Bucket="storscale-platform", Key=f"connections/{project}/{SECRET}.json")
+        s3_root().delete_object(Bucket=STORE_BUCKET, Key=f"connections/{project}/{SECRET}.json")
 
 
 def airflow():

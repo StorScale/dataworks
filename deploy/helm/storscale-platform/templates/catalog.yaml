@@ -220,6 +220,7 @@ spec:
             - {name: OPENMETADATA_TRINO_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: OPENMETADATA_TRINO_PASSWORD}}}
             - {name: STORE_ACCESS_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: PLATFORM_STORE_ACCESS_KEY}}}
             - {name: STORE_SECRET_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: PLATFORM_STORE_SECRET_KEY}}}
+            - {name: STORE_BUCKET, value: {{ include "storscale.bucket.platform" $ | quote }}}
             - {name: STORSCALE_K8S, value: "true"}
           readinessProbe:
             exec: {command: ["test", "-s", "/catalog/token"]}

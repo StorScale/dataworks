@@ -1,8 +1,9 @@
 """Configure the platform's base: Buckets, then Ranger.
 
 Buckets
-  - buckets `warehouse` (Iceberg tables), `scratch` (people's own files) and
-    `storscale-platform` (the platform's projects, and their status);
+  - buckets `warehouse` (Iceberg tables), `scratch` (people's own files), the
+    platform's own (STORE_BUCKET: its projects, and their status) and the
+    backups' (BACKUP_BUCKET), named by the chart;
   - policy `lakehouse-engine` (the warehouse, read and write) for the engines'
     service accounts, `trino-svc` and `nessie-svc`; policy `platform-store` for
     platformd's account, `platform-svc`;
@@ -38,6 +39,9 @@ from lakekit import (
 )
 
 ICEBERG = "iceberg"
+# The platform's own buckets, as the chart names them (Compose: the old names).
+PLATFORM_BUCKET = env.get("STORE_BUCKET", "storscale-platform")
+BACKUP_BUCKET = env.get("BACKUP_BUCKET", "storscale-backups")
 CATALOG_USER = "openmetadata"  # the catalog's service user: it reads every table, to describe and check them
 # platformd's table maintenance: Trino's optimize, expire_snapshots and
 # remove_orphan_files are table procedures, which need alter; optimize scans
@@ -101,9 +105,9 @@ POLICIES = [{**p, "policyItems": p["policyItems"] + ([allow(["execute"], groups=
 
 if __name__ == "__main__":
     setup_buckets(
-        buckets=["warehouse", "scratch", "storscale-platform", "storscale-backups", "mlflow"],
-        policies={"lakehouse-engine": bucket_rw("warehouse"), "platform-store": bucket_rw("storscale-platform"),
-                  "backup-store": bucket_rw("storscale-backups"),  # the backups' own account: that bucket alone
+        buckets=["warehouse", "scratch", PLATFORM_BUCKET, BACKUP_BUCKET, "mlflow"],
+        policies={"lakehouse-engine": bucket_rw("warehouse"), "platform-store": bucket_rw(PLATFORM_BUCKET),
+                  "backup-store": bucket_rw(BACKUP_BUCKET),  # the backups' own account: that bucket alone
                   "mlflow-store": bucket_rw("mlflow"),  # MLflow's artifacts, a workspace (project) a folder
                   "analysts": bucket_rw("scratch"), "engineers": bucket_rw("scratch")},
         accounts=[(env["TRINO_S3_ACCESS_KEY"], env["TRINO_S3_SECRET_KEY"], "lakehouse-engine"),

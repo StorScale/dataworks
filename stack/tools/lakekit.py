@@ -16,6 +16,7 @@ from http.cookiejar import DefaultCookiePolicy
 import requests
 
 env = os.environ
+STORE_BUCKET = env.get("STORE_BUCKET", "storscale-platform")   # the platform's own bucket (the chart names it)
 KEYCLOAK = env.get("KEYCLOAK_URL", "http://keycloak:8080")
 REALM = "lakehouse"
 RANGER = "http://ranger-admin:6080"

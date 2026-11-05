@@ -13,6 +13,7 @@ Safe to run again.
 """
 import io
 import json
+import os
 import sys
 import time
 
@@ -21,7 +22,7 @@ import pandas as pd
 
 from lakekit import load_sales_tables, log, s3_root
 
-STORE = "storscale-platform"
+STORE = os.environ.get("STORE_BUCKET", "storscale-platform")   # the platform's own bucket
 
 
 def wait_ready(name, timeout=300):

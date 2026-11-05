@@ -57,6 +57,7 @@ for noisy in ("metadata", "urllib3", "botocore", "sqlfluff"):
     logging.getLogger(noisy).setLevel(logging.WARNING)
 
 env = os.environ
+STORE_BUCKET = env.get("STORE_BUCKET", "storscale-platform")   # the platform's own bucket (the chart names it)
 OM = "http://openmetadata:8585/api"
 SERVICE = "trino"
 EVERY = int(env.get("SYNC_EVERY", "20"))
@@ -156,7 +157,7 @@ def ingest_dbt(token):
     for p in projects():
         name = p["metadata"]["name"]
         try:
-            s3.head_object(Bucket="storscale-platform", Key=f"dbt/{name}/manifest.json")
+            s3.head_object(Bucket=STORE_BUCKET, Key=f"dbt/{name}/manifest.json")
         except Exception:  # noqa: BLE001 (no dbt run yet)
             continue
         # The ingestion patches each lineage edge against its own copy of it,
@@ -170,7 +171,7 @@ def ingest_dbt(token):
                 "dbtConfigSource": {"dbtConfigType": "s3",
                                     "dbtSecurityConfig": {"awsAccessKeyId": env["STORE_ACCESS_KEY"], "awsSecretAccessKey": env["STORE_SECRET_KEY"],
                                                           "awsRegion": "us-east-1", "endPointURL": "http://buckets:9000"},
-                                    "dbtPrefixConfig": {"dbtBucketName": "storscale-platform", "dbtObjectPrefix": f"dbt/{name}"}}}}},
+                                    "dbtPrefixConfig": {"dbtBucketName": STORE_BUCKET, "dbtObjectPrefix": f"dbt/{name}"}}}}},
             "sink": {"type": "metadata-rest", "config": {}},
             "workflowConfig": server_config(token),
         })
@@ -187,9 +188,9 @@ def projects():
     s3 = boto3.client("s3", endpoint_url="http://buckets:9000", region_name="us-east-1",
                       aws_access_key_id=env["STORE_ACCESS_KEY"], aws_secret_access_key=env["STORE_SECRET_KEY"])
     out = []
-    for page in s3.get_paginator("list_objects_v2").paginate(Bucket="storscale-platform", Prefix="projects/"):
+    for page in s3.get_paginator("list_objects_v2").paginate(Bucket=STORE_BUCKET, Prefix="projects/"):
         for o in page.get("Contents", []):
-            out.append(json.loads(s3.get_object(Bucket="storscale-platform", Key=o["Key"])["Body"].read()))
+            out.append(json.loads(s3.get_object(Bucket=STORE_BUCKET, Key=o["Key"])["Body"].read()))
     return out
 
 
@@ -200,7 +201,7 @@ def model_of(project):
     s3 = boto3.client("s3", endpoint_url="http://buckets:9000", region_name="us-east-1",
                       aws_access_key_id=env["STORE_ACCESS_KEY"], aws_secret_access_key=env["STORE_SECRET_KEY"])
     try:
-        return s3.get_object(Bucket="storscale-platform", Key=f"semantic/{project}.yaml")["Body"].read().decode()
+        return s3.get_object(Bucket=STORE_BUCKET, Key=f"semantic/{project}.yaml")["Body"].read().decode()
     except Exception:  # noqa: BLE001 (none)
         return ""
 
@@ -726,7 +727,7 @@ def protected_columns(project):
     s3 = boto3.client("s3", endpoint_url="http://buckets:9000", region_name="us-east-1",
                       aws_access_key_id=env["STORE_ACCESS_KEY"], aws_secret_access_key=env["STORE_SECRET_KEY"])
     try:
-        doc = json.loads(s3.get_object(Bucket="storscale-platform", Key=f"classification/{project}.json")["Body"].read())
+        doc = json.loads(s3.get_object(Bucket=STORE_BUCKET, Key=f"classification/{project}.json")["Body"].read())
     except Exception:  # noqa: BLE001 (none yet)
         return {}
     out = {}
@@ -830,7 +831,7 @@ def classify_projects():
     """Where personal data is: declared and found, tagged in the catalog, written for the operator."""
     s3 = boto3.client("s3", endpoint_url="http://buckets:9000", region_name="us-east-1",
                       aws_access_key_id=env["STORE_ACCESS_KEY"], aws_secret_access_key=env["STORE_SECRET_KEY"])
-    classify.run(OM, admin_headers(), SERVICE, projects(), trino_cursor_factory(), s3, "storscale-platform")
+    classify.run(OM, admin_headers(), SERVICE, projects(), trino_cursor_factory(), s3, STORE_BUCKET)
 
 
 def main():

@@ -33,7 +33,7 @@ import threading
 import k8s
 import paramiko
 
-from lakekit import check, env, finish, s3_root, sql
+from lakekit import STORE_BUCKET, check, env, finish, s3_root, sql
 from projects import platform, projects, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
@@ -128,14 +128,14 @@ def put_connection(name, data):
     if k8s.in_cluster():
         k8s.put_secret(name, data, labels={"platform.storscale.io/connection": NAME})
     else:
-        s3_root().put_object(Bucket="storscale-platform", Key=f"connections/{NAME}/{name}.json", Body=json.dumps(data).encode())
+        s3_root().put_object(Bucket=STORE_BUCKET, Key=f"connections/{NAME}/{name}.json", Body=json.dumps(data).encode())
 
 
 def delete_connection(name):
     if k8s.in_cluster():
         k8s._api("DELETE", f"secrets/{name}")
     else:
-        s3_root().delete_object(Bucket="storscale-platform", Key=f"connections/{NAME}/{name}.json")
+        s3_root().delete_object(Bucket=STORE_BUCKET, Key=f"connections/{NAME}/{name}.json")
 
 
 def deliveries(s):

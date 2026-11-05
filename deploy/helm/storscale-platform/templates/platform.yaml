@@ -42,6 +42,7 @@ spec:
             # Projects are Project resources, with a copy in the bucket for the services that read them there.
             - {name: PROJECT_STORE, value: kubernetes}
             - {name: STORE_URL, value: "http://buckets:9000"}
+            - {name: STORE_BUCKET, value: {{ include "storscale.bucket.platform" $ | quote }}}
             - {name: STORE_ACCESS_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: PLATFORM_STORE_ACCESS_KEY}}}
             - {name: STORE_SECRET_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: PLATFORM_STORE_SECRET_KEY}}}
             - {name: CATALOG_URL, value: "http://openmetadata:8585"}
@@ -183,6 +184,7 @@ spec:
           env:
             - {name: PROJECT_STORE, value: kubernetes}
             - {name: STORE_URL, value: "http://buckets:9000"}
+            - {name: STORE_BUCKET, value: {{ include "storscale.bucket.platform" $ | quote }}}
             - {name: BUCKETS_ACCESS_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: BUCKETS_ROOT_USER}}}
             - {name: BUCKETS_SECRET_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: BUCKETS_ROOT_PASSWORD}}}
             - {name: KEYCLOAK_DIRECT_URL, value: "http://keycloak:8080/sso"}
@@ -302,6 +304,7 @@ spec:
             - {name: MCP_URL, value: "{{ include "storscale.url" . }}/mcp"}
             - {name: STORE_ACCESS_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: PLATFORM_STORE_ACCESS_KEY}}}
             - {name: STORE_SECRET_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: PLATFORM_STORE_SECRET_KEY}}}
+            - {name: STORE_BUCKET, value: {{ include "storscale.bucket.platform" $ | quote }}}
             {{- include "storscale.ca.env" . | nindent 12 }}
           ports:
             - {name: http, containerPort: 8000}

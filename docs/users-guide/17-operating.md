@@ -506,7 +506,7 @@ storscale backup --context <cluster>                     # one now; then nightly
 | `backup.certificate` | empty: backups off | The certificate backups are encrypted for |
 | `backup.schedule` | `0 4 * * *` (UTC) | When the CronJob `storscale-backup` runs |
 | `backup.keep` | `14` | How many backups are kept |
-| `backup.bucket` | `storscale-backups` | Where |
+| `backup.bucket` | `dataworks-backups` (`storscale-backups` on an install made before 0.39.0) | Where |
 | `backup.s3.endpoint`, `region`, `secretName` | empty: the platform's own Buckets | Another S3 endpoint, its credentials in a Secret with `accessKey` and `secretKey`. A real install should use one: a lost cluster takes its own Buckets with it. |
 | `backup.data.enabled`, `schedule`, `allowInternal` | `false`, `30 4 * * *`, `false` | Every bucket copied to `backup.s3` nightly (what changed since); needs `backup.s3.endpoint` |
 
@@ -629,6 +629,7 @@ The chart's values that matter most, from `deploy/helm/storscale-platform/values
 | `notebooks.memoryLimit`, `cpuLimit`, `storage` | `1G`, `2`, `1Gi` | | Each person's notebook |
 | `superset.mapboxApiKey` | empty | `MAPBOX_API_KEY` | A base map for map charts |
 | `examples.users` | `true` | | The example people (alice, bob, carol) in the realm Keycloak imports on the first install, and the sales project and its data (setup). `false`: neither, for real users only; setup then checks Trino as the maintenance account and the store's sign-in with the pipelines' service account |
+| `storage.buckets.platform`, `backup.bucket` | `dataworks-platform`, `dataworks-backups` | The platform's own buckets (its projects and their status, the semantic models, dbt's artifacts; the backups). An install made before 0.39.0 keeps `storscale-platform` and `storscale-backups`: the install's config (`storscale-config`) remembers the names it has, and they never change under it. Name them only before the first install |
 | `catalog.admins` | empty (bob) | | The catalog's administrators besides the platform operator's service account: usernames as people sign in (`jane.doe`) |
 | `storage.external.sts` | `true` | | The external store takes the platform's Keycloak tokens (STS), which setup checks. `false`: not yet; setup says so and goes on, and people get no credentials of their own there until it does |
 

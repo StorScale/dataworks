@@ -349,7 +349,7 @@ platform role.
 | `governance`'s groups | `products.certifierGroups` | `PRODUCT_CERTIFIER_GROUPS` | the administrators' groups |
 | `data-protection`'s groups | `deliveries.approverGroups` | `DELIVERY_APPROVER_GROUPS` (`engineers,analysts` in `stack/compose.yaml`) | the administrators' groups |
 
-The defined roles are kept in the platform's bucket, `roles/roles.json` (`STORE_BUCKET`, `storscale-platform` by default):
+The defined roles are kept in the platform's bucket, `roles/roles.json` (`STORE_BUCKET`: `dataworks-platform`, or `storscale-platform` on an install made before 0.39.0):
 the operator and platformd both read it, and backups keep it with the bucket.
 
 ## Limits and gotchas

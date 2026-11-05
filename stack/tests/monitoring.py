@@ -23,7 +23,7 @@ import k8s
 import requests
 from botocore.exceptions import ClientError
 
-from lakekit import EXTERNAL, check, env, finish, s3, s3_root
+from lakekit import EXTERNAL, STORE_BUCKET, check, env, finish, s3, s3_root
 
 
 def drive(mode):
@@ -113,7 +113,7 @@ def main():
     except ClientError:
         sample = False
     try:
-        s3(aws_access_key_id=env["PROMETHEUS_USER"], aws_secret_access_key=env["PROMETHEUS_SECRET"]).list_objects_v2(Bucket="photos" if sample else "storscale-platform")
+        s3(aws_access_key_id=env["PROMETHEUS_USER"], aws_secret_access_key=env["PROMETHEUS_SECRET"]).list_objects_v2(Bucket="photos" if sample else STORE_BUCKET)
         denied = "allowed"
     except ClientError as e:
         denied = e.response["Error"]["Code"]

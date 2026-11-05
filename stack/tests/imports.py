@@ -48,7 +48,7 @@ import k8s
 import requests
 from connector_standins import GONG_KEY, GONG_SECRET, HS_KEY, HS_SECRET, SAP, SAP_CLIENT, SAP_PASSWORD, SAP_USER, Gong, Highspot
 
-from lakekit import check, denied, env, finish, s3_root, sql
+from lakekit import STORE_BUCKET, check, denied, env, finish, s3_root, sql
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
@@ -93,14 +93,14 @@ def put_connection(data):
     if k8s.in_cluster():
         k8s.put_secret(CONNECTION, data, labels={"platform.storscale.io/connection": PROJECT})
     else:
-        s3_root().put_object(Bucket="storscale-platform", Key=f"connections/{PROJECT}/{CONNECTION}.json", Body=json.dumps(data).encode())
+        s3_root().put_object(Bucket=STORE_BUCKET, Key=f"connections/{PROJECT}/{CONNECTION}.json", Body=json.dumps(data).encode())
 
 
 def delete_connection():
     if k8s.in_cluster():
         k8s._api("DELETE", f"secrets/{CONNECTION}")
     else:
-        s3_root().delete_object(Bucket="storscale-platform", Key=f"connections/{PROJECT}/{CONNECTION}.json")
+        s3_root().delete_object(Bucket=STORE_BUCKET, Key=f"connections/{PROJECT}/{CONNECTION}.json")
 
 
 SF_PORT, GONG_PORT, HS_PORT, SAP_PORT = 8428, 8429, 8430, 8431

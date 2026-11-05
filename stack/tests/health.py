@@ -21,7 +21,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import k8s
 
-from lakekit import check, finish, s3_root
+from lakekit import STORE_BUCKET, check, finish, s3_root
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
@@ -47,7 +47,7 @@ def read_secret():
     if k8s.in_cluster():
         return k8s.get_secret(SECRET) or None
     try:
-        return json.loads(s3_root().get_object(Bucket="storscale-platform", Key=f"secrets/{SECRET}.json")["Body"].read())
+        return json.loads(s3_root().get_object(Bucket=STORE_BUCKET, Key=f"secrets/{SECRET}.json")["Body"].read())
     except Exception:  # noqa: BLE001 (none)
         return None
 
@@ -59,9 +59,9 @@ def write_secret(data):
         else:
             k8s.put_secret(SECRET, data)
     elif data is None:
-        s3_root().delete_object(Bucket="storscale-platform", Key=f"secrets/{SECRET}.json")
+        s3_root().delete_object(Bucket=STORE_BUCKET, Key=f"secrets/{SECRET}.json")
     else:
-        s3_root().put_object(Bucket="storscale-platform", Key=f"secrets/{SECRET}.json", Body=json.dumps(data).encode())
+        s3_root().put_object(Bucket=STORE_BUCKET, Key=f"secrets/{SECRET}.json", Body=json.dumps(data).encode())
 
 
 def main():

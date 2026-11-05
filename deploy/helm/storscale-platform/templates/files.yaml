@@ -24,3 +24,6 @@ data:
   PYTHONPATH: /tools
   STORSCALE_K8S: "true"
   STORSCALE_NAMESPACE: {{ .Release.Namespace | quote }}
+  # The platform's own buckets: chosen once, then kept (storscale.bucket).
+  STORE_BUCKET: {{ include "storscale.bucket.platform" . | quote }}
+  BACKUP_BUCKET: {{ include "storscale.bucket.backups" . | quote }}

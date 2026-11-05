@@ -32,7 +32,7 @@ import requests
 
 sys.path.insert(0, "/python")
 import storscale  # noqa: E402
-from lakekit import check, env, finish, s3_root  # noqa: E402
+from lakekit import STORE_BUCKET, check, env, finish, s3_root  # noqa: E402
 from projects import platform, projects, wait  # noqa: E402
 
 PLATFORM = os.environ["PLATFORM_URL"]
@@ -75,7 +75,7 @@ def raw_key(conn):
     if k8s.in_cluster():
         return k8s.get_secret(conn).get("llmKey", "")
     try:
-        d = json.loads(s3_root().get_object(Bucket="storscale-platform", Key=f"connections/{NAME}/{conn}.json")["Body"].read())
+        d = json.loads(s3_root().get_object(Bucket=STORE_BUCKET, Key=f"connections/{NAME}/{conn}.json")["Body"].read())
     except Exception:   # not there yet
         return ""
     return d.get("llmKey") or (d.get("data") or {}).get("llmKey") or ""
