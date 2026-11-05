@@ -254,6 +254,14 @@ def setup_ranger(policies, keep=()):
         ranger("PUT", f"/service/public/v2/api/service/{found[0]['id']}", json={**found[0], **service})
     else:
         ranger("POST", "/service/public/v2/api/service", json=service)
+    # Ranger refuses a policy naming a group it doesn't know, and a group gets
+    # there only with a member (sync_people): on an install with no one in it yet
+    # (no example users), make the policies' groups first.
+    named = {g for p in policies for k, items in p.items() if k.endswith("olicyItems")
+             for item in items for g in item.get("groups", [])} - {"public"}  # Ranger's own
+    known = {g["name"] for g in ranger("GET", "/service/xusers/groups?pageSize=1000")["vXGroups"]}
+    for name in sorted(named - known):
+        ranger("POST", "/service/xusers/groups", json={"name": name, "description": "from Keycloak"})
     existing = {p["name"]: p for p in ranger("GET", f"/service/public/v2/api/service/{RANGER_SERVICE}/policy")}
     wanted = {p["name"] for p in policies}
     for name, p in existing.items():  # Ranger's default policies, and any of ours since removed
