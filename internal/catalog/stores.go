@@ -3,7 +3,6 @@ package catalog
 import (
 	"context"
 	"fmt"
-	"path"
 	"strings"
 	"time"
 
@@ -94,12 +93,24 @@ func RegisterInStore(ctx context.Context, tr *trino.Client, from, metadataFile s
 	if len(parts) != 3 {
 		return fmt.Errorf("from %q: as <store>.<schema>.<table>", from)
 	}
-	dir, file := path.Split(metadataFile)                                       // .../<table>/metadata/, <n>.metadata.json
-	location := strings.TrimSuffix(path.Dir(strings.TrimSuffix(dir, "/")), "/") // .../<table>
-	if path.Base(strings.TrimSuffix(dir, "/")) != "metadata" || file == "" {
-		return fmt.Errorf("%s isn't a table's metadata file (<table>/metadata/<file>)", metadataFile)
+	location, file, err := tableLocation(metadataFile)
+	if err != nil {
+		return err
 	}
-	_, err := tr.Exec(ctx, fmt.Sprintf(`CALL %s.system.register_table(schema_name => '%s', table_name => '%s', table_location => '%s', metadata_file_name => '%s')`,
+	_, err = tr.Exec(ctx, fmt.Sprintf(`CALL %s.system.register_table(schema_name => '%s', table_name => '%s', table_location => '%s', metadata_file_name => '%s')`,
 		trino.Quote(WritableCatalog(parts[0])), parts[1], parts[2], strings.ReplaceAll(location, "'", "''"), strings.ReplaceAll(file, "'", "''")))
 	return err
+}
+
+// tableLocation splits a table's metadata file, <location>/metadata/<file>,
+// into its location and file name. By hand, not with path's functions:
+// they'd clean s3a://bucket/... down to s3a:/bucket/....
+func tableLocation(metadataFile string) (location, file string, err error) {
+	i := strings.LastIndex(metadataFile, "/")
+	dir, file := metadataFile[:max(i, 0)], metadataFile[i+1:]
+	j := strings.LastIndex(dir, "/")
+	if i < 0 || j < 0 || dir[j+1:] != "metadata" || file == "" || !strings.HasSuffix(file, ".metadata.json") {
+		return "", "", fmt.Errorf("%s isn't a table's metadata file (<table>/metadata/<file>.metadata.json)", metadataFile)
+	}
+	return dir[:j], file, nil
 }
