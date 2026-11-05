@@ -4,6 +4,15 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.39.1] - 2026-11-05
+
+A fix for an install with real users only: its setup step stopped at Ranger, refusing policies for the analysts' and engineers' groups before anyone was in them.
+
+**Upgrading from 0.39.0:** `storscale upgrade --context <cluster> --version 0.39.1`. Nothing else changes.
+
+### Fixed
+- **Setup on an install with no example users** (`examples.users: false`): Ranger refused the Trino policies naming the `analysts`, `engineers` and `pipelines` groups ("Group name: analysts specified in policy does not exist"), since a group reached Ranger only with a member. Setup now makes the groups its policies name first.
+
 ## [0.39.0] - 2026-11-05
 
 The platform's own buckets named for DataWorks on a new install (`dataworks-platform`, `dataworks-backups`). An install for real users only: `examples.users: false` leaves out the example people and the sales project (the setting had done nothing until now), with the catalog's administrators named in `catalog.admins`; and an install on a company's store that takes the platform's sign-in later (`storage.external.sts: false`).
