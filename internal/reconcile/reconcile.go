@@ -75,8 +75,11 @@ type Reconciler struct {
 	RangerUserPassword string
 }
 
-// Apply makes the systems hold what the project says, and reports how each went.
-func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Status {
+// Apply makes the systems hold what the project says, and reports how each
+// went. prev is its status before this pass (nil the first time): what was
+// applied before, to undo what the spec no longer lists. Not the store's
+// status now, which the pass's Applying status already holds the new spec in.
+func (r *Reconciler) Apply(ctx context.Context, p *project.Project, prev *project.Status) *project.Status {
 	st := &project.Status{Name: p.Metadata.Name, Observed: p.Hash(), Spec: p}
 	part := func(system string, err error) {
 		pt := project.Part{System: system, OK: err == nil, Message: "applied"}
@@ -97,7 +100,7 @@ func (r *Reconciler) Apply(ctx context.Context, p *project.Project) *project.Sta
 	// project's); on GitLab's error, those of before, kept.
 	var before []int
 	var prevSpec *project.Project
-	if prev, _ := r.Store.Status(ctx, p.Metadata.Name); prev != nil {
+	if prev != nil {
 		before, prevSpec = prev.Reviews, prev.Spec
 	}
 	mrs, gl, reviewsErr := r.openReviews(ctx, p)
@@ -640,7 +643,7 @@ func (r *Reconciler) pass(ctx context.Context, last map[string]time.Time, resync
 			r.Store.PutStatus(ctx, &project.Status{Name: p.Metadata.Name, Phase: project.Applying, Observed: p.Hash(),
 				Spec: p, Updated: time.Now().UTC(), Members: memberList(st)})
 		}
-		got := r.Apply(ctx, p)
+		got := r.Apply(ctx, p, st)
 		last[p.Metadata.Name] = time.Now()
 		if err := r.Store.PutStatus(ctx, got); err != nil {
 			r.Log.Error("writing status", "project", p.Metadata.Name, "error", err)
