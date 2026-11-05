@@ -4,6 +4,11 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **An install with real users only** (`examples.users: false`): Keycloak imports its realm without the example people (alice, bob, carol), and setup makes no sales project. Setup's own checks no longer need them: Trino's as the table maintenance account, the store's sign-in (STS) with the pipelines' service account. Set it before the first install. The setting had done nothing until now: the example people were always there.
+- **The catalog's administrators** (`catalog.admins`): people's usernames, beside the platform operator's service account; bob when empty, as before.
+- **An external store that takes the platform's Keycloak tokens later** (`storage.external.sts: false`): setup says it doesn't yet and goes on, where it stopped. The platform's services work with their keys; people's own credentials there (notebooks, pipelines) wait for the store's OpenID settings, which restart it.
+
 ## [0.38.0] - 2026-11-05
 
 Another platform's tables, adopted where their files are and then made a project's own: **Adopt tables** on the Data page picks them from a company's store, **Take over…** makes one the project's own once that platform stops writing it, taking it out of that platform's catalog too, so its jobs no longer find it, and **Give back…** returns it, everything written here included. A company's store over HTTPS, or one signing people in through LDAP, works now; the setup step no longer prints that store's administrator key when a command fails; and a table a project stops adopting is unregistered again.

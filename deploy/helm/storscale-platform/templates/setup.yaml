@@ -36,8 +36,10 @@ spec:
           env:
             - {name: STORSCALE_REVISION, value: {{ $root.Release.Revision | quote }}}
             - {name: STORSCALE_SAMPLE_TRAFFIC, value: {{ $root.Values.monitoring.sampleTraffic | quote }}}
+            - {name: STORSCALE_EXAMPLES, value: {{ $root.Values.examples.users | toString | quote }}}   # the example people and the sales project
             {{- if include "storscale.store.external" $root }}
             - {name: STORE_EXTERNAL, value: "true"}   # a company's store: only what's marked as the platform's is changed there
+            - {name: STORE_STS, value: {{ $root.Values.storage.external.sts | toString | quote }}}   # it takes the platform's Keycloak tokens
             {{- end }}
             {{- with $root.Values.storage.external.console }}
             - {name: STORE_CONSOLE_URL, value: {{ . | quote }}}   # a company store's console: people sign in there through Keycloak

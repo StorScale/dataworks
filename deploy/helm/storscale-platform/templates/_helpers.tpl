@@ -55,9 +55,23 @@ data:
 {{- range $path, $_ := $root.Files.Glob (printf "files/%s/**" $dir) }}
 {{- $rel := trimPrefix (printf "files/%s/" $dir) $path }}
 {{- if not (or (contains "__pycache__" $rel) (hasSuffix ".pyc" $rel)) }}
+{{- if and (eq $name "keycloak") (eq $rel "realm.json") (not $root.Values.examples.users) }}
+  {{ $rel }}: {{ include "storscale.realmWithoutExamples" $root | quote }}
+{{- else }}
   {{ $rel | replace "/" "__" }}: {{ $root.Files.Get $path | quote }}
 {{- end }}
 {{- end }}
+{{- end }}
+{{- end }}
+
+{{- /* Keycloak's realm (keycloak/realm.json) without the example people
+     (examples.users: false): its service accounts are its only users. */}}
+{{- define "storscale.realmWithoutExamples" -}}
+{{- $realm := .Files.Get "files/keycloak/realm.json" | fromJson -}}
+{{- $users := list -}}
+{{- range $realm.users }}{{ if .serviceAccountClientId }}{{ $users = append $users . }}{{ end }}{{ end -}}
+{{- $_ := set $realm "users" $users -}}
+{{- toPrettyJson $realm -}}
 {{- end }}
 
 {{- define "storscale.filesVolume" -}}

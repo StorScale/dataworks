@@ -357,6 +357,9 @@ def denied(user, statement, catalog, schema=None):
     return None
 
 
+MAINTENANCE_TRINO_USER = "maintenance"   # platformd's table maintenance account (setup/lakehouse.py)
+
+
 def wait_for_trino(timeout=180):
     """Until Trino has started and runs a query: it refuses every query until
     the platform operator has written its limits (its resource groups)."""
@@ -365,7 +368,13 @@ def wait_for_trino(timeout=180):
     deadline, last = time.time() + timeout, None
     while time.time() < deadline:
         try:
-            sql("bob", "SELECT 1", catalog="iceberg")
+            if env.get("MAINTENANCE_TRINO_PASSWORD"):   # the platform's own account: no example person needed
+                import trino
+                trino.dbapi.connect(host="trino", port=8443, http_scheme="https", user=MAINTENANCE_TRINO_USER,
+                                    auth=trino.auth.BasicAuthentication(MAINTENANCE_TRINO_USER, env["MAINTENANCE_TRINO_PASSWORD"]),
+                                    verify="/tls/cert.pem", catalog="iceberg").cursor().execute("SELECT 1").fetchall()
+            else:
+                sql("bob", "SELECT 1", catalog="iceberg")
             return
         except Exception as e:  # noqa: BLE001 (no resource group yet, or Keycloak's token not yet)
             last = e
@@ -419,12 +428,25 @@ def ensure_buckets_identity(timeout=600):
     server restarted), and waits for STS to work."""
     from botocore.exceptions import BotoCoreError, ClientError
 
+    if EXTERNAL and env.get("STORE_STS") == "false":   # storage.external.sts: not yet
+        log("the store doesn't take the platform's Keycloak tokens yet (storage.external.sts: false): people get "
+            "no credentials of their own there (notebooks, pipelines) until it's given its OpenID settings")
+        return
+    examples = env.get("STORSCALE_EXAMPLES", "true") != "false"
+
     def sts():
         """True: it works; False: Buckets has no OpenID settings; None: it isn't answering."""
         try:
-            s3_as("bob")   # credentials from his Keycloak token: what STS is for
+            if examples:
+                s3_as("bob")   # credentials from his Keycloak token: what STS is for
+            else:   # no example people: the pipelines' service account's token
+                s3_as("service-account-airflow-pipelines", web_token=service_token("airflow-pipelines", env["AIRFLOW_PIPELINES_SECRET"]))
             return True
         except ClientError as e:
+            # Its token taken, but no policy for its groups (none of the projects
+            # gives one yet): the store reads Keycloak's tokens, which is the question.
+            if "are defined" in e.response["Error"].get("Message", ""):
+                return True
             if e.response["Error"].get("Code") in ("InvalidParameterValue", "InvalidIdentityToken"):
                 return False
             raise

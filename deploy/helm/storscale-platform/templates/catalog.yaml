@@ -36,8 +36,9 @@
 - {name: OIDC_SCOPE, value: openid email profile}
 # Use the person's Keycloak session, as the other tools do (no fresh sign-in).
 - {name: OIDC_MAX_AGE, value: "28800"}
-# Administrators: the platform operator's service account (which sets the catalog up) and bob.
-- {name: AUTHORIZER_ADMIN_PRINCIPALS, value: "[service-account-platform-operator,bob]"}
+# Administrators: the platform operator's service account (which sets the catalog up), and
+# catalog.admins (people's usernames), else bob, the examples' engineer.
+- {name: AUTHORIZER_ADMIN_PRINCIPALS, value: {{ printf "[%s]" (join "," (prepend (.Values.catalog.admins | default (list "bob")) "service-account-platform-operator")) | quote }}}
 - {name: AUTHORIZER_PRINCIPAL_DOMAIN, value: {{ .Values.global.domain | quote }}}
 - {name: STORSCALE_REVISION, value: {{ .Release.Revision | quote }}}
 {{- end }}

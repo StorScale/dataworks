@@ -95,7 +95,7 @@ How it behaves and what to watch:
 
 - The platform's four names, `domain` and `catalog.`, `access.`, `s3.` under it, must resolve to the ingress from people's browsers and to the gateway from inside the cluster (hairpin traffic through the load balancer, or a CoreDNS rewrite as `deploy/kind/dns.sh` does).
 - Every secret is generated on install and kept on upgrade, in the Secret `storscale-env`; give one in `secrets:` to choose it. The example people's password: `kubectl -n storscale get secret storscale-env -o jsonpath='{.data.LAKEHOUSE_USER_PASSWORD}' | base64 -d`.
-- Keycloak runs in development mode with its realm imported at each start: fine for a trial, not for real users yet. The example users always exist (`examples.users` doesn't switch them off yet).
+- Keycloak's realm is imported on the first install only; after that people and their sign-in are the organisation's. The example people (alice, bob, carol) and the sales project come with it unless `examples.users: false`, which is for an install people sign in to with their own accounts (`sso.entra`): set it before the first install, since it changes what's imported (people already in a realm stay; remove them in Keycloak). Name the catalog's administrators then too (`catalog.admins`), whom bob is otherwise.
 - A Spark Operator another release installed owns the Spark CRDs: install with `--set spark-operator.enabled=false`.
 - Upgrade with `storscale upgrade`, never a bare `helm upgrade` ([Upgrades](#upgrades)).
 
@@ -464,6 +464,11 @@ platform lets Keycloak's `lakehouse` client send people back to `<console>/oauth
 They see the buckets their groups' policies allow. The store must trust the platform's certificate (MinIO Operator: the
 tenant's `externalCaCertSecret`), since it fetches Keycloak's settings and keys itself.
 
+Setup checks the store takes the platform's Keycloak tokens (STS), and stops if it doesn't. A store that's given its OpenID
+settings later (they restart it, which a shared store may need to plan for) installs with `storage.external.sts: false`: setup
+says so and goes on, and the platform's own services work as usual, with their keys. Only people's own credentials there wait,
+in notebooks and pipelines. Set it back to `true` once the store has them.
+
 ### How it behaves
 
 - Every service reaches the store at `buckets:9000`, as it does Buckets: a forwarder there (`store-forwarder`) passes each
@@ -623,7 +628,9 @@ The chart's values that matter most, from `deploy/helm/storscale-platform/values
 | `limits.project.*`, `limits.person.*`, `limits.total.*` | 4/40/50%/none; 4/100; 20/1000 | `LIMITS_*` (the operator's; same defaults) | [Limits](#limits) |
 | `notebooks.memoryLimit`, `cpuLimit`, `storage` | `1G`, `2`, `1Gi` | | Each person's notebook |
 | `superset.mapboxApiKey` | empty | `MAPBOX_API_KEY` | A base map for map charts |
-| `examples.users` | `true` | | Doesn't switch the example people off yet |
+| `examples.users` | `true` | | The example people (alice, bob, carol) in the realm Keycloak imports on the first install, and the sales project and its data (setup). `false`: neither, for real users only; setup then checks Trino as the maintenance account and the store's sign-in with the pipelines' service account |
+| `catalog.admins` | empty (bob) | | The catalog's administrators besides the platform operator's service account: usernames as people sign in (`jane.doe`) |
+| `storage.external.sts` | `true` | | The external store takes the platform's Keycloak tokens (STS), which setup checks. `false`: not yet; setup says so and goes on, and people get no credentials of their own there until it does |
 
 Who administers is `PLATFORM_ADMIN_GROUPS` (default `engineers`), and who may sign in at all `PLATFORM_GROUPS` (default `analysts,engineers`): platformd's environment; the chart has no value for them.
 

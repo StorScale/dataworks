@@ -4,14 +4,18 @@
           Buckets' buckets, policies and accounts for the lakehouse, the
           notebooks and monitoring; Ranger's people and policies.
   trino   once Trino is up: what Superset needs, then the sales
-          project (projects/sales.json), applied by the operator, and its data.
+          project (projects/sales.json), applied by the operator, and its data:
+          the examples', left out with them (STORSCALE_EXAMPLES=false).
 
 Every step is safe to run again.
 """
+import os
 import subprocess
 import sys
 
-STAGES = {"base": ["realm", "lakehouse", "jupyterhub", "monitoring"], "trino": ["superset", "project"]}
+EXAMPLES = os.environ.get("STORSCALE_EXAMPLES", "true") != "false"
+STAGES = {"base": ["realm", "lakehouse", "jupyterhub", "monitoring"],
+          "trino": ["superset"] + (["project"] if EXAMPLES else [])}
 
 if sys.argv[1] == "trino":   # until Trino runs queries: it refuses them until its limits are written
     from lakekit import wait_for_trino

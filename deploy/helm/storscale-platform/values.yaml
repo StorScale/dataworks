@@ -174,9 +174,19 @@ sso:
       enabled: false
       maxAssertionSeconds: 5400   # Entra's tokens live 60 to 90 minutes
 
-# The example people (alice, bob, carol) and their groups, from the realm.
+# The example people (alice, bob, carol), from the realm, and the sales
+# project with its data (setup's project step), which the guides and the test
+# suites use. false: neither, for an install people sign in to with their own
+# accounts (sso.entra); Keycloak's realm is imported without them, so set it
+# before the first install (people already in a realm stay: remove them there).
 examples:
   users: true
+
+# The catalog's administrators (OpenMetadata), besides the platform operator's
+# service account: usernames as people sign in (an Entra login name's local
+# part, jane.doe). Empty: bob, the examples' engineer.
+catalog:
+  admins: []
 
 # Buckets' first pool: its servers, each one's drives, and each drive's size.
 # Raise storage to grow every drive of the pool (the storage class must allow
@@ -225,6 +235,11 @@ storage:
     # It holds without endpoint too: a store the platform doesn't keep its files
     # on yet (its adopted tables', one being moved from).
     console: ""
+    # The store takes the platform's Keycloak tokens (STS: people's own
+    # credentials there, in notebooks and pipelines; its OpenID settings, the
+    # users' guide, Operating). Setup checks it, and stops if it doesn't.
+    # false: not yet, for a store that's given them later; setup only says so.
+    sts: true
 
 # Where the stateful pods run (their volumes follow them): a node selector
 # per workload, by name, for a cluster whose storage driver mounts a volume
