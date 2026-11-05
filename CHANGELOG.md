@@ -4,6 +4,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-11-05
+
+An install for real users only: `examples.users: false` leaves out the example people and the sales project (the setting had done nothing until now), with the catalog's administrators named in `catalog.admins`; and an install on a company's store that takes the platform's sign-in later (`storage.external.sts: false`).
+
+**Upgrading from 0.38.0:** `storscale upgrade --context <cluster> --version 0.39.0`, after a `--dry-run` (with `--chart oci://<harbor>/<project>/charts/storscale-platform --ca-file <ca.pem>` for an install on a registry of your own). Nothing changes for an install that keeps its defaults. `examples.users: false` changes only what a new install's Keycloak imports: on an existing one it stops making the sales project, and the example people already in its realm stay until removed there.
+
 ### Added
 - **An install with real users only** (`examples.users: false`): Keycloak imports its realm without the example people (alice, bob, carol), and setup makes no sales project. Setup's own checks no longer need them: Trino's as the table maintenance account, the store's sign-in (STS) with the pipelines' service account. Set it before the first install. The setting had done nothing until now: the example people were always there.
 - **The catalog's administrators** (`catalog.admins`): people's usernames, beside the platform operator's service account; bob when empty, as before.
