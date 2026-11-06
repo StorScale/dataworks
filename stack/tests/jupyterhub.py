@@ -12,7 +12,9 @@ Jupyter Server API:
   3. each person reads and writes home/<them>/ only;
   4. the sales project's files: analysts (readers) read them, and only
      engineers (editors) write them;
-  5. what notebooks write is in Buckets, under each person's prefix.
+  5. what notebooks write is in Buckets, under each person's prefix;
+  6. on Kubernetes, Distributed Spark: the first profile, Spark's executors as
+     pods, and Spark's credentials for the tables a person reads whole only.
 """
 import html
 import json
@@ -25,7 +27,7 @@ from urllib.parse import urlparse
 import requests
 import websocket
 
-from lakekit import check, finish, keys, s3_root
+from lakekit import check, finish, keys, s3_root, sql
 
 HUB = os.environ["NOTEBOOKS_URL"]
 
@@ -59,25 +61,27 @@ def server_token(s, user):
     return t["token"]
 
 
-def wait_for_server(s, user, timeout=180):
+def wait_for_server(s, user, timeout=180, profile=None):
+    """profile: the Kubernetes profile to start (spark, notebook); None, the first (Distributed Spark)."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         server = hub_api(s, "GET", f"/users/{user}")["servers"].get("")
         if not server:
-            hub_api(s, "POST", f"/users/{user}/server")
+            hub_api(s, "POST", f"/users/{user}/server", json={"profile": profile} if profile else None)
         elif server["ready"]:
             return
         time.sleep(2)
     raise TimeoutError(f"{user}'s notebook server didn't start")
 
 
-def run(user, token, code):
-    """Run code in a new kernel on the person's server; returns its stdout."""
+def run(user, token, code, timeout=120):
+    """Run code in a new kernel on the person's server; returns its stdout. timeout: the longest
+    it may go without a word (a Spark job's executors start first)."""
     auth = {"Authorization": f"token {token}"}
     base = f"{HUB}/user/{user}/api"
     kernel = requests.post(f"{base}/kernels", headers=auth, json={"name": "python3"}, timeout=60).json()["id"]
     ws = websocket.create_connection(HUB.replace("http", "ws", 1) + f"/user/{user}/api/kernels/{kernel}/channels",
-                                     header=[f"Authorization: token {token}"], timeout=120)
+                                     header=[f"Authorization: token {token}"], timeout=timeout)
     msg_id = uuid.uuid4().hex
     ws.send(json.dumps({
         "header": {"msg_id": msg_id, "username": user, "session": uuid.uuid4().hex,
@@ -158,12 +162,71 @@ print(json.dumps({
 '''
 
 
-def notebook_checks(user, other):
+# Runs in a person's notebook: Spark, where the notebook has it (the Distributed Spark
+# profile, on Kubernetes), and the credentials the platform gives Spark, as the person.
+SPARK = r'''
+import json, os, socket
+import pandas as pd, requests, boto3
+import buckets_lake
+from botocore.exceptions import ClientError
+
+def credentials(body=None):
+    r = requests.post(os.environ.get("STORSCALE_PLATFORMD_URL", "http://platformd:8080") + "/api/notebooks/spark-credentials",
+                      json=body or {}, headers={"Authorization": "Bearer " + buckets_lake.token(), "X-Platform-Request": "1"}, timeout=300)
+    return r.status_code, r.json()
+
+out = {"spark": bool(os.environ.get("SPARK_REMOTE")),
+       "k8s_token": os.path.exists("/var/run/secrets/kubernetes.io/serviceaccount/token")}
+status, given = credentials()
+out["status"] = status
+out["tables"] = {t["name"]: t["write"] for t in given.get("tables", [])}
+out["skipped"] = {t["name"]: t["why"] for t in given.get("skipped", [])}
+if status == 200:
+    s3 = boto3.client("s3", endpoint_url=buckets_lake.ENDPOINT, region_name="us-east-1",
+                      aws_access_key_id=given["accessKeyId"], aws_secret_access_key=given["secretAccessKey"],
+                      aws_session_token=given["sessionToken"])
+    def code(fn):
+        try:
+            fn(); return "OK"
+        except ClientError as e:
+            return e.response["Error"]["Code"]
+    out["list_warehouse"] = code(lambda: s3.list_objects_v2(Bucket="warehouse"))
+    out["read_home"] = code(lambda: s3.get_object(Bucket="home", Key=f"{buckets_lake.username()}/notes.txt"))
+if out["spark"]:
+    import threading
+    spark = buckets_lake.spark()
+    timer = threading.Timer(300, spark.interruptAll)   # executors that never start: a failure, not a hang
+    timer.start()
+    out["payroll"] = spark.table("sales.payroll").count()
+    out["payroll_trino"] = len(buckets_lake.sql("sales", "SELECT * FROM payroll"))
+    # Four partitions, each on whatever executor it lands on: their hosts are executors' pods.
+    hosts = spark.range(0, 4, 1, 4).mapInPandas(
+        lambda batches: (pd.DataFrame({"host": [socket.gethostname()]}) for _ in batches), "host string").distinct().collect()
+    out["hosts"] = sorted(h.host for h in hosts)
+    out["spark_tables"] = dict(buckets_lake.spark_tables)
+    timer.cancel()
+    spark.stop()
+    # A table made for Spark (by Trino, as the person), then written from Spark.
+    made = buckets_lake.spark(create={"sales.spark_check": {"id": "bigint", "who": "varchar"}})
+    made.createDataFrame([(1, "a"), (2, "b"), (3, "c")], "id long, who string").writeTo("sales.spark_check").append()
+    out["made"] = buckets_lake.spark_tables.get("sales.spark_check")
+    out["made_rows"] = len(buckets_lake.sql("sales", "SELECT * FROM spark_check"))
+    made.stop()
+else:   # someone who may not make tables there asks Spark to
+    out["create_status"], answer = credentials({"create": [{"name": "sales.spark_denied", "columns": [{"name": "a", "type": "bigint"}]}]})
+    out["create_error"] = answer.get("error", "")[:300]
+print(json.dumps(out))
+'''
+
+
+def notebook_checks(user, other, profile=None):
     s, r = sign_in(user)
     me = hub_api(s, "GET", "/user")
-    wait_for_server(s, user)
+    wait_for_server(s, user, profile=profile)
     out = run(user, server_token(s, user), NOTEBOOK.replace("OTHER", repr(other)))
     result = json.loads(out.strip().splitlines()[-1])
+    if os.environ.get("KUBERNETES_SERVICE_HOST"):   # Spark is Kubernetes' alone
+        result["spark"] = json.loads(run(user, server_token(s, user), SPARK, timeout=420).strip().splitlines()[-1])
     # VS Code, as JupyterLab's launcher opens it: served by the person's own server through jupyter-server-proxy.
     vs = requests.get(f"{HUB}/user/{user}/vscode/", headers={"Authorization": f"token {server_token(s, user)}"}, timeout=120, allow_redirects=True)
     result["vscode"] = vs.status_code if vs.ok else f"{vs.status_code} at {vs.url}: {vs.text[:200]}"
@@ -182,8 +245,11 @@ def main():
         time.sleep(2)
 
     # bob first: alice's checks read bob's prefix, so it must exist.
+    if os.environ.get("KUBERNETES_SERVICE_HOST"):   # Spark's table, as a failed run may have left it
+        sql("bob", "DROP TABLE IF EXISTS spark_check", "iceberg", "sales")
+    # bob's notebook has Distributed Spark (the first profile); alice's, the notebook alone.
     bob, b = notebook_checks("bob", other="alice")
-    alice, a = notebook_checks("alice", other="bob")
+    alice, a = notebook_checks("alice", other="bob", profile="notebook")
 
     # 1. Keycloak sign-in, groups and hub roles.
     check("people sign in to JupyterHub with Keycloak, and their groups come along",
@@ -225,6 +291,34 @@ def main():
     homes = keys(s3_root(), "home")
     check("the notebooks' files are in Buckets, each under its person's prefix",
           {"alice/notes.txt", "bob/notes.txt"} <= set(homes), ", ".join(sorted(homes)))
+
+    # 6. Distributed Spark (Kubernetes): Spark's driver beside the notebook, executors as pods,
+    # and credentials for the tables the person reads whole, from the platform.
+    if "spark" in b:
+        bs, as_ = b["spark"], a["spark"]
+        check("the Distributed Spark profile is the first: bob's notebook has Spark, alice's (the notebook alone) hasn't",
+              bs["spark"] is True and as_["spark"] is False, f"bob {bs['spark']}, alice {as_['spark']}")
+        check("... and the notebook itself has no Kubernetes token (only Spark's container does)",
+              bs["k8s_token"] is False and as_["k8s_token"] is False, f"bob {bs['k8s_token']}, alice {as_['k8s_token']}")
+        check("Spark reads a table as Trino does, as the person, with executors as pods",
+              bs.get("payroll") == bs.get("payroll_trino") >= 1 and bs.get("hosts") and all("-exec-" in h for h in bs["hosts"]),
+              f"{bs.get('payroll')} payroll rows (Trino: {bs.get('payroll_trino')}), on {bs.get('hosts')}")
+        check("Spark gets the tables a person reads whole, and changes those they edit (bob, sales' editor: payroll)",
+              bs["status"] == 200 and bs["tables"].get("sales.payroll") is True,
+              f"HTTP {bs['status']}: {bs['tables']}, skipped {bs['skipped']}")
+        check("... and nothing else: no listing the warehouse, no one's home",
+              bs.get("list_warehouse") == "AccessDenied" and bs.get("read_home") == "AccessDenied",
+              f"ListObjects {bs.get('list_warehouse')}, home {bs.get('read_home')}")
+        check("Spark writes a table made for it: Trino makes it, as the person, and the session may write it",
+              bs.get("made") == "read and write" and bs.get("made_rows") == 3,
+              f"sales.spark_check: {bs.get('made')}, {bs.get('made_rows')} rows through Trino")
+        check("... and only where the person may make tables (alice, an analyst, is refused)",
+              as_.get("create_status") == 403 and "spark_denied" in as_.get("create_error", ""),
+              f"HTTP {as_.get('create_status')}: {as_.get('create_error')}")
+        sql("bob", "DROP TABLE IF EXISTS spark_check", "iceberg", "sales")
+        check("a table with a row filter or mask for the person isn't Spark's: alice reads orders through Trino only",
+              as_["status"] == 403 and "sales.orders" in as_["skipped"] and not as_["tables"],
+              f"HTTP {as_['status']}: {as_['tables']}, skipped {as_['skipped']}")
     finish()
 
 

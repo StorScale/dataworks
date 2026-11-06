@@ -91,6 +91,7 @@ build:
       - {NAME: platform-superset, CONTEXT: stack/superset/image}
       - {NAME: platform-jupyterhub, CONTEXT: stack/jupyterhub/image, TARGET: hub}
       - {NAME: platform-notebook, CONTEXT: stack/jupyterhub/image, TARGET: notebook}
+      - {NAME: platform-spark, CONTEXT: stack/jupyterhub/image, TARGET: spark}
       - {NAME: platform-opensearch, CONTEXT: stack/catalog/opensearch}
       - {NAME: platform-semanticd, CONTEXT: stack/semantic}
       - {NAME: platform-catalog-sync, CONTEXT: stack/catalog/sync}

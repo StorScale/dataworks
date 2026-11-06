@@ -42,6 +42,7 @@ images:
   superset: platform-superset
   jupyterhub: platform-jupyterhub
   notebook: platform-notebook
+  spark: platform-spark
   opensearch: platform-opensearch
   semanticd: platform-semanticd
   catalogSync: platform-catalog-sync
@@ -491,6 +492,32 @@ notebooks:
   # to startTimeout seconds to start, its image's pull included.
   prePull: true
   startTimeout: 600
+  # Distributed Spark: a profile people pick as their notebook starts, first in the list
+  # (the other: the notebook alone). Spark Connect's server runs beside the notebook as
+  # Spark's driver, and buckets_lake.spark() is a Spark session on the platform's
+  # tables, as the person (their own Buckets credentials). Its executors are pods in a
+  # namespace of their own, which only the driver may start pods in, scaled from none
+  # to executors.max as jobs need them. Spark reads the tables' files directly: Ranger's
+  # row filters and column masks, which Trino applies, don't apply to it.
+  spark:
+    enabled: true
+    # The executors' namespace: "" is <the release's namespace>-spark. createNamespace
+    # makes it (with Pod Security's restricted standard); false, when something else
+    # does (Flux, an administrator).
+    namespace: ""
+    createNamespace: true
+    driver:              # Spark Connect's server, in the notebook's pod
+      cpu: 1
+      memory: 2G
+    executors:
+      max: 2             # each person's at once
+      cores: 2           # tasks an executor runs at once
+      requestCores: ""   # CPUs an executor's pod asks for ("": cores); less lets more fit on a node
+      coreLimit: 2       # CPUs an executor may use (Spark's spark.kubernetes.executor.limit.cores)
+      memory: 4g         # an executor's JVM, as Spark writes it (its pod asks 10% more)
+      idleTimeout: 120s  # an executor with nothing to do is let go after this
+    # How long a session's credentials last: a job running longer loses its access.
+    credentialHours: 12
 
 buckets-operator:
   enabled: true

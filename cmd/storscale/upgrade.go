@@ -232,7 +232,7 @@ func helmCanResetValues() error {
 
 // The platform's images, as the chart names them (values.yaml, images.*).
 var images = []string{"platformd", "platform-tools", "platform-airflow", "platform-superset", "platform-jupyterhub",
-	"platform-notebook", "platform-opensearch", "platform-semanticd", "platform-catalog-sync", "platform-mlflow"}
+	"platform-notebook", "platform-spark", "platform-opensearch", "platform-semanticd", "platform-catalog-sync", "platform-mlflow"}
 
 // missingImages are the platform's images not published at a tag, under
 // prefix (storscale on ghcr.io, a project's path on Harbor) at base (the

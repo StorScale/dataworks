@@ -9,6 +9,8 @@
 
     orders = buckets_lake.sql("sales", "SELECT * FROM orders LIMIT 100")   # a query, as you, in Trino
 
+    spark = buckets_lake.spark()                 # Spark on the same tables (the Distributed Spark profile)
+
 No keys live in the notebook. The hub keeps the person's Keycloak tokens (and
 refreshes them); this asks the hub for the current one with the server's own
 API token, then exchanges it with Buckets' STS (AssumeRoleWithWebIdentity)
@@ -77,6 +79,98 @@ def session():
 def s3():
     """A boto3 S3 client for Buckets, as the signed-in person."""
     return session().client("s3", endpoint_url=ENDPOINT, config=Config(s3={"addressing_style": "path"}))
+
+
+# --- Spark, with the Distributed Spark profile ---------------------------------------------
+
+def _trino_type(t):
+    """A Spark type as Trino writes it, for a table spark() makes."""
+    from pyspark.sql import types as T
+    simple = {T.StringType: "varchar", T.LongType: "bigint", T.IntegerType: "integer", T.ShortType: "smallint",
+              T.ByteType: "tinyint", T.DoubleType: "double", T.FloatType: "real", T.BooleanType: "boolean",
+              T.DateType: "date", T.TimestampType: "timestamp(6) with time zone", T.TimestampNTZType: "timestamp(6)",
+              T.BinaryType: "varbinary"}
+    for k, v in simple.items():
+        if isinstance(t, k):
+            return v
+    if isinstance(t, T.DecimalType):
+        return f"decimal({t.precision},{t.scale})"
+    if isinstance(t, T.ArrayType):
+        return f"array({_trino_type(t.elementType)})"
+    if isinstance(t, T.MapType):
+        return f"map({_trino_type(t.keyType)}, {_trino_type(t.valueType)})"
+    if isinstance(t, T.StructType):
+        return "row(" + ", ".join(f"{f.name} {_trino_type(f.dataType)}" for f in t.fields) + ")"
+    raise TypeError(f"Spark's {t.simpleString()} has no Trino type here: give the table's columns as Trino types")
+
+
+def _columns(schema):
+    """A new table's columns, from a Spark schema (StructType), a DataFrame, or {column: Trino type}."""
+    if isinstance(schema, dict):
+        return [{"name": k, "type": v} for k, v in schema.items()]
+    schema = getattr(schema, "schema", schema)   # a DataFrame's
+    return [{"name": f.name, "type": _trino_type(f.dataType)} for f in schema.fields]
+
+
+def spark(tables=None, hours=None, create=None, wait=120):
+    """A Spark session on the platform's tables, as you (the Distributed Spark profile).
+
+        spark = buckets_lake.spark()
+        orders = spark.table("sales.orders")      # iceberg.sales.orders, as Trino names it
+        orders.groupBy("region").sum("amount").show()
+
+    Spark Connect's server beside your notebook is the driver; its executors start as
+    jobs need them and stop when idle. Spark reads the tables' files itself, so Ranger
+    can't filter rows or mask columns for it: the platform asks Trino, as you, which
+    tables you read whole (no row filter or mask applies to you) and which of those you
+    may change, and gives this session credentials for those tables' files alone. Use
+    Trino (sql()) for the others. tables names the ones this session needs
+    (["sales.orders", ...]): Buckets takes about thirty tables' worth in one session.
+    create makes tables first, where they aren't there yet ({"sales.order_counts":
+    df.schema}, a DataFrame, or {column: Trino type}): Trino makes them, as you, so
+    they're made only where you may make tables, and this session may write them.
+    spark_tables and spark_skipped say what the last session got, and why not the rest.
+    The credentials last hours (at most 12, the default); a new session gets new ones,
+    with tables made or granted since. Spark itself makes no table: make it here.
+    """
+    import time
+    from pyspark.sql import SparkSession
+    remote = os.environ.get("SPARK_REMOTE")
+    if not remote:
+        raise RuntimeError("this notebook has no Spark: start it with the Distributed Spark profile "
+                           "(File > Hub Control Panel > Stop My Server, then Start My Server)")
+    url = os.environ.get("STORSCALE_PLATFORMD_URL", "http://platformd:8080").rstrip("/")
+    body = {"tables": list(tables or []),
+            "create": [{"name": name, "columns": _columns(schema)} for name, schema in (create or {}).items()],
+            "hours": float(hours or os.environ.get("STORSCALE_SPARK_CREDENTIAL_HOURS", "12"))}
+    r = requests.post(f"{url}/api/notebooks/spark-credentials", json=body, timeout=300,
+                      headers={"Authorization": f"Bearer {token()}", "X-Platform-Request": "1"})
+    answer = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+    if not r.ok:
+        raise (PermissionError if r.status_code in (401, 403) else RuntimeError)(
+            answer.get("error") or f"HTTP {r.status_code}: {r.text[:300]}")
+    deadline = time.time() + wait
+    while True:   # the server starts with the notebook, and takes a few seconds more
+        try:
+            s = SparkSession.builder.remote(remote).create()
+            break
+        except Exception:
+            if time.time() > deadline:
+                raise
+            time.sleep(3)
+    # Before this session first uses the catalog, which takes them then.
+    for k, v in {"s3.access-key-id": answer["accessKeyId"], "s3.secret-access-key": answer["secretAccessKey"],
+                 "s3.session-token": answer["sessionToken"]}.items():
+        s.conf.set(f"spark.sql.catalog.iceberg.{k}", v)
+    spark_tables.clear()
+    spark_tables.update({t["name"]: "read and write" if t["write"] else "read" for t in answer["tables"]})
+    spark_skipped.clear()
+    spark_skipped.update({t["name"]: t["why"] for t in answer.get("skipped") or []})
+    return s
+
+
+spark_tables = {}    # the last spark() session's tables: name -> "read" or "read and write"
+spark_skipped = {}   # and those it has no credentials for: name -> why
 
 
 # --- SQL, as the SQL tab runs it ---------------------------------------------------------

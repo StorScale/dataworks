@@ -11,7 +11,7 @@ cd "$(dirname "$0")/../.."
 cluster=${1:-storscale}
 
 docker compose --project-directory stack -f stack/compose.yaml -f compose.dev.yaml build \
-  platformd setup notebook jupyterhub superset-init airflow-init openmetadata-search semanticd catalog-sync mlflow
+  platformd setup notebook spark jupyterhub superset-init airflow-init openmetadata-search semanticd catalog-sync mlflow
 
 # The image Compose builds, and the name the chart gives it.
 while read -r local name; do
@@ -25,6 +25,7 @@ storscale-airflow platform-airflow
 storscale-superset platform-superset
 storscale-jupyterhub platform-jupyterhub
 storscale-notebook platform-notebook
+storscale-spark platform-spark
 storscale-opensearch platform-opensearch
 storscale-semanticd platform-semanticd
 storscale-catalog-sync platform-catalog-sync

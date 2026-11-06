@@ -116,7 +116,10 @@ if __name__ == "__main__":
                   (env["BACKUP_S3_ACCESS_KEY"], env["BACKUP_S3_SECRET_KEY"], "backup-store"),
                   (env["MLFLOW_S3_ACCESS_KEY"], env["MLFLOW_S3_SECRET_KEY"], "mlflow-store"),
                   # The projects' sources' copies (change capture) write their tables.
-                  (env["COPY_S3_ACCESS_KEY"], env["COPY_S3_SECRET_KEY"], "lakehouse-engine")])
+                  (env["COPY_S3_ACCESS_KEY"], env["COPY_S3_SECRET_KEY"], "lakehouse-engine"),
+                  # Notebooks' Spark: platformd mints each session's credentials from it (AssumeRole),
+                  # cut down by a session policy to the tables the person reads whole.
+                  (env["SPARK_S3_ACCESS_KEY"], env["SPARK_S3_SECRET_KEY"], "lakehouse-engine")])
     ensure_buckets_identity()
     wait_for("Ranger", f"{RANGER}/login.jsp")  # unauthenticated: five failed sign-ins lock Ranger's admin
     sync_people({**keycloak_people(), "service-account-airflow-pipelines": ["pipelines"]})

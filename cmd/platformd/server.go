@@ -293,6 +293,7 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("POST /api/projects/{name}/knowledge/{bank}/build", s.handleKnowledgeBuild)   // editors, the project's pipelines
 	mux.HandleFunc("POST /api/projects/{name}/knowledge/{bank}/search", s.handleKnowledgeSearch) // members, and agents by their own token
 	mux.HandleFunc("GET /api/notebooks/projects", s.handleNotebookProjects)
+	mux.HandleFunc("POST /api/notebooks/spark-credentials", s.handleSparkCredentials)
 	mux.HandleFunc("POST /api/projects/{name}/notebooks/schedules", s.handleScheduleNotebook)
 	mux.HandleFunc("POST /api/projects/{name}/notebooks/runs/{dag}/{run}", s.handleNotebookRun)
 	mux.HandleFunc("GET /api/projects/{name}/notebooks/runs/{dag}/{run}", s.handleNotebookRunView)

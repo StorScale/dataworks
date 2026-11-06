@@ -1,0 +1,141 @@
+{{- /* Notebooks' Spark (notebooks.spark): the Distributed Spark profile. Spark
+     Connect's server runs in a container of the person's notebook pod as Spark's
+     driver, and starts its executors as pods in a namespace of their own (by
+     default <the release's namespace>-spark), which holds nothing else. Only the
+     Spark container has a Kubernetes token (the ServiceAccount notebook-spark's,
+     mounted into it alone), and it may start pods in that namespace only: the
+     notebook itself has none. The executors have no token, and resolve the
+     release's services by their short names (buckets, nessie), as the
+     notebook does. */ -}}
+{{- if .Values.notebooks.spark.enabled }}
+{{- $ns := include "storscale.sparkNamespace" . }}
+{{- if .Values.notebooks.spark.createNamespace }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    {{- include "storscale.labels" . | nindent 4 }}
+    pod-security.kubernetes.io/enforce: restricted
+---
+{{- end }}
+# The notebook pod's account under the Distributed Spark profile: its token is
+# mounted into the Spark container alone.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: notebook-spark
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spark-executor
+  namespace: {{ $ns }}
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+automountServiceAccountToken: false
+---
+# What Spark's driver does with its executors: pods, and the ConfigMap of their
+# settings it makes for each session.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: notebook-spark
+  namespace: {{ $ns }}
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods, configmaps, services, persistentvolumeclaims]
+    verbs: [get, list, watch, create, delete, deletecollection]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: notebook-spark
+  namespace: {{ $ns }}
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: notebook-spark}
+subjects:
+  - {kind: ServiceAccount, name: notebook-spark, namespace: {{ .Release.Namespace }}}
+---
+# The hub, as a notebook stops: its executors that outlived it (a notebook pod
+# stopped before Spark could let them go).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: jupyterhub-spark
+  namespace: {{ $ns }}
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [list, delete, deletecollection]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: jupyterhub-spark
+  namespace: {{ $ns }}
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: jupyterhub-spark}
+subjects:
+  - {kind: ServiceAccount, name: jupyterhub, namespace: {{ .Release.Namespace }}}
+---
+# The executors' pod: Pod Security's restricted standard, no token, and the
+# release's namespace in their DNS search (Nessie names Buckets as buckets).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notebook-spark
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+data:
+  executor.yaml: |
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      labels: {{- include "storscale.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: spark-executor
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, runAsGroup: 100, fsGroup: 100, seccompProfile: {type: RuntimeDefault}}
+      dnsConfig:
+        searches: [{{ .Release.Namespace }}.svc.cluster.local]
+      containers:
+        - name: spark-kubernetes-executor
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+{{- if .Values.networkPolicies.enabled }}
+---
+# The executors reach what notebooks reach in the release's namespace (Buckets,
+# Nessie, the notebook pods' Spark drivers), and nothing more.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: storscale-spark-executors
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: NotIn, values: {{ toJson (include "storscale.np.protected" . | fromJsonArray) }}}
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: {{ $ns }}}}}]
+---
+# In the executors' namespace: from its own pods (executors share shuffle data)
+# and from the release's namespace (the drivers), only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: storscale-spark
+  namespace: {{ $ns }}
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: {}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: {{ .Release.Namespace }}}}
+{{- end }}
+{{- end }}

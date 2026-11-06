@@ -45,6 +45,11 @@ spec:
             - {name: STORE_BUCKET, value: {{ include "storscale.bucket.platform" $ | quote }}}
             - {name: STORE_ACCESS_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: PLATFORM_STORE_ACCESS_KEY}}}
             - {name: STORE_SECRET_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: PLATFORM_STORE_SECRET_KEY}}}
+            {{- if .Values.notebooks.spark.enabled }}
+            # Notebooks' Spark: each session's credentials, minted from this account and cut down to the person's tables.
+            - {name: SPARK_S3_ACCESS_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: SPARK_S3_ACCESS_KEY}}}
+            - {name: SPARK_S3_SECRET_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: SPARK_S3_SECRET_KEY}}}
+            {{- end }}
             - {name: CATALOG_URL, value: "http://openmetadata:8585"}
             - {name: SEMANTIC_URL, value: "http://semanticd:8000"}
             - {name: AIRFLOW_URL, value: "http://airflow:8090/pipelines"}

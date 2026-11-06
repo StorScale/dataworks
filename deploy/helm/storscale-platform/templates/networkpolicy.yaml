@@ -6,7 +6,7 @@
      the workloads that use them; every other service, from the namespace's
      own pods. Egress is open. */}}
 {{- if .Values.networkPolicies.enabled }}
-{{- $protected := list "postgres" "ranger-db" "ranger-solr" "openmetadata-search" "keycloak" "mlflow" "model-serving" }}
+{{- $protected := include "storscale.np.protected" . | fromJsonArray }}
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

@@ -762,6 +762,14 @@ services:
     image: storscale-notebook
     command: ["true"]
 
+  # Spark for notebooks on Kubernetes (the Distributed Spark profile); built here for
+  # kind (deploy/kind/images.sh), never started: Compose's notebooks have no Spark.
+  spark:
+    profiles: [kubernetes]
+    build: {context: ./jupyterhub/image, target: spark}
+    image: storscale-spark
+    command: ["true"]
+
   jupyterhub:
     restart: unless-stopped
     build: {context: ./jupyterhub/image, target: hub}

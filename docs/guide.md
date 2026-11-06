@@ -439,6 +439,17 @@ calls.head(10)
 
 **Check:** the run's notebook shows the table with Viktor Schmidt first, and `landing/reports/call-list.csv` is in the `retail` bucket (read it from a notebook with `buckets_lake.s3().get_object`); `SELECT * FROM customer_scores ORDER BY score DESC` lists the customers likeliest to have stopped, each with version `2` of `churn`; **Models** lists versions 1 and 2, version 2 approved; and **As of** `churn-v2-data` reads `customer_features` as version 2 learned from it.
 
+**When the data outgrows one notebook (Kubernetes).** A notebook starts with **Distributed Spark** unless you pick **Notebook only**: Spark runs beside it, and its executors start on the cluster as a job needs them, up to the install's limit, and stop when idle. As bob, in a notebook:
+
+```python
+import buckets_lake
+spark = buckets_lake.spark()                       # a Spark session, as bob
+spark.table("retail.uploads_orders").groupBy("customer_id").count().orderBy("count", ascending=False).show(5)
+buckets_lake.spark_tables                          # what this session may read, and change
+```
+
+Spark reads the tables' files itself, so Ranger can't filter rows or mask columns for it: a session gets credentials only for the tables you read whole, and writes only those you edit. As alice, `buckets_lake.spark_skipped` names `retail.uploads_customers` (its personal columns are masked for her, Lab 4) with "a column mask or row filter applies to you": she reads it through `buckets_lake.sql()`, as before. A new table is made as the session starts, by Trino as you, so only where you may make tables: `spark = buckets_lake.spark(create={"retail.order_counts": counts.schema})`, then `counts.writeTo("retail.order_counts").append()`. A session's credentials last 12 hours, and a new session sees tables made or granted since.
+
 **What Part III gained:** the second and third questions answered: Store weekend pays back nearly eight times and runs again in December; Enterprise outreach is cut; and sales gets thirty names every Monday morning. Both answers are code in the repo, rebuilt on schedule, and a wrong change can't reach them without a review.
 
 ---

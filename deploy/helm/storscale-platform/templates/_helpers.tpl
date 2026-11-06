@@ -224,6 +224,18 @@ resources:
 {{/* A network policy's sources: the pods of these workloads (by their
      app.kubernetes.io/name), whatever their release label (the operator's
      project Airflows have none). */}}
+{{/* The services only the workloads that use them reach (networkPolicies): the
+     stores, Keycloak, MLflow and model serving. Every other service takes
+     connections from the namespace's own pods. A JSON list. */}}
+{{- define "storscale.np.protected" -}}
+["postgres","ranger-db","ranger-solr","openmetadata-search","keycloak","mlflow","model-serving"]
+{{- end }}
+
+{{/* The namespace of notebooks' Spark executors (notebooks.spark.namespace). */}}
+{{- define "storscale.sparkNamespace" -}}
+{{- .Values.notebooks.spark.namespace | default (printf "%s-spark" .Release.Namespace) -}}
+{{- end }}
+
 {{- define "storscale.np.from" -}}
 - podSelector:
     matchExpressions:

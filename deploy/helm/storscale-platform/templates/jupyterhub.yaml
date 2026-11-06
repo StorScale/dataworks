@@ -95,6 +95,13 @@ spec:
             - {name: NOTEBOOK_MEMORY, value: {{ .Values.notebooks.memoryLimit | quote }}}
             - {name: NOTEBOOK_CPUS, value: {{ .Values.notebooks.cpuLimit | quote }}}
             - {name: NOTEBOOK_STORAGE, value: {{ .Values.notebooks.storage | quote }}}
+            {{- with .Values.notebooks.spark }}{{ if .enabled }}
+            # The Distributed Spark profile (notebook-spark.yaml).
+            - name: NOTEBOOK_SPARK
+              value: {{ dict "image" (include "storscale.image" (list $ "spark")) "pullPolicy" $.Values.images.pullPolicy
+                         "namespace" (include "storscale.sparkNamespace" $) "driver" .driver "executors" .executors
+                         "credentialHours" .credentialHours | toJson | quote }}
+            {{- end }}{{ end }}
             {{- if include "storscale.ca.enabled" . }}
             # Notebook pods trust the platform's CA too, as the hub does.
             - name: NOTEBOOK_CA
@@ -158,6 +165,14 @@ spec:
           command: ["true"]
           securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
           resources: {requests: {cpu: 1m, memory: 8Mi}, limits: {memory: 64Mi}}
+        {{- if .Values.notebooks.spark.enabled }}
+        - name: pull-spark   # the Distributed Spark profile's container, and its executors'
+          image: {{ include "storscale.image" (list . "spark") }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          command: ["true"]
+          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources: {requests: {cpu: 1m, memory: 8Mi}, limits: {memory: 64Mi}}
+        {{- end }}
       containers:
         - name: pause
           image: {{ .Values.upstream.pause }}

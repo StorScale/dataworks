@@ -20,15 +20,17 @@ WORKDIR /src
 RUN npm install --no-audit --no-fund && /opt/lab/bin/jupyter labextension build .
 
 # The notebook server people get: JupyterLab, boto3, and buckets_lake, which
-# turns the person's own Keycloak sign-in into Buckets credentials; Schedule,
-# which makes a notebook a project's pipeline; the libraries the common
-# analyses and models need (use case 7.8); and VS Code in the browser
+# turns the person's own Keycloak sign-in into Buckets credentials (and, with
+# the Distributed Spark profile, a Spark session through Spark Connect's
+# client); Schedule, which makes a notebook a project's pipeline; the libraries
+# the common analyses and models need (use case 7.8); and VS Code in the browser
 # (code-server, opened from JupyterLab's launcher through jupyter-server-proxy).
 FROM quay.io/jupyter/base-notebook:hub-6.0.1 AS notebook
 RUN pip install --no-cache-dir jupyterlab==4.5.10 boto3==1.43.108 requests==2.34.2 pandas==3.0.6 pyarrow==25.0.1 \
       scikit-learn==1.9.1 statsmodels==0.15.0 scipy==1.18.1 lightgbm==4.7.0 xgboost==3.4.1 flaml==2.7.0 mlflow-skinny==3.17.2 skops==0.16.0 \
       geopandas==1.2.0 networkx==3.7 \
-      jupyter-server-proxy==4.6.0
+      jupyter-server-proxy==4.6.0 \
+      pyspark-client==4.1.4
 # code-server for the image's architecture (the image has Python, not curl).
 ARG TARGETARCH
 USER root
@@ -79,3 +81,25 @@ COPY --chmod=0755 <<'SH' /usr/local/bin/before-notebook.d/50-storscale-templates
   if [ "$(id -u)" = 0 ]; then chown -R "${NB_UID:-1000}:${NB_GID:-100}" "${dst}"; fi
 ) || true
 SH
+
+# Spark for notebooks (the Distributed Spark profile): Spark Connect's server, in a
+# container beside the person's notebook, is the driver; its executors are pods of this
+# image too. The notebook's base, so Python functions (UDFs) run on executors in the
+# Python the notebook pickled them with. Iceberg's Spark runtime and AWS bundle read
+# and write the platform's tables (Nessie's Iceberg REST catalog, Buckets).
+FROM quay.io/jupyter/base-notebook:hub-6.0.1 AS spark
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends default-jre-headless tini procps \
+ && rm -rf /var/lib/apt/lists/*
+ARG SPARK_VERSION=4.1.4
+ARG SPARK_SHA512=1461b6c425d290913e7be97bfec738abc843c663d177dc57e32b82874d20144ed67dcca692a57efc4e5b40d2f001ee0e9e0d2d7b088ae58f5378ecac92739076
+ARG ICEBERG_VERSION=1.12.0
+COPY spark/install_spark.py /tmp/install_spark.py
+RUN python /tmp/install_spark.py && rm /tmp/install_spark.py
+# What Python functions on executors use most: pandas and Arrow (pandas UDFs), as in the notebook.
+RUN pip install --no-cache-dir pandas==3.0.6 pyarrow==25.0.1
+ENV SPARK_HOME=/opt/spark JAVA_HOME=/usr/lib/jvm/default-java PYSPARK_PYTHON=/opt/conda/bin/python
+ENV PATH=/opt/spark/bin:/opt/spark/sbin:${PATH}
+WORKDIR /opt/spark/work-dir
+USER ${NB_UID}
+ENTRYPOINT ["/opt/entrypoint.sh"]

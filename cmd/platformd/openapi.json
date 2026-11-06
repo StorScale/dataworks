@@ -598,6 +598,34 @@
         ]
       }
     },
+    "/api/notebooks/spark-credentials": {
+      "post": {
+        "description": "handleSparkCredentials gives a notebook's Spark session credentials for the\ntables the person reads whole (or those of them asked for), as the person.",
+        "operationId": "post_notebooks_spark_credentials",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "description": "As JSON"
+          },
+          "4XX": {
+            "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
+          }
+        },
+        "summary": "Gives a notebook's Spark session credentials for the tables the person reads whole (or those of them asked for), as the person",
+        "tags": [
+          "notebooks"
+        ]
+      }
+    },
     "/api/openapi.json": {
       "get": {
         "description": "the API reference (14.3), to anyone: it says what exists, not what's in it\n\nhandleOpenAPI is the API reference: this document, as OpenAPI 3.1.",

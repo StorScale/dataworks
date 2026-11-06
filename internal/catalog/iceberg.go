@@ -144,7 +144,9 @@ type tableMetadata struct {
 			At      int64             `json:"timestamp-ms"`
 			Summary map[string]string `json:"summary"`
 		} `json:"snapshots"`
-		Refs map[string]any `json:"refs"`
+		Refs       map[string]any    `json:"refs"`
+		Root       string            `json:"location"`
+		Properties map[string]string `json:"properties"`
 	} `json:"metadata"`
 }
 
@@ -291,6 +293,29 @@ func (ic *Iceberg) MetadataLocation(ctx context.Context, namespace, table string
 		return "", err
 	}
 	return t.Location, nil
+}
+
+// Folders are where the table's files are: its location, and the folders its
+// properties put its data or metadata in instead (write.data.path,
+// write.metadata.path, write.object-storage.path), each once.
+func (ic *Iceberg) Folders(ctx context.Context, namespace, table string) ([]string, error) {
+	t, err := ic.load(ctx, namespace, table)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, f := range []string{t.Metadata.Root, t.Metadata.Properties["write.data.path"],
+		t.Metadata.Properties["write.metadata.path"], t.Metadata.Properties["write.object-storage.path"]} {
+		if f = strings.TrimRight(f, "/"); f != "" && !seen[f] {
+			seen[f] = true
+			out = append(out, f)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("table %s.%s has no location", namespace, table)
+	}
+	return out, nil
 }
 
 // MetadataFiles are the table's metadata files, its current one first and
