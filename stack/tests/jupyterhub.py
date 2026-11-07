@@ -194,29 +194,76 @@ if status == 200:
     out["read_home"] = code(lambda: s3.get_object(Bucket="home", Key=f"{buckets_lake.username()}/notes.txt"))
 if out["spark"]:
     import threading
-    spark = buckets_lake.spark()
-    timer = threading.Timer(300, spark.interruptAll)   # executors that never start: a failure, not a hang
-    timer.start()
-    out["payroll"] = spark.table("sales.payroll").count()
-    out["payroll_trino"] = len(buckets_lake.sql("sales", "SELECT * FROM payroll"))
-    # Four partitions, each on whatever executor it lands on: their hosts are executors' pods.
-    hosts = spark.range(0, 4, 1, 4).mapInPandas(
-        lambda batches: (pd.DataFrame({"host": [socket.gethostname()]}) for _ in batches), "host string").distinct().collect()
-    out["hosts"] = sorted(h.host for h in hosts)
-    out["spark_tables"] = dict(buckets_lake.spark_tables)
-    timer.cancel()
-    spark.stop()
-    # A table made for Spark (by Trino, as the person), then written from Spark.
-    made = buckets_lake.spark(create={"sales.spark_check": {"id": "bigint", "who": "varchar"}})
-    made.createDataFrame([(1, "a"), (2, "b"), (3, "c")], "id long, who string").writeTo("sales.spark_check").append()
-    out["made"] = buckets_lake.spark_tables.get("sales.spark_check")
-    out["made_rows"] = len(buckets_lake.sql("sales", "SELECT * FROM spark_check"))
-    made.stop()
+    try:   # a failure is the checks' to report, with what came before it
+        spark = buckets_lake.spark()
+        timer = threading.Timer(300, spark.interruptAll)   # executors that never start: a failure, not a hang
+        timer.start()
+        out["payroll"] = spark.table("sales.payroll").count()
+        out["payroll_trino"] = len(buckets_lake.sql("sales", "SELECT * FROM payroll"))
+        # Four partitions, each on whatever executor it lands on: their hosts are executors' pods.
+        hosts = spark.range(0, 4, 1, 4).mapInPandas(
+            lambda batches: (pd.DataFrame({"host": [socket.gethostname()]}) for _ in batches), "host string").distinct().collect()
+        out["hosts"] = sorted(h.host for h in hosts)
+        out["spark_tables"] = dict(buckets_lake.spark_tables)
+        timer.cancel()
+        spark.stop()
+        # A table made for Spark (by Trino, as the person), then written from Spark.
+        made = buckets_lake.spark(create={"sales.spark_check": {"id": "bigint", "who": "varchar"}})
+        made.createDataFrame([(1, "a"), (2, "b"), (3, "c")], "id long, who string").writeTo("sales.spark_check").append()
+        out["made"] = buckets_lake.spark_tables.get("sales.spark_check")
+        out["made_rows"] = len(buckets_lake.sql("sales", "SELECT * FROM spark_check"))
+        made.stop()
+    except Exception as e:
+        out["error"] = f"{type(e).__name__}: {str(e)[:1200]}"
 else:   # someone who may not make tables there asks Spark to
     out["create_status"], answer = credentials({"create": [{"name": "sales.spark_denied", "columns": [{"name": "a", "type": "bigint"}]}]})
     out["create_error"] = answer.get("error", "")[:300]
 print(json.dumps(out))
 '''
+
+
+def show_spark(user):
+    """What CI shows when Spark fails, before the notebook stops: its driver's log (warnings and
+    errors), and its executors' pods and the events of the Spark namespace."""
+    sa = "/var/run/secrets/kubernetes.io/serviceaccount"
+    try:
+        with open(f"{sa}/token") as f:
+            token = f.read().strip()
+        with open(f"{sa}/namespace") as f:
+            ns = f.read().strip()
+    except OSError:
+        return
+    base = f"https://{os.environ['KUBERNETES_SERVICE_HOST']}:{os.environ.get('KUBERNETES_SERVICE_PORT', '443')}/api/v1/namespaces"
+
+    def get(path, **params):
+        r = requests.get(f"{base}/{path}", params=params, headers={"Authorization": f"Bearer {token}"}, verify=f"{sa}/ca.crt", timeout=30)
+        return r if r.ok else print(f"  {path}: HTTP {r.status_code} {r.text[:200]}")
+
+    r = get(f"{ns}/pods/jupyter-{user}/log", container="spark")
+    if r:
+        lines = [line for line in r.text.splitlines() if re.search(r" (WARN|ERROR) |Exception|Caused by", line)]
+        seen = set()
+        print(f"  --- jupyter-{user}'s spark container (warnings and errors, each once):")
+        for line in lines:
+            key = re.sub(r"^\S+ \S+ ", "", line)
+            if key not in seen:
+                seen.add(key)
+                print("    " + line[:400])
+    sns = os.environ.get("STORSCALE_SPARK_NAMESPACE", f"{ns}-spark")
+    r = get(f"{sns}/pods")
+    for pod in (r.json().get("items", []) if r else []):
+        name = pod["metadata"]["name"]
+        st = pod.get("status", {})
+        print(f"  {sns}/{name}: {st.get('phase')} {json.dumps([c.get('state') for c in st.get('containerStatuses', [])])[:300]}")
+        for c in st.get("conditions", []):
+            if c.get("status") != "True":
+                print(f"    {c.get('type')}: {c.get('reason') or ''} {c.get('message') or ''}")
+        r = get(f"{sns}/pods/{name}/log", tailLines="40")
+        if r:
+            print("\n".join("    " + line for line in r.text.splitlines()))
+    r = get(f"{sns}/events")
+    for e in (r.json().get("items", []) if r else [])[-20:]:
+        print(f"  {sns} event {e.get('involvedObject', {}).get('name')}: {e.get('reason')}: {(e.get('message') or '')[:300]}")
 
 
 def notebook_checks(user, other, profile=None):
@@ -231,6 +278,8 @@ def notebook_checks(user, other, profile=None):
                 result["spark"] = json.loads(run(user, server_token(s, user), SPARK, timeout=420).strip().splitlines()[-1])
             except RuntimeError as e:   # a failed check, not the end of the suite
                 result["spark"] = {"error": str(e)[-1500:]}
+            if result["spark"].get("error"):
+                show_spark(user)
         # VS Code, as JupyterLab's launcher opens it: served by the person's own server through jupyter-server-proxy.
         vs = requests.get(f"{HUB}/user/{user}/vscode/", headers={"Authorization": f"token {server_token(s, user)}"}, timeout=120, allow_redirects=True)
         result["vscode"] = vs.status_code if vs.ok else f"{vs.status_code} at {vs.url}: {vs.text[:200]}"
@@ -306,7 +355,7 @@ def main():
         check("... and the notebook itself has no Kubernetes token (only Spark's container does)",
               bs.get("k8s_token") is False and as_.get("k8s_token") is False, f"bob {bs.get('k8s_token')}, alice {as_.get('k8s_token')}")
         check("Spark reads a table as Trino does, as the person, with executors as pods",
-              bs.get("payroll") == bs.get("payroll_trino") >= 1 and bs.get("hosts") and all("-exec-" in h for h in bs["hosts"]),
+              bs.get("payroll") is not None and bs.get("payroll") == bs.get("payroll_trino") >= 1 and bs.get("hosts") and all("-exec-" in h for h in bs["hosts"]),
               f"{bs.get('payroll')} payroll rows (Trino: {bs.get('payroll_trino')}), on {bs.get('hosts')}")
         check("Spark gets the tables a person reads whole, and changes those they edit (bob, sales' editor: payroll)",
               bs.get("status") == 200 and bs.get("tables", {}).get("sales.payroll") is True,

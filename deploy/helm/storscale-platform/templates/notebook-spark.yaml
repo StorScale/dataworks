@@ -82,6 +82,31 @@ roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: jupyterhub-spar
 subjects:
   - {kind: ServiceAccount, name: jupyterhub, namespace: {{ .Release.Namespace }}}
 ---
+# The end-to-end checks (tests.yaml): when Spark's check fails, what its executors did.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: storscale-test-spark
+  namespace: {{ $ns }}
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/log]
+    verbs: [get, list]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: storscale-test-spark
+  namespace: {{ $ns }}
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: storscale-test-spark}
+subjects:
+  - {kind: ServiceAccount, name: storscale-test, namespace: {{ .Release.Namespace }}}
+---
 # The executors' pod: Pod Security's restricted standard, no token, and the
 # release's namespace in their DNS search (Nessie names Buckets as buckets).
 apiVersion: v1
