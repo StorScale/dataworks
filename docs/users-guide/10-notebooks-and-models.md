@@ -1,11 +1,12 @@
 # 10. Notebooks and machine learning
 
-This chapter is for analysts and data scientists who work in notebooks, and for the editors and administrators who put their models to use. It covers JupyterLab and VS Code in the platform, the `buckets_lake` module that signs a notebook in as you (Buckets, SQL, MLflow, the company's libraries), each project's own MLflow workspace, registering and approving model versions, model cards, scoring a table on a schedule with drift checks, serving a model as an API, how models appear in the catalog's lineage, scheduled notebooks, and the three notebook templates.
+This chapter is for analysts and data scientists who work in notebooks, and for the editors and administrators who put their models to use. It covers JupyterLab and VS Code in the platform, the `buckets_lake` module that signs a notebook in as you (Buckets, SQL, MLflow, the company's libraries), Spark across many machines, each project's own MLflow workspace, registering and approving model versions, model cards, scoring a table on a schedule with drift checks, serving a model as an API, how models appear in the catalog's lineage, scheduled notebooks, and the three notebook templates.
 
 In this chapter:
 
 - [JupyterLab and VS Code](#jupyterlab-and-vs-code)
 - [buckets_lake: the notebook signed in as you](#buckets_lake-the-notebook-signed-in-as-you)
+- [Distributed Spark](#distributed-spark)
 - [MLflow, a workspace per project](#mlflow-a-workspace-per-project)
 - [Registering and approving model versions](#registering-and-approving-model-versions)
 - [Model cards](#model-cards)
@@ -69,6 +70,7 @@ Nothing to set up per project. To open it:
 | `buckets_lake.tables()` | The tables `sql()` has read in this kernel, as `catalog.schema.table`, sorted. |
 | `buckets_lake.mlflow(project)` | The `mlflow` module, pointed at the project's MLflow workspace, signed in as you. |
 | `buckets_lake.library(name, path="")` | One of the company's shared libraries put on `sys.path`; returns its folder. |
+| `buckets_lake.spark(tables=None, create=None)` | A Spark session on the tables you read whole (Kubernetes, the Distributed Spark profile): see [Distributed Spark](#distributed-spark). |
 
 ### s3() and session()
 
@@ -130,6 +132,44 @@ The project's pipelines read and write all of the project's tables, so a noteboo
 - `sql()` posts to the platform's SQL route; it doesn't connect to Trino itself, so the 100,000-row limit holds whatever the client.
 - `lake.tables` holds at most 8,000 characters (MLflow's limit for a tag's value); tables past that are left out.
 - The `storscale.*` tags are the platform's: name your own tags anything else.
+
+---
+
+## Distributed Spark
+
+**What it's for.** Work too big for one notebook: Spark's DataFrames and SQL on the platform's tables, run across executors that start as a job needs them and stop when it's done. The notebook stays where you write the code; the work happens on other machines.
+
+**Who can do it.** Anyone who may sign in to JupyterLab, on an install on Kubernetes (Compose has no Spark). Spark reads the tables' files itself, so Ranger can't filter rows or mask columns for it: a session gets only the tables **you read whole**, with no row filter or column mask applying to you, and writes only those you may insert into and delete from. alice, an analyst who reads `sales.orders` under the EU filter and the card mask, gets no Spark access to it; bob, its editor, reads and writes it.
+
+### Set up
+
+1. When your notebook starts, the hub asks which server you want. **Distributed Spark** is picked unless you pick **Notebook only** (an install may make the notebook alone the default). To switch later: **File → Hub Control Panel → Stop My Server**, then **Start My Server**.
+2. In a notebook:
+
+```python
+import buckets_lake
+spark = buckets_lake.spark()
+orders = spark.table("sales.orders")          # iceberg.sales.orders, as Trino names it
+orders.groupBy("region").sum("amount").show()
+buckets_lake.spark_tables                      # what it got: {"sales.orders": "read and write"}
+buckets_lake.spark_skipped                     # and what it didn't, and why
+```
+
+3. To write a new table, have the platform make it first: `buckets_lake.spark(create={"sales.order_counts": df.schema})` (a DataFrame's schema, or `{column: Trino type}`). Trino makes it, as you, so only where you may make tables; then `df.writeTo("sales.order_counts").append()`. An existing table you may change is written the same way.
+
+### How it behaves
+
+- Spark's driver runs beside your notebook, in a container of its own; the executors are pods in the install's Spark namespace, up to `notebooks.spark.executors.max` of them, let go after `idleTimeout` with nothing to do. Stopping your server stops them too.
+- Each `spark()` asks the platform for credentials: it asks Trino, as you, which tables a plain `SELECT *` gives you whole, and gets Buckets credentials for those tables' files alone, for 12 hours (`credentialHours`). A new session picks up tables made or shared with you since.
+- Every grant is in the audit log (`spark.credentials`, `spark.create`).
+
+### Limits and gotchas
+
+- A table with a row filter or mask for you stays Trino's: read it with `buckets_lake.sql()`.
+- One session takes about thirty tables (Buckets' policy limit). With more, name the ones you need: `buckets_lake.spark(tables=["sales.orders", "sales.payroll"])`.
+- Make new tables with `create=`, not Spark's own `CREATE TABLE`: a session's credentials reach only the folders of the tables it was given, so Spark can't write a table it made itself.
+- A job running past the credentials' hours loses its access: start a new session.
+- The notebook has no Kubernetes access; only Spark's driver may start pods, and only in the Spark namespace.
 
 ---
 
@@ -516,6 +556,11 @@ Each server start puts them in `work/templates/`: `churn.ipynb`, `propensity.ipy
 | `notebooks.storage` | `1Gi` | a Docker volume, no size | Each person's `work/` volume. |
 | `notebooks.prePull` | `true` | n/a | The notebook image (over a gigabyte) pulled onto every node ahead of time and at each upgrade (a DaemonSet, `notebook-prepull`), so a first notebook doesn't wait on the download. |
 | `notebooks.startTimeout` | `600` | `600` | Seconds a notebook server may take to start, its image's pull included, before JupyterHub gives up. |
+| `notebooks.spark.enabled` | `true` | n/a | Distributed Spark, a profile people pick as their notebook starts. |
+| `notebooks.spark.default` | `true` | n/a | Distributed Spark picked unless people pick **Notebook only**; `false`: the notebook alone is. |
+| `notebooks.spark.driver.memory` | `2G` | n/a | Spark's driver beside the notebook (at least `1G`); `driver.requestMemory` asks for less. |
+| `notebooks.spark.executors.*` | `max: 2`, `cores: 2`, `memory: 4g`, `idleTimeout: 120s` | n/a | Each person's executors at once, their CPUs and memory, and how long one idles before it's let go. |
+| `notebooks.spark.credentialHours` | `12` | n/a | How long a session's credentials last. |
 | `storage.jupyterhub` | `1Gi` | | The hub's own database volume. |
 | `placement.jupyterhub` | `{}` | | A node selector for the hub. |
 | `images.mlflow` | `platform-mlflow` | `mlflow` service | MLflow's image. |
@@ -531,6 +576,10 @@ platformd reaches MLflow at `MLFLOW_URL` (Compose: `http://mlflow:5000`) and the
 |---|---|---|
 | `sql()` | `PermissionError: the platform refused the query on retail (403): ...` | You may not read that: check your role and the readers' rules. |
 | `sql()` | warning "the answer has 100000 rows ..." | Aggregate or sample in SQL. |
+| `spark()` | `RuntimeError: this notebook has no Spark: start it with the Distributed Spark profile ...` | Restart your server with that profile. |
+| `spark()` | `PermissionError: there's no table you read whole, so Spark has nothing to read ...` | Use `sql()`; `spark_skipped` says why each was left out. |
+| `spark()` | 413 "your N tables don't fit in one session's credentials ..." | Name the tables: `spark(tables=[...])`. |
+| `spark(create=...)` | `PermissionError: Trino didn't make <table> as you: ...` | Make it where you're an editor. |
 | `mlflow()` | 403 "not a member of the project" | Use a project you're in. |
 | MLflow write | 403 "the project's readers read its experiments and models; its editors and pipelines write them" | Ask for `models`, or have an editor run it. |
 | MLflow tag | 403 "the storscale.* tags are the platform's ..." | Use another tag name; approve on **Models**. |

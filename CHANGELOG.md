@@ -4,14 +4,18 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-11-07
+
+Distributed Spark in notebooks, the profile picked unless people pick the notebook alone: Spark Connect beside each notebook, its executors as pods started as jobs need them, on the tables a person reads whole (no row filter or mask for them) and writes only those they may change. Nessie no longer signs S3 requests for whoever asks.
+
+**Upgrading from 0.39.1:** `storscale upgrade --context <cluster> --version 0.40.0`, after a `--dry-run`. Nothing else to do for most installs: the profile appears, and setup makes the Spark account (`SPARK_S3_ACCESS_KEY`, `spark`; `dataworks-spark` on an external store). On a cluster where something else makes namespaces, set `notebooks.spark.createNamespace: false` and make `<release namespace>-spark` first; `notebooks.spark.enabled: false` leaves Spark out.
+
 ### Added
 - **Distributed Spark in notebooks** (`notebooks.spark`, on by default on Kubernetes): a profile people pick as their notebook starts, the one chosen unless they pick **Notebook only** (`notebooks.spark.default: false` makes the notebook alone the default). Spark Connect's server runs in a container of the person's notebook pod as Spark's driver, reachable from that pod alone, and `buckets_lake.spark()` is a Spark session on the platform's tables (`spark.table("sales.orders")`, the `iceberg` catalog as Trino names it). Its executors are pods of the new `platform-spark` image (Spark 4.1.4, Iceberg 1.12, the notebook's Python) in a namespace of their own (`<release namespace>-spark`, Pod Security's restricted standard), started as jobs need them up to `executors.max` and let go when idle. The driver needs at least 1G (`driver.memory`); `driver.requestMemory` and `executors.requestCores` ask for less than the limits, so more fit on a node. Spark runs on Java 21. Only Spark's container holds a Kubernetes token, and it may start pods in that namespace only: the notebook has none.
 - **Spark reads the tables a person reads whole, nothing else.** Spark reads the tables' files itself, so Ranger can't filter rows or mask columns for it, and people's own Buckets credentials never reach the warehouse. platformd (`POST /api/notebooks/spark-credentials`) asks Trino, as the person, which tables a plain `SELECT *` gives them whole (no row filter, no mask) and which of those they may insert into and delete from, and gives the session credentials for those tables' folders alone, for up to 12 hours (`credentialHours`): Buckets' AssumeRole on the platform's Spark account, cut down by a session policy. A table with a filter or mask for the person stays Trino's (`buckets_lake.sql`); `buckets_lake.spark_skipped` says which and why. A session takes about thirty tables (Buckets' 2 KB session policy): `buckets_lake.spark(tables=[...])` names the ones it needs. `buckets_lake.spark(create={"sales.order_counts": df.schema})` makes new tables first: Trino makes them, as the person (so Ranger decides where they may), and the session may write them; Spark itself never commits a new table to the catalog. Every grant is in the audit log (`spark.credentials`, `spark.create`).
 
 ### Fixed
 - **Nessie no longer signs S3 requests for whoever asks.** By default its Iceberg REST catalog offered any client, without signing in, to sign requests to a table's files with Nessie's own key. Every client of the platform reads and writes with credentials of its own (Trino, the imports, Nessie's GC, now Spark), so the chart turns it off (`request-signing-enabled: false`).
-
-**Upgrading:** nothing to do for most installs: the profile appears, and setup makes the Spark account (`SPARK_S3_ACCESS_KEY`, `spark`; `dataworks-spark` on an external store). On a cluster where something else makes namespaces, set `notebooks.spark.createNamespace: false` and make `<release namespace>-spark` first; `notebooks.spark.enabled: false` leaves Spark out.
 
 ## [0.39.1] - 2026-11-05
 
