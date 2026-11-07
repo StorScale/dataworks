@@ -232,8 +232,10 @@ Items 1 to 3 work on one; 4 to 6 are still to do.
    - Trino gets 2.5 GB (`trino.memory`, 2560Mi), and no workers unless `trino.workers` says.
 6. **Spark in notebooks only.** The Distributed Spark profile (`notebooks.spark`) runs
    Spark Connect beside each notebook, its executors in `<namespace>-spark`, on the tables
-   the person reads whole (platformd's `spark-credentials`). The Spark Operator is
-   installed but unused: no canvas step, no Spark usage counted per project yet.
+   the person reads whole (platformd's `spark-credentials`), its catalog platformd's
+   (`/internal/spark-catalog/`: Nessie answers only the platform's catalog account,
+   `lakehouse-catalog`). The Spark Operator is installed but unused: no canvas step, no
+   Spark usage counted per project yet.
 
 ### Buckets' capacity
 

@@ -40,6 +40,8 @@ Administrators may do every platform action in every project (the Edit page, con
 
 The rules reach a table read as it was, too: `uploads_orders@close-2026-09` and `uploads_orders#<commit>` are under the same policies as `uploads_orders` ([chapter 15](15-history-and-releases.md)).
 
+There's no way around them to the tables themselves. Nobody but the platform's engines reads the warehouse's files, and the table catalog (Nessie) answers the platform's own services alone (Trino, platformd, the operator, the copies, the imports): not people, their notebooks or the pipelines' code. A notebook's Distributed Spark gets the catalog through platformd, for the tables its person reads whole and nothing else ([chapter 10](10-notebooks-and-models.md#distributed-spark)).
+
 ---
 
 ## Tables readers may read

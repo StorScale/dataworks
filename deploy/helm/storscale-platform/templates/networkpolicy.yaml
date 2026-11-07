@@ -121,6 +121,28 @@ spec:
       from:
         {{- include "storscale.np.from" (list "openmetadata" "openmetadata-migrate" "platformd") | nindent 8 }}
 ---
+# The catalog (Nessie): its API to the services that sign in to it as the
+# catalog's account (and the checks); its health to those that wait on it.
+# People's notebooks, Spark's executors and the pipelines' code reach the
+# tables through Trino, or Spark through platformd, never Nessie itself.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: storscale-nessie
+  labels: {{- include "storscale.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "storscale.selector" (list .Release.Name "nessie") | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{port: 19120}]
+      from:
+        {{- include "storscale.np.from" (list "trino" "trino-worker" "platformd" "platform-operator" "storscale-copy"
+              "airflow-scheduler" "nessie-gc" "storscale-test") | nindent 8 }}
+    - ports: [{port: 9000}]
+      from:
+        {{- include "storscale.np.from" (list "trino" "platformd" "platform-operator" "nessie-gc" "storscale-test") | nindent 8 }}
+---
 # Keycloak: the services that call it directly (the rest go through the
 # gateway, as people do), and their wait for it to be ready.
 apiVersion: networking.k8s.io/v1
@@ -136,7 +158,8 @@ spec:
     - ports: [{port: 8080}, {port: 9000}]
       from:
         {{- include "storscale.np.from" (list "gateway" "platformd" "platform-operator" "semanticd" "grafana" "jupyterhub"
-              "catalog-sync" "airflow" "openmetadata" "setup") | nindent 8 }}
+              "catalog-sync" "airflow" "openmetadata" "setup"
+              "nessie" "trino" "trino-worker" "storscale-copy" "airflow-scheduler" "nessie-gc") | nindent 8 }}
     # Its own pods, when there are more than one: their shared caches (JGroups).
     - from:
         {{- include "storscale.np.from" (list "keycloak") | nindent 8 }}

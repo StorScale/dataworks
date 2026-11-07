@@ -17,7 +17,7 @@ import sys
 
 import requests
 
-from lakekit import KEYCLOAK, REALM, allow, check, env, finish, ranger, res, s3_root, sql
+from lakekit import KEYCLOAK, REALM, allow, catalog_headers, check, env, finish, ranger, res, s3_root, sql
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
@@ -47,7 +47,7 @@ def person():
 
 
 def tag():
-    r = requests.get(f"{NESSIE}/trees/{TAG}", timeout=10)
+    r = requests.get(f"{NESSIE}/trees/{TAG}", headers=catalog_headers(), timeout=10)
     return r.json()["reference"] if r.status_code == 200 else None
 
 
@@ -62,8 +62,8 @@ def project(s):
 
 
 def mark():
-    main = requests.get(f"{NESSIE}/trees/main", timeout=10).json()["reference"]
-    r = requests.post(f"{NESSIE}/trees", params={"name": TAG, "type": "TAG"}, json=main, timeout=10)
+    main = requests.get(f"{NESSIE}/trees/main", headers=catalog_headers(), timeout=10).json()["reference"]
+    r = requests.post(f"{NESSIE}/trees", params={"name": TAG, "type": "TAG"}, json=main, headers=catalog_headers(), timeout=10)
     check("a Nessie tag (the catalog)", r.ok or tag() is not None, r.text[:200])
     base, h = keycloak()
     r = requests.post(f"{base}/users", headers=h, json={"username": PERSON, "enabled": True, "firstName": "Restore", "lastName": "Check",
@@ -89,7 +89,7 @@ def mark():
 def damage():
     t = tag()
     if t:
-        requests.delete(f"{NESSIE}/trees/{TAG}@{t['hash']}", timeout=10)
+        requests.delete(f"{NESSIE}/trees/{TAG}@{t['hash']}", headers=catalog_headers(), timeout=10)
     check("the tag is gone", tag() is None)
     p = person()
     if p:

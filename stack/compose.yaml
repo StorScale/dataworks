@@ -91,6 +91,7 @@ x-airflow-env: &airflow-env
   # Projects' imports (dlt) write the lakehouse as its writers' Buckets account.
   COPY_S3_ACCESS_KEY: ${COPY_S3_ACCESS_KEY}
   COPY_S3_SECRET_KEY: ${COPY_S3_SECRET_KEY}
+  CATALOG_CLIENT_SECRET: ${CATALOG_CLIENT_SECRET}   # ... and their tables in the catalog, as its account
 
 x-airflow: &airflow
   build: ./airflow/image
@@ -241,6 +242,7 @@ services:
       JUPYTERHUB_OAUTH_SECRET: ${JUPYTERHUB_OAUTH_SECRET}
       PLATFORM_OAUTH_SECRET: ${PLATFORM_OAUTH_SECRET}
       OPERATOR_CLIENT_SECRET: ${OPERATOR_CLIENT_SECRET}
+      CATALOG_CLIENT_SECRET: ${CATALOG_CLIENT_SECRET}
       SUPERSET_OAUTH_SECRET: ${SUPERSET_OAUTH_SECRET}
       GRAFANA_OAUTH_SECRET: ${GRAFANA_OAUTH_SECRET}
       OPENMETADATA_OAUTH_SECRET: ${OPENMETADATA_OAUTH_SECRET}
@@ -274,6 +276,7 @@ services:
       GATEWAY_HEALTH_URL: http://gateway:${STORSCALE_PORT}/healthz
       # Project alerts: when a project's tables last changed (its freshness targets).
       NESSIE_URL: http://nessie:19120
+      CATALOG_CLIENT_SECRET: ${CATALOG_CLIENT_SECRET}   # Nessie answers the catalog's account alone
       PLATFORM_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}
       KEYCLOAK_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}/sso
       KEYCLOAK_DIRECT_URL: http://keycloak:8080/sso
@@ -385,6 +388,7 @@ services:
       RANGER_URL: http://ranger-admin:6080
       RANGER_PASSWORD: ${RANGER_PASSWORD}
       NESSIE_URL: http://nessie:19120
+      CATALOG_CLIENT_SECRET: ${CATALOG_CLIENT_SECRET}
       # Projects' pipelines repos: their git connections, through the platform's Airflow account.
       AIRFLOW_URL: http://airflow:8090/pipelines
       SERVING_ACCOUNT: airflow-pipelines   # the shared model server signs in as it: a reader of each project it serves
@@ -635,6 +639,16 @@ services:
       nessie.catalog.service.s3.default-options.access-key: urn:nessie-secret:quarkus:nessie.catalog.secrets.access-key
       nessie.catalog.secrets.access-key.name: ${NESSIE_S3_ACCESS_KEY}
       nessie.catalog.secrets.access-key.secret: ${NESSIE_S3_SECRET_KEY}
+      # A Keycloak token, and the catalog's account alone (the chart's storscale.nessieAuth).
+      nessie.server.authentication.enabled: "true"
+      quarkus.oidc.auth-server-url: http://keycloak:8080/sso/realms/lakehouse
+      quarkus.oidc.discovery-enabled: "false"
+      quarkus.oidc.jwks-path: protocol/openid-connect/certs
+      quarkus.oidc.token.issuer: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}/sso/realms/lakehouse
+      quarkus.oidc.client-id: nessie
+      quarkus.oidc.token.principal-claim: preferred_username
+      nessie.server.authorization.enabled: "true"
+      nessie.server.authorization.rules.platform: role=='service-account-lakehouse-catalog'
     depends_on:
       setup: {condition: service_completed_successfully}
       nessie-move: {condition: service_completed_successfully}
@@ -659,12 +673,16 @@ services:
           fi
           echo "nessie-gc: collecting what's older than $$NESSIE_GC_KEEP"
           java -jar /nessie-gc.jar gc --uri http://nessie:19120/api/v2 --inmemory --default-cutoff "$$NESSIE_GC_KEEP" \
+            -o nessie.authentication.type=OAUTH2 -o nessie.authentication.oauth2.client-id=lakehouse-catalog \
+            -o nessie.authentication.oauth2.token-endpoint=http://keycloak:8080/sso/realms/lakehouse/protocol/openid-connect/token \
+            -o "nessie.authentication.oauth2.client-secret=$$CATALOG_CLIENT_SECRET" \
             --iceberg s3.endpoint=http://buckets:9000/,s3.path-style-access=true \
             && echo "nessie-gc: done" || echo "nessie-gc: failed"
         done
     environment:
       NESSIE_GC_KEEP: ${NESSIE_GC_KEEP}
       NESSIE_GC_EVERY: ${NESSIE_GC_EVERY}
+      CATALOG_CLIENT_SECRET: ${CATALOG_CLIENT_SECRET}   # Nessie answers the catalog's account alone
       AWS_ACCESS_KEY_ID: ${NESSIE_S3_ACCESS_KEY}   # Nessie's own account: the warehouse, nothing else
       AWS_SECRET_ACCESS_KEY: ${NESSIE_S3_SECRET_KEY}
       AWS_REGION: us-east-1
@@ -701,6 +719,7 @@ services:
       KEYCLOAK_URL: http://${STORSCALE_DOMAIN}:${STORSCALE_PORT}/sso
       TRINO_S3_ACCESS_KEY: ${TRINO_S3_ACCESS_KEY}
       TRINO_S3_SECRET_KEY: ${TRINO_S3_SECRET_KEY}
+      CATALOG_CLIENT_SECRET: ${CATALOG_CLIENT_SECRET}   # Nessie answers the catalog's account alone
       TRINO_SHARED_SECRET: ${TRINO_SHARED_SECRET}
       RANGER_PLUGIN_PASSWORD: ${RANGER_PLUGIN_PASSWORD}
       TRINO_DB_PASSWORD: ${TRINO_DB_PASSWORD}   # its limits' database

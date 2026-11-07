@@ -81,7 +81,10 @@ func iids(mrs []gitlab.MergeRequest) []int {
 func reviewCatalog(cat, branch string) string {
 	return fmt.Sprintf(`CREATE CATALOG IF NOT EXISTS %s USING iceberg WITH (`+
 		`"iceberg.catalog.type" = 'rest', "iceberg.rest-catalog.uri" = 'http://nessie:19120/iceberg/%s/', `+
-		`"iceberg.rest-catalog.warehouse" = 'warehouse', "fs.s3.enabled" = 'true', "s3.endpoint" = 'http://buckets:9000', `+
+		`"iceberg.rest-catalog.warehouse" = 'warehouse', "iceberg.rest-catalog.security" = 'OAUTH2', `+
+		`"iceberg.rest-catalog.oauth2.credential" = 'lakehouse-catalog:${ENV:CATALOG_CLIENT_SECRET}', `+
+		`"iceberg.rest-catalog.oauth2.server-uri" = 'http://keycloak:8080/sso/realms/lakehouse/protocol/openid-connect/token', `+
+		`"iceberg.rest-catalog.oauth2.scope" = 'openid', "fs.s3.enabled" = 'true', "s3.endpoint" = 'http://buckets:9000', `+
 		`"s3.region" = 'us-east-1', "s3.path-style-access" = 'true', `+
 		`"s3.aws-access-key" = '${ENV:TRINO_S3_ACCESS_KEY}', "s3.aws-secret-key" = '${ENV:TRINO_S3_SECRET_KEY}')`,
 		trino.Quote(cat), branch)

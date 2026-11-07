@@ -16,7 +16,7 @@ import uuid
 
 import requests
 
-from lakekit import audited_denials, check, code, finish, keys, s3_as, s3_root, wait_for_trino
+from lakekit import audited_denials, catalog_headers, check, code, finish, keys, s3_as, s3_root, token, wait_for_trino
 from lakekit import denied as _denied
 from lakekit import sql as _sql
 
@@ -52,10 +52,21 @@ def main():
     check("engineers create, load and change an Iceberg table", now[0] == 7 and float(now[1]) == 130.5,
           f"{now[0]} rows, order 1 now {now[1]}")
     # Nessie keeps a table's history as catalog commits (like git), not as Iceberg snapshots.
-    log = requests.get("http://nessie:19120/api/v2/trees/main/history", params={"max-records": 50}, timeout=10).json()
+    log = requests.get("http://nessie:19120/api/v2/trees/main/history", params={"max-records": 50}, headers=catalog_headers(), timeout=10).json()
     changes = [e for e in log["logEntries"] if "sales.orders" in e["commitMeta"].get("message", "")]
     check("Nessie records every change as a commit", len(changes) >= 4,
           f"{len(changes)} commits for sales.orders on branch main")
+    # Nessie answers the platform's catalog account alone: people reach the tables through
+    # Trino (Ranger's rules), or Spark through platformd (the tables they read whole).
+    anyone = requests.get("http://nessie:19120/api/v2/trees", timeout=10).status_code
+    as_bob = requests.get("http://nessie:19120/api/v2/trees", headers={"Authorization": "Bearer " + token("bob")}, timeout=10)
+    cfg = requests.get("http://nessie:19120/iceberg/v1/config", params={"warehouse": "warehouse"}, headers=catalog_headers(), timeout=10).json()
+    prefix = cfg.get("overrides", {}).get("prefix") or cfg.get("defaults", {}).get("prefix")
+    as_bob_iceberg = requests.get(f"http://nessie:19120/iceberg/v1/{prefix}/namespaces/sales/tables",
+                                  headers={"Authorization": "Bearer " + token("bob")}, timeout=10)
+    check("Nessie answers the catalog's account alone: not someone without a token, nor a person's own (bob, an engineer)",
+          anyone == 401 and as_bob.status_code == 403 and as_bob_iceberg.status_code == 403,
+          f"no token: HTTP {anyone}; bob's: HTTP {as_bob.status_code} (Iceberg's API: HTTP {as_bob_iceberg.status_code})")
     sql("bob", "CREATE TABLE payroll (employee varchar, salary decimal(10,2))")
     sql("bob", "INSERT INTO payroll VALUES ('Ana', 5000.00)")
 
@@ -85,7 +96,7 @@ def main():
             return sql(user, f'SELECT {cols} FROM "{name}" ORDER BY 1')
         except Exception as e:  # noqa: BLE001 (refused, or not found)
             return str(e).splitlines()[0][:200]
-    head = requests.get("http://nessie:19120/api/v2/trees/main", timeout=10).json()["reference"]["hash"]
+    head = requests.get("http://nessie:19120/api/v2/trees/main", headers=catalog_headers(), timeout=10).json()["reference"]["hash"]
     everyone = at("bob", f"orders#{head}", "count(*)")
     check("a table reads as it was at a Nessie commit (orders#<commit>)", everyone == [[7]], everyone)
     then = at("alice", f"orders#{head}")

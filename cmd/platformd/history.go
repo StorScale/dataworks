@@ -31,8 +31,8 @@ type history struct {
 func (s *server) startHistory() {
 	base := strings.TrimRight(envOr("NESSIE_URL", "http://nessie:19120"), "/")
 	h := &history{
-		nessie:  &catalog.Nessie{HTTP: &http.Client{Timeout: 30 * time.Second}, Base: base + "/api/v2"},
-		iceberg: &catalog.Iceberg{HTTP: &http.Client{Timeout: 30 * time.Second}, Base: base + "/iceberg", Warehouse: envOr("NESSIE_WAREHOUSE", "warehouse")},
+		nessie:  &catalog.Nessie{HTTP: catalog.NessieHTTP(30 * time.Second), Base: base + "/api/v2"},
+		iceberg: &catalog.Iceberg{HTTP: catalog.NessieHTTP(30 * time.Second), Base: base + "/iceberg", Warehouse: envOr("NESSIE_WAREHOUSE", "warehouse")},
 	}
 	h.keep, _ = isoDuration(envOr("MAINTENANCE_KEEP_HISTORY", ""))
 	s.history = h

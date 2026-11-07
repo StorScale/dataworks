@@ -194,6 +194,24 @@ resources:
   limits: {memory: {{ index . 2 }}}
 {{- end }}
 
+{{/* Nessie asks for a Keycloak token (the realm's keys, fetched from Keycloak
+     directly; the issuer, the platform's address, as Keycloak names itself),
+     and answers only the platform's catalog account (the client
+     lakehouse-catalog's service account): Trino, platformd, the operator, the
+     copies, the imports and Nessie's GC sign in as it. Everyone else, people's
+     notebooks and Spark among them, reaches the catalog through those. */}}
+{{- define "storscale.nessieAuth" -}}
+- {name: nessie.server.authentication.enabled, value: "true"}
+- {name: quarkus.oidc.auth-server-url, value: "http://keycloak:8080/sso/realms/lakehouse"}
+- {name: quarkus.oidc.discovery-enabled, value: "false"}
+- {name: quarkus.oidc.jwks-path, value: protocol/openid-connect/certs}
+- {name: quarkus.oidc.token.issuer, value: "{{ include "storscale.url" . }}/sso/realms/lakehouse"}
+- {name: quarkus.oidc.client-id, value: nessie}
+- {name: quarkus.oidc.token.principal-claim, value: preferred_username}
+- {name: nessie.server.authorization.enabled, value: "true"}
+- {name: nessie.server.authorization.rules.platform, value: "role=='service-account-lakehouse-catalog'"}
+{{- end }}
+
 {{/* Nessie's version store: its database on the platform's Postgres. */}}
 {{- define "storscale.nessieDb" -}}
 - {name: nessie.version.store.type, value: JDBC2}
@@ -228,7 +246,7 @@ resources:
      stores, Keycloak, MLflow and model serving. Every other service takes
      connections from the namespace's own pods. A JSON list. */}}
 {{- define "storscale.np.protected" -}}
-["postgres","ranger-db","ranger-solr","openmetadata-search","keycloak","mlflow","model-serving"]
+["postgres","ranger-db","ranger-solr","openmetadata-search","keycloak","mlflow","model-serving","nessie"]
 {{- end }}
 
 {{/* The namespace of notebooks' Spark executors (notebooks.spark.namespace). */}}

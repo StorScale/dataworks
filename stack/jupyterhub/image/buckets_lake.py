@@ -159,9 +159,11 @@ def spark(tables=None, hours=None, create=None, wait=120):
             if time.time() > deadline:
                 raise
             time.sleep(3)
-    # Before this session first uses the catalog, which takes them then.
+    # Before this session first uses the catalog, which takes them then: the files' credentials,
+    # and the catalog's grant (platformd's catalog answers this session's tables alone).
     for k, v in {"s3.access-key-id": answer["accessKeyId"], "s3.secret-access-key": answer["secretAccessKey"],
-                 "s3.session-token": answer["sessionToken"]}.items():
+                 "s3.session-token": answer["sessionToken"],
+                 "header.Authorization": "Bearer " + answer["catalogToken"]}.items():
         s.conf.set(f"spark.sql.catalog.iceberg.{k}", v)
     spark_tables.clear()
     spark_tables.update({t["name"]: "read and write" if t["write"] else "read" for t in answer["tables"]})

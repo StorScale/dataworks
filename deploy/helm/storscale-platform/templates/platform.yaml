@@ -62,6 +62,7 @@ spec:
             - {name: LIMITS_PROJECT_STORAGE, value: {{ .Values.limits.project.storage | quote }}}
             # Project alerts: when a project's tables last changed (its freshness targets).
             - {name: NESSIE_URL, value: "http://nessie:19120"}
+            - {name: CATALOG_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: storscale-env, key: CATALOG_CLIENT_SECRET}}}   # Nessie answers the catalog's account alone
             # A project with a repo has an Airflow of its own (project-<name>-airflow).
             - {name: PROJECT_AIRFLOWS, value: "true"}
             # Table maintenance, each night (maintenance.*), as Trino's maintenance account.
@@ -179,7 +180,7 @@ spec:
       serviceAccountName: storscale
       initContainers:
         {{- include "storscale.wait" (list . "setup" (list "job" "setup")) | nindent 8 }}
-        {{- include "storscale.wait" (list . "nessie" (list "url" "http://nessie:19120/api/v2/config")) | nindent 8 }}
+        {{- include "storscale.wait" (list . "nessie" (list "url" "http://nessie:9000/q/health/ready")) | nindent 8 }}
       containers:
         - name: operator
           image: {{ include "storscale.image" (list . "platformd") }}
@@ -197,6 +198,7 @@ spec:
             - {name: RANGER_URL, value: "http://ranger-admin:6080"}
             - {name: RANGER_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: RANGER_PASSWORD}}}
             - {name: NESSIE_URL, value: "http://nessie:19120"}
+            - {name: CATALOG_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: storscale-env, key: CATALOG_CLIENT_SECRET}}}   # Nessie answers the catalog's account alone
             # Projects' pipelines repos: their git connections, through the platform's Airflow account.
             - {name: AIRFLOW_URL, value: "http://airflow:8090/pipelines"}
             - {name: AIRFLOW_PASSWORD, valueFrom: {secretKeyRef: {name: storscale-env, key: AIRFLOW_PLATFORM_PASSWORD}}}

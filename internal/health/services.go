@@ -23,7 +23,7 @@ func Services() []Check {
 		db("keycloak-db", "Sign-in's database", "signing in"),
 		{Name: "buckets", Label: "Storage (Buckets)", URL: "http://buckets:9000/minio/health/live", Features: []string{"tables", "files", "deliveries"},
 			Selector: "buckets.io/cluster=buckets"},
-		{Name: "nessie", Label: "Table catalog (Nessie)", URL: "http://nessie:19120/api/v2/config", Features: []string{"tables"}},
+		{Name: "nessie", Label: "Table catalog (Nessie)", URL: "http://nessie:9000/q/health/ready", Features: []string{"tables"}},
 		{Name: "trino", Label: "Query engine (Trino)", URL: "http://trino:8080/v1/info", OK: trinoOK, Features: []string{"SQL", "dashboards", "metrics", "pipelines' queries"}},
 		db("trino-db", "Query engine's limits", "SQL", "dashboards", "metrics"),
 		{Name: "ranger-admin", Label: "Access rules (Ranger)", URL: "http://ranger-admin:6080/service/public/v2/api/servicedef", OK: answersSignIn,

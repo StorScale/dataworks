@@ -413,6 +413,11 @@ def service_token(client_id, secret):
     return r.json()["access_token"]
 
 
+def catalog_headers():
+    """Headers for Nessie itself, which answers the catalog's account alone (Keycloak's client lakehouse-catalog)."""
+    return {"Authorization": "Bearer " + service_token("lakehouse-catalog", env["CATALOG_CLIENT_SECRET"])}
+
+
 def s3_as(user, web_token=None):
     """Buckets credentials for a person (or, given its token, a service
     account): their Keycloak token through STS."""

@@ -38,6 +38,8 @@ deployment:
               - {name: AWS_ACCESS_KEY_ID, valueFrom: {secretKeyRef: {name: storscale-env, key: COPY_S3_ACCESS_KEY}}}
               - {name: AWS_SECRET_ACCESS_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: COPY_S3_SECRET_KEY}}}
               - {name: AWS_REGION, value: us-east-1}
+              # The catalog, as its account (the config's ${CATALOG_CLIENT_SECRET}).
+              - {name: CATALOG_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: storscale-env, key: CATALOG_CLIENT_SECRET}}}
               - {name: JAVA_OPTS, value: "-XX:MaxRAMPercentage=70"}
             ports:
               - {name: http, containerPort: 8080}

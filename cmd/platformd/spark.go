@@ -282,7 +282,7 @@ func (s *server) handleSparkCredentials(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 	sort.Strings(names)
-	iceberg := &catalog.Iceberg{HTTP: &http.Client{Timeout: 30 * time.Second},
+	iceberg := &catalog.Iceberg{HTTP: catalog.NessieHTTP(30 * time.Second),
 		Base: strings.TrimRight(envOr("NESSIE_URL", "http://nessie:19120"), "/") + "/iceberg", Warehouse: envOr("NESSIE_WAREHOUSE", "warehouse")}
 	results := make([]*sparkTable, len(names))
 	whys := make([]string, len(names))
@@ -352,9 +352,15 @@ func (s *server) handleSparkCredentials(w http.ResponseWriter, r *http.Request) 
 				}
 			}
 			s.record(r, who, "spark.credentials", "spark", strings.Join(names, ", "))
+			// The session's catalog (platformd's, sparkcatalog.go): these tables alone, as long as the credentials.
+			grant := sparkGrant{User: who, Tables: map[string]bool{}, Expires: v.Expiration.Unix()}
+			for _, t := range tables {
+				grant.Tables[t.Name] = t.Write
+			}
 			writeJSON(w, http.StatusOK, map[string]any{
 				"accessKeyId": v.AccessKeyID, "secretAccessKey": v.SecretAccessKey, "sessionToken": v.SessionToken,
-				"expiration": v.Expiration.UTC().Format(time.RFC3339), "tables": tables, "skipped": skipped})
+				"expiration": v.Expiration.UTC().Format(time.RFC3339), "tables": tables, "skipped": skipped,
+				"catalogToken": grant.sign(sparkCatalogKey())})
 			return
 		}
 	}

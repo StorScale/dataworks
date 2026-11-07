@@ -161,13 +161,14 @@ buckets_lake.spark_skipped                     # and what it didn't, and why
 
 - Spark's driver runs beside your notebook, in a container of its own; the executors are pods in the install's Spark namespace, up to `notebooks.spark.executors.max` of them, let go after `idleTimeout` with nothing to do. Stopping your server stops them too.
 - Each `spark()` asks the platform for credentials: it asks Trino, as you, which tables a plain `SELECT *` gives you whole, and gets Buckets credentials for those tables' files alone, for 12 hours (`credentialHours`). A new session picks up tables made or shared with you since.
-- Every grant is in the audit log (`spark.credentials`, `spark.create`).
+- The session's catalog is the platform's, not Nessie itself: it lists and loads only the session's tables, commits only to those you may change, and stays on the catalog's main branch.
+- Every grant and every commit is in the audit log (`spark.credentials`, `spark.create`, `spark.commit`).
 
 ### Limits and gotchas
 
 - A table with a row filter or mask for you stays Trino's: read it with `buckets_lake.sql()`.
 - One session takes about thirty tables (Buckets' policy limit). With more, name the ones you need: `buckets_lake.spark(tables=["sales.orders", "sales.payroll"])`.
-- Make new tables with `create=`, not Spark's own `CREATE TABLE`: a session's credentials reach only the folders of the tables it was given, so Spark can't write a table it made itself.
+- Spark's own `CREATE TABLE`, `DROP TABLE` and `ALTER TABLE ... RENAME` are refused ("a Spark session doesn't make, drop or rename tables"): make a table with `create=`, and drop or rename one in SQL, through Trino.
 - A job running past the credentials' hours loses its access: start a new session.
 - The notebook has no Kubernetes access; only Spark's driver may start pods, and only in the Spark namespace.
 
@@ -579,6 +580,9 @@ platformd reaches MLflow at `MLFLOW_URL` (Compose: `http://mlflow:5000`) and the
 | `spark()` | `RuntimeError: this notebook has no Spark: start it with the Distributed Spark profile ...` | Restart your server with that profile. |
 | `spark()` | `PermissionError: there's no table you read whole, so Spark has nothing to read ...` | Use `sql()`; `spark_skipped` says why each was left out. |
 | `spark()` | 413 "your N tables don't fit in one session's credentials ..." | Name the tables: `spark(tables=[...])`. |
+| Spark | `ForbiddenException: sales.orders isn't one of this session's tables ...` | It has a row filter or mask for you (`spark_skipped`), or the session named other tables. |
+| Spark | `ForbiddenException: a Spark session doesn't make, drop or rename tables ...` | Use `spark(create=...)`, or Trino. |
+| Spark | `NotAuthorizedException: ... the session's grant has expired` | Start a new session: `buckets_lake.spark()`. |
 | `spark(create=...)` | `PermissionError: Trino didn't make <table> as you: ...` | Make it where you're an editor. |
 | `mlflow()` | 403 "not a member of the project" | Use a project you're in. |
 | MLflow write | 403 "the project's readers read its experiments and models; its editors and pipelines write them" | Ask for `models`, or have an editor run it. |

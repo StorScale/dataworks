@@ -109,7 +109,7 @@ func main() {
 		Ranger: &reconcile.Ranger{URL: strings.TrimRight(rangerURL, "/"), User: env("RANGER_USER", "admin"),
 			Password: rangerPassword, Service: env("RANGER_SERVICE", "lakehouse")},
 		Buckets:            &reconcile.Buckets{URL: strings.TrimRight(storeURL, "/"), AccessKey: accessKey, SecretKey: secretKey, External: os.Getenv("STORE_EXTERNAL") == "true"},
-		Nessie:             &reconcile.Nessie{URL: strings.TrimRight(nessieURL, "/"), Warehouse: env("NESSIE_WAREHOUSE", "warehouse")},
+		Nessie:             &reconcile.Nessie{URL: strings.TrimRight(nessieURL, "/"), Warehouse: env("NESSIE_WAREHOUSE", "warehouse"), Account: catalog.CredentialsFromEnv()},
 		Store:              st,
 		PlatformURL:        os.Getenv("PLATFORM_URL"),
 		Protection:         protection,
@@ -209,7 +209,7 @@ func main() {
 		r.Sources = &reconcile.TrinoSources{Trino: tc, Files: files, Dir: env("TRINO_SOURCES_DIR", "/etc/trino/sources"), FileWait: wait}
 		// Projects' merge requests' data branches, their catalogs made as the same account.
 		r.Reviewer = &reconcile.Reviewer{Trino: tc, Nessie: r.Nessie}
-		r.Adopter = &reconcile.Adopter{Trino: tc, Iceberg: &catalog.Iceberg{HTTP: &http.Client{Timeout: time.Minute},
+		r.Adopter = &reconcile.Adopter{Trino: tc, Iceberg: &catalog.Iceberg{HTTP: catalog.NessieHTTP(time.Minute),
 			Base: strings.TrimRight(nessieURL, "/") + "/iceberg", Warehouse: env("NESSIE_WAREHOUSE", "warehouse")}}
 	}
 	// On Kubernetes, the projects' sources copied into their tables, a pod

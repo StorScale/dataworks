@@ -22,7 +22,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from lakekit import check, finish, s3_root, sql
+from lakekit import catalog_headers, check, finish, s3_root, sql
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
@@ -41,9 +41,9 @@ def seconds(iso):
 
 def files():
     """The table's files in the warehouse: (bucket, data prefix, keys)."""
-    cfg = requests.get(f"{NESSIE}/v1/config?warehouse=warehouse", timeout=10).json()
+    cfg = requests.get(f"{NESSIE}/v1/config?warehouse=warehouse", headers=catalog_headers(), timeout=10).json()
     prefix = (cfg.get("overrides") or {}).get("prefix") or (cfg.get("defaults") or {}).get("prefix")
-    loc = urlparse(requests.get(f"{NESSIE}/v1/{prefix}/namespaces/{PROJECT}/tables/{TABLE}", timeout=10).json()["metadata"]["location"])
+    loc = urlparse(requests.get(f"{NESSIE}/v1/{prefix}/namespaces/{PROJECT}/tables/{TABLE}", headers=catalog_headers(), timeout=10).json()["metadata"]["location"])
     bucket, data = loc.netloc, loc.path.strip("/") + "/data/"
     keys = set()
     for page in s3_root().get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=data):

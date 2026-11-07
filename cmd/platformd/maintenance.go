@@ -63,7 +63,7 @@ func (s *server) startMaintenance(ctx context.Context) error {
 		return fmt.Errorf("trino: %w", err)
 	}
 	m := &maintainer{trino: tc, at: at.Hour()*60 + at.Minute(), atText: at.Format("15:04"), history: os.Getenv("MAINTENANCE_KEEP_HISTORY"),
-		iceberg: &catalog.Iceberg{HTTP: &http.Client{Timeout: 30 * time.Second},
+		iceberg: &catalog.Iceberg{HTTP: catalog.NessieHTTP(30 * time.Second),
 			Base: strings.TrimRight(envOr("NESSIE_URL", "http://nessie:19120"), "/") + "/iceberg", Warehouse: envOr("NESSIE_WAREHOUSE", "warehouse")},
 		runs: map[string]map[string]tableRun{}, wake: make(chan struct{}, 1)}
 	// Started after tonight's time: the next round is tomorrow's.

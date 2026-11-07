@@ -107,12 +107,13 @@ def spark_container(spark):
         "spark.executor.cores": str(ex["cores"]), "spark.kubernetes.executor.request.cores": str(ex.get("requestCores") or ex["cores"]),
         "spark.kubernetes.executor.limit.cores": str(ex["coreLimit"]), "spark.executor.memory": ex["memory"],
         # The platform's tables, as Trino names them (iceberg.<namespace>.<table>), and the default
-        # catalog: spark.table("sales.orders"). Its credentials are the session's (buckets_lake.spark()).
+        # catalog: spark.table("sales.orders"). Its credentials are the session's (buckets_lake.spark()),
+        # and so is its catalog: platformd's, its tables alone (Nessie answers the platform's account only).
         "spark.sql.extensions": "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions",
         "spark.sql.defaultCatalog": "iceberg",
         "spark.sql.catalog.iceberg": "org.apache.iceberg.spark.SparkCatalog",
         "spark.sql.catalog.iceberg.type": "rest",
-        "spark.sql.catalog.iceberg.uri": "http://nessie:19120/iceberg/",
+        "spark.sql.catalog.iceberg.uri": "http://platformd:8080/internal/spark-catalog/",
         "spark.sql.catalog.iceberg.warehouse": "warehouse",
         "spark.sql.catalog.iceberg.io-impl": "org.apache.iceberg.aws.s3.S3FileIO",
         "spark.sql.catalog.iceberg.s3.endpoint": "http://buckets:9000",

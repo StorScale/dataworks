@@ -99,9 +99,10 @@ spec:
             - {name: nessie.catalog.service.s3.default-options.region, value: us-east-1}
             - {name: nessie.catalog.service.s3.default-options.path-style-access, value: "true"}
             # Clients read and write the files with credentials of their own (Trino's, the
-            # imports', a person's in Spark): Nessie, which asks no one to sign in, signs no
-            # one's requests with its key (it would, by default, for any client that asks).
+            # imports', a person's in Spark): Nessie signs no one's requests with its key
+            # (it would, by default, for any client that asks).
             - {name: nessie.catalog.service.s3.default-options.request-signing-enabled, value: "false"}
+            {{- include "storscale.nessieAuth" . | nindent 12 }}
             - {name: nessie.catalog.service.s3.default-options.access-key, value: "urn:nessie-secret:quarkus:nessie.catalog.secrets.access-key"}
             - {name: nessie.catalog.secrets.access-key.name, valueFrom: {secretKeyRef: {name: storscale-env, key: NESSIE_S3_ACCESS_KEY}}}
             - {name: nessie.catalog.secrets.access-key.secret, valueFrom: {secretKeyRef: {name: storscale-env, key: NESSIE_S3_SECRET_KEY}}}
@@ -153,6 +154,7 @@ spec:
   selector: {{- include "storscale.selector" (list .Release.Name "nessie") | nindent 4 }}
   ports:
     - {name: http, port: 19120, targetPort: http}
+    - {name: management, port: 9000, targetPort: management}   # its health, which asks no one to sign in
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -175,7 +177,7 @@ spec:
       initContainers:
         {{- include "storscale.ca.init" . | nindent 8 }}
         {{- include "storscale.wait" (list . "setup" (list "job" "setup")) | nindent 8 }}
-        {{- include "storscale.wait" (list . "nessie" (list "url" "http://nessie:19120/api/v2/config")) | nindent 8 }}
+        {{- include "storscale.wait" (list . "nessie" (list "url" "http://nessie:9000/q/health/ready")) | nindent 8 }}
         # Its limits' database and user (resource-groups.properties), if they're
         # missing: as Postgres' admin, who is in this step alone.
         - name: database
@@ -393,15 +395,20 @@ spec:
           enableServiceLinks: false
           restartPolicy: Never
           initContainers:
-            {{- include "storscale.wait" (list . "nessie" (list "url" "http://nessie:19120/api/v2/config")) | nindent 12 }}
+            {{- include "storscale.wait" (list . "nessie" (list "url" "http://nessie:9000/q/health/ready")) | nindent 12 }}
           containers:
             - name: gc
               image: {{ .Values.upstream.nessieGc }}
               securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 185, runAsGroup: 185, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+              # As the catalog's account, the only one Nessie answers.
               args: ["gc", "--uri", "http://nessie:19120/api/v2", "--inmemory",
                      "--default-cutoff", {{ .Values.maintenance.history.keep | quote }},
+                     "-o", "nessie.authentication.type=OAUTH2", "-o", "nessie.authentication.oauth2.client-id=lakehouse-catalog",
+                     "-o", "nessie.authentication.oauth2.token-endpoint=http://keycloak:8080/sso/realms/lakehouse/protocol/openid-connect/token",
+                     "-o", "nessie.authentication.oauth2.client-secret=$(CATALOG_CLIENT_SECRET)",
                      "--iceberg", "s3.endpoint=http://buckets:9000/,s3.path-style-access=true"]
               env:
+                - {name: CATALOG_CLIENT_SECRET, valueFrom: {secretKeyRef: {name: storscale-env, key: CATALOG_CLIENT_SECRET}}}
                 - {name: AWS_ACCESS_KEY_ID, valueFrom: {secretKeyRef: {name: storscale-env, key: NESSIE_S3_ACCESS_KEY}}}
                 - {name: AWS_SECRET_ACCESS_KEY, valueFrom: {secretKeyRef: {name: storscale-env, key: NESSIE_S3_SECRET_KEY}}}
                 - {name: AWS_REGION, value: us-east-1}

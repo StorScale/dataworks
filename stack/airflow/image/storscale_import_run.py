@@ -10,7 +10,8 @@ _dlt_pipeline_state, so a run in a fresh pod goes on from the last).
 
 The tables are Iceberg's, through Nessie's REST catalog (pyiceberg), their
 files in the warehouse bucket, as the lakehouse's writers' Buckets account
-(COPY_S3_ACCESS_KEY, COPY_S3_SECRET_KEY).
+(COPY_S3_ACCESS_KEY, COPY_S3_SECRET_KEY); the catalog as its own account
+(CATALOG_CLIENT_SECRET, Keycloak's client lakehouse-catalog).
 """
 import json
 import os
@@ -27,6 +28,11 @@ name = im["name"]
 # pyiceberg's catalog, as dlt asks pyiceberg for it (the catalog "default").
 access, key = os.environ["COPY_S3_ACCESS_KEY"], os.environ["COPY_S3_SECRET_KEY"]
 for k, v in {"TYPE": "rest", "URI": os.environ.get("NESSIE_ICEBERG_URL", "http://nessie:19120/iceberg/"),
+             # As the catalog's account, the only one Nessie answers.
+             "CREDENTIAL": "lakehouse-catalog:" + os.environ["CATALOG_CLIENT_SECRET"],
+             "OAUTH2_SERVER_URI": os.environ.get("CATALOG_TOKEN_URL",
+                                                 "http://keycloak:8080/sso/realms/lakehouse/protocol/openid-connect/token"),
+             "SCOPE": "openid",
              "WAREHOUSE": "warehouse", "S3__ENDPOINT": "http://buckets:9000", "S3__ACCESS_KEY_ID": access,
              "S3__SECRET_ACCESS_KEY": key, "S3__REGION": "us-east-1", "S3__PATH_STYLE_ACCESS": "true"}.items():
     os.environ[f"PYICEBERG_CATALOG__DEFAULT__{k}"] = v

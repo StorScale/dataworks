@@ -20,7 +20,7 @@ import time
 
 import requests
 
-from lakekit import check, finish, sql
+from lakekit import catalog_headers, check, finish, sql
 from projects import platform, wait
 
 PLATFORM = os.environ["PLATFORM_URL"]
@@ -29,7 +29,7 @@ PROJECT, TABLE = "sales", "hist_check"
 
 
 def nessie_tag(name):
-    r = requests.get(f"{NESSIE}/trees/{PROJECT}.{name}", timeout=10)
+    r = requests.get(f"{NESSIE}/trees/{PROJECT}.{name}", headers=catalog_headers(), timeout=10)
     return r.json()["reference"]["hash"] if r.status_code == 200 else None
 
 

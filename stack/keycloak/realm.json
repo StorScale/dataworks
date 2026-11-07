@@ -76,6 +76,11 @@
       ]
     },
     {
+      "username": "service-account-lakehouse-catalog",
+      "enabled": true,
+      "serviceAccountClientId": "lakehouse-catalog"
+    },
+    {
       "username": "service-account-platform-operator",
       "enabled": true,
       "serviceAccountClientId": "platform-operator",
@@ -352,6 +357,17 @@
       "publicClient": false,
       "clientAuthenticatorType": "client-secret",
       "secret": "${OPERATOR_CLIENT_SECRET:platform-operator-secret-change-me}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true
+    },
+    {
+      "clientId": "lakehouse-catalog",
+      "name": "The lakehouse's catalog (service account): the only account Nessie answers",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${CATALOG_CLIENT_SECRET:lakehouse-catalog-secret-change-me}",
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": true

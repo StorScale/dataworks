@@ -48,7 +48,7 @@ type projectAlerts struct {
 func (s *server) startProjectAlerts(ctx context.Context) {
 	pa := &projectAlerts{issues: map[string]map[string]issue{}, told: map[string]string{}, muted: map[string]time.Time{}, unknown: map[string][]string{},
 		down: map[string]time.Time{},
-		http: &http.Client{Timeout: 20 * time.Second}, warehous: "warehouse"}
+		http: catalog.NessieHTTP(20 * time.Second), warehous: "warehouse"}
 	pa.nessie = strings.TrimRight(os.Getenv("NESSIE_URL"), "/")
 	if pa.nessie == "" {
 		pa.nessie = "http://nessie:19120"

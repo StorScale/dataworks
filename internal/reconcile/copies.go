@@ -98,10 +98,14 @@ func (c *Copies) properties(p *project.Project, s project.Source, conn map[strin
 		"debezium.source.schema.history.internal.iceberg.table-namespace": StateNamespace,
 		"debezium.source.schema.history.internal.iceberg.table-name":      cat + "_history",
 		// Into Iceberg: the project's namespace, through Nessie's REST catalog.
-		"debezium.sink.type":                         "iceberg",
-		"debezium.sink.iceberg.type":                 "rest",
-		"debezium.sink.iceberg.uri":                  "http://nessie:19120/iceberg/",
-		"debezium.sink.iceberg.warehouse":            "warehouse",
+		"debezium.sink.type":              "iceberg",
+		"debezium.sink.iceberg.type":      "rest",
+		"debezium.sink.iceberg.uri":       "http://nessie:19120/iceberg/",
+		"debezium.sink.iceberg.warehouse": "warehouse",
+		// As the catalog's account, the only one Nessie answers (its secret from the pod's environment).
+		"debezium.sink.iceberg.credential":           "lakehouse-catalog:${CATALOG_CLIENT_SECRET}",
+		"debezium.sink.iceberg.oauth2-server-uri":    "http://keycloak:8080/sso/realms/lakehouse/protocol/openid-connect/token",
+		"debezium.sink.iceberg.scope":                "openid",
 		"debezium.sink.iceberg.catalog-name":         "storscale",
 		"debezium.sink.iceberg.io-impl":              "org.apache.iceberg.aws.s3.S3FileIO",
 		"debezium.sink.iceberg.s3.endpoint":          "http://buckets:9000",

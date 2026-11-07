@@ -13,6 +13,18 @@ import (
 // Nessie is the catalog's Iceberg REST API.
 type Nessie struct {
 	URL, Warehouse string
+	Account        *catalog.ClientCredentials // the platform's account on the catalog; nil: none
+}
+
+func (n *Nessie) auth(ctx context.Context) (func(*http.Request), error) {
+	if n.Account == nil {
+		return nil, nil
+	}
+	t, err := n.Account.Token(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return func(r *http.Request) { r.Header.Set("Authorization", "Bearer "+t) }, nil
 }
 
 func (n *Nessie) prefix(ctx context.Context) (string, error) {
@@ -20,7 +32,11 @@ func (n *Nessie) prefix(ctx context.Context) (string, error) {
 		Defaults  map[string]string `json:"defaults"`
 		Overrides map[string]string `json:"overrides"`
 	}
-	if err := call(ctx, "GET", n.URL+"/iceberg/v1/config?warehouse="+url.QueryEscape(n.Warehouse), nil, nil, &cfg); err != nil {
+	auth, err := n.auth(ctx)
+	if err != nil {
+		return "", err
+	}
+	if err := call(ctx, "GET", n.URL+"/iceberg/v1/config?warehouse="+url.QueryEscape(n.Warehouse), auth, nil, &cfg); err != nil {
 		return "", err
 	}
 	if p := cfg.Overrides["prefix"]; p != "" {
@@ -36,11 +52,15 @@ func (n *Nessie) ensureNamespace(ctx context.Context, namespace string) error {
 		return err
 	}
 	base := n.URL + "/iceberg/v1/" + prefix + "/namespaces" // Nessie gives the prefix URL-encoded already
-	err = call(ctx, "GET", base+"/"+url.PathEscape(namespace), nil, nil, nil)
+	auth, err := n.auth(ctx)
+	if err != nil {
+		return err
+	}
+	err = call(ctx, "GET", base+"/"+url.PathEscape(namespace), auth, nil, nil)
 	if !isStatus(err, http.StatusNotFound) {
 		return err
 	}
-	err = call(ctx, "POST", base, nil, map[string]any{"namespace": []string{namespace}}, nil)
+	err = call(ctx, "POST", base, auth, map[string]any{"namespace": []string{namespace}}, nil)
 	if isStatus(err, http.StatusConflict) {
 		return nil
 	}
@@ -48,7 +68,7 @@ func (n *Nessie) ensureNamespace(ctx context.Context, namespace string) error {
 }
 
 func (n *Nessie) api() *catalog.Nessie {
-	return &catalog.Nessie{HTTP: &http.Client{Timeout: 30 * time.Second}, Base: n.URL + "/api/v2"}
+	return &catalog.Nessie{HTTP: catalog.ClientWith(n.Account, 30*time.Second), Base: n.URL + "/api/v2"}
 }
 
 // syncTags makes the project's Nessie tags (<project>.<name>) as its spec

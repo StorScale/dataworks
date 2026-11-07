@@ -177,6 +177,13 @@ def credentials(body=None):
 
 out = {"spark": bool(os.environ.get("SPARK_REMOTE")),
        "k8s_token": os.path.exists("/var/run/secrets/kubernetes.io/serviceaccount/token")}
+# Nessie itself, from the notebook: not reachable, or not answering (with no token, or the person's own).
+def nessie(headers=None):
+    try:
+        return requests.get("http://nessie:19120/api/v2/trees", headers=headers or {}, timeout=10).status_code
+    except requests.RequestException:
+        return "unreachable"
+out["nessie"] = [nessie(), nessie({"Authorization": "Bearer " + buckets_lake.token()})]
 status, given = credentials()
 out["status"] = status
 out["tables"] = {t["name"]: t["write"] for t in given.get("tables", [])}
@@ -212,7 +219,20 @@ if out["spark"]:
         made.createDataFrame([(1, "a"), (2, "b"), (3, "c")], "id long, who string").writeTo("sales.spark_check").append()
         out["made"] = buckets_lake.spark_tables.get("sales.spark_check")
         out["made_rows"] = len(buckets_lake.sql("sales", "SELECT * FROM spark_check"))
+        try:   # Spark's catalog (platformd's) drops nothing
+            made.sql("DROP TABLE sales.spark_check").collect()
+            out["spark_drop"] = "dropped"
+        except Exception as e:
+            out["spark_drop"] = str(e)[:300]
         made.stop()
+        # A session given payroll alone: its catalog answers payroll, and nothing else.
+        limited = buckets_lake.spark(tables=["sales.payroll"])
+        try:
+            limited.table("sales.orders").count()
+            out["spark_other"] = "read"
+        except Exception as e:
+            out["spark_other"] = str(e)[:300]
+        limited.stop()
     except Exception as e:
         out["error"] = f"{type(e).__name__}: {str(e)[:1200]}"
 else:   # someone who may not make tables there asks Spark to
@@ -372,6 +392,13 @@ def main():
         check("Spark writes a table made for it: Trino makes it, as the person, and the session may write it",
               bs.get("made") == "read and write" and bs.get("made_rows") == 3,
               f"sales.spark_check: {bs.get('made')}, {bs.get('made_rows')} rows through Trino")
+        check("Spark's catalog drops nothing: platformd's, on the session's tables (Nessie answers the platform alone)",
+              "drop or rename" in bs.get("spark_drop", ""), bs.get("spark_drop"))
+        check("... and a session reads only the tables it was given (payroll alone: orders refused)",
+              "isn't one of this session's tables" in bs.get("spark_other", ""), bs.get("spark_other"))
+        check("... and the notebook can't reach Nessie itself, without a token or with the person's own",
+              all(v in ("unreachable", 401, 403) for v in bs.get("nessie", [200]) + as_.get("nessie", [200])),
+              f"bob {bs.get('nessie')}, alice {as_.get('nessie')}")
         check("... and only where the person may make tables (alice, an analyst, is refused)",
               as_.get("create_status") == 403 and "spark_denied" in as_.get("create_error", ""),
               f"HTTP {as_.get('create_status')}: {as_.get('create_error')}")
