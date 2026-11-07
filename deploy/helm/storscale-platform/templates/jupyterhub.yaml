@@ -100,7 +100,7 @@ spec:
             - name: NOTEBOOK_SPARK
               value: {{ dict "image" (include "storscale.image" (list $ "spark")) "pullPolicy" $.Values.images.pullPolicy
                          "namespace" (include "storscale.sparkNamespace" $) "driver" .driver "executors" .executors
-                         "credentialHours" .credentialHours | toJson | quote }}
+                         "credentialHours" .credentialHours "default" .default | toJson | quote }}
             {{- end }}{{ end }}
             {{- if include "storscale.ca.enabled" . }}
             # Notebook pods trust the platform's CA too, as the hub does.

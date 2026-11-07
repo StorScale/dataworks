@@ -501,6 +501,7 @@ notebooks:
   # row filters and column masks, which Trino applies, don't apply to it.
   spark:
     enabled: true
+    default: true        # the profile picked unless people pick another; false: Notebook only is
     # The executors' namespace: "" is <the release's namespace>-spark. createNamespace
     # makes it (with Pod Security's restricted standard); false, when something else
     # does (Flux, an administrator).

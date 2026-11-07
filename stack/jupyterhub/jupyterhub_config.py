@@ -147,8 +147,8 @@ def spark_profiles(spark, volumes):
             {"downwardAPI": {"items": [{"path": "namespace", "fieldRef": {"fieldPath": "metadata.namespace"}}]}}]}},
         {"name": "spark-executor", "configMap": {"name": "notebook-spark"}},
     ]
-    return [
-        {"display_name": "Distributed Spark", "slug": "spark", "default": True,
+    profiles = [
+        {"display_name": "Distributed Spark", "slug": "spark",
          "description": "Your notebook, with Spark beside it: buckets_lake.spark() is a Spark session on the "
                         f"platform's tables, as you. Executors start as your jobs need them (up to {ex['max']}, "
                         f"{ex['cores']} CPUs and {ex['memory']} each) and stop when idle.",
@@ -163,6 +163,11 @@ def spark_profiles(spark, volumes):
         {"display_name": "Notebook only", "slug": "notebook",
          "description": "Your notebook alone: pandas, SQL in Trino (buckets_lake.sql) and the models' libraries."},
     ]
+    # The default first (notebooks.spark.default): Spark, unless the install says otherwise.
+    if spark.get("default") is False:
+        profiles.reverse()
+    profiles[0]["default"] = True
+    return profiles
 
 
 def spark_executors_gone(namespace):
@@ -210,7 +215,7 @@ if os.environ.get("STORSCALE_K8S") == "true":
         c.KubeSpawner.volumes += ca["volumes"]
         c.KubeSpawner.volume_mounts += ca["volume_mounts"]
         c.KubeSpawner.environment.update({e["name"]: e["value"] for e in ca["env"]})
-    # Distributed Spark (the chart's notebooks.spark): a profile, first and so the default.
+    # Distributed Spark (the chart's notebooks.spark): a profile, the default unless notebooks.spark.default is false.
     spark = json.loads(os.environ.get("NOTEBOOK_SPARK") or "{}")
     if spark:
         c.KubeSpawner.profile_list = spark_profiles(spark, c.KubeSpawner.volumes)

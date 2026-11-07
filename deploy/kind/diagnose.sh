@@ -19,3 +19,12 @@ for p in $(k get pods -o name); do
   k get "$p" -o jsonpath='{range .status.containerStatuses[?(@.lastState.terminated)]}{.name}{": "}{.lastState.terminated.reason}{" (exit "}{.lastState.terminated.exitCode}{") at "}{.lastState.terminated.finishedAt}{"\n"}{end}' 2>/dev/null |
     sed "s|^|restarted: $p, container |" || true
 done
+# Notebooks' Spark executors, in a namespace of their own: pending ones say why.
+sns="$ns-spark"
+if kubectl --context "${KUBECTL_CONTEXT:-kind-storscale}" get namespace "$sns" >/dev/null 2>&1; then
+  ks() { kubectl --context "${KUBECTL_CONTEXT:-kind-storscale}" -n "$sns" "$@"; }
+  echo "=== namespace $sns"
+  ks get pods -o wide
+  ks get events --sort-by=.lastTimestamp | tail -30
+  for p in $(ks get pods -o name); do echo "=== $sns/$p"; ks logs "$p" --tail 60 || true; done
+fi

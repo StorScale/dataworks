@@ -223,14 +223,19 @@ def notebook_checks(user, other, profile=None):
     s, r = sign_in(user)
     me = hub_api(s, "GET", "/user")
     wait_for_server(s, user, profile=profile)
-    out = run(user, server_token(s, user), NOTEBOOK.replace("OTHER", repr(other)))
-    result = json.loads(out.strip().splitlines()[-1])
-    if os.environ.get("KUBERNETES_SERVICE_HOST"):   # Spark is Kubernetes' alone
-        result["spark"] = json.loads(run(user, server_token(s, user), SPARK, timeout=420).strip().splitlines()[-1])
-    # VS Code, as JupyterLab's launcher opens it: served by the person's own server through jupyter-server-proxy.
-    vs = requests.get(f"{HUB}/user/{user}/vscode/", headers={"Authorization": f"token {server_token(s, user)}"}, timeout=120, allow_redirects=True)
-    result["vscode"] = vs.status_code if vs.ok else f"{vs.status_code} at {vs.url}: {vs.text[:200]}"
-    hub_api(s, "DELETE", f"/users/{user}/server")  # done: stop it, as the hub's idle culler would
+    try:
+        out = run(user, server_token(s, user), NOTEBOOK.replace("OTHER", repr(other)))
+        result = json.loads(out.strip().splitlines()[-1])
+        if os.environ.get("KUBERNETES_SERVICE_HOST"):   # Spark is Kubernetes' alone
+            try:
+                result["spark"] = json.loads(run(user, server_token(s, user), SPARK, timeout=420).strip().splitlines()[-1])
+            except RuntimeError as e:   # a failed check, not the end of the suite
+                result["spark"] = {"error": str(e)[-1500:]}
+        # VS Code, as JupyterLab's launcher opens it: served by the person's own server through jupyter-server-proxy.
+        vs = requests.get(f"{HUB}/user/{user}/vscode/", headers={"Authorization": f"token {server_token(s, user)}"}, timeout=120, allow_redirects=True)
+        result["vscode"] = vs.status_code if vs.ok else f"{vs.status_code} at {vs.url}: {vs.text[:200]}"
+    finally:
+        hub_api(s, "DELETE", f"/users/{user}/server")  # done (or failed): stop it, as the hub's idle culler would
     return me, result
 
 
@@ -247,8 +252,8 @@ def main():
     # bob first: alice's checks read bob's prefix, so it must exist.
     if os.environ.get("KUBERNETES_SERVICE_HOST"):   # Spark's table, as a failed run may have left it
         sql("bob", "DROP TABLE IF EXISTS spark_check", "iceberg", "sales")
-    # bob's notebook has Distributed Spark (the first profile); alice's, the notebook alone.
-    bob, b = notebook_checks("bob", other="alice")
+    # bob's notebook has Distributed Spark; alice's, the notebook alone.
+    bob, b = notebook_checks("bob", other="alice", profile="spark")
     alice, a = notebook_checks("alice", other="bob", profile="notebook")
 
     # 1. Keycloak sign-in, groups and hub roles.
@@ -296,16 +301,16 @@ def main():
     # and credentials for the tables the person reads whole, from the platform.
     if "spark" in b:
         bs, as_ = b["spark"], a["spark"]
-        check("the Distributed Spark profile is the first: bob's notebook has Spark, alice's (the notebook alone) hasn't",
-              bs["spark"] is True and as_["spark"] is False, f"bob {bs['spark']}, alice {as_['spark']}")
+        check("bob's notebook (Distributed Spark) has Spark, and alice's (the notebook alone) hasn't",
+              bs.get("spark") is True and as_.get("spark") is False, bs.get("error") or as_.get("error") or f"bob {bs['spark']}, alice {as_['spark']}")
         check("... and the notebook itself has no Kubernetes token (only Spark's container does)",
-              bs["k8s_token"] is False and as_["k8s_token"] is False, f"bob {bs['k8s_token']}, alice {as_['k8s_token']}")
+              bs.get("k8s_token") is False and as_.get("k8s_token") is False, f"bob {bs.get('k8s_token')}, alice {as_.get('k8s_token')}")
         check("Spark reads a table as Trino does, as the person, with executors as pods",
               bs.get("payroll") == bs.get("payroll_trino") >= 1 and bs.get("hosts") and all("-exec-" in h for h in bs["hosts"]),
               f"{bs.get('payroll')} payroll rows (Trino: {bs.get('payroll_trino')}), on {bs.get('hosts')}")
         check("Spark gets the tables a person reads whole, and changes those they edit (bob, sales' editor: payroll)",
-              bs["status"] == 200 and bs["tables"].get("sales.payroll") is True,
-              f"HTTP {bs['status']}: {bs['tables']}, skipped {bs['skipped']}")
+              bs.get("status") == 200 and bs.get("tables", {}).get("sales.payroll") is True,
+              f"HTTP {bs.get('status')}: {bs.get('tables')}, skipped {bs.get('skipped')}")
         check("... and nothing else: no listing the warehouse, no one's home",
               bs.get("list_warehouse") == "AccessDenied" and bs.get("read_home") == "AccessDenied",
               f"ListObjects {bs.get('list_warehouse')}, home {bs.get('read_home')}")
@@ -317,8 +322,8 @@ def main():
               f"HTTP {as_.get('create_status')}: {as_.get('create_error')}")
         sql("bob", "DROP TABLE IF EXISTS spark_check", "iceberg", "sales")
         check("a table with a row filter or mask for the person isn't Spark's: alice reads orders through Trino only",
-              as_["status"] == 403 and "sales.orders" in as_["skipped"] and not as_["tables"],
-              f"HTTP {as_['status']}: {as_['tables']}, skipped {as_['skipped']}")
+              as_.get("status") == 403 and "sales.orders" in as_.get("skipped", {}) and not as_.get("tables"),
+              f"HTTP {as_.get('status')}: {as_.get('tables')}, skipped {as_.get('skipped')}")
     finish()
 
 

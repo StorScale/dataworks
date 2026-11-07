@@ -138,7 +138,7 @@ def run(browser, switch=True, start_run=True):
             press(page, f"[data-testid=nav-{tool}]")
         else:
             page.goto(f"{PLATFORM}/tools/{tool}")
-        frame, deadline = None, time.time() + 120
+        frame, deadline, picked = None, time.time() + 120, False
         while time.time() < deadline:
             try:  # the app may swap the element while it renders; look again
                 el = page.query_selector(f"[data-testid=frame-{tool}]")
@@ -147,6 +147,15 @@ def run(browser, switch=True, start_run=True):
                 frame = None
             if frame and re.search(where, frame.url):
                 break
+            # On Kubernetes the hub asks which profile first (Distributed Spark, or the notebook
+            # alone): alice picks the notebook alone and starts it, as a person would.
+            if tool == "notebooks" and frame and "/hub/spawn" in frame.url and not picked:
+                try:
+                    frame.check("input[name=profile][value=notebook]", timeout=10_000, force=True)
+                    frame.click("#spawn_form [type=submit]", timeout=10_000)
+                    picked = True
+                except Exception:  # noqa: BLE001 (the form still loading: look again)
+                    pass
             time.sleep(1)
         url = frame.url if frame and not frame.is_detached() else "no frame"
         shown = frame is not None and re.search(where, url) is not None

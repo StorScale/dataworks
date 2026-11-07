@@ -35,12 +35,14 @@ var (
 // GC every three minutes, keeping two minutes' history, so the maintenance
 // suite sees history go; and the analysts (alice) data-protection approvers
 // beside the administrators, so the deliveries suite has one besides bob;
-// and notebooks' Spark small enough for one kind node beside everything else
-// (its executors half a CPU and a gigabyte each).
+// and notebooks' Spark small enough for one kind node beside everything else:
+// not the default profile (the suites' notebooks start without it; the
+// jupyterhub suite asks for it), one executor of half a CPU and 512 MB.
 var devSets = []string{"--set", "maintenance.history.keep=PT2M", "--set", "maintenance.history.schedule=*/3 * * * *",
 	"--set", `deliveries.approverGroups=engineers\,analysts`,
-	"--set", "notebooks.spark.driver.memory=1G", "--set", "notebooks.spark.executors.cores=1",
-	"--set", "notebooks.spark.executors.requestCores=0.5", "--set", "notebooks.spark.executors.memory=1g"}
+	"--set", "notebooks.spark.default=false", "--set", "notebooks.spark.driver.memory=768M",
+	"--set", "notebooks.spark.executors.max=1", "--set", "notebooks.spark.executors.cores=1",
+	"--set", "notebooks.spark.executors.requestCores=0.5", "--set", "notebooks.spark.executors.memory=512m"}
 
 // podSecurity makes the platform's namespace, if it's missing, and labels it
 // for Pod Security admission: baseline enforced, restricted warned of.

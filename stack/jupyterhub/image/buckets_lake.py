@@ -134,6 +134,7 @@ def spark(tables=None, hours=None, create=None, wait=120):
     with tables made or granted since. Spark itself makes no table: make it here.
     """
     import time
+
     from pyspark.sql import SparkSession
     remote = os.environ.get("SPARK_REMOTE")
     if not remote:
