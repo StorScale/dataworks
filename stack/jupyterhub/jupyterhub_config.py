@@ -86,6 +86,11 @@ def _bytes(size):
 def spark_container(spark):
     driver, ex = spark["driver"], spark["executors"]
     memory = _bytes(driver["memory"])
+    heap = memory * 3 // 5 // 2**20  # MiB: the JVM's heap; the rest is the JVM's own and Python's
+    # Spark won't start a driver whose heap is under 450 MiB x 1.5 (as the JVM reports it, a
+    # little under -Xmx): Spark Connect's server would exit, and the notebook find nothing on 15002.
+    if heap < 512:
+        raise ValueError(f"notebooks.spark.driver.memory {driver['memory']}: Spark's driver needs at least 1G")
     conf = {
         "spark.kubernetes.namespace": spark["namespace"],
         "spark.kubernetes.container.image": spark["image"],
@@ -115,7 +120,7 @@ def spark_container(spark):
         "spark.sql.catalog.iceberg.client.region": "us-east-1",
     }
     args = ["--master", "k8s://https://kubernetes.default.svc", "--name", "notebook",
-            "--driver-memory", f"{memory * 3 // 5 // 2**20}m"]   # the JVM's heap: the rest is the JVM's own and Python's
+            "--driver-memory", f"{heap}m"]
     for k, v in conf.items():
         args += ["--conf", f"{k}={v}"]
     return {

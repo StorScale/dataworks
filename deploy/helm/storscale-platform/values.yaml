@@ -509,7 +509,7 @@ notebooks:
     createNamespace: true
     driver:              # Spark Connect's server, in the notebook's pod
       cpu: 1
-      memory: 2G
+      memory: 2G         # at least 1G: Spark won't start a driver on less
     executors:
       max: 2             # each person's at once
       cores: 2           # tasks an executor runs at once
