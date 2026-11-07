@@ -89,8 +89,10 @@ SH
 # and write the platform's tables (Nessie's Iceberg REST catalog, Buckets).
 FROM quay.io/jupyter/base-notebook:hub-6.0.1 AS spark
 USER root
-RUN apt-get update && apt-get install -y --no-install-recommends default-jre-headless tini procps \
- && rm -rf /var/lib/apt/lists/*
+# Java 21: Spark 4.1's (17 or 21). Ubuntu's default, 25, has no Subject.getSubject, which
+# Hadoop's sign-in calls: Spark's driver then never starts an executor.
+RUN apt-get update && apt-get install -y --no-install-recommends openjdk-21-jre-headless tini procps \
+ && rm -rf /var/lib/apt/lists/* && ln -s /usr/lib/jvm/java-21-openjdk-* /usr/lib/jvm/java-21
 ARG SPARK_VERSION=4.1.4
 ARG SPARK_SHA512=1461b6c425d290913e7be97bfec738abc843c663d177dc57e32b82874d20144ed67dcca692a57efc4e5b40d2f001ee0e9e0d2d7b088ae58f5378ecac92739076
 ARG ICEBERG_VERSION=1.12.0
@@ -98,7 +100,7 @@ COPY spark/install_spark.py /tmp/install_spark.py
 RUN python /tmp/install_spark.py && rm /tmp/install_spark.py
 # What Python functions on executors use most: pandas and Arrow (pandas UDFs), as in the notebook.
 RUN pip install --no-cache-dir pandas==3.0.6 pyarrow==25.0.1
-ENV SPARK_HOME=/opt/spark JAVA_HOME=/usr/lib/jvm/default-java PYSPARK_PYTHON=/opt/conda/bin/python
+ENV SPARK_HOME=/opt/spark JAVA_HOME=/usr/lib/jvm/java-21 PYSPARK_PYTHON=/opt/conda/bin/python
 ENV PATH=/opt/spark/bin:/opt/spark/sbin:${PATH}
 WORKDIR /opt/spark/work-dir
 USER ${NB_UID}

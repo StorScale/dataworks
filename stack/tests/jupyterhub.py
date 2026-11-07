@@ -241,14 +241,20 @@ def show_spark(user):
 
     r = get(f"{ns}/pods/jupyter-{user}/log", container="spark")
     if r:
-        lines = [line for line in r.text.splitlines() if re.search(r" (WARN|ERROR) |Exception|Caused by", line)]
-        seen = set()
-        print(f"  --- jupyter-{user}'s spark container (warnings and errors, each once):")
-        for line in lines:
-            key = re.sub(r"^\S+ \S+ ", "", line)
-            if key not in seen:
-                seen.add(key)
+        seen, trace = set(), 0
+        print(f"  --- jupyter-{user}'s spark container (warnings and errors, each once, and their traces' start):")
+        for line in r.text.splitlines():
+            if re.search(r" (WARN|ERROR) ", line):
+                key = re.sub(r"^\S+ \S+ ", "", line)
+                trace = 0 if key in seen else 8
+                if trace:
+                    seen.add(key)
+                    print("    " + line[:400])
+            elif trace and (line[:1].isspace() or re.match(r"(Caused by|[\w.$]+(Exception|Error))", line)):
+                trace -= 1
                 print("    " + line[:400])
+            else:
+                trace = 0
     sns = os.environ.get("STORSCALE_SPARK_NAMESPACE", f"{ns}-spark")
     r = get(f"{sns}/pods")
     for pod in (r.json().get("items", []) if r else []):
