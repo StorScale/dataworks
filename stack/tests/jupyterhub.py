@@ -377,7 +377,8 @@ def main():
               f"HTTP {as_.get('create_status')}: {as_.get('create_error')}")
         sql("bob", "DROP TABLE IF EXISTS spark_check", "iceberg", "sales")
         check("a table with a row filter or mask for the person isn't Spark's: alice reads orders through Trino only",
-              as_.get("status") == 403 and "sales.orders" in as_.get("skipped", {}) and not as_.get("tables"),
+              # (her tables elsewhere are the other suites': business shares company's customers with her)
+              "sales.orders" in as_.get("skipped", {}) and not any(t.startswith("sales.") for t in as_.get("tables") or {}),
               f"HTTP {as_.get('status')}: {as_.get('tables')}, skipped {as_.get('skipped')}")
     finish()
 

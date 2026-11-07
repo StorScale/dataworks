@@ -510,12 +510,13 @@ notebooks:
     driver:              # Spark Connect's server, in the notebook's pod
       cpu: 1
       memory: 2G         # at least 1G: Spark won't start a driver on less
+      requestMemory: ""  # what its container asks for ("": memory); less lets more fit on a node
     executors:
       max: 2             # each person's at once
       cores: 2           # tasks an executor runs at once
       requestCores: ""   # CPUs an executor's pod asks for ("": cores); less lets more fit on a node
       coreLimit: 2       # CPUs an executor may use (Spark's spark.kubernetes.executor.limit.cores)
-      memory: 4g         # an executor's JVM, as Spark writes it (its pod asks 10% more)
+      memory: 4g         # an executor's JVM, as Spark writes it (its pod asks 10% more, at least 384m)
       idleTimeout: 120s  # an executor with nothing to do is let go after this
     # How long a session's credentials last: a job running longer loses its access.
     credentialHours: 12

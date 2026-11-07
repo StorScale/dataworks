@@ -37,10 +37,12 @@ var (
 // beside the administrators, so the deliveries suite has one besides bob;
 // and notebooks' Spark small enough for one kind node beside everything else:
 // not the default profile (the suites' notebooks start without it; the
-// jupyterhub suite asks for it), one executor of half a CPU and 512 MB.
+// jupyterhub suite asks for it), a driver asking half its 1G, one executor of
+// half a CPU and 512 MB.
 var devSets = []string{"--set", "maintenance.history.keep=PT2M", "--set", "maintenance.history.schedule=*/3 * * * *",
 	"--set", `deliveries.approverGroups=engineers\,analysts`,
 	"--set", "notebooks.spark.default=false", "--set", "notebooks.spark.driver.memory=1G",
+	"--set", "notebooks.spark.driver.requestMemory=512M",
 	"--set", "notebooks.spark.executors.max=1", "--set", "notebooks.spark.executors.cores=1",
 	"--set", "notebooks.spark.executors.requestCores=0.5", "--set", "notebooks.spark.executors.memory=512m"}
 

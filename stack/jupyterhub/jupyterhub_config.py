@@ -132,7 +132,7 @@ def spark_container(spark):
         "env": [{"name": "POD_IP", "valueFrom": {"fieldRef": {"fieldPath": "status.podIP"}}},
                 {"name": "SPARK_NO_DAEMONIZE", "value": "true"},   # in the foreground: its log is the container's
                 {"name": "SPARK_LOG_DIR", "value": "/tmp/spark-logs"}, {"name": "SPARK_PID_DIR", "value": "/tmp"}],
-        "resources": {"requests": {"cpu": "100m", "memory": str(memory)},
+        "resources": {"requests": {"cpu": "100m", "memory": str(driver.get("requestMemory") or memory)},
                       "limits": {"cpu": str(driver["cpu"]), "memory": str(memory)}},
         "securityContext": {"allowPrivilegeEscalation": False, "runAsUser": 1000, "runAsNonRoot": True,
                             "capabilities": {"drop": ["ALL"]}},
