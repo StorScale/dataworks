@@ -60,18 +60,22 @@ def main():
     # Trino (Ranger's rules), or Spark through platformd (the tables they read whole).
     anyone = requests.get("http://nessie:19120/api/v2/trees", timeout=10).status_code
     bob = {"Authorization": "Bearer " + token("bob")}
-    # Listing the references leaves out those one may not see: none, for bob.
-    bob_refs = requests.get("http://nessie:19120/api/v2/trees", headers=bob, timeout=10)
-    as_bob = requests.get("http://nessie:19120/api/v2/trees/main", headers=bob, timeout=10)
+    # Nessie shows any signed-in caller its default branch's name and commit; nothing in it:
+    # bob may neither list its tables (Nessie's API and Iceberg's) nor commit to it.
+    main = requests.get("http://nessie:19120/api/v2/trees/main", headers=catalog_headers(), timeout=10).json()["reference"]["hash"]
+    entries = requests.get("http://nessie:19120/api/v2/trees/main/entries", headers=bob, timeout=10)
+    commit = requests.post(f"http://nessie:19120/api/v2/trees/main@{main}/history/commit", headers=bob, timeout=10, json={
+        "commitMeta": {"message": "bob, past the platform"},
+        "operations": [{"type": "DELETE", "key": {"elements": ["sales", "nessie_check_never_there"]}}]})
     cfg = requests.get("http://nessie:19120/iceberg/v1/config", params={"warehouse": "warehouse"}, headers=catalog_headers(), timeout=10).json()
     prefix = cfg.get("overrides", {}).get("prefix") or cfg.get("defaults", {}).get("prefix")
     as_bob_iceberg = requests.get(f"http://nessie:19120/iceberg/v1/{prefix}/namespaces/sales/tables",
                                   headers=bob, timeout=10)
-    refs = bob_refs.json().get("references") if bob_refs.ok else None
     check("Nessie answers the catalog's account alone: not someone without a token, nor a person's own (bob, an engineer)",
-          anyone == 401 and refs == [] and as_bob.status_code == 403 and as_bob_iceberg.status_code >= 400,
-          f"no token: HTTP {anyone}; bob's: references {refs}, main HTTP {as_bob.status_code}, "
-          f"Iceberg's tables HTTP {as_bob_iceberg.status_code} {as_bob_iceberg.text[:200]}")
+          anyone == 401 and entries.status_code == 403 and commit.status_code == 403
+          and "is not allowed" in as_bob_iceberg.text,
+          f"no token: HTTP {anyone}; bob's: main's tables HTTP {entries.status_code}, a commit HTTP {commit.status_code} "
+          f"{commit.text[:150]}, Iceberg's tables HTTP {as_bob_iceberg.status_code} {as_bob_iceberg.text[:150]}")
     sql("bob", "CREATE TABLE payroll (employee varchar, salary decimal(10,2))")
     sql("bob", "INSERT INTO payroll VALUES ('Ana', 5000.00)")
 
