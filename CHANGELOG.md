@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **A notebook template on reading and changing tables** (`work/templates/tables.ipynb`): the same work through Trino (`buckets_lake.sql`: read, make a table, insert, update, delete, merge, a few rows from pandas, snapshots and reading a table as it was) and through Spark (`buckets_lake.spark`: read, replace a table's rows, merge, update, delete), on the guide's `retail` project. CI runs it top to bottom as bob.
+
 ## [0.41.0] - 2026-11-07
 
 The table catalog (Nessie) answers the platform alone: a Keycloak token of the catalog's own account, which Trino, platformd, the operator, the copies, the imports and Nessie's GC use. People's notebooks, Spark's executors and the pipelines' code can no longer read the catalog or commit to it; a notebook's Spark reaches it through platformd, for its own tables alone.

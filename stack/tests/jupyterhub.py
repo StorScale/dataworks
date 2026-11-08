@@ -241,6 +241,28 @@ else:   # someone who may not make tables there asks Spark to
 print(json.dumps(out))
 '''
 
+# The tables template (work/templates/tables.ipynb), run top to bottom as its reader would, on
+# sales' copy of the guide's orders: SQL through Trino, then Spark, each reading and changing.
+TABLES_TEMPLATE = '''
+import json, os
+nb = json.load(open(os.path.expanduser("~/work/templates/tables.ipynb")))
+out = {"cells": 0}
+try:
+    for c in nb["cells"]:
+        if c["cell_type"] != "code":
+            continue
+        exec(compile("".join(c["source"]), f"tables.ipynb cell {out['cells']}", "exec"), globals())
+        out["cells"] += 1
+        if "parameters" in c["metadata"].get("tags", []):   # as papermill would
+            PROJECT, SCHEMA, ORDERS, TIERS, SUMMARY = "sales", "sales", "template_orders", "template_tiers", "template_tier_summary"
+    out["tiers"] = buckets_lake.sql(PROJECT, f"SELECT tier, count(*) AS n FROM {TIERS} GROUP BY tier").set_index("tier")["n"].to_dict()
+    out["summary"] = len(buckets_lake.sql(PROJECT, f"SELECT * FROM {SUMMARY}"))
+    out["snapshots"] = len(buckets_lake.sql(PROJECT, f\'SELECT * FROM "{TIERS}$snapshots"\'))
+except Exception as e:
+    out["error"] = f"{type(e).__name__}: {str(e)[:1200]}"
+print(json.dumps(out))
+'''
+
 
 def show_spark(user):
     """What CI shows when Spark fails, before the notebook stops: its driver's log (warnings and
@@ -306,6 +328,11 @@ def notebook_checks(user, other, profile=None):
                 result["spark"] = {"error": str(e)[-1500:]}
             if result["spark"].get("error"):
                 show_spark(user)
+            if profile == "spark":
+                try:
+                    result["template"] = json.loads(run(user, server_token(s, user), TABLES_TEMPLATE, timeout=420).strip().splitlines()[-1])
+                except RuntimeError as e:
+                    result["template"] = {"error": str(e)[-1500:]}
         # VS Code, as JupyterLab's launcher opens it: served by the person's own server through jupyter-server-proxy.
         vs = requests.get(f"{HUB}/user/{user}/vscode/", headers={"Authorization": f"token {server_token(s, user)}"}, timeout=120, allow_redirects=True)
         result["vscode"] = vs.status_code if vs.ok else f"{vs.status_code} at {vs.url}: {vs.text[:200]}"
@@ -327,6 +354,15 @@ def main():
     # bob first: alice's checks read bob's prefix, so it must exist.
     if os.environ.get("KUBERNETES_SERVICE_HOST"):   # Spark's table, as a failed run may have left it
         sql("bob", "DROP TABLE IF EXISTS spark_check", "iceberg", "sales")
+        # The tables template's: the guide's orders, a few (two customers in August, one more in September; a test row)
+        for t in ("template_orders", "template_tiers", "template_tier_summary"):
+            sql("bob", f"DROP TABLE IF EXISTS {t}", "iceberg", "sales")
+        sql("bob", "CREATE TABLE template_orders (order_id bigint, customer_id bigint, ordered_on date, region varchar, "
+                   "amount double, refunded boolean, test boolean)", "iceberg", "sales")
+        sql("bob", "INSERT INTO template_orders VALUES "
+                   "(1, 1, DATE '2026-08-03', 'US', 650.0, false, false), (2, 2, DATE '2026-08-04', 'EU', 120.0, false, false), "
+                   "(3, 1, DATE '2026-09-02', 'US', 500.0, false, false), (4, 3, DATE '2026-09-05', 'APAC', 80.0, false, false), "
+                   "(5, 2, DATE '2026-09-06', 'EU', 9999.0, false, true)", "iceberg", "sales")
     # bob's notebook has Distributed Spark; alice's, the notebook alone.
     bob, b = notebook_checks("bob", other="alice", profile="spark")
     alice, a = notebook_checks("alice", other="bob", profile="notebook")
@@ -343,8 +379,8 @@ def main():
     check("people in neither group can't sign in", r.status_code == 403, f"HTTP {r.status_code}")
     check("a notebook has the analysis and ML libraries, and VS Code opens from the launcher (7.8)",
           a["libraries"] == [] and a["code_server"] is True and a["vscode"] == 200, (a["libraries"], a["code_server"], a["proxied"], a["vscode"]))
-    check("... and the models' templates, churn, forecast and propensity, are in the person's work folder (15.1)",
-          a["templates"] == ["churn.ipynb", "forecast.ipynb", "propensity.ipynb"], a["templates"])
+    check("... and the templates, churn, forecast, propensity and tables, are in the person's work folder (15.1)",
+          a["templates"] == ["churn.ipynb", "forecast.ipynb", "propensity.ipynb", "tables.ipynb"], a["templates"])
 
     # 2. Each notebook works as its person, with no keys.
     check("each notebook gets its own person's Keycloak token",
@@ -403,6 +439,14 @@ def main():
               as_.get("create_status") == 403 and "spark_denied" in as_.get("create_error", ""),
               f"HTTP {as_.get('create_status')}: {as_.get('create_error')}")
         sql("bob", "DROP TABLE IF EXISTS spark_check", "iceberg", "sales")
+        tt = b.get("template", {})
+        # After it: customer 1 (1,150), 2 (120) and 3 (80, new in September); Spark's merge gives them gold, bronze, bronze,
+        # but for the two key accounts the pandas fix made (1 and 2), which it leaves.
+        check("the tables template runs top to bottom: SQL and Spark each read and change a table (template_tiers)",
+              not tt.get("error") and tt.get("tiers") == {"key account": 2, "bronze": 1} and tt.get("summary") >= 2 and tt.get("snapshots", 0) >= 4,
+              tt.get("error") or f"{tt.get('cells')} cells; tiers {tt.get('tiers')}, summary {tt.get('summary')} rows, {tt.get('snapshots')} snapshots")
+        for t in ("template_orders", "template_tiers", "template_tier_summary"):
+            sql("bob", f"DROP TABLE IF EXISTS {t}", "iceberg", "sales")
         check("a table with a row filter or mask for the person isn't Spark's: alice reads orders through Trino only",
               # (her tables elsewhere are the other suites': business shares company's customers with her)
               "sales.orders" in as_.get("skipped", {}) and not any(t.startswith("sales.") for t in as_.get("tables") or {}),

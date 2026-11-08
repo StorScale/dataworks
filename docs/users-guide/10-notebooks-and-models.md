@@ -1,6 +1,6 @@
 # 10. Notebooks and machine learning
 
-This chapter is for analysts and data scientists who work in notebooks, and for the editors and administrators who put their models to use. It covers JupyterLab and VS Code in the platform, the `buckets_lake` module that signs a notebook in as you (Buckets, SQL, MLflow, the company's libraries), Spark across many machines, each project's own MLflow workspace, registering and approving model versions, model cards, scoring a table on a schedule with drift checks, serving a model as an API, how models appear in the catalog's lineage, scheduled notebooks, and the three notebook templates.
+This chapter is for analysts and data scientists who work in notebooks, and for the editors and administrators who put their models to use. It covers JupyterLab and VS Code in the platform, the `buckets_lake` module that signs a notebook in as you (Buckets, SQL, MLflow, the company's libraries), Spark across many machines, each project's own MLflow workspace, registering and approving model versions, model cards, scoring a table on a schedule with drift checks, serving a model as an API, how models appear in the catalog's lineage, scheduled notebooks, and the four notebook templates.
 
 In this chapter:
 
@@ -14,7 +14,7 @@ In this chapter:
 - [Serving a model as an API](#serving-a-model-as-an-api)
 - [Models in the catalog's lineage](#models-in-the-catalogs-lineage)
 - [Scheduled notebooks](#scheduled-notebooks)
-- [The notebook templates: churn, propensity, forecast](#the-notebook-templates-churn-propensity-forecast)
+- [The notebook templates: tables, churn, propensity, forecast](#the-notebook-templates-tables-churn-propensity-forecast)
 - [Settings](#settings)
 - [Errors you may meet](#errors-you-may-meet)
 
@@ -510,15 +510,15 @@ See [Lab 11](../guide.md#lab-11-customers-worth-a-call-a-notebook-on-a-schedule)
 
 ---
 
-## The notebook templates: churn, propensity, forecast
+## The notebook templates: tables, churn, propensity, forecast
 
-**What it's for.** A worked start for the three models most teams want, each ending in a registered version ready for approval: change the parameters, run top to bottom.
+**What it's for.** Worked starts: one on reading and changing tables, and three for the models most teams want, each ending in a registered version ready for approval. Change the parameters, run top to bottom.
 
-**Who can do it.** Anyone in JupyterLab. Registering needs `models` in the project; making the features table needs `write-tables`.
+**Who can do it.** Anyone in JupyterLab. Changing tables (and making the features table) needs `write-tables` in the project; registering needs `models`; the tables template's Spark part needs the Distributed Spark profile.
 
 ### Where they are
 
-Each server start puts them in `work/templates/`: `churn.ipynb`, `propensity.ipynb`, `forecast.ipynb`. A template you've changed, or deleted, is yours: only one still as it was last put there is updated when the image is.
+Each server start puts them in `work/templates/`: `tables.ipynb`, `churn.ipynb`, `propensity.ipynb`, `forecast.ipynb`. A template you've changed, or deleted, is yours: only one still as it was last put there is updated when the image is.
 
 | Template | Model | Judged by | Examples use |
 |---|---|---|---|
@@ -526,7 +526,16 @@ Each server start puts them in `work/templates/`: `churn.ipynb`, `propensity.ipy
 | `propensity.ipynb` | A classifier: each customer's chance of responding to a campaign. Same estimators. | ROC AUC on a held-out quarter | `customer_campaign_features`; label from `uploads_campaign_responses` (campaign 6) |
 | `forecast.ipynb` | A daily series for the next `HORIZON` days. FLAML tries ARIMA, SARIMAX, Holt-Winters and tree models on the calendar. | Mean absolute error on the last `HORIZON` days, beside a naive forecast (`mae_naive`) | Revenue a day from `uploads_orders` |
 
-### Use one
+### Reading and changing tables: tables.ipynb
+
+The same work done two ways, side by side, on the guide's `retail` project: it reads `uploads_orders` and makes and changes its own table, `customer_tiers` (and, from Spark, `customer_tier_summary`).
+
+- **SQL, through Trino** (`buckets_lake.sql`): read and aggregate; make a table (`CREATE TABLE IF NOT EXISTS ... AS SELECT ... WITH NO DATA`); `INSERT`, `UPDATE`, `DELETE`; `MERGE` to update the rows that are there and insert the rest; a few rows from pandas as `VALUES`; the table's snapshots (`"customer_tiers$snapshots"`) and reading it as it was (`FOR VERSION AS OF`). Row filters and masks apply; answers have at most 100,000 rows.
+- **Spark** (`buckets_lake.spark`): a session on the tables named, with a new table made by `create=`; read with DataFrames; replace a table's rows (`writeTo(...).overwritePartitions()`); `MERGE INTO` from a DataFrame (a temporary view), `UPDATE` and `DELETE FROM`. Only tables you read whole.
+
+Change `PROJECT`, `ORDERS` and the two tables' names in the first code cell for your own. Its last cell, commented out, drops the two tables.
+
+### Use one of the model templates
 
 1. Save a copy (**File → Save Notebook As…**).
 2. Change the first code cell's parameters: `PROJECT` (it reads `STORSCALE_PROJECT` first, so a scheduled run uses its project), the features table and `ID`, `COLUMNS`, the `LABEL` and the `LABELS` query (or `SERIES`, `DATE`, `VALUE`, `HORIZON` for the forecast), `MODEL`, `EXPERIMENT`, and `TIME_BUDGET` (seconds FLAML may spend; default 60).

@@ -58,8 +58,9 @@ RUN echo /opt/buckets > "$(python -c 'import site; print(site.getsitepackages()[
 COPY --from=schedule /src/dist /opt/conda/share/jupyter/labextensions/storscale-schedule
 COPY schedule/jupyter_server_config.d/storscale_schedule.json /opt/conda/etc/jupyter/jupyter_server_config.d/storscale_schedule.json
 # Notebook templates for the common models (use case 15.1, R15.7): churn, propensity
-# and forecast, put in each person's work/templates/ as their server starts (a hook
-# of the image's start.sh). A template the person has changed, or deleted, is
+# and forecast; and tables (reading and changing tables, by SQL and by Spark). Put
+# in each person's work/templates/ as their server starts (a hook of the image's
+# start.sh). A template the person has changed, or deleted, is
 # theirs: only one still as last put there is updated with the image.
 COPY templates/ /opt/storscale/templates/
 COPY --chmod=0755 <<'SH' /usr/local/bin/before-notebook.d/50-storscale-templates.sh
