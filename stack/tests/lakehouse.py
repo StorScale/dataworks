@@ -59,14 +59,19 @@ def main():
     # Nessie answers the platform's catalog account alone: people reach the tables through
     # Trino (Ranger's rules), or Spark through platformd (the tables they read whole).
     anyone = requests.get("http://nessie:19120/api/v2/trees", timeout=10).status_code
-    as_bob = requests.get("http://nessie:19120/api/v2/trees", headers={"Authorization": "Bearer " + token("bob")}, timeout=10)
+    bob = {"Authorization": "Bearer " + token("bob")}
+    # Listing the references leaves out those one may not see: none, for bob.
+    bob_refs = requests.get("http://nessie:19120/api/v2/trees", headers=bob, timeout=10)
+    as_bob = requests.get("http://nessie:19120/api/v2/trees/main", headers=bob, timeout=10)
     cfg = requests.get("http://nessie:19120/iceberg/v1/config", params={"warehouse": "warehouse"}, headers=catalog_headers(), timeout=10).json()
     prefix = cfg.get("overrides", {}).get("prefix") or cfg.get("defaults", {}).get("prefix")
     as_bob_iceberg = requests.get(f"http://nessie:19120/iceberg/v1/{prefix}/namespaces/sales/tables",
-                                  headers={"Authorization": "Bearer " + token("bob")}, timeout=10)
+                                  headers=bob, timeout=10)
+    refs = bob_refs.json().get("references") if bob_refs.ok else None
     check("Nessie answers the catalog's account alone: not someone without a token, nor a person's own (bob, an engineer)",
-          anyone == 401 and as_bob.status_code == 403 and as_bob_iceberg.status_code == 403,
-          f"no token: HTTP {anyone}; bob's: HTTP {as_bob.status_code} (Iceberg's API: HTTP {as_bob_iceberg.status_code})")
+          anyone == 401 and refs == [] and as_bob.status_code == 403 and as_bob_iceberg.status_code >= 400,
+          f"no token: HTTP {anyone}; bob's: references {refs}, main HTTP {as_bob.status_code}, "
+          f"Iceberg's tables HTTP {as_bob_iceberg.status_code} {as_bob_iceberg.text[:200]}")
     sql("bob", "CREATE TABLE payroll (employee varchar, salary decimal(10,2))")
     sql("bob", "INSERT INTO payroll VALUES ('Ana', 5000.00)")
 
