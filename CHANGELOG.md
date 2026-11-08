@@ -4,11 +4,15 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-11-07
+
+The table catalog (Nessie) answers the platform alone: a Keycloak token of the catalog's own account, which Trino, platformd, the operator, the copies, the imports and Nessie's GC use. People's notebooks, Spark's executors and the pipelines' code can no longer read the catalog or commit to it; a notebook's Spark reaches it through platformd, for its own tables alone.
+
+**Upgrading from 0.40.0:** `storscale upgrade --context <cluster> --version 0.41.0`, after a `--dry-run`. Setup makes the Keycloak client, and the chart the new secret. Nessie's health is now on its management port (`http://nessie:9000/q/health/ready`). Anything else that called Nessie itself (a script, a tool of your own) is refused: give it the catalog account's token (client credentials, `lakehouse-catalog`), or have it go through Trino.
+
 ### Security
 - **The table catalog (Nessie) answers the platform alone.** It asked no one to sign in: any pod in the install's namespace (a person's notebook, Spark's executors, the pipelines' code) could read every table's metadata, Ranger's hidden tables' too, and commit to the catalog: drop, rename or roll back any table, and move or delete branches and tags. Nessie now takes only a Keycloak token of the platform's catalog account (the new client `lakehouse-catalog`, its secret `CATALOG_CLIENT_SECRET`), as which Trino, platformd, the operator, the copies, the imports and Nessie's GC sign in; a network policy lets only those reach it. People reach the tables through Trino, under Ranger's rules, as before.
 - **A Spark session's catalog is platformd's** (`/internal/spark-catalog/`), not Nessie: it lists and loads only the tables the session's credentials were given for, commits only to those the person may change (not moving a table's files elsewhere), keeps to the main branch, and makes, drops and renames nothing. The session's grant is signed by platformd and lasts as its credentials do. Its commits are in the audit log (`spark.commit`).
-
-**Upgrading:** setup makes the Keycloak client, and the chart the new secret. Nessie's health is now on its management port (`http://nessie:9000/q/health/ready`). Anything else that called Nessie itself (a script, a tool of your own) is refused: give it the catalog account's token (client credentials, `lakehouse-catalog`), or have it go through Trino.
 
 ## [0.40.0] - 2026-11-07
 
