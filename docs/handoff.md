@@ -6,7 +6,7 @@ the target cluster. Read this, then [plan.md](plan.md) and the
 
 ## Where things stand (2026-11-08)
 
-- **Release 0.42.0** has phases 0 to 5 of the plan (the platform, its web app, projects, the
+- **Release 0.42.1** has phases 0 to 5 of the plan (the platform, its web app, projects, the
   catalog, the semantic layer with MCP for agents, and the Helm chart), ready for a real cluster:
   behind an ingress that ends TLS, with a private CA, on Buckets 1.20.4. It has these from
   phases 6 to 16 too ([plan.md](plan.md)'s phase table says what each phase has and lacks,
@@ -56,6 +56,8 @@ the target cluster. Read this, then [plan.md](plan.md) and the
     platform-wide (16.1).
   - **Not yet placed, now built:** a new team's project from a template, and the company's
     shared libraries (U.2), with the install's GitLab.
+- **New in 0.42.1:** a company's MinIO from before 2025 takes Nessie GC's deletes (the store
+  forwarder, now platformd's, adds the `Content-MD5` it asks for).
 - **New in 0.42.0:** adopting, taking over and giving back tables take the platform
   role `table-adoption` (group `data-migration`, the chart's `adoption.groups`, made empty by
   setup: put the people doing a move in it when upgrading); a table taken over is writable in
@@ -81,8 +83,8 @@ the target cluster. Read this, then [plan.md](plan.md) and the
   - **`kubernetes-https`** does the same behind HTTPS with a private CA, as on a real cluster
     (`deploy/kind/https.sh`, `https.yaml`): every suite but the browser's.
 - **What's published, and signed:**
-  - The images: `ghcr.io/storscale/platformd:0.42.0` and `ghcr.io/storscale/platform-*:0.42.0`.
-  - The chart: `oci://ghcr.io/storscale/charts/storscale-platform` at version 0.42.0.
+  - The images: `ghcr.io/storscale/platformd:0.42.1` and `ghcr.io/storscale/platform-*:0.42.1`.
+  - The chart: `oci://ghcr.io/storscale/charts/storscale-platform` at version 0.42.1.
 - **Installed on a real cluster:** Kubernetes 1.27, shared with other teams, with
   ingress-nginx and a certificate from a corporate Vault PKI (through cert-manager).
   Every suite but the browser's passes there. That install found the three bugs the
@@ -130,7 +132,7 @@ trino:
 ```
 
 ```bash
-helm install storscale oci://ghcr.io/storscale/charts/storscale-platform --version 0.42.0 \
+helm install storscale oci://ghcr.io/storscale/charts/storscale-platform --version 0.42.1 \
   -n storscale --create-namespace -f platform.yaml --set-file global.ca.certs=root-ca.pem
 kubectl -n storscale get pods,jobs,projects -w      # the first install takes 10–20 minutes
 helm test storscale -n storscale --logs --timeout 90m
@@ -150,8 +152,8 @@ service. It first checks the release isn't mid-upgrade, isn't going backwards, a
 release's images are published; it says what it will do, and asks:
 
 ```bash
-storscale upgrade --context <cluster> --version 0.42.0 --dry-run   # check; show the CRD's changes
-storscale upgrade --context <cluster> --version 0.42.0             # then do it
+storscale upgrade --context <cluster> --version 0.42.1 --dry-run   # check; show the CRD's changes
+storscale upgrade --context <cluster> --version 0.42.1             # then do it
 ```
 
 `-f`, `--set` and `--set-file` change settings over those it was installed with. If it fails,

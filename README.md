@@ -89,7 +89,7 @@ Without `--dir`, `storscale up --k8s` installs the published chart at its own ve
 **On a real cluster**, install the chart with Helm:
 
 ```bash
-helm install storscale oci://ghcr.io/storscale/charts/storscale-platform --version 0.42.0 \
+helm install storscale oci://ghcr.io/storscale/charts/storscale-platform --version 0.42.1 \
   -n storscale --create-namespace -f platform.yaml
 ```
 

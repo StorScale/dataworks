@@ -4,6 +4,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.42.1] - 2026-11-09
+
+Nessie's GC deletes again on a company's MinIO from before 2025: the store forwarder adds the `Content-MD5` such a MinIO asks of a multi-object delete.
+
+**Upgrading from 0.42.0:** `storscale upgrade --context <cluster> --version 0.42.1`. Only an install on a company's store (`storage.external`) changes: its forwarder runs platformd's image in place of Caddy.
+
 ### Fixed
 - **Nessie's GC deleted nothing on a company's MinIO from before 2025** (`storage.external`): AWS's SDKs since early 2025 send a multi-object delete with a CRC32 checksum and no `Content-MD5`, and such a MinIO refuses it ("Missing required header for this request: Content-Md5"); the history the install doesn't keep stayed in the store. The store forwarder (`buckets:9000`) is now platformd's (`platformd store-forward`, in place of Caddy) and adds the body's `Content-MD5` to a delete without one; every other request passes as it came.
 
