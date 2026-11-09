@@ -18,6 +18,7 @@ RUN /opt/dlt/bin/pip install --no-cache-dir "dlt[filesystem,pyiceberg,sql-databa
 COPY sources /opt/dlt/sources
 # An import's run (the DAG file storscale_imports.py starts it here).
 COPY storscale_import_run.py /opt/dlt/storscale_import_run.py
+COPY storscale_iceberg_merge.py /opt/dlt/storscale_iceberg_merge.py
 # Deliveries (use case 9.1): the files written (pyarrow), encrypted (gpg) and
 # sent (SFTP, S3), in a virtualenv of their own; the run in it.
 USER root

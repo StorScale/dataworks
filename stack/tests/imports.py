@@ -9,7 +9,8 @@ here (a token, a cursor, its leads changing):
   2. a run copies the leads into sales.crm_leads, signed in with the token,
      page by page (the API's cursor in its answer: rest_api paging);
   3. a second run asks only for what's new past the cursor, and merges it
-     (a lead changed, one added);
+     (a lead changed, one added); and a field the CRM had kept empty, given a
+     value partway through a run, is added, the run's earlier rows merged;
   4. alice (a reader of sales' listed tables) can't read it;
   5. the catalog has its lineage: the import's pipeline upstream of its table;
   6. a run that fails (the API down) is one of sales' alerts;
@@ -258,6 +259,21 @@ def main():
         check("... and merges it: a lead changed, one added, none twice",
               state == "success" and rows() == [[1, "Ada"], [2, "Grace Hopper"], [3, "Edsger"], [4, "Barbara"]], f"{state}: {rows()}")
 
+        # A field the CRM had kept empty gets a value, partway through a run: dlt adds the column then, so the
+        # run's first page (its file) lacks it and the next has it (Dev's CRM import, 2026-11-09: refused on
+        # every run after, the same package retried, until 0.42.0's storscale_iceberg_merge).
+        CRM.leads[0] = {"id": 1, "name": "Ada Lovelace", "updated_at": "2026-10-06T10:00:00Z"}
+        CRM.leads[2] = {"id": 3, "name": "Edsger Dijkstra", "updated_at": "2026-10-07T10:00:00Z"}
+        CRM.leads.append({"id": 5, "name": "Frances", "owner": "u7", "updated_at": "2026-10-08T10:00:00Z"})
+        state = run(bob)
+        try:
+            owners = [list(r) for r in sql("bob", f"SELECT id, owner FROM {TABLE} ORDER BY id", "iceberg", "sales")]
+        except Exception as e:  # noqa: BLE001
+            owners = str(e)[:200]
+        check("a field that first has a value partway through a run is added, the rows before it merged without it",
+              state == "success" and rows() == [[1, "Ada Lovelace"], [2, "Grace Hopper"], [3, "Edsger Dijkstra"], [4, "Barbara"], [5, "Frances"]]
+              and owners == [[1, None], [2, None], [3, None], [4, None], [5, "u7"]], f"{state}: {rows()} {owners}")
+
         # A reset: all copied again, from the cursor's start.
         CRM.asked.clear()
         r = bob.post(f"{url}/imports/crm/reset", headers={"X-Platform-Request": "1"}, timeout=60)
@@ -266,7 +282,8 @@ def main():
                                    if x["id"] == reset_id and x["state"] in ("success", "failed")), None), 600, every=10) if reset_id else r.text[:200]
         check("a reset copies it all again, from the cursor's start, none twice",
               state == "success" and CRM.asked and CRM.asked[0][0] == "2026-01-01T00:00:00Z"
-              and rows() == [[1, "Ada"], [2, "Grace Hopper"], [3, "Edsger"], [4, "Barbara"]], f"{state}: {CRM.asked[:2]} {rows()}")
+              and rows() == [[1, "Ada Lovelace"], [2, "Grace Hopper"], [3, "Edsger Dijkstra"], [4, "Barbara"], [5, "Frances"]],
+              f"{state}: {CRM.asked[:2]} {rows()}")
         code = alice.post(f"{url}/imports/crm/reset", headers={"X-Platform-Request": "1"}, timeout=60).status_code
         check("... and only an editor resets it: alice (a reader) can't", code == 403, f"HTTP {code}")
 

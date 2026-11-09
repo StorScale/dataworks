@@ -18,7 +18,11 @@ import os
 import urllib.parse
 
 import dlt
+import storscale_iceberg_merge
 from dlt.destinations import filesystem
+
+# A merge where a column first has a value partway through a load (storscale_iceberg_merge says why).
+storscale_iceberg_merge.apply()
 
 pi = json.loads(os.environ["STORSCALE_IMPORT"])
 secret = json.loads(os.environ.get("STORSCALE_IMPORT_SECRET") or "{}")
