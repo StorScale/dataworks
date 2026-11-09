@@ -259,7 +259,10 @@ try:
     out["summary"] = len(buckets_lake.sql(PROJECT, f"SELECT * FROM {SUMMARY}"))
     out["changes"] = len(changes(TIERS))   # the template's own: the History tab's list
 except Exception as e:
-    out["error"] = f"{type(e).__name__}: {str(e)[:1200]}"
+    # Which cell, and the cause: Spark's errors come with the JVM's trace, its causes at the end.
+    text = str(e)
+    causes = [ln.strip() for ln in text.splitlines() if ln.strip().startswith("Caused by") or "Exception:" in ln][:12]
+    out["error"] = f"cell {out['cells']}: {type(e).__name__}: {text[:600]} ... " + " | ".join(causes)[:2500]
 print(json.dumps(out))
 '''
 
@@ -333,6 +336,8 @@ def notebook_checks(user, other, profile=None):
                     result["template"] = json.loads(run(user, server_token(s, user), TABLES_TEMPLATE, timeout=420).strip().splitlines()[-1])
                 except RuntimeError as e:
                     result["template"] = {"error": str(e)[-1500:]}
+                if result["template"].get("error"):
+                    show_spark(user)
         # VS Code, as JupyterLab's launcher opens it: served by the person's own server through jupyter-server-proxy.
         vs = requests.get(f"{HUB}/user/{user}/vscode/", headers={"Authorization": f"token {server_token(s, user)}"}, timeout=120, allow_redirects=True)
         result["vscode"] = vs.status_code if vs.ok else f"{vs.status_code} at {vs.url}: {vs.text[:200]}"
