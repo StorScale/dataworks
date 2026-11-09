@@ -475,8 +475,13 @@ in notebooks and pipelines. Set it back to `true` once the store has them.
 
 ### How it behaves
 
-- Every service reaches the store at `buckets:9000`, as it does Buckets: a forwarder there (`store-forwarder`) passes each
-  request to the endpoint as it came, so its signature holds.
+- Every service reaches the store at `buckets:9000`, as it does Buckets: a forwarder there (`store-forwarder`, platformd's
+  image) passes each request to the endpoint as it came, so its signature holds.
+- **A MinIO from before 2025** wants a `Content-MD5` on a multi-object delete, which AWS's SDKs since early 2025 replaced
+  with a CRC32 checksum: such a MinIO refused them ("Missing required header for this request: Content-Md5"), and Nessie's GC
+  deleted nothing there. The forwarder adds the body's `Content-MD5` to a delete that lacks one (it isn't among the headers
+  the request's signature covers). Only the platform's own traffic goes through it: another client of that MinIO with a new
+  SDK still needs MinIO upgraded.
 - What the platform makes there it marks as its own: a bucket's tag `dataworks=owned`, a policy's ID `dataworks`. It changes
   nothing that isn't marked. A project whose bucket is already the store's (another's) is refused, naming the bucket (give the
   project another, `files.bucket`); so is one of its groups whose policy name is taken. Removing a project leaves the store's

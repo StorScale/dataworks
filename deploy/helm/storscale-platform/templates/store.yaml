@@ -2,37 +2,13 @@
 {{- $store := urlParse .Values.storage.external.endpoint }}
 # The platform's files on an external S3 store (storage.external): the
 # Service buckets, on port 9000 as the platform's own Buckets is, forwarding
-# to the store's endpoint. Every service keeps its one address for the
-# store; the forwarder passes each request on as it came, Host included,
-# so the signatures made for buckets:9000 (and for s3.<domain> through the
-# gateway) hold at the store. It trusts the store's certificate through
-# global.ca.
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: store-forwarder
-  labels: {{- include "storscale.labels" . | nindent 4 }}
-data:
-  Caddyfile: |
-    {
-      admin off
-      auto_https off
-      persist_config off
-    }
-    :9000 {
-      reverse_proxy {$STORE_ENDPOINT} {
-        # The request's own Host (buckets:9000, s3.<domain>), which its signature covers: Caddy would
-        # otherwise send an HTTPS upstream's name instead, and the store refuse the signature.
-        header_up Host {hostport}
-        flush_interval -1
-        {{- if eq $store.scheme "https" }}
-        transport http {
-          tls_server_name {{ regexReplaceAll ":[0-9]+$" $store.host "" }}   # the store's own name, for its certificate
-        }
-        {{- end }}
-      }
-    }
----
+# to the store's endpoint (platformd store-forward, cmd/platformd/storeforward.go).
+# Every service keeps its one address for the store; the forwarder passes each
+# request on as it came, Host included, so the signatures made for buckets:9000
+# (and for s3.<domain> through the gateway) hold at the store. It adds one
+# thing: a multi-object delete without a Content-MD5 gets its body's, which a
+# MinIO from before 2025 asks for and newer AWS SDKs no longer send. It trusts
+# the store's certificate through global.ca.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -56,14 +32,13 @@ spec:
         {{- . | nindent 8 }}
       {{- end }}
       containers:
-        - name: caddy
-          image: {{ .Values.upstream.caddy }}
-          securityContext: {allowPrivilegeEscalation: false, runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, capabilities: {drop: [ALL], add: [NET_BIND_SERVICE]}, seccompProfile: {type: RuntimeDefault}}   # its binary carries that capability: without it, it can't start
-          args: ["caddy", "run", "--config", "/etc/storscale/Caddyfile", "--adapter", "caddyfile"]
+        - name: forwarder
+          image: {{ include "storscale.image" (list . "platformd") }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, runAsNonRoot: true, capabilities: {drop: [ALL]}, seccompProfile: {type: RuntimeDefault}}
+          args: ["store-forward"]
           env:
             - {name: STORE_ENDPOINT, value: {{ .Values.storage.external.endpoint | quote }}}
-            - {name: XDG_DATA_HOME, value: /tmp}
-            - {name: XDG_CONFIG_HOME, value: /tmp}
             {{- include "storscale.ca.env" . | nindent 12 }}
           ports:
             - {name: s3, containerPort: 9000}
@@ -71,15 +46,15 @@ spec:
             httpGet: {path: /minio/health/live, port: s3}   # the store, through it
             periodSeconds: 10
             failureThreshold: 6
+          {{- with include "storscale.ca.mount" . }}
           volumeMounts:
-            - {name: config, mountPath: /etc/storscale/Caddyfile, subPath: Caddyfile}
-            - {name: tmp, mountPath: /tmp}
-            {{- include "storscale.ca.mount" . | nindent 12 }}
+            {{- . | nindent 12 }}
+          {{- end }}
           {{- include "storscale.resources" (list "50m" "64Mi" "512Mi") | nindent 10 }}
+      {{- with include "storscale.ca.volumes" . }}
       volumes:
-        - {name: config, configMap: {name: store-forwarder}}
-        - {name: tmp, emptyDir: {}}
-        {{- include "storscale.ca.volumes" . | nindent 8 }}
+        {{- . | nindent 8 }}
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service

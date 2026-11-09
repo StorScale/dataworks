@@ -4,6 +4,9 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+- **Nessie's GC deleted nothing on a company's MinIO from before 2025** (`storage.external`): AWS's SDKs since early 2025 send a multi-object delete with a CRC32 checksum and no `Content-MD5`, and such a MinIO refuses it ("Missing required header for this request: Content-Md5"); the history the install doesn't keep stayed in the store. The store forwarder (`buckets:9000`) is now platformd's (`platformd store-forward`, in place of Caddy) and adds the body's `Content-MD5` to a delete without one; every other request passes as it came.
+
 ## [0.42.0] - 2026-11-08
 
 Adopting another platform's tables, taking them over and giving them back become a platform role's, `table-adoption` (the group `data-migration`), in the projects one edits; a table taken over is writable at last. A notebook template on reading and changing tables, by SQL and by Spark.
