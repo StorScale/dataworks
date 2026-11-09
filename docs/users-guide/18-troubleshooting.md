@@ -341,6 +341,7 @@ the tables you read whole, with no row filter or column mask for you, and writes
 | `spark()` | 503 `this install gives Spark no credentials (no SPARK_S3_ACCESS_KEY or STORE_URL)` | An install problem: setup makes the Spark account |
 | Spark | `ForbiddenException: sales.orders isn't one of this session's tables ...` | It has a row filter or mask for you (`spark_skipped`), or the session named other tables: read it with `sql()` |
 | Spark | `ForbiddenException: a Spark session doesn't make, drop or rename tables ...` | Make it with `spark(create=...)`; drop or rename it in SQL |
+| Spark | `[INTERNAL_ERROR] The Spark SQL phase planning failed with an internal error` on `MERGE INTO`, `UPDATE` or `DELETE FROM` | Spark's row-level SQL doesn't work here yet (0.42.0): change rows with `sql()`, through Trino, or rewrite the table from Spark with `writeTo(...).overwritePartitions()` |
 | Spark | `NotAuthorizedException: ... the session's grant has expired` | Start a new session: `buckets_lake.spark()` (credentials last `credentialHours`, 12 by default) |
 | `spark(create=...)` | `PermissionError: Trino didn't make <table> as you: ...` | Make it in a project where you may make tables |
 

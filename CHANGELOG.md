@@ -18,7 +18,10 @@ Adopting another platform's tables, taking them over and giving them back become
 - **The finance and governance groups' pages were missing from the menu** for people who aren't administrators: the web app dropped `usage` and `governance` from `/api/session`.
 
 ### Added
-- **A notebook template on reading and changing tables** (`work/templates/tables.ipynb`): the same work through Trino (`buckets_lake.sql`: read, make a table, insert, update, delete, merge, a few rows from pandas, a table's history and reading it as it was) and through Spark (`buckets_lake.spark`: read, replace a table's rows, merge, update, delete), on the guide's `retail` project. CI runs it top to bottom as bob.
+- **A notebook template on reading and changing tables** (`work/templates/tables.ipynb`): the same work through Trino (`buckets_lake.sql`: read, make a table, insert, update, delete, merge, a few rows from pandas, a table's history and reading it as it was) and through Spark (`buckets_lake.spark`: read, append, and change rows by rewriting the table), on the guide's `retail` project. CI runs it top to bottom as bob.
+
+### Known issues
+- **Spark's own `MERGE INTO`, `UPDATE` and `DELETE FROM` fail in notebooks** (`[INTERNAL_ERROR] The Spark SQL phase planning failed`, Spark 4.1 with Iceberg 1.12): change rows through Trino (`buckets_lake.sql()`), or rewrite the table from Spark with `writeTo(...).overwritePartitions()`. Appending and rewriting work.
 
 ## [0.41.0] - 2026-11-07
 

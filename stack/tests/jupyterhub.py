@@ -258,6 +258,22 @@ try:
     out["tiers"] = buckets_lake.sql(PROJECT, f"SELECT tier, count(*) AS n FROM {TIERS} GROUP BY tier").set_index("tier")["n"].to_dict()
     out["summary"] = len(buckets_lake.sql(PROJECT, f"SELECT * FROM {SUMMARY}"))
     out["changes"] = len(changes(TIERS))   # the template's own: the History tab's list
+    # Spark's own MERGE INTO fails here (an internal planning error, 0.42.0): its whole error, in CI's log, to fix it by.
+    for k, v in {"spark.sql.connect.serverStacktrace.enabled": "true", "spark.sql.pyspark.jvmStacktrace.enabled": "true"}.items():
+        try:
+            spark.conf.set(k, v)
+        except Exception:
+            pass
+    try:
+        spark.sql(f"MERGE INTO {SCHEMA}.{TIERS} t USING (SELECT * FROM {SCHEMA}.{TIERS}) s ON t.customer_id = s.customer_id "
+                  "WHEN MATCHED THEN UPDATE SET *").collect()
+        out["spark_merge"] = "ok"
+    except Exception as e:
+        out["spark_merge"] = "failed"
+        print("--- Spark's MERGE INTO, its whole error:")
+        print(e)
+        trace = getattr(e, "getStackTrace", None)
+        print(trace() if callable(trace) else "")
 except Exception as e:
     # Which cell, and the cause: Spark's errors come with the JVM's trace, its causes at the end.
     text = str(e)
@@ -333,7 +349,10 @@ def notebook_checks(user, other, profile=None):
                 show_spark(user)
             if profile == "spark":
                 try:
-                    result["template"] = json.loads(run(user, server_token(s, user), TABLES_TEMPLATE, timeout=420).strip().splitlines()[-1])
+                    said = run(user, server_token(s, user), TABLES_TEMPLATE, timeout=420).strip().splitlines()
+                    result["template"] = json.loads(said[-1])
+                    if result["template"].get("spark_merge") != "ok":   # for the record (not a failed check): Spark's MERGE INTO's error
+                        print("\n".join(line for line in said[:-1] if not line.startswith("+---") and "|" not in line)[-20000:])
                 except RuntimeError as e:
                     result["template"] = {"error": str(e)[-1500:]}
                 if result["template"].get("error"):

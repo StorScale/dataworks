@@ -168,6 +168,7 @@ buckets_lake.spark_skipped                     # and what it didn't, and why
 
 - A table with a row filter or mask for you stays Trino's: read it with `buckets_lake.sql()`.
 - One session takes about thirty tables (Buckets' policy limit). With more, name the ones you need: `buckets_lake.spark(tables=["sales.orders", "sales.payroll"])`.
+- **Spark's own `MERGE INTO`, `UPDATE` and `DELETE FROM` fail** with `[INTERNAL_ERROR] The Spark SQL phase planning failed` (Spark 4.1 with Iceberg 1.12, as of 0.42.0): change rows in SQL, through Trino (`buckets_lake.sql()`), or rewrite the table from Spark (`writeTo(...).overwritePartitions()`, as the tables template does). `append()` and `overwritePartitions()` work.
 - Spark's own `CREATE TABLE`, `DROP TABLE` and `ALTER TABLE ... RENAME` are refused ("a Spark session doesn't make, drop or rename tables"): make a table with `create=`, and drop or rename one in SQL, through Trino.
 - A job running past the credentials' hours loses its access: start a new session.
 - The notebook has no Kubernetes access; only Spark's driver may start pods, and only in the Spark namespace.
@@ -531,7 +532,7 @@ Each server start puts them in `work/templates/`: `tables.ipynb`, `churn.ipynb`,
 The same work done two ways, side by side, on the guide's `retail` project: it reads `uploads_orders` and makes and changes its own table, `customer_tiers` (and, from Spark, `customer_tier_summary`).
 
 - **SQL, through Trino** (`buckets_lake.sql`): read and aggregate; make a table (`CREATE TABLE IF NOT EXISTS ... AS SELECT ... WITH NO DATA`); `INSERT`, `UPDATE`, `DELETE`; `MERGE` to update the rows that are there and insert the rest; a few rows from pandas as `VALUES`; the table's history (its changes, as the History tab lists them) and reading it as it was (`"customer_tiers#<commit>"`). Row filters and masks apply; answers have at most 100,000 rows.
-- **Spark** (`buckets_lake.spark`): a session on the tables named, with a new table made by `create=`; read with DataFrames; replace a table's rows (`writeTo(...).overwritePartitions()`); `MERGE INTO` from a DataFrame (a temporary view), `UPDATE` and `DELETE FROM`. Only tables you read whole.
+- **Spark** (`buckets_lake.spark`): a session on the tables named, with a new table made by `create=`; read with DataFrames; replace a table's rows (`writeTo(...).overwritePartitions()`), and change rows by rewriting the table from what it should hold. Only tables you read whole.
 
 Change `PROJECT`, `ORDERS` and the two tables' names in the first code cell for your own. Its last cell, commented out, drops the two tables.
 
