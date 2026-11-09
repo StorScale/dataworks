@@ -633,3 +633,28 @@ func TestAdoptedTablesAreReadOnly(t *testing.T) {
 		t.Error("the readers read orders (their table) and not legacy")
 	}
 }
+
+// A table taken over is the project's own: in the writers' policy like any of
+// its tables, with no read-only adopted policy of its own.
+func TestTakenOverTablesAreWritable(t *testing.T) {
+	p, _ := Parse([]byte(sales))
+	p.Spec.Tables.Adopt = []Adoption{{Table: "orders", From: "lakehouse.sales.orders", TakenOver: time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC), TakenOverBy: "bob"},
+		{Table: "legacy", From: "lakehouse.sales.legacy"}}
+	if err := p.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]RangerPolicy{}
+	for _, rp := range p.RangerPolicies() {
+		byName[strings.TrimPrefix(rp.Name, "project:sales:")] = rp
+	}
+	if _, ok := byName["adopted:orders"]; ok {
+		t.Error("orders, taken over, still has a read-only adopted policy")
+	}
+	if _, ok := byName["adopted:legacy"]; !ok {
+		t.Error("legacy, still adopted, lost its read-only policy")
+	}
+	all := byName["tables"].Resources["table"]
+	if slices.Contains(all.Values, "orders") || !slices.Contains(all.Values, "legacy") {
+		t.Errorf("the writers' policy should leave out legacy alone: %+v", all)
+	}
+}

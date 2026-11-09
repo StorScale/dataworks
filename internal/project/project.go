@@ -1429,14 +1429,18 @@ func (p *Project) tablePolicies() []RangerPolicy {
 	// which also holds the readers' and consumers' reads of them (Ranger
 	// keeps one policy to a resource).
 	var adopted []string
+	var followed []Adoption // not those taken over: they're the project's own, in the writers' policy
 	for _, a := range t.Adopt {
-		adopted = append(adopted, a.Table, a.Table+"@*", a.Table+"#*")
+		if a.TakenOver.IsZero() {
+			followed = append(followed, a)
+			adopted = append(adopted, a.Table, a.Table+"@*", a.Table+"#*")
+		}
 	}
 	if len(adopted) > 0 {
 		tables.Resources["table"] = RangerResource{Values: adopted, IsExcludes: true}
 	}
 	out := []RangerPolicy{schema}
-	for _, a := range t.Adopt {
+	for _, a := range followed {
 		its := append(each(writers, "select", "show"), each(whole, "select", "show")...)
 		if hasPipelines {
 			its = append(its, allow(pipelines, "select", "show"))
