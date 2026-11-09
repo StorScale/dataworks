@@ -16,7 +16,7 @@ import (
 	"github.com/StorScale/dataworks/internal/trino"
 )
 
-// What a project's editors may adopt (tables.adopt), and adopting it: the
+// What a project's editors (in the table-adoption role) may adopt (tables.adopt), and adopting it: the
 // external stores (the chart's externalStores), their schemas, and a
 // schema's tables with their rows, size and last change, read as the table
 // maintenance account in the stores' own catalogs (ext_<store>). Names and
@@ -32,10 +32,10 @@ type adoptableTable struct {
 	Note       string     `json:"note,omitempty"`      // why it can't be adopted (a view, its metadata unreadable)
 }
 
-// handleAdoptable answers, for one of the project's editors: the stores
+// handleAdoptable answers, for one of the project's editors in the table-adoption role: the stores
 // (no store=), a store's schemas (store=), or a schema's tables (store= and schema=).
 func (s *server) handleAdoptable(w http.ResponseWriter, r *http.Request) {
-	sess, v := s.editorOf(w, r, project.PermWriteTables, "adopt tables")
+	sess, v := s.adopter(w, r, "table.adoptable", "see what may be adopted")
 	if sess == nil {
 		return
 	}
@@ -133,10 +133,10 @@ func shortError(s string) string {
 	return s
 }
 
-// handleAdopt adds tables to the project's tables.adopt (its editors): each
+// handleAdopt adds tables to the project's tables.adopt (its editors in the table-adoption role): each
 // {table, from}, the operator registering it within a minute or so.
 func (s *server) handleAdopt(w http.ResponseWriter, r *http.Request) {
-	sess, v := s.editorOf(w, r, project.PermWriteTables, "adopt tables")
+	sess, v := s.adopter(w, r, "table.adopt", "adopt tables")
 	if sess == nil {
 		return
 	}
@@ -178,11 +178,11 @@ func (s *server) handleAdopt(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"adopt": tables.Adopt})
 }
 
-// handleUnadopt takes an adopted table out of the project (its editors):
+// handleUnadopt takes an adopted table out of the project (its editors in the table-adoption role):
 // unregistered within a minute, its files left to its store. One taken over
 // is the project's own: it stays (drop it as any other table).
 func (s *server) handleUnadopt(w http.ResponseWriter, r *http.Request) {
-	sess, v := s.editorOf(w, r, project.PermWriteTables, "stop adopting tables")
+	sess, v := s.adopter(w, r, "table.unadopt", "stop adopting tables")
 	if sess == nil {
 		return
 	}

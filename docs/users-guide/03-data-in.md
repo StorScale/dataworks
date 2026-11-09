@@ -687,12 +687,16 @@ project without copying it: the project's namespace has it, by a name you give i
 other platform changes it, the project sees the change within a minute. It's read and governed like any of the project's tables
 (the Data page, the catalog, SQL, notebooks, dbt, dashboards, the readers' rules), and it's read-only here until it's handed over.
 
-**Who can do it.** An administrator sets up the store once (the chart's `externalStores`: [Operating](17-operating.md#external-stores));
-then whoever changes the project's spec (administrators) lists its tables.
+**Who can do it.** An administrator sets up the store once (the chart's `externalStores`: [Operating](17-operating.md#external-stores)).
+Then adopting, taking over, giving back and stopping take two things: being an editor of the project (one who may write its tables),
+and the platform's **table-adoption** role (the Keycloak group `data-migration` unless the install names others; the chart's
+`adoption.groups`, or more on **Administration → Roles**: [Roles](16-roles.md#platform-roles)). Administrators have both. Editors
+without the role see what's adopted and where from, but not the stores, nor the buttons; the platform answers them 403, naming the group,
+and records the refusal in the audit log.
 
 ### Set up
 
-On the project's **Data** page, **Adopt tables** (the project's editors, who may write its tables): choose the store, then one of
+On the project's **Data** page, **Adopt tables** (its editors in the table-adoption role): choose the store, then one of
 its schemas, and its tables are listed with their rows, size and when each was last written. Tick those to adopt, give each its
 name here if not the store's, and **Adopt**. Those already adopted are marked; views and tables whose metadata can't be read say
 so. The operator registers them within a minute, and the catalog lists them a little after (until then they show as *coming*).
@@ -732,7 +736,7 @@ Or in the project's spec, `tables.adopt`: each table's name in the project, and 
 
 ### Taking a table over
 
-While the other platform writes a table, it stays adopted. Once it stops, a project editor (one who may write its tables) takes it
+While the other platform writes a table, it stays adopted. Once it stops, a project editor in the table-adoption role takes it
 over: it's then the project's own, where its files are. Nothing is copied. On the table's page, **Take over…**, then **Take it over** once you've
 read what it means; or through the API:
 
@@ -765,7 +769,7 @@ curl -X POST -H "Authorization: Bearer $TOKEN" -H "X-Platform-Request: 1" \
 ### Giving a table back
 
 A table taken over can be given back to the platform it came from, where the platform may write that store's catalog: on its
-page, **Give back…**, then **Give it back** (or `POST /api/projects/<project>/tables/<table>/giveback`). Its project's editors.
+page, **Give back…**, then **Give it back** (or `POST /api/projects/<project>/tables/<table>/giveback`). Its project's editors in the table-adoption role.
 
 - **Its current state goes back:** its newest metadata file, everything written here included, is registered in the store's own
   catalog under its old name (Iceberg's `register_table`; nothing copied), for the other platform's jobs to write again.

@@ -79,6 +79,7 @@ const (
 	PermSeeGovernance  = "see-governance"   // the Governance page across projects
 	PermCertify        = "certify-products" // certify data products, and take certification away
 	PermProtectPersons = "protect-personal" // approve deliveries of personal columns; what was sent about a person; erasures
+	PermAdoptTables    = "adopt-tables"     // adopt another platform's tables, take them over, give them back (in projects one edits)
 )
 
 // PlatformPermissions are the platform-wide ones, as the Roles page lists them.
@@ -87,6 +88,7 @@ var PlatformPermissions = []Permission{
 	{PermSeeGovernance, "See the Governance page: every project's approvals, agents, rules, products and erasures"},
 	{PermCertify, "Certify data products, and take certification away"},
 	{PermProtectPersons, "Approve deliveries that send personal columns, search what was sent about a person, and record erasures"},
+	{PermAdoptTables, "Adopt tables from another platform's catalog, take them over and give them back, in the projects one may write tables in"},
 }
 
 // Role scopes: a project's (given to its members in its spec), or the platform's (given to Keycloak groups on the Roles page).

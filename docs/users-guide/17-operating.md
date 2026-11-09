@@ -346,7 +346,9 @@ to this platform goes on ([Adopted tables](03-data-in.md#adopted-tables-another-
 
 ### Who can do it
 
-Whoever installs the chart.
+Whoever installs the chart. Who then adopts, takes over and gives back the store's tables is the chart's `adoption.groups`
+(default `[data-migration]`, a Keycloak group setup makes, empty): the platform role `table-adoption`, in the projects they edit,
+besides the administrators ([Roles](16-roles.md#the-installs-platform-roles)). Put the people doing the move in that group.
 
 ### Set up
 

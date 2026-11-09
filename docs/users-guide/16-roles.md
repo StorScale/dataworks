@@ -26,7 +26,7 @@ In this chapter:
 |---|---|---|
 | Given | by a project, to its members (people and Keycloak groups), in its spec | on Administration → Roles, to Keycloak groups |
 | Reaches | that project only | every project, and the pages across them |
-| Built in | `editor`, `reader` | `finance`, `governance`, `data-protection` (from the install's settings) |
+| Built in | `editor`, `reader` | `finance`, `governance`, `data-protection`, `table-adoption` (from the install's settings) |
 | Made of | the 17 project permissions | the 4 platform permissions |
 | Defined by the company | yes: **Define a project role** | yes: **Define a platform role** |
 
@@ -252,18 +252,22 @@ role gives such a group its permissions everywhere.
 | `see-governance` | See the Governance page: every project's approvals, agents, rules, products and erasures | **Governance** in the account menu |
 | `certify-products` | Certify data products, and take certification away | The Data products page |
 | `protect-personal` | Approve deliveries that send personal columns, search what was sent about a person, and record erasures | Deliveries, the delivery log's search, erasures |
+| `adopt-tables` | Adopt tables from another platform's catalog, take them over and give them back, in the projects one may write tables in | A project's Data page: **Adopt tables**, **Take over…**, **Give back…**, **Stop adopting** ([Adopting tables](03-data-in.md)); only with `write-tables` in the project too |
 
 ### The install's platform roles
 
-Three are built in, made from the install's settings, and shown on the Roles page marked **the install's**:
+Four are built in, made from the install's settings, and shown on the Roles page marked **the install's**:
 
 | Role | Permissions | Its groups (setting) | Chart value | Default |
 |---|---|---|---|---|
 | `finance` | `see-all-usage` | `USAGE_VIEWER_GROUPS` | `usage.viewerGroups` | the administrators' groups |
 | `governance` | `certify-products`, `see-governance` | `PRODUCT_CERTIFIER_GROUPS` | `products.certifierGroups` | the administrators' groups |
 | `data-protection` | `protect-personal`, `see-governance` | `DELIVERY_APPROVER_GROUPS` | `deliveries.approverGroups` | the administrators' groups |
+| `table-adoption` | `adopt-tables` | `ADOPTION_GROUPS` | `adoption.groups` (a list) | `data-migration`, a group of its own: setup makes it in Keycloak, empty |
 
 Change their groups with the settings (`storscale upgrade --set products.certifierGroups=governance`), not on the page.
+`table-adoption` alone has a group of its own by default, not the administrators': adopting another platform's tables and taking
+them over is migration work, given to the few doing it (put them in `data-migration`). The administrators may anyway.
 Compose sets `DELIVERY_APPROVER_GROUPS: engineers,analysts`, so the example's alice is a data-protection approver there.
 
 ### Who can do it
@@ -348,6 +352,7 @@ platform role.
 | `finance`'s groups | `usage.viewerGroups` (a list) | `USAGE_VIEWER_GROUPS` | the administrators' groups |
 | `governance`'s groups | `products.certifierGroups` | `PRODUCT_CERTIFIER_GROUPS` | the administrators' groups |
 | `data-protection`'s groups | `deliveries.approverGroups` | `DELIVERY_APPROVER_GROUPS` (`engineers,analysts` in `stack/compose.yaml`) | the administrators' groups |
+| `table-adoption`'s groups | `adoption.groups` (a list) | `ADOPTION_GROUPS` | `data-migration` |
 
 The defined roles are kept in the platform's bucket, `roles/roles.json` (`STORE_BUCKET`: `dataworks-platform`, or `storscale-platform` on an install made before 0.39.0):
 the operator and platformd both read it, and backups keep it with the bucket.

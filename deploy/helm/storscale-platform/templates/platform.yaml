@@ -78,6 +78,7 @@ spec:
             {{- with include "storscale.takeoverStores" . }}
             - {name: TAKEOVER_STORES, value: {{ . | quote }}}   # whose adopted tables projects may take over (externalStores[].takeover)
             {{- end }}
+            - {name: ADOPTION_GROUPS, value: {{ join "," .Values.adoption.groups | quote }}}   # who adopts, takes over and gives back tables (table-adoption)
             - {name: MAINTENANCE_AT, value: {{ .Values.maintenance.at | quote }}}
             {{- with .Values.deliveries.approverGroups }}
             - {name: DELIVERY_APPROVER_GROUPS, value: {{ . | quote }}}   # who approves deliveries of personal data

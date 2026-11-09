@@ -114,6 +114,15 @@ def main():
               before == (403, False) and made.ok and given is True and gone.status_code == 204 and taken is True,
               (before, made.status_code, made.text[:200], given, gone.status_code, taken))
 
+        # 4b. Adopting tables is a platform role's (table-adoption, the group data-migration) and the administrators':
+        # in the projects whose tables one writes. Neither alice nor carol is in data-migration.
+        session = lambda who: (who.get(f"{PLATFORM}/api/session", timeout=30).json() or {}).get("adopt")
+        adoption = next((r for r in (bob.get(f"{PLATFORM}/api/roles", timeout=30).json() or {}).get("roles", []) if r.get("name") == "table-adoption"), {})
+        check("adopting tables takes the table-adoption role (data-migration) or being an administrator: bob may, alice may not",
+              session(bob) is True and session(alice) is False and adoption.get("groups") == ["data-migration"]
+              and adoption.get("permissions") == ["adopt-tables"] and adoption.get("scope") == "platform",
+              (session(bob), session(alice), adoption))
+
         # 5. Removing it.
         in_use = bob.delete(role_url, headers=H, timeout=30)
         bob.put(url, data=json.dumps(dict(SPEC, spec=dict(SPEC["spec"], members=[m for m in MEMBERS if m["role"] != ROLE]))), timeout=30)

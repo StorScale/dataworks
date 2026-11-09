@@ -9,11 +9,10 @@ import (
 	"time"
 
 	"github.com/StorScale/dataworks/internal/catalog"
-	"github.com/StorScale/dataworks/internal/project"
 )
 
-// handleTakeover takes one of a project's adopted tables over (its editors,
-// who may write its tables): the table, which the other platform kept
+// handleTakeover takes one of a project's adopted tables over (its editors
+// in the table-adoption role, see adopter): the table, which the other platform kept
 // writing until now, becomes the project's own where its files are, from
 // its store's newest metadata file. From then on it's written, maintained
 // and erased here as the project's other tables are, and no longer followed.
@@ -25,7 +24,7 @@ import (
 // operator also says so, on the project's page, if the other platform
 // writes it after all.
 func (s *server) handleTakeover(w http.ResponseWriter, r *http.Request) {
-	sess, v := s.editorOf(w, r, project.PermWriteTables, "take over its adopted tables")
+	sess, v := s.adopter(w, r, "table.takeover", "take over its adopted tables")
 	if sess == nil {
 		return
 	}
@@ -113,14 +112,14 @@ func (s *server) handleTakeover(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGiveBack gives a table taken over back to the platform it came from
-// (the project's editors): its current metadata file, everything written
+// (the project's editors in the table-adoption role): its current metadata file, everything written
 // here included, is registered in the store's own catalog again (nothing
 // copied), and the project adopts it as before, read-only and followed.
 // Refused unless the platform may write the store's catalog, while the
 // project still writes it (its last change must be TakeoverQuiet old), and
 // when the store has a table by its name again.
 func (s *server) handleGiveBack(w http.ResponseWriter, r *http.Request) {
-	sess, v := s.editorOf(w, r, project.PermWriteTables, "give its tables back")
+	sess, v := s.adopter(w, r, "table.giveback", "give its tables back")
 	if sess == nil {
 		return
 	}

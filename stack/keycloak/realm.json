@@ -12,6 +12,9 @@
     },
     {
       "name": "pipelines"
+    },
+    {
+      "name": "data-migration"
     }
   ],
   "users": [

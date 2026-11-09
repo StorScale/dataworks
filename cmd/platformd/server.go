@@ -413,7 +413,9 @@ func (s *server) handleSession(w http.ResponseWriter, r *http.Request) {
 		"admin": s.isAdmin(sess.User), "projects": s.store != nil,
 		// the pages across projects some see besides the administrators: usage (finance), governance (certifiers, approvers)
 		"usage":      s.platformCan(r.Context(), sess.User, project.PermSeeAllUsage),
-		"governance": s.platformCan(r.Context(), sess.User, project.PermSeeGovernance), "flow": s.catalog != nil, "semantic": s.cfg.SemanticURL != "", "pipelines": s.airflow != nil,
+		"governance": s.platformCan(r.Context(), sess.User, project.PermSeeGovernance),
+		// adopting, taking over and giving back tables, in the projects they edit (the table-adoption role)
+		"adopt": s.platformCan(r.Context(), sess.User, project.PermAdoptTables), "flow": s.catalog != nil, "semantic": s.cfg.SemanticURL != "", "pipelines": s.airflow != nil,
 		"brand": s.brand.session()})
 }
 

@@ -131,6 +131,14 @@ externalStores: []
 #    # a table taken over is taken out of it, so its writers there no longer
 #    # find it, and one given back is put back in (catalog.write: true).
 
+# Who adopts tables, takes them over and gives them back (the platform role
+# table-adoption, permission adopt-tables): the Keycloak groups here, in the
+# projects whose tables they may write (a project's editors), and the
+# administrators. Setup makes the groups in Keycloak if they aren't there;
+# it never puts anyone in them. More groups: Administration → Roles.
+adoption:
+  groups: [data-migration]
+
 # How long a Deployment may take to become ready before Kubernetes calls its
 # rollout failed (its default is 10 minutes). On a first install, services
 # wait for the setup steps, and those for Keycloak, Buckets, Ranger and

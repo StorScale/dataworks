@@ -1004,7 +1004,7 @@
     },
     "/api/projects/{name}/adopt": {
       "post": {
-        "description": "tables of a store, adopted where they are\n\nhandleAdopt adds tables to the project's tables.adopt (its editors): each\n{table, from}, the operator registering it within a minute or so.",
+        "description": "tables of a store, adopted where they are\n\nhandleAdopt adds tables to the project's tables.adopt (its editors in the table-adoption role): each\n{table, from}, the operator registering it within a minute or so.",
         "operationId": "post_projects_name_adopt",
         "parameters": [
           {
@@ -1034,7 +1034,7 @@
             "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
           }
         },
-        "summary": "Adds tables to the project's tables.adopt (its editors): each {table, from}, the operator registering it within a minute or so",
+        "summary": "Adds tables to the project's tables.adopt (its editors in the table-adoption role): each {table, from}, the operator registering it within a minute or so",
         "tags": [
           "adopt"
         ]
@@ -1042,7 +1042,7 @@
     },
     "/api/projects/{name}/adopt/{table}": {
       "delete": {
-        "description": "one no longer adopted (not one taken over)\n\nhandleUnadopt takes an adopted table out of the project (its editors):\nunregistered within a minute, its files left to its store. One taken over\nis the project's own: it stays (drop it as any other table).",
+        "description": "one no longer adopted (not one taken over)\n\nhandleUnadopt takes an adopted table out of the project (its editors in the table-adoption role):\nunregistered within a minute, its files left to its store. One taken over\nis the project's own: it stays (drop it as any other table).",
         "operationId": "delete_projects_name_adopt_table",
         "parameters": [
           {
@@ -1070,7 +1070,7 @@
             "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
           }
         },
-        "summary": "Takes an adopted table out of the project (its editors): unregistered within a minute, its files left to its store",
+        "summary": "Takes an adopted table out of the project (its editors in the table-adoption role): unregistered within a minute, its files left to its store",
         "tags": [
           "adopt"
         ]
@@ -1078,7 +1078,7 @@
     },
     "/api/projects/{name}/adoptable": {
       "get": {
-        "description": "the stores, their schemas and tables, to adopt from\n\nhandleAdoptable answers, for one of the project's editors: the stores\n(no store=), a store's schemas (store=), or a schema's tables (store= and schema=).",
+        "description": "the stores, their schemas and tables, to adopt from\n\nhandleAdoptable answers, for one of the project's editors in the table-adoption role: the stores\n(no store=), a store's schemas (store=), or a schema's tables (store= and schema=).",
         "operationId": "get_projects_name_adoptable",
         "parameters": [
           {
@@ -1098,7 +1098,7 @@
             "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
           }
         },
-        "summary": "Answers, for one of the project's editors: the stores (no store=), a store's schemas (store=), or a schema's tables (store= and schema=)",
+        "summary": "Answers, for one of the project's editors in the table-adoption role: the stores (no store=), a store's schemas (store=), or a schema's tables (store= and schema=)",
         "tags": [
           "adoptable"
         ]
@@ -4100,7 +4100,7 @@
     },
     "/api/projects/{name}/tables/{table}/giveback": {
       "post": {
-        "description": "one taken over, back to its store, adopted again\n\nhandleGiveBack gives a table taken over back to the platform it came from\n(the project's editors): its current metadata file, everything written\nhere included, is registered in the store's own catalog again (nothing\ncopied), and the project adopts it as before, read-only and followed.\nRefused unless the platform may write the store's catalog, while the\nproject still writes it (its last change must be TakeoverQuiet old), and\nwhen the store has a table by its name again.",
+        "description": "one taken over, back to its store, adopted again\n\nhandleGiveBack gives a table taken over back to the platform it came from\n(the project's editors in the table-adoption role): its current metadata file, everything written\nhere included, is registered in the store's own catalog again (nothing\ncopied), and the project adopts it as before, read-only and followed.\nRefused unless the platform may write the store's catalog, while the\nproject still writes it (its last change must be TakeoverQuiet old), and\nwhen the store has a table by its name again.",
         "operationId": "post_projects_name_tables_table_giveback",
         "parameters": [
           {
@@ -4138,7 +4138,7 @@
             "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
           }
         },
-        "summary": "Gives a table taken over back to the platform it came from (the project's editors): its current metadata file, everything written here included, is registered in the store's own catalog again (nothing copied), and the project adopts it as before, read-only and followed",
+        "summary": "Gives a table taken over back to the platform it came from (the project's editors in the table-adoption role): its current metadata file, everything written here included, is registered in the store's own catalog again (nothing copied), and the project adopts it as before, read-only and followed",
         "tags": [
           "tables"
         ]
@@ -4146,7 +4146,7 @@
     },
     "/api/projects/{name}/tables/{table}/takeover": {
       "post": {
-        "description": "an adopted table, the project's own from now\n\nhandleTakeover takes one of a project's adopted tables over (its editors,\nwho may write its tables): the table, which the other platform kept\nwriting until now, becomes the project's own where its files are, from\nits store's newest metadata file. From then on it's written, maintained\nand erased here as the project's other tables are, and no longer followed.\n\nRefused unless its store takes takeovers (the chart's externalStores[]\n.takeover: a key that may write its buckets), and while the other\nplatform still writes it: its last change there must be TakeoverQuiet\nold (default a day). Two writers would lose each other's changes, so the\noperator also says so, on the project's page, if the other platform\nwrites it after all.",
+        "description": "an adopted table, the project's own from now\n\nhandleTakeover takes one of a project's adopted tables over (its editors\nin the table-adoption role, see adopter): the table, which the other platform kept\nwriting until now, becomes the project's own where its files are, from\nits store's newest metadata file. From then on it's written, maintained\nand erased here as the project's other tables are, and no longer followed.\n\nRefused unless its store takes takeovers (the chart's externalStores[]\n.takeover: a key that may write its buckets), and while the other\nplatform still writes it: its last change there must be TakeoverQuiet\nold (default a day). Two writers would lose each other's changes, so the\noperator also says so, on the project's page, if the other platform\nwrites it after all.",
         "operationId": "post_projects_name_tables_table_takeover",
         "parameters": [
           {
@@ -4184,7 +4184,7 @@
             "description": "{\"error\": ..., \"request\": ...}: what's wrong, in words"
           }
         },
-        "summary": "Takes one of a project's adopted tables over (its editors, who may write its tables): the table, which the other platform kept writing until now, becomes the project's own where its files are, from its store's newest metadata file",
+        "summary": "Takes one of a project's adopted tables over (its editors in the table-adoption role, see adopter): the table, which the other platform kept writing until now, becomes the project's own where its files are, from its store's newest metadata file",
         "tags": [
           "tables"
         ]

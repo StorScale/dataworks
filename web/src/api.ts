@@ -16,7 +16,7 @@ export type Tool = {
 export type Brand = { name: string; logo: string };
 
 export type Session =
-  | { state: "signed-in"; user: User; tools: Tool[]; admin: boolean; projects: boolean; flow: boolean; semantic: boolean; pipelines: boolean; brand: Brand; usage?: boolean; governance?: boolean }
+  | { state: "signed-in"; user: User; tools: Tool[]; admin: boolean; projects: boolean; flow: boolean; semantic: boolean; pipelines: boolean; brand: Brand; usage?: boolean; governance?: boolean; adopt?: boolean }
   | { state: "refused"; user: User; error: string };
 
 // session is null when nobody is signed in.
@@ -27,6 +27,7 @@ export async function session(): Promise<Session | null> {
   if (res.status === 403) return { state: "refused", user: body.user, error: body.error };
   if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
   return { state: "signed-in", user: body.user, tools: body.tools, admin: !!body.admin, projects: !!body.projects, flow: !!body.flow, semantic: !!body.semantic, pipelines: !!body.pipelines,
+    usage: !!body.usage, governance: !!body.governance, adopt: !!body.adopt,
     brand: { name: body.brand?.name || "DataWorks", logo: body.brand?.logo || "" } };
 }
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { type ColumnProfile, SQLAnswer, TableStats, ago, classify, getClassification, getFlow, getHistory, getMaintenance, runMaintenance, runSQL, when } from "../api";
-import { Breakable, can, checkName, CheckPill, ErrorBanner, failing, limits, maskLabel, Spinner, usePoll, useProject } from "../lib";
+import { Breakable, can, checkName, CheckPill, ErrorBanner, failing, limits, maskLabel, Spinner, usePlatform, usePoll, useProject } from "../lib";
 import { FlowStrip } from "./Overview";
 import { Adopted, AdoptPanel } from "./Adopt";
 
@@ -34,13 +34,15 @@ export default function Data() {
   const table = tables.find((t) => t.name === params.get("table")) ?? tables[0];
   const tab: Tab = (TABS as readonly string[]).includes(params.get("tab") ?? "") ? (params.get("tab") as Tab) : "columns";
   const go = (t: string, tb: Tab = "columns") => setParams(tb === "columns" ? { table: t } : { table: t, tab: tb });
-  // Adopted tables (tables.adopt), and adopting more: the project's editors, who may write its tables.
+  // Adopted tables (tables.adopt), and adopting more: the project's editors (who may write its tables)
+  // who also hold the platform's table-adoption role; others see the adoptions, and change nothing.
   const adopts = spec?.tables?.adopt ?? [];
-  const canWrite = can(view, "write-tables");
+  const { adopt: mayAdopt } = usePlatform();
+  const adopter = can(view, "write-tables") && !!mayAdopt;
   const waiting = adopts.filter((a) => !tables.some((t) => t.name === a.table));
   const changed = () => { reload(); flow.reload(); };
   const adoptPanel = adopting && <AdoptPanel project={name} adopted={adopts} onClose={() => setAdopting(false)} onAdopted={() => { setAdopting(false); changed(); }} />;
-  const adoptButton = canWrite && !adopting && <button className="btn small" onClick={() => setAdopting(true)} data-testid="adopt">Adopt tables</button>;
+  const adoptButton = adopter && !adopting && <button className="btn small" onClick={() => setAdopting(true)} data-testid="adopt">Adopt tables</button>;
 
   if (flow.error && !flow.data) return <div className="page"><ErrorBanner error={flow.error} /></div>;
   if (!flow.data) return <div className="page"><Spinner /></div>;
@@ -72,7 +74,7 @@ export default function Data() {
       <div className="split">
         <nav className="side side-list" aria-label="Tables" data-testid="tables">
           <p className="eyebrow">Tables</p>
-          {canWrite && !adopting && (
+          {adopter && !adopting && (
             <div style={{ padding: "0 12px 8px" }}>
               <button className="linkish small" onClick={() => setAdopting(true)} data-testid="adopt">+ Adopt tables</button>
             </div>
@@ -103,7 +105,7 @@ export default function Data() {
                 {into[0]?.pipeline && <> · made by <Link to={`../pipelines?pipeline=${into[0].pipeline}`} relative="path" className="mono">{into[0].pipeline}</Link></>}
               </p>
               {adopts.find((a) => a.table === table.name) && (
-                <Adopted key={table.name} project={name} adoption={adopts.find((a) => a.table === table.name)!} canWrite={canWrite} onChanged={changed} />
+                <Adopted key={table.name} project={name} adoption={adopts.find((a) => a.table === table.name)!} adopter={adopter} onChanged={changed} />
               )}
               {narrowed && (
                 <div className={`banner ${reader ? "warn" : "info"}`} style={{ marginBottom: 12 }} data-testid="limits">

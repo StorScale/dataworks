@@ -35,6 +35,7 @@ spec:
           {{- include "storscale.envFrom" $root | nindent 10 }}
           env:
             - {name: STORSCALE_REVISION, value: {{ $root.Release.Revision | quote }}}
+            - {name: ADOPTION_GROUPS, value: {{ join "," $root.Values.adoption.groups | quote }}}   # realm.py makes them (the table-adoption role's)
             - {name: STORSCALE_SAMPLE_TRAFFIC, value: {{ $root.Values.monitoring.sampleTraffic | quote }}}
             - {name: STORSCALE_EXAMPLES, value: {{ $root.Values.examples.users | toString | quote }}}   # the example people and the sales project
             {{- if include "storscale.store.external" $root }}

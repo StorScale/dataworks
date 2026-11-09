@@ -122,6 +122,10 @@ type config struct {
 	// ProductCertifierGroups certify data products (use case 10.3): the
 	// governance group; default the administrators.
 	ProductCertifierGroups []string
+	// AdoptionGroups adopt another platform's tables, take them over and
+	// give them back (ADOPTION_GROUPS: the table-adoption role), in the
+	// projects whose tables they may write; default data-migration.
+	AdoptionGroups []string
 	// Protection is what the catalog's tags mean (12.5), as the operator
 	// applies it (PROTECTION_TAGS), and whether suggested tags are applied
 	// too: for the Governance page (12.9), which shows it.
@@ -211,6 +215,7 @@ func configFromEnv(get func(string) string) (config, error) {
 		TakeoverQuiet:          durationOr(or("TAKEOVER_QUIET", "24h"), 24*time.Hour),
 		DeliveryKeepFor:        or("DELIVERY_KEEP_FOR", "7y"),
 		ProductCertifierGroups: list("PRODUCT_CERTIFIER_GROUPS", or("PLATFORM_ADMIN_GROUPS", "engineers")),
+		AdoptionGroups:         list("ADOPTION_GROUPS", "data-migration"),
 		ErasureDeadlineDays:    atoi(or("ERASURE_DEADLINE_DAYS", "45"), 45),
 		LLMGatewayURL:          strings.TrimRight(get("LLM_GATEWAY_URL"), "/"), LLMGatewayMasterKey: get("LLM_GATEWAY_MASTER_KEY"),
 		OperatorURL: or("OPERATOR_URL", "http://platform-operator:8081"), DefaultStorage: get("LIMITS_PROJECT_STORAGE"),

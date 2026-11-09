@@ -12,6 +12,9 @@ what's the platform's:
     its mappers by name; fields and mappers someone added stay;
   - the platform's service accounts: the roles and groups realm.json gives
     them are added, none taken away.
+  - the groups the platform's built-in roles are given to (ADOPTION_GROUPS,
+    the table-adoption role's: data-migration): made if missing, with no one
+    put in them.
 
 Users, groups' members, policies and themes are never written. Nor the
 signing key: the import made it, and the realm keeps it. Identity providers
@@ -275,6 +278,9 @@ def main():
     for u in want.get("users", []):
         if u.get("serviceAccountClientId"):
             apply_service_account(kc, u)
+    # The groups the platform's own roles are given to (the table-adoption role's): made, never filled.
+    for name in filter(None, (g.strip() for g in env.get("ADOPTION_GROUPS", "data-migration").split(","))):
+        group_id(kc, name)
     apply_entra(kc)
     log("realm: the platform's parts are as realm.json says")
 

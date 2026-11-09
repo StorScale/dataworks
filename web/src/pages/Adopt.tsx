@@ -120,7 +120,7 @@ export function AdoptPanel({ project, adopted, onClose, onAdopted }: { project: 
 }
 
 // Adopted is an adopted table's banner: where it comes from, and taking it over (or no longer adopting it).
-export function Adopted({ project, adoption, canWrite, onChanged }: { project: string; adoption: Adoption; canWrite: boolean; onChanged: () => void }) {
+export function Adopted({ project, adoption, adopter, onChanged }: { project: string; adoption: Adoption; adopter: boolean; onChanged: () => void }) {
   const [confirm, setConfirm] = useState(false);
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -136,10 +136,10 @@ export function Adopted({ project, adoption, canWrite, onChanged }: { project: s
           it's this project's own now, where its files are.
         </div>
         {error && <ErrorBanner error={error} />}
-        {canWrite && !confirm && (
+        {adopter && !confirm && (
           <div><button className="btn small" onClick={() => setConfirm(true)} data-testid="giveback">Give back…</button></div>
         )}
-        {canWrite && confirm && (
+        {adopter && confirm && (
           <div className="stack" style={{ gap: 8 }} data-testid="giveback-confirm">
             <div className="small">
               Giving it back puts it in its store's catalog again as it is now, everything written here included, for the platform it came
@@ -160,13 +160,13 @@ export function Adopted({ project, adoption, canWrite, onChanged }: { project: s
         <strong>Adopted</strong> from <code>{adoption.from}</code>: read-only here while that platform writes it, and followed as it does.
       </div>
       {error && <ErrorBanner error={error} />}
-      {canWrite && !confirm && (
+      {adopter && !confirm && (
         <div className="row" style={{ gap: 12 }}>
           <button className="btn small" onClick={() => setConfirm(true)} data-testid="takeover">Take over…</button>
           <button className="linkish small" disabled={busy} onClick={() => run(() => stopAdopting(project, adoption.table))} data-testid="unadopt">Stop adopting</button>
         </div>
       )}
-      {canWrite && confirm && (
+      {adopter && confirm && (
         <div className="stack" style={{ gap: 8 }} data-testid="takeover-confirm">
           <div className="small">
             Taking it over makes it this project's own, where its files are: written, maintained and erased here, and no longer followed.

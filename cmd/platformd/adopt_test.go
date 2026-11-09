@@ -13,23 +13,26 @@ import (
 	"github.com/StorScale/dataworks/internal/store"
 )
 
-// A project's editors adopt tables of an external store, and stop adopting
-// one still followed; a reader can't, nor can anyone name a store the
-// install hasn't, adopt a table twice, or let go of one taken over.
+// A project's editors in the table-adoption role (the group data-migration)
+// adopt tables of an external store, and stop adopting one still followed; an
+// editor without the role can't (nor see what may be adopted), nor a reader
+// with it, nor can anyone name a store the install hasn't, adopt a table
+// twice, or let go of one taken over. An administrator may.
 func TestEditorsAdoptAndStopAdoptingTables(t *testing.T) {
-	sales, err := project.Parse([]byte(`{"metadata":{"name":"sales"},"spec":{"members":[{"user":"alice","role":"editor"},{"user":"erin","role":"reader"}],
+	sales, err := project.Parse([]byte(`{"metadata":{"name":"sales"},"spec":{"members":[{"user":"alice","role":"editor"},{"user":"erin","role":"reader"},{"user":"frank","role":"editor"}],
 		"tables":{"adopt":[{"table":"old","from":"lakehouse.sales.old","takenOver":"2026-11-04T12:00:00Z","takenOverBy":"bob"}]}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	members := []project.Person{{Username: "alice", Role: "editor"}, {Username: "erin", Role: "reader"}}
+	members := []project.Person{{Username: "alice", Role: "editor"}, {Username: "erin", Role: "reader"}, {Username: "frank", Role: "editor"}}
 	st := &connsKept{projectsKept: projectsKept{statuses: statuses{list: []*project.Status{{Name: "sales", Members: members}}},
 		specs: map[string]*project.Project{"sales": sales}}, conns: map[string]store.StoredConnection{}}
-	s := &server{cfg: config{Groups: []string{"analysts"}, AdminGroups: []string{"engineers"}, ExternalStores: []string{"lakehouse"}, TakeoverStores: []string{"lakehouse"}},
+	s := &server{cfg: config{Groups: []string{"analysts", "engineers"}, AdminGroups: []string{"engineers"}, AdoptionGroups: []string{"data-migration"}, ExternalStores: []string{"lakehouse"}, TakeoverStores: []string{"lakehouse"}},
 		store: st, now: time.Now, log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		tokenUser: func(raw string) (string, error) { return raw, nil }, sessions: map[string]*session{}}
-	for _, n := range []string{"alice", "erin"} {
-		s.sessions[n] = &session{User: user{Username: n, Groups: []string{"analysts"}}, Expires: time.Now().Add(time.Hour)}
+	for n, groups := range map[string][]string{"alice": {"analysts", "data-migration"}, "erin": {"analysts", "data-migration"},
+		"frank": {"analysts"}, "bob": {"engineers"}} {
+		s.sessions[n] = &session{User: user{Username: n, Groups: groups}, Expires: time.Now().Add(time.Hour)}
 	}
 	h := s.routes()
 	call := func(who, method, path, body string) (int, string) {
@@ -42,11 +45,27 @@ func TestEditorsAdoptAndStopAdoptingTables(t *testing.T) {
 	}
 	adopts := func() *project.Tables { return st.specs["sales"].Spec.Tables }
 
+	// An editor without the role: nothing, not even what may be adopted; the refusal names the group.
+	for _, c := range [][3]string{
+		{"GET", "/api/projects/sales/adoptable", ""},
+		{"POST", "/api/projects/sales/adopt", `{"tables":[{"table":"orders","from":"lakehouse.sales.orders"}]}`},
+		{"DELETE", "/api/projects/sales/adopt/old", ""},
+		{"POST", "/api/projects/sales/tables/old/takeover", ""},
+		{"POST", "/api/projects/sales/tables/old/giveback", ""},
+	} {
+		if code, body := call("frank", c[0], c[1], c[2]); code != http.StatusForbidden || !strings.Contains(body, "table-adoption") || !strings.Contains(body, "data-migration") {
+			t.Errorf("an editor without the role, %s %s: %d %s", c[0], c[1], code, body)
+		}
+	}
+	if code, body := call("bob", "GET", "/api/projects/sales/adoptable", ""); code != http.StatusOK {
+		t.Errorf("an administrator: %d %s", code, body)
+	}
+
 	if code, body := call("alice", "GET", "/api/projects/sales/adoptable", ""); code != http.StatusOK || !strings.Contains(body, `"name":"lakehouse"`) || !strings.Contains(body, `"takeover":true`) {
 		t.Errorf("the stores: %d %s", code, body)
 	}
 	if code, _ := call("erin", "POST", "/api/projects/sales/adopt", `{"tables":[{"table":"orders","from":"lakehouse.sales.orders"}]}`); code != http.StatusForbidden {
-		t.Errorf("a reader adopts: %d", code)
+		t.Errorf("a reader in the role adopts: %d", code)
 	}
 	if code, body := call("alice", "POST", "/api/projects/sales/adopt", `{"tables":[{"table":"orders","from":"elsewhere.sales.orders"}]}`); code != http.StatusUnprocessableEntity {
 		t.Errorf("a store the install hasn't: %d %s", code, body)

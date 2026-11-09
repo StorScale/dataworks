@@ -233,6 +233,8 @@ func (s *server) builtInPlatformRoles() []project.Role {
 			Scope: project.ScopePlatform, Groups: s.cfg.ProductCertifierGroups, BuiltIn: true},
 		{Name: "data-protection", Description: "Approves deliveries of personal data, finds what was sent about a person, records erasures",
 			Permissions: []string{project.PermProtectPersons, project.PermSeeGovernance}, Scope: project.ScopePlatform, Groups: s.cfg.DeliveryApproverGroups, BuiltIn: true},
+		{Name: "table-adoption", Description: "Adopts tables from another platform's catalog, takes them over and gives them back, in the projects whose tables they may write",
+			Permissions: []string{project.PermAdoptTables}, Scope: project.ScopePlatform, Groups: s.cfg.AdoptionGroups, BuiltIn: true},
 	}
 }
 

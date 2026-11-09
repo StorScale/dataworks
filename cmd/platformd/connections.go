@@ -91,6 +91,28 @@ func (s *server) editorOf(w http.ResponseWriter, r *http.Request, perm, what str
 	return sess, v
 }
 
+// adopter is editorOf for adopting tables, taking them over and giving them
+// back: the project's tables' editors (write-tables) who also hold the
+// platform's adopt-tables (the table-adoption role, ADOPTION_GROUPS), or an
+// administrator. A refusal for the role is in the audit log.
+func (s *server) adopter(w http.ResponseWriter, r *http.Request, action, what string) (*session, *projectView) {
+	sess, v := s.editorOf(w, r, project.PermWriteTables, what)
+	if v == nil {
+		return nil, nil
+	}
+	if !s.platformCan(r.Context(), sess.User, project.PermAdoptTables) {
+		groups := s.platformGroupsWith(r.Context(), project.PermAdoptTables)
+		why := "adopting and taking over tables takes the platform's table-adoption role (" + project.PermAdoptTables + ")"
+		if len(groups) > 0 {
+			why += ": the group " + strings.Join(groups, " or ")
+		}
+		s.recordRefusal(r, sess.User.Username, action, "project:"+v.Name, why)
+		s.fail(w, r, http.StatusForbidden, why)
+		return nil, nil
+	}
+	return sess, v
+}
+
 // handlePutConnection adds a connection (POST, a new name: the project's
 // and a dash first) or gives an existing one new values (PUT: a value left
 // empty stays as it was; rotating a token is pasting the new one).
