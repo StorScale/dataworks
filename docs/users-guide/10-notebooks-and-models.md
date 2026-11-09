@@ -530,7 +530,7 @@ Each server start puts them in `work/templates/`: `tables.ipynb`, `churn.ipynb`,
 
 The same work done two ways, side by side, on the guide's `retail` project: it reads `uploads_orders` and makes and changes its own table, `customer_tiers` (and, from Spark, `customer_tier_summary`).
 
-- **SQL, through Trino** (`buckets_lake.sql`): read and aggregate; make a table (`CREATE TABLE IF NOT EXISTS ... AS SELECT ... WITH NO DATA`); `INSERT`, `UPDATE`, `DELETE`; `MERGE` to update the rows that are there and insert the rest; a few rows from pandas as `VALUES`; the table's snapshots (`"customer_tiers$snapshots"`) and reading it as it was (`FOR VERSION AS OF`). Row filters and masks apply; answers have at most 100,000 rows.
+- **SQL, through Trino** (`buckets_lake.sql`): read and aggregate; make a table (`CREATE TABLE IF NOT EXISTS ... AS SELECT ... WITH NO DATA`); `INSERT`, `UPDATE`, `DELETE`; `MERGE` to update the rows that are there and insert the rest; a few rows from pandas as `VALUES`; the table's history (its changes, as the History tab lists them) and reading it as it was (`"customer_tiers#<commit>"`). Row filters and masks apply; answers have at most 100,000 rows.
 - **Spark** (`buckets_lake.spark`): a session on the tables named, with a new table made by `create=`; read with DataFrames; replace a table's rows (`writeTo(...).overwritePartitions()`); `MERGE INTO` from a DataFrame (a temporary view), `UPDATE` and `DELETE FROM`. Only tables you read whole.
 
 Change `PROJECT`, `ORDERS` and the two tables' names in the first code cell for your own. Its last cell, commented out, drops the two tables.

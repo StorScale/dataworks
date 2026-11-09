@@ -257,7 +257,7 @@ try:
             PROJECT, SCHEMA, ORDERS, TIERS, SUMMARY = "sales", "sales", "template_orders", "template_tiers", "template_tier_summary"
     out["tiers"] = buckets_lake.sql(PROJECT, f"SELECT tier, count(*) AS n FROM {TIERS} GROUP BY tier").set_index("tier")["n"].to_dict()
     out["summary"] = len(buckets_lake.sql(PROJECT, f"SELECT * FROM {SUMMARY}"))
-    out["snapshots"] = len(buckets_lake.sql(PROJECT, f\'SELECT * FROM "{TIERS}$snapshots"\'))
+    out["changes"] = len(changes(TIERS))   # the template's own: the History tab's list
 except Exception as e:
     out["error"] = f"{type(e).__name__}: {str(e)[:1200]}"
 print(json.dumps(out))
@@ -443,8 +443,8 @@ def main():
         # After it: customer 1 (1,150), 2 (120) and 3 (80, new in September); Spark's merge gives them gold, bronze, bronze,
         # but for the two key accounts the pandas fix made (1 and 2), which it leaves.
         check("the tables template runs top to bottom: SQL and Spark each read and change a table (template_tiers)",
-              not tt.get("error") and tt.get("tiers") == {"key account": 2, "bronze": 1} and tt.get("summary") >= 2 and tt.get("snapshots", 0) >= 4,
-              tt.get("error") or f"{tt.get('cells')} cells; tiers {tt.get('tiers')}, summary {tt.get('summary')} rows, {tt.get('snapshots')} snapshots")
+              not tt.get("error") and tt.get("tiers") == {"key account": 2, "bronze": 1} and tt.get("summary") >= 2 and tt.get("changes", 0) >= 4,
+              tt.get("error") or f"{tt.get('cells')} cells; tiers {tt.get('tiers')}, summary {tt.get('summary')} rows, {tt.get('changes')} changes")
         for t in ("template_orders", "template_tiers", "template_tier_summary"):
             sql("bob", f"DROP TABLE IF EXISTS {t}", "iceberg", "sales")
         check("a table with a row filter or mask for the person isn't Spark's: alice reads orders through Trino only",
