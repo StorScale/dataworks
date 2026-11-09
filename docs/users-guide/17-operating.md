@@ -12,6 +12,8 @@ In this chapter:
 - [Usage and cost](#usage-and-cost)
 - [Limits](#limits)
 - [Table maintenance](#table-maintenance)
+- [External stores](#external-stores)
+- [The platform's files on a company's store](#the-platforms-files-on-a-companys-store)
 - [Backups and restore](#backups-and-restore)
 - [Upgrades](#upgrades)
 - [Buckets capacity](#buckets-capacity)
@@ -85,7 +87,7 @@ trino:
 ```
 
 ```bash
-helm install storscale oci://ghcr.io/storscale/charts/storscale-platform --version 0.31.0 \
+helm install storscale oci://ghcr.io/storscale/charts/storscale-platform --version 0.41.0 \
   -n storscale --create-namespace -f platform.yaml --set-file global.ca.certs=root-ca.pem
 kubectl -n storscale get pods,jobs,projects -w      # the first install takes 10 to 20 minutes
 helm test storscale -n storscale --logs --timeout 90m
@@ -120,7 +122,7 @@ privileged pods, but it must reach the base images' registries (Docker Hub, quay
 `ghcr.io` and `kubeflow.github.io` (its dependencies). Install from it as from the public chart:
 
 ```bash
-helm install storscale oci://harbor.example.internal/<project>/charts/storscale-platform --version 0.34.0 \
+helm install storscale oci://harbor.example.internal/<project>/charts/storscale-platform --version 0.41.0 \
   -n storscale --create-namespace -f platform.yaml --set-file global.ca.certs=root-ca.pem
 ```
 
@@ -128,7 +130,7 @@ An install from `ghcr.io` moves to Harbor at its next upgrade, its chart and ima
 
 ```bash
 storscale upgrade --context <cluster> --chart oci://harbor.example.internal/<project>/charts/storscale-platform \
-  --version 0.34.0 --ca-file root-ca.pem --set images.registry=harbor.example.internal/<project> --dry-run
+  --version 0.41.0 --ca-file root-ca.pem --set images.registry=harbor.example.internal/<project> --dry-run
 ```
 
 The `--set images.registry` is kept with the install's values, so later upgrades take Harbor's images too. The nodes
@@ -523,8 +525,8 @@ storscale backup --context <cluster>                     # one now; then nightly
 ### Set up
 
 ```bash
-storscale upgrade --context <cluster> --version 0.31.0 --dry-run   # check; show the Project definition's changes
-storscale upgrade --context <cluster> --version 0.31.0             # then do it
+storscale upgrade --context <cluster> --version 0.41.0 --dry-run   # check; show the Project definition's changes
+storscale upgrade --context <cluster> --version 0.41.0             # then do it
 ```
 
 | Flag | What |
@@ -545,7 +547,7 @@ storscale upgrade --context <cluster> --version 0.31.0             # then do it
 1. It checks the release isn't mid-upgrade (`another install, upgrade or rollback is under way`), isn't going backwards (`... is older than the installed ...`, unless `--force`), that Helm is 3.14 or later, and that the release's images are published where the install takes them from (`images.registry`: a `--set`, else the installed value, else the chart's).
 2. It applies the release's **Project definition** (the CRD), which Helm never upgrades. Without it Kubernetes silently drops whatever fields the old definition lacks from every project.
 3. It upgrades the chart keeping the installed values (`--reset-then-reuse-values`, so the new release's defaults apply to new settings), with the images pinned to the release.
-4. It waits for every service to roll out and be ready, then prints `Upgraded storscale from 0.30.0 to 0.31.0 (revision N).` If anything fails it prints the `helm rollback` that undoes it.
+4. It waits for every service to roll out and be ready, then prints `Upgraded storscale from 0.40.0 to 0.41.0 (revision N).` If anything fails it prints the `helm rollback` that undoes it.
 
 The CHANGELOG's *Upgrading from ...* paragraph says what each release needs. A `--dry-run` to the version already installed changes nothing.
 

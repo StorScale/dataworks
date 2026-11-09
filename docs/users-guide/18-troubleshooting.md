@@ -11,9 +11,11 @@ In this chapter:
 - [Projects and their spec](#projects-and-their-spec)
 - [Connections](#connections)
 - [Uploads and imports](#uploads-and-imports)
+- [Adopted tables](#adopted-tables)
 - [Pipelines](#pipelines)
 - [SQL, metrics and limits](#sql-metrics-and-limits)
 - [Access and protection](#access-and-protection)
+- [The table catalog (Nessie)](#the-table-catalog-nessie)
 - [History, tags and maintenance](#history-tags-and-maintenance)
 - [Releases](#releases)
 - [Flows](#flows)
@@ -21,6 +23,7 @@ In this chapter:
 - [Deliveries](#deliveries)
 - [Privacy: search and erasure](#privacy-search-and-erasure)
 - [AI: the gateway, agents, knowledge banks, apps](#ai-the-gateway-agents-knowledge-banks-apps)
+- [Spark in notebooks](#spark-in-notebooks)
 - [Models](#models)
 - [Roles and templates](#roles-and-templates)
 - [Audit, usage, governance and health](#audit-usage-governance-and-health)
@@ -143,6 +146,22 @@ Saving a spec (the **Edit** page's **Save**, or `PUT /api/projects/{name}`) chec
 
 A files import that fails with `Forbidden` in its run log reading the landing area: the project's pipelines can't read it. Since 0.31.0 an import gives the project pipelines; on an older project, add `pipelines` to its spec. A table whose dates were imported as text before 0.31.0 needs its import's **Reset** (the Imports tab) to take dates.
 
+## Adopted tables
+
+Adopting another platform's tables, taking them over and giving them back ([Getting data in](03-data-in.md#adopted-tables-another-platforms-iceberg-tables-where-they-are)).
+
+| Message | Means | Do |
+|---|---|---|
+| 403 `adopting and taking over tables takes the platform's table-adoption role (adopt-tables): the group data-migration` | You edit the project, but aren't in the platform role `table-adoption`; the refusal is in the audit log. Editors without it don't see **Adopt tables**, **Take over…** or **Give back…** | An administrator puts you in the group the message names (`adoption.groups`; [Roles](16-roles.md#platform-roles)); then sign out and in again |
+| `no external store <s> (the chart's externalStores)` | | An administrator sets the store up ([Operating](17-operating.md#external-stores)) |
+| `the project already adopts <store>.<schema>.<table>, or a table by the name <t>` | | Give it another name |
+| `<t> was taken over: it's the project's own now, dropped as its other tables are` | **Stop adopting** a table taken over | Drop it in SQL, or give it back |
+| `the store <s> takes no takeovers: its administrator gives it a key that may write its buckets first (the chart's externalStores[].takeover)` | | An administrator sets `takeover.secret` |
+| `<t> is still written there: its last change was ... Stop its writer first.` | The other platform wrote it within `TAKEOVER_QUIET` (a day) | Stop its jobs, and take it over a day later |
+| `<t> is still written here: ... Stop its pipelines first.`, `the store has a table <t> again ...: rename one of them first` | Giving back | Stop the project's writers; rename one of the two tables |
+| `the platform may not write the store <s>'s catalog (the chart's externalStores[].catalog.write), so nothing can be given back there` | | An administrator sets `catalog.write` |
+| `Access Denied` writing a table taken over, on 0.41.0 or before | Its project's Ranger policies kept it read-only after the takeover | Upgrade: the operator gives it the project's writers' policies |
+
 ## Pipelines
 
 | Message | Means | Do |
@@ -178,6 +197,20 @@ The SQL tab, metrics and assistants go through the metrics and SQL service (sema
 | `the action is confirm or remove` | | |
 
 A column you expect to read whole shows hashed or masked: it's tagged `personal`, `financial` or `health` and you're not excepted ([Access and protection](04-access-and-protection.md)). The project's alerts say *<t>.<c> looks personal: the catalog tagged it, and it's masked* until someone confirms or removes the tag.
+
+## The table catalog (Nessie)
+
+The table catalog answers the platform's own services alone (Trino, platformd, the operator, the copies, the imports and
+Nessie's GC), signed in as its catalog account. People, their notebooks, Spark's executors and the pipelines' code reach the
+tables through Trino, under Ranger's rules ([Access and protection](04-access-and-protection.md)).
+
+| What you see | Means | Do |
+|---|---|---|
+| `401` from `http://nessie:19120/...` | A call with no token | Query through Trino instead: the **SQL** tab, `buckets_lake.sql()`, a JDBC client |
+| `403`, `... is not allowed for role '<you>' ...` (Iceberg's REST API answers the same refusal as a `500`) | A call with a person's own token, or any account but the catalog's | The same: Trino, or Spark through `buckets_lake.spark()` for the tables you read whole |
+| A call to Nessie from a notebook or a pipeline's pod hangs and times out (Kubernetes) | The chart's network policy lets only the platform's services reach it | The same |
+| A script or tool of your own that called Nessie stopped working after 0.41.0 | | Give it the catalog account's token (client credentials, client `lakehouse-catalog`, secret `CATALOG_CLIENT_SECRET` in `storscale-env`), or have it go through Trino |
+| A health check of Nessie fails after 0.41.0 | Its health is on its management port now | Check `http://nessie:9000/q/health/ready` |
 
 ## History, tags and maintenance
 
@@ -295,6 +328,22 @@ A column you expect to read whole shows hashed or masked: it's tagged `personal`
 | `a question app answers questions: ask it`, `only a question app is asked` | | |
 | `asking the model: ...`, `the model couldn't be asked: ...` | The gateway refused (the guardrail, a budget) or failed | The message says which |
 
+## Spark in notebooks
+
+Distributed Spark, on Kubernetes ([Notebooks and models](10-notebooks-and-models.md#distributed-spark)). A session gets only
+the tables you read whole, with no row filter or column mask for you, and writes only those you may change.
+
+| Where | Message | Do |
+|---|---|---|
+| `spark()` | `RuntimeError: this notebook has no Spark: start it with the Distributed Spark profile ...` | Restart your server with that profile (**File → Hub Control Panel**). Compose has no Spark |
+| `spark()` | `PermissionError: there's no table you read whole, so Spark has nothing to read ...` | Use `sql()`; `buckets_lake.spark_skipped` says why each was left out |
+| `spark()` | 413 `your N tables don't fit in one session's credentials ...` | Name the tables: `spark(tables=[...])` |
+| `spark()` | 503 `this install gives Spark no credentials (no SPARK_S3_ACCESS_KEY or STORE_URL)` | An install problem: setup makes the Spark account |
+| Spark | `ForbiddenException: sales.orders isn't one of this session's tables ...` | It has a row filter or mask for you (`spark_skipped`), or the session named other tables: read it with `sql()` |
+| Spark | `ForbiddenException: a Spark session doesn't make, drop or rename tables ...` | Make it with `spark(create=...)`; drop or rename it in SQL |
+| Spark | `NotAuthorizedException: ... the session's grant has expired` | Start a new session: `buckets_lake.spark()` (credentials last `credentialHours`, 12 by default) |
+| `spark(create=...)` | `PermissionError: Trino didn't make <table> as you: ...` | Make it in a project where you may make tables |
+
 ## Models
 
 | Message | Means | Do |
@@ -313,7 +362,7 @@ A column you expect to read whole shows hashed or masked: it's tagged `personal`
 
 | Message | Means | Do |
 |---|---|---|
-| `<r> is the install's (its settings' groups): define another` | finance, governance and data-protection are built in | |
+| `<r> is the install's (its settings' groups): define another` | finance, governance, data-protection and table-adoption are built in | |
 | `<r> is a project's role: remove it first to make it another kind` | | |
 | `the projects <p> give <r>: change their members first` | A role in use can't be removed | |
 | `the install has no GitLab for templates' repos (GITLAB_URL, GITLAB_GROUP, GITLAB_TOKEN): leave repo out` | | Set `templates.gitlab` ([Operating](17-operating.md#the-installs-settings)) |

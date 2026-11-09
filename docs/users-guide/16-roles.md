@@ -310,7 +310,7 @@ Administrators define, change and remove platform roles.
 ### Limits and gotchas
 
 - **"a platform role is given to at least one Keycloak group"**; **"no permission "read" for a platform role: they're
-  [see-all-usage see-governance certify-products protect-personal]"**; **""data protection" isn't a Keycloak group's name"**.
+  [see-all-usage see-governance certify-products protect-personal adopt-tables]"**; **""data protection" isn't a Keycloak group's name"**.
 - A platform role is never a project's: a project can't give it to its members.
 - A platform role gives nothing inside a project's tables: a privacy officer who must read personal data needs a project
   role too (or to be in a protection rule's `except`; see [Access and protection](04-access-and-protection.md)).
@@ -354,7 +354,7 @@ platform role.
 | `data-protection`'s groups | `deliveries.approverGroups` | `DELIVERY_APPROVER_GROUPS` (`engineers,analysts` in `stack/compose.yaml`) | the administrators' groups |
 | `table-adoption`'s groups | `adoption.groups` (a list) | `ADOPTION_GROUPS` | `data-migration` |
 
-The defined roles are kept in the platform's bucket, `roles/roles.json` (`STORE_BUCKET`: `dataworks-platform`, or `storscale-platform` on an install made before 0.39.0):
+The defined roles are kept in the platform's bucket, `roles/roles.json` (`STORE_BUCKET`: `dataworks-platform`, or `storscale-platform` on an install made before 0.39.0 and on Compose):
 the operator and platformd both read it, and backups keep it with the bucket.
 
 ## Limits and gotchas

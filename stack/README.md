@@ -9,9 +9,9 @@ This directory is DataWorks on one machine: a Docker Compose project. `storscale
 | `platform-operator` | Applies projects to Keycloak, Ranger, Buckets and Nessie, and keeps them that way | |
 | `keycloak` | Sign-in for everything; realm `lakehouse`, with a signing key kept in a volume | `/sso/` |
 | `buckets` | Buckets, one server with four drives (EC 2+2) | `s3.` |
-| `nessie`, `trino` | The Iceberg catalog and the SQL engine | Trino: `https://localhost:8443` |
+| `nessie`, `trino` | The Iceberg catalog, which answers only the platform's own services, signed in as its catalog account (`lakehouse-catalog`); and the SQL engine, through which people reach the tables | Trino: `https://localhost:8443` |
 | `ranger-admin` (with `ranger-db`, `ranger-solr`) | Who may query what, and the audit log | `access.` |
-| `jupyterhub` | A notebook server per person | `/notebooks/` |
+| `jupyterhub` | A notebook server per person (Distributed Spark beside it on Kubernetes only: the `spark` image is built here for kind, never started) | `/notebooks/` |
 | `superset` (with `superset-db`) | SQL Lab and dashboards | `/dashboards/` |
 | `airflow` (with its scheduler, DAG processor and `airflow-db`) | Pipelines | `/pipelines/` |
 | `prometheus`, `grafana` | Monitoring; Grafana signs people in with Keycloak | `/monitoring/` |
@@ -76,7 +76,7 @@ OpenMetadata 2.0.4 is trimmed to fit a laptop:
 
 Every 20 seconds, `catalog-sync` does three things:
 - **Tables:** it ingests Trino's tables, as the service `trino`, through the service user `openmetadata`. Ranger lets that user read every table, to describe and check it.
-- **Checks:** it runs each project's checks (`spec.tables.checks`: `unique`, `notNull`, `rowCount`) as OpenMetadata tests.
+- **Checks:** it runs each project's checks (`spec.tables.checks`: `unique`, `notNull`, `rowCount`, `acceptedValues`, `range`, `regex`, `references`, `sql`) as OpenMetadata tests.
 - **The bot's token:** it shares the catalog's ingestion-bot token in the `catalog` volume.
 
 Two services use that token:
@@ -96,14 +96,14 @@ Each project can have a semantic model, kept in the project store as `semantic/<
 - **Querying:** people (in the platform) and agents (over MCP) ask for metrics by name. `semanticd` compiles each request to Trino SQL and runs it **as whoever asked**, with their own Keycloak token. Ranger's policies, row filters and masks therefore apply to an agent exactly as to the person it works for.
 - **Auditing:** each query starts with a comment naming the agent (the token's client) and the person, and Ranger's audit log keeps it.
 - **Agents' access:** agents connect to `http://storscale.localhost:8800/mcp`, an OAuth resource server whose metadata names Keycloak. They sign in through Keycloak's client `storscale-agent`, as the person using them. That client's tokens are for both the MCP server and Trino.
-  - The tools are `list_projects`, `list_metrics`, `query_metrics` and `explain_query`.
+  - The tools are `list_projects`, `list_metrics`, `query_metrics` and `explain_query`; the business terms and data products (`list_terms`, `describe_term`, `search_terms`, `list_products`, `describe_product`, `query_product`); `list_runs`, `list_alerts` and `search_documents`; and, for agents given them, `list_tools`, `call_tool` and `ask_agent`.
   - In Claude Code: `claude mcp add --transport http storscale http://storscale.localhost:8800/mcp`.
 
 ## Memory
 
 The stack uses about 8 GB. The Java services' heaps are set explicitly (Keycloak, Nessie, Solr, OpenMetadata, OpenSearch, and Trino's 2 GB limit); without that, each JVM would size its heap from the machine's memory. Long-running services restart if they stop.
 
-Keycloak's signing key is made once, in the `keycloak-keys` volume, and kept. Tokens stay valid when Keycloak restarts, and Trino and Buckets keep the keys they've fetched. The realm itself is imported afresh on each start.
+Keycloak's signing key is made once, in the `keycloak-keys` volume, and kept. Tokens stay valid when Keycloak restarts, and Trino and Buckets keep the keys they've fetched. Keycloak runs in production mode on a database of its own: the realm (`keycloak/realm.json`) is imported only when there's none, and setup (`tools/setup/realm.py`) keeps the platform's own parts of it up to date.
 
 ## Where it comes from
 

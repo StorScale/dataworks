@@ -373,7 +373,7 @@ under their projects' rules.
 ```python
 import storscale
 
-p = storscale.Platform("http://storscale.localhost:8800")   # asks for your name and password, or reads STORSCALE_TOKEN
+p = storscale.Platform("http://storscale.localhost:8800")   # reads STORSCALE_TOKEN, or signs you in by a device code
 p.call("post_projects_name_semantic_query", {"metrics": ["revenue"], "group_by": ["order__region"]}, name="retail")
 ```
 

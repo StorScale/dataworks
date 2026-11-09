@@ -1,6 +1,6 @@
 # 3. Getting data in
 
-This chapter is for the people who bring a project's data onto the platform: an engineer adding a feed from an application or a database, an analyst uploading a spreadsheet, an administrator wiring up a project's sources. It covers every way in: files uploaded to the project's landing area and imported as tables; imports from a REST API, a database, Salesforce, Gong, HighSpot or SAP S/4HANA, each on a schedule; a database queried where it is, with no copy; a database copied by change capture; and the connections that hold the credentials all of these sign in with. Who may read what arrives is [chapter 4](04-access-and-protection.md); checking that it's right is [chapter 5](05-quality.md).
+This chapter is for the people who bring a project's data onto the platform: an engineer adding a feed from an application or a database, an analyst uploading a spreadsheet, an administrator wiring up a project's sources. It covers every way in: files uploaded to the project's landing area and imported as tables; imports from a REST API, a database, Salesforce, Gong, HighSpot or SAP S/4HANA, each on a schedule; a database queried where it is, with no copy; a database copied by change capture; another platform's Iceberg tables adopted where they are, taken over and given back; and the connections that hold the credentials all of these sign in with. Who may read what arrives is [chapter 4](04-access-and-protection.md); checking that it's right is [chapter 5](05-quality.md).
 
 In this chapter:
 

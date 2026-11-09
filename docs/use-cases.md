@@ -34,16 +34,18 @@ What people need to do, phase by phase, told as storyboards: who does what, fram
 - R6.3 A first-run Home for someone in no project, saying how to get access.
 - R6.4 Access requests: ask, approve or refuse in the project, with the result applied by the operator and recorded in the audit log.
 
-**Built (2026-10-26):** sign-in with Entra ID (R6.1), brokered by Keycloak: `sso.entra` names the tenant and the app registration, setup makes the identity provider from the tenant's discovery document, a person's username is their Entra login name's local part, and the app registration's roles put them in the platform's groups at each sign-in (Analyst: analysts; Engineer and Administrator: engineers), so a role taken away in Entra takes its groups away. The `entra` suite plays Entra with a stand-in realm. The example people stay beside it.
+**Built (2026-10-26):** sign-in with Entra ID (R6.1), brokered by Keycloak: `sso.entra` names the tenant and the app registration, setup makes the identity provider from the tenant's discovery document, a person's username is their Entra login name's local part, and the app registration's roles put them in the platform's groups at each sign-in (Analyst: analysts; Engineer and Administrator: engineers), so a role taken away in Entra takes its groups away. The `entra` suite plays Entra with a stand-in realm. The example people stay beside it, unless switched off (below).
 
-**Built (2026-10-07), a little:** Home tells someone in no project that they're in none, and to ask an administrator (R6.3's first part). Not yet: `examples.users: false` (R6.2: the chart has the setting, and nothing reads it yet) and access requests (R6.4), which wait for real users, as decided below.
+**Built (2026-11-05):** an install for real users only (R6.2): `examples.users: false` leaves the example people (alice, bob, carol) out of the realm a new install imports, and setup makes no sales project; the catalog's administrators are named in `catalog.admins` (bob when empty); setup's own checks no longer need the example people, and it makes the groups its Ranger policies name before anyone is in them (0.39.1). The end-to-end suites still sign in as the example people, so they run on an install that has them. With it, a script's token by a device code (2026-10-30), for people who sign in through Entra ID and have no password to give it.
+
+**Built (2026-10-07), a little:** Home tells someone in no project that they're in none, and to ask an administrator (R6.3's first part). Not yet: access requests (R6.4), which wait for real users, as decided below.
 
 **Decided (2026-10-16)**
 - The identity provider will be Entra ID. Until real users come, the platform stays in development: the example people stay, and corporate sign-in (R6.1) and turning the examples off (R6.2) wait.
 - The realm's ownership is split: the platform keeps its own parts (the tools' clients, its service accounts, its signing key, the settings it relies on) and applies them at each upgrade; the company owns the people, their sign-in and its policies, which an upgrade never writes (plan, "Phase 6: Keycloak for real use, how").
 
 **Open questions**
-- Do groups come from Entra ID (and the project maps them), or are they the platform's own?
+- Do groups come from Entra ID (and the project maps them), or are they the platform's own? (Answered 2026-10-26: the platform's own, `analysts` and `engineers`, which the app registration's roles put people in at each sign-in, `sso.entra.roles`; projects name those groups, or people.)
 - Who approves: a project's editors, a named owner, or administrators only?
 
 ### 6.2 An upgrade that loses nothing
@@ -555,9 +557,9 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 
 **Requirements**
 - R11.5 The canvas and the code are the same thing: a canvas opens from the repo's models, and a step changed by hand stays code.
-- R11.6 Large data later: the same canvas on Spark, for what Trino can't do in one query.
+- R11.6 Large data later: the same canvas on Spark, for what Trino can't do in one query. (Spark in notebooks built 2026-11-07: Distributed Spark beside each notebook, on Kubernetes, its executors started as jobs need them, on the tables a person reads whole; not yet on the canvas.)
 
-**Built (2026-10-19), for 11.1 and 11.2:** a project's Flows tab: input, select and rename, retype, filter, join, union, deduplicate, group by, pivot, unpivot, window, formula, a metric step on the company's definitions, and output, each compiled to its columns and SQL before anything runs and previewed on a sample in Trino as the person (R11.1); saved as dbt models and their DAG on a branch of the project's repo with a merge request, reviewed on a data branch (7.3) (R11.2); CSV, Excel, JSON-lines and Parquet uploads to the project's landing area, a CSV previewed, imported as a `files` import and used as an input (R11.3); merged, it runs as a pipeline with its checks as dbt tests and its table in the catalog with its lineage (R11.4); the canvas opens from the repo's models, a model changed by hand a code step from then on (R11.5). Not yet: incremental outputs, and Spark (R11.6).
+**Built (2026-10-19), for 11.1 and 11.2:** a project's Flows tab: input, select and rename, retype, filter, join, union, deduplicate, group by, pivot, unpivot, window, formula, a metric step on the company's definitions, and output, each compiled to its columns and SQL before anything runs and previewed on a sample in Trino as the person (R11.1); saved as dbt models and their DAG on a branch of the project's repo with a merge request, reviewed on a data branch (7.3) (R11.2); CSV, Excel, JSON-lines and Parquet uploads to the project's landing area, a CSV previewed, imported as a `files` import and used as an input (R11.3); merged, it runs as a pipeline with its checks as dbt tests and its table in the catalog with its lineage (R11.4); the canvas opens from the repo's models, a model changed by hand a code step from then on (R11.5). Not yet: incremental outputs, and Spark on the canvas (R11.6; Spark runs in notebooks since 2026-11-07).
 
 ### 11.3 alice cleans a column, and asks a model about another (added 2026-10-20)
 
@@ -680,7 +682,7 @@ Pipelines built on a canvas, as in Domo's Magic ETL or Dataiku's visual recipes,
 3. At 80% of the month's budget, frank and the project's owner get an alert.
 
 **Requirements**
-- R13.1 Usage attributed to projects: Trino (query to project, through the person or service account), Spark, Buckets storage, the LLM gateway. (Built 2026-10-21: Trino by the tables each query read (its HTTP event listener, to platformd), its CPU time, bytes read, who ran it and the costliest queries; storage sampled daily, tables' data files and the project's bucket; the gateway's spend. Spark left: nothing runs Spark per project yet.)
+- R13.1 Usage attributed to projects: Trino (query to project, through the person or service account), Spark, Buckets storage, the LLM gateway. (Built 2026-10-21: Trino by the tables each query read (its HTTP event listener, to platformd), its CPU time, bytes read, who ran it and the costliest queries; storage sampled daily, tables' data files and the project's bucket; the gateway's spend. Spark left: it runs in notebooks since 2026-11-07, a person's rather than a project's, and isn't counted.)
 - R13.2 A rate card (what a CPU-hour, a GB-month and a token cost), set by the install. (Built 2026-10-21: `usage.rates`; a token's price is the gateway's.)
 - R13.3 Budgets per project, with alerts. (The limits that cap a project's use are 6.8's.) (Built 2026-10-21: `cost.budget`, a project alert at 80% and 100%; the Usage tab for its editors, and a page of every project's for finance, `usage.viewerGroups`, and the administrators.)
 
@@ -742,7 +744,7 @@ A project's members are editors or readers, and its pipelines a service account;
 
 **Requirements**
 - R16.1 Roles defined by administrators: a name, a description and a set of the platform's permissions, kept by the platform (not per project), the built-in roles expressed as the same permissions. (Built 2026-10-22: the Roles page, Administration → Roles, from seventeen permissions; editor and reader shown as the same permissions; kept in the platform's bucket.)
-- R16.2 Custom roles given per project to people and Keycloak groups, and platform-wide to groups; the project spec names them (`members[].role`). (Built 2026-10-22, per project: a project's Edit page offers the defined roles beside editor and reader, for people and groups. Platform-wide, 2026-10-23: platform roles given to Keycloak groups on the Roles page, from four platform permissions (every project's usage, the Governance page, certifying products, protecting people's data); finance, the governance group and the data-protection approvers are the install's, from its settings.)
+- R16.2 Custom roles given per project to people and Keycloak groups, and platform-wide to groups; the project spec names them (`members[].role`). (Built 2026-10-22, per project: a project's Edit page offers the defined roles beside editor and reader, for people and groups. Platform-wide, 2026-10-23: platform roles given to Keycloak groups on the Roles page, from four platform permissions (every project's usage, the Governance page, certifying products, protecting people's data); finance, the governance group and the data-protection approvers are the install's, from its settings. A fifth, 2026-11-08: adopting, taking over and giving back tables (`adopt-tables`), the install's `table-adoption` role, given by default to a group of its own, `data-migration` (`adoption.groups`).)
 - R16.3 Each permission applied in every system the built-in roles reach (Ranger, Buckets, Keycloak, Airflow, Superset, MLflow, platformd), from one mapping, so a new permission is added in one place. (Built 2026-10-22: a group per custom role per project (`<project>-role-<name>`), named in Ranger's table, mask, row filter, tag and source policies, Buckets' policies and the project's Airflow by its permissions; each member's permissions in the project's status, which platformd and semanticd check. A data product's consumers' custom roles that read read it too (2026-10-23). Superset and the shared Airflow: what a role reads holds there, as each query runs in Trino as the person; Superset's own roles (who makes dashboards) and the shared Airflow's UI follow the platform-wide groups, and a project's pipelines are run from its Pipelines tab, which asks for run-pipelines.)
 - R16.4 Changes to a role carried to every project using it, audited; a role in use not deleted; the separation rules kept (who registers a model, agent or delivery change still can't approve it, whatever their role). (Built 2026-10-22: a change reaches every project giving the role within a minute (its hash covers the role's permissions), and is in the audit log with what it was; a role a project gives can't be removed.)
 
@@ -756,6 +758,12 @@ A project's members are editors or readers, and its pipelines a service account;
 **Requirements**
 - R-U.3 Project templates: a spec and a repo to copy, kept by the platform's administrators. (Built 2026-10-23: Administration → Templates; a project made from one gets a copy of its repo in the install's GitLab group, made by the platform, with a token of its own as the project's connection; "{project}" in the spec and the repo's files becomes the project's name.)
 - R-U.4 Shared libraries (code, recipes, checks) that projects use without copying. (Built 2026-10-23: a repo in the install's GitLab at a ref, read by the platform for whoever the realm signed in: a dbt package named in `packages.yml` (macros are the recipes, generic tests the checks), Python code on a pipeline's or notebook's path. A new ref reaches every project at its next run.)
+
+### Built beyond the storyboards
+
+- **Applications as a project's members** (2026-10-30): service accounts (`serviceAccounts`), an application's identity in one project, in a role, approved by an administrator other than its registrant; acting for the people signed in to it through Entra ID (`onBehalfOf`, 2026-11-04), under their own rules, for that project alone. A project's LLM gateway as OpenAI's API for such applications (2026-11-04).
+- **Another platform's tables, where they are** (2026-10-30): adopted tables (`tables.adopt`) from an external store, followed as that platform writes them; adopted from the Data page, taken over once that platform stops writing them, and given back (2026-11-04 and 05); since 2026-11-08 the work of the platform role `table-adoption` (R16.2).
+- **The platform's files on a company's own S3 store** (2026-11-04): `storage.external`, an existing MinIO in place of the platform's own Buckets.
 
 
 ## To decide, with the first teams

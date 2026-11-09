@@ -4,57 +4,74 @@ For whoever picks this up next, person or agent, on a machine that can reach
 the target cluster. Read this, then [plan.md](plan.md) and the
 [CHANGELOG](../CHANGELOG.md).
 
-## Where things stand (2026-10-24)
+## Where things stand (2026-11-08)
 
 - **Release 0.41.0** has phases 0 to 5 of the plan (the platform, its web app, projects, the
   catalog, the semantic layer with MCP for agents, and the Helm chart), ready for a real cluster:
   behind an ingress that ends TLS, with a private CA, on Buckets 1.20.4. It has these from
   phases 6 to 16 too ([plan.md](plan.md)'s phase table says what each phase has and lacks,
   and [use-cases.md](use-cases.md) each requirement, with the date it was built):
-  - **Phase 6, production-ready:** Keycloak on its own database; `storscale upgrade`; the Health
-    page, with alerts to administrators and to each project (Teams, Slack, email); table
-    maintenance and Nessie's GC; the audit log; backups and restore, into a new install too;
-    high availability, network policies and Pod Security; limits per project; the data as it
-    was (6.10); erasure under the CCPA and retention per table (6.9); profiling and more kinds
-    of check (6.11); Buckets' capacity (drives grown by the chart, more pools, a project told as
-    its bucket fills).
+  - **Phase 5, Kubernetes:** a Spark suite at last, in the `jupyterhub` suite's checks
+    (Distributed Spark's profile, its executors, and its credentials for the tables a person
+    reads whole).
+  - **Phase 6, production-ready:** Keycloak on its own database; corporate sign-in with Entra
+    ID, brokered by Keycloak, its app roles putting people in the platform's groups (6.1); an
+    install for real users only (`examples.users: false`, with `catalog.admins`); tokens for
+    scripts by a device code; `storscale upgrade`; the Health page, with alerts to
+    administrators and to each project (Teams, Slack, email); table maintenance and Nessie's GC;
+    the audit log; backups and restore, into a new install too; high availability, network
+    policies and Pod Security; the table catalog (Nessie) answering the platform's own catalog
+    account alone; limits per project; the data as it was (6.10); erasure under the CCPA and
+    retention per table (6.9); profiling and more kinds of check (6.11); Buckets' capacity
+    (drives grown by the chart, more pools, a project told as its bucket fills); the platform's
+    files on a company's own S3 store (`storage.external`).
   - **Phase 7, git-native projects:** pipelines from each project's repo, in an Airflow of its own
     on Kubernetes; dbt in the repo; a merge request's change built on its own data branch,
     GitLab told (7.3); the project as code, planned and applied by another (7.4); the
     Connections tab; a notebook scheduled from JupyterLab; VS Code and the ML libraries.
   - **Phase 8, getting data in:** databases queried where they are (8.3), copied by change
     capture (8.1), applications' data and uploaded files imported with dlt (8.2), Salesforce,
-    Gong, HighSpot and SAP S/4HANA (OData) from a form (8.4).
+    Gong, HighSpot and SAP S/4HANA (OData) from a form (8.4); another platform's Iceberg tables
+    adopted where they are (`tables.adopt`, from an external store), taken over once that
+    platform stops writing them, and given back.
   - **Phase 9, getting data out:** file deliveries over SFTP and S3, approved before they run
     (9.1), and the delivery log searched by a person's ID (9.2).
   - **Phase 10, the business layer:** the company's terms in a shared semantic model (10.1),
     Superset's datasets on it (10.2), certified data products read in place across projects,
     with a form to publish one (10.3), and assistants over MCP on them (10.4).
   - **Phase 11, the canvas:** a flow of steps saved as dbt models in a merge request, uploads as
-    inputs, a prepare step and an LLM step.
+    inputs, a prepare step and an LLM step. Spark in part: Distributed Spark in notebooks
+    (`notebooks.spark`), not yet on the canvas.
   - **Phase 12, governed AI:** the LLM gateway (LiteLLM on Microsoft Foundry, proven on a real
-    cluster, or the stand-in) with budgets and a guardrail; agents of a project's own, from a
-    notebook or a prompt, as tools of each other, with the project's own tools; semantic tests;
-    a new column of personal data protected by its tag; knowledge banks; each model call; the
-    Governance page.
+    cluster, or the stand-in) with budgets and a guardrail, and a project's gateway as OpenAI's
+    API (`/api/projects/{name}/llm/v1`); agents of a project's own, from a notebook or a prompt,
+    as tools of each other, with the project's own tools; semantic tests; a new column of
+    personal data protected by its tag; knowledge banks; each model call, and who asked it;
+    the Governance page.
   - **Phases 13 to 16:** usage and cost per project (13.1); a project's apps, the API reference
-    and the Python package (14.1, 14.3); MLflow per project, approval, batch scoring with
-    drift, a model as an API, models in the catalog (15.1); roles of the company's own, per
-    project and platform-wide (16.1).
+    and the Python package (14.1, 14.3); service accounts, an application's identity in one
+    project, which may act for the people signed in to it through Entra ID (`onBehalfOf`);
+    MLflow per project, approval, batch scoring with drift, a model as an API, models in the
+    catalog, notebook templates (15.1); roles of the company's own, per project and
+    platform-wide (16.1).
   - **Not yet placed, now built:** a new team's project from a template, and the company's
     shared libraries (U.2), with the install's GitLab.
+- **Unreleased, for 0.42.0:** adopting, taking over and giving back tables take the platform
+  role `table-adoption` (group `data-migration`, the chart's `adoption.groups`, made empty by
+  setup: put the people doing a move in it when upgrading); a table taken over is writable in
+  Ranger; the finance and governance groups see their pages in the menu again; a notebook
+  template on reading and changing tables (`tables.ipynb`).
 - **What's next** (the "Not yet" of each phase in [plan.md](plan.md), and the open questions in
   [use-cases.md](use-cases.md)):
-  - **Before real users:** corporate sign-in (Entra ID, brokered by Keycloak) and the example
-    users switched off (`examples.users` exists and nothing reads it yet), access requests,
-    and who approves them (6.1).
-  - **Hardening:** Buckets' encryption at rest, Pod Security's restricted standard, more than one
-    platformd (its sessions are in memory), a version matrix per release.
+  - **For real users:** access requests, and who approves them (6.1, R6.4).
+  - **Hardening:** Buckets' encryption at rest, Pod Security's restricted standard for the
+    release's namespace (Spark's own namespace has it), more than one platformd (its sessions
+    are in memory), a version matrix per release.
   - **Features left in built phases:** shares for partners (9.3); Power BI (10.2, to decide);
-    a Python step and Spark (11.3, 11.6; nothing runs on the Spark Operator yet); the assistant
-    on the SQL page (12.4); SAP HANA or BW as a database (8.4); a readers' Home per project and the
-    package on PyPI (14); the models on the Governance page; a DAG ID clash refused, not only
-    shown (7.2).
+    a Python step and Spark on the canvas (11.3, 11.6; the Spark Operator is installed and
+    nothing runs on it); Spark's use counted per project (13.1); the assistant on the SQL page
+    (12.4); SAP HANA or BW as a database (8.4); a readers' Home per project and the package on
+    PyPI (14); the models on the Governance page; a DAG ID clash refused, not only shown (7.2).
 - **CI passes on every way of running it:**
   - **`platform`** runs the Compose stack and every suite (`stack/tests/run.py`: the suites that
     share `sales` in a chain, those with projects of their own alongside; the `guide` suite and
@@ -190,13 +207,13 @@ project's repo token lasts a year (GitLab's most); renew it on the project's Con
   `llm.litellm.models` (the chart's values show Anthropic's models on Microsoft Foundry, and an
   embedding model for the knowledge banks).
 
-People's password (the example users alice, bob, carol):
+People's password (the example users alice, bob, carol, unless `examples.users: false`):
 `kubectl -n storscale get secret storscale-env -o jsonpath='{.data.LAKEHOUSE_USER_PASSWORD}' | base64 -d`.
 Every other secret is in the same Secret. They're generated on install and kept on upgrade.
 
 ## On a real cluster
 
-Items 1 to 3 work on one; 4 to 6 are still to do.
+Items 1 to 4 work on one; 5 and 6 are still to do in part.
 
 1. **One address, inside and out.** Every service uses the platform's public names:
    `domain`, plus `catalog.`, `access.` and `s3.` under it. Keycloak's tokens carry
@@ -222,9 +239,12 @@ Items 1 to 3 work on one; 4 to 6 are still to do.
    none. At each install and upgrade a setup step puts back the platform's own parts of it (its
    clients, service accounts and settings); people, groups and whatever an administrator adds
    stay (plan, "Phase 6: Keycloak for real use").
-4. **The example users** (alice, bob, carol) and their groups come from the realm, and
-   corporate sign-in (Entra ID) isn't connected yet. `examples.users` exists in values but
-   nothing reads it: it doesn't switch them off yet.
+4. **People:** the example users (alice, bob, carol) and the sales project come with the realm
+   on a first install. For real users only, set `examples.users: false` before the first install,
+   with `catalog.admins` (the catalog's administrators, bob otherwise) and corporate sign-in
+   (`sso.entra`: the company's Entra ID tenant and app registration, brokered by Keycloak; the
+   users' guide, Operating). On an existing install it stops making the sales project; the
+   example people already in its realm stay until removed in Keycloak.
 5. **Sizes:**
    - Buckets is one server with four drives (`buckets.servers`, `volumesPerServer`,
      `storage`). To grow it, see **Buckets' capacity** below.
@@ -317,7 +337,8 @@ the installed values, and a later `-f` without them is refused.
 ## Where the code is
 
 - `cmd/platformd`: the platform's backend, its API (`openapi.json`, kept current by a test)
-  and the web app's server; `web/`: the web app (React).
+  and the web app's server, Spark's catalog (`/internal/spark-catalog/`) among it; `web/`: the
+  web app (React).
 - `cmd/platform-operator` and `internal/reconcile`: projects applied to Keycloak, Ranger,
   Buckets, Nessie, Trino, Airflow and the LLM gateway, their scorings and servings, and
   Buckets' drives grown.
@@ -333,8 +354,8 @@ the installed values, and a later `-f` without them is refused.
   variants (`https.yaml`, `ha.yaml`, `templates.yaml`, ...); `storscale up --k8s` uses them.
 - `stack/`: the Compose stack and each service's image and configuration: semanticd and the
   MCP server (`stack/semantic`), catalog-sync (`stack/catalog/sync`), Airflow's image with the
-  platform's helpers for DAGs (`stack/airflow/image`), the notebook image with `buckets_lake`
-  and the model templates (`stack/jupyterhub/image`), the setup steps (`stack/tools/setup`),
+  platform's helpers for DAGs (`stack/airflow/image`), the notebook image with `buckets_lake`,
+  the notebook templates and Spark's image (`stack/jupyterhub/image`), the setup steps (`stack/tools/setup`),
   and the end-to-end suites (`stack/tests`, `guide.py` among them).
 - `stack/python`: the `storscale` Python package, the API from a script.
 - `docs/`: the [lab guide](guide.md) with its data (`docs/lab/`), the

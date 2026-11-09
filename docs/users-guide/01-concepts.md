@@ -23,6 +23,8 @@ In this chapter:
 
 The platform is a lakehouse with a web app in front of it. Data lives as Iceberg tables in Buckets (S3-compatible
 storage), catalogued by Nessie and queried through Trino. Apache Ranger decides, query by query, who may read what in Trino.
+Nessie answers the platform's own services alone: people reach the tables through Trino, or through a notebook's Spark for
+the tables they read whole ([Access and protection](04-access-and-protection.md)).
 Keycloak signs everyone in, once, for every tool. Around that core are the tools people work in: JupyterHub (notebooks),
 Superset (SQL Lab and dashboards), Airflow (pipelines), OpenMetadata (the catalog), Grafana (monitoring), MLflow (models) and
 an LLM gateway (models through a budget).
@@ -46,15 +48,16 @@ Everyone is a user in Keycloak, in the realm `lakehouse`. What a person may do c
 | The platform's groups | `PLATFORM_GROUPS` | `analysts,engineers` | May use the platform at all. Someone in none of these is shown "No access". |
 | The administrators' groups | `PLATFORM_ADMIN_GROUPS` | `engineers` | Administration, every project, every permission in every project, and the platform roles' permissions. |
 | A project's member groups | the project's `members` | none | Membership in that project, with a role (see [Projects](#projects)). |
-| A platform role's groups | Administration → Roles | see below | A platform-wide permission: every project's usage, the Governance page, certifying data products, protecting people's data. See [Roles](16-roles.md). |
+| A platform role's groups | Administration → Roles | see below | A platform-wide permission: every project's usage, the Governance page, certifying data products, protecting people's data, adopting another platform's tables. See [Roles](16-roles.md). |
 
-The install's own platform roles take their groups from three settings, each defaulting to the administrators' groups:
+The install's own platform roles take their groups from four settings, the first three defaulting to the administrators' groups:
 
 | Platform role | Gives | Setting | Chart value |
 |---|---|---|---|
 | `finance` | `see-all-usage` | `USAGE_VIEWER_GROUPS` | `usage.viewerGroups` (a list; `[]` by default) |
 | `governance` | `certify-products`, `see-governance` | `PRODUCT_CERTIFIER_GROUPS` | `products.certifierGroups` (comma-separated; `""` by default) |
 | `data-protection` | `protect-personal`, `see-governance` | `DELIVERY_APPROVER_GROUPS` | `deliveries.approverGroups` (comma-separated; `""` by default) |
+| `table-adoption` | `adopt-tables` | `ADOPTION_GROUPS` | `adoption.groups` (a list; `[data-migration]` by default, a group setup makes and leaves empty) |
 
 Groups beat names: a project that names the group `analysts` as its readers has every analyst as a reader, the day they
 join the group, and loses them the day they leave. Name a person (`{"user": "alice", ...}`) only when they need something
@@ -184,7 +187,9 @@ Each project has **members**, each a Keycloak group or a person, with a **role**
 | A role of the company's own | What an administrator defined on Administration → Roles, from the platform's permissions. See [Roles](16-roles.md). |
 
 Two more kinds of member are the platform's, never given by hand: `pipelines` (the project's service account) and its
-agents' and served models' accounts, which read as its readers do.
+agents' and served models' accounts, which read as its readers do. An application (a CRM, a system that reads the tables)
+is a member through a **service account** of the project's, in a role, registered by its editors and approved by an
+administrator; it may also act for the people signed in to it, under their own rules. See [Projects](02-projects.md#service-accounts-applications-as-members).
 
 The operator records, for each project, what it last applied: a **phase** (`Ready`, `Applying`, `Error`, `Deleting`; the
 web app shows "Waiting for the operator" before the first pass), a line per system it applied (`keycloak`, `ranger`,
@@ -198,7 +203,7 @@ tool checks for itself what a person may do: the menu is what to show, not what'
 
 | Tool | What it is | Where it opens |
 |---|---|---|
-| **Notebooks** | JupyterLab, in a notebook server of your own, with your own Buckets credentials (JupyterHub) | In the platform's frame, `/notebooks/` |
+| **Notebooks** | JupyterLab, in a notebook server of your own, with your own Buckets credentials (JupyterHub); on Kubernetes, Distributed Spark beside it, and the notebook templates in `work/templates/` | In the platform's frame, `/notebooks/` |
 | **SQL** | Superset's SQL Lab: query the lakehouse in Trino, as yourself | In the platform's frame, `/dashboards/sqllab/` |
 | **Dashboards** | Superset's dashboards and charts | In the platform's frame, `/dashboards/` |
 | **Pipelines** | Airflow: pipelines, their runs and their logs | In the platform's frame, `/pipelines/` |
@@ -302,7 +307,8 @@ example projects, which is why bob reads them).
 ## The example people
 
 A local install comes with three people in Keycloak, and their password is `LAKEHOUSE_USER_PASSWORD` in `stack/.env`. On
-Kubernetes it's generated on install and kept in the Secret `storscale-env`:
+Kubernetes they come too, unless the install is for real users only (`examples.users: false`, set before the first
+install); their password is generated on install and kept in the Secret `storscale-env`:
 
 ```bash
 kubectl -n storscale get secret storscale-env -o jsonpath='{.data.LAKEHOUSE_USER_PASSWORD}' | base64 -d
@@ -333,14 +339,16 @@ See [Lab 1](../guide.md#lab-1-sign-in-and-see-what-each-person-sees) in the lab 
 | Every project's usage (finance) | `USAGE_VIEWER_GROUPS` | `usage.viewerGroups` | the administrators' groups |
 | Certifying products, Governance | `PRODUCT_CERTIFIER_GROUPS` | `products.certifierGroups` | the administrators' groups |
 | Data-protection approvers | `DELIVERY_APPROVER_GROUPS` (Compose sets `engineers,analysts`) | `deliveries.approverGroups` | the administrators' groups |
+| Adopting, taking over and giving back tables | `ADOPTION_GROUPS` | `adoption.groups` | `data-migration` |
 | The platform's address | `STORSCALE_DOMAIN`, `STORSCALE_PORT` in `stack/.env` | `global.domain`, `global.port`, `global.scheme` | `storscale.localhost`, `8800`, `http` |
 | The brand in the top bar and the tab | `BRAND_NAME`, `BRAND_TITLE`, `BRAND_LOGO`, `BRAND_ICON` | `brand.name`, `brand.title`, `brand.logo`, `brand.icon` | none: the tab reads *DataWorks* |
-| The example people | the realm (`stack/keycloak/realm.json`) | `examples.users` | `true` |
+| The example people, and the sales project | the realm (`stack/keycloak/realm.json`) | `examples.users` (set before the first install) | `true` |
+| Sign-in with Entra ID | setup's `ENTRA_AUTHORITY`, `ENTRA_CLIENT_ID`, `ENTRA_CLIENT_SECRET` | `sso.entra` ([Operating the platform](17-operating.md#the-installs-settings)) | off |
 
 ## Limits and gotchas
 
-- **`examples.users` doesn't switch the example people off yet.** The value is in the chart, but alice, bob and carol come
-  from the realm whatever it says. Remove them in Keycloak on a real install.
+- **`examples.users: false` changes only a new install's realm.** On an install made with the example people, it stops
+  making the sales project, but alice, bob and carol stay in Keycloak until an administrator removes them there.
 - **Signed in, but no projects.** Home says "You're not in any project yet. Ask an administrator to add you." An
   administrator adds the person (or a group they're in) to a project's members.
 - **A tab is missing.** Tabs show only when the project has what they need (Pipelines needs `pipelines`; Deliveries needs a

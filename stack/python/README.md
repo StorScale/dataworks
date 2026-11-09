@@ -3,10 +3,10 @@
 DataWorks' API, as Python (use case 14.3). Every call runs as whoever signed in, under their projects' rules, as the web app does.
 
 ```sh
-pip install "git+https://github.com/StorScale/dataworks@v0.31.0#subdirectory=stack/python"
+pip install "git+https://github.com/StorScale/dataworks@v0.41.0#subdirectory=stack/python"
 ```
 
-Python 3.10 or later; it needs only `requests`. Leave out `@v0.31.0` for the latest from `main`.
+Python 3.10 or later; it needs only `requests`. Leave out `@v0.41.0` for the latest from `main`.
 
 ```python
 import storscale
@@ -28,8 +28,8 @@ Also by name: `project(name)`, `flows(project)`, `flow(project, name)`, `knowled
 
 **Signing in**, in this order:
 
-- `token=`, or `STORSCALE_TOKEN`: a Keycloak access token of the realm `lakehouse` (used as it is, never renewed);
-- `client_id=` and `client_secret=`, or `STORSCALE_CLIENT_ID` and `STORSCALE_CLIENT_SECRET`: a service account (an agent of a project's, say), by client credentials;
+- `token=`, or `STORSCALE_TOKEN`: a Keycloak access token of the realm `lakehouse` (used as it is, never renewed), such as one a project's service account got for a person on their behalf (`onBehalfOf`), for that project alone;
+- `client_id=` and `client_secret=`, or `STORSCALE_CLIENT_ID` and `STORSCALE_CLIENT_SECRET`: a service account by client credentials: a project's (`svc-<project>-<name>`, registered on its Access tab and approved by an administrator) or an agent's;
 - `username=` and `password=`, or `STORSCALE_USERNAME` and `STORSCALE_PASSWORD`: a person, through the public client `storscale-agent`;
 - otherwise, by a device code: it shows a link and a code (`show=`, default `print`), you open the link in your own browser, sign in as you always do (Entra ID included) and grant it access, and it carries on as you. For a notebook, a pod or any terminal without a browser of its own; a renewal that Keycloak refuses (a long idle) asks for approval again.
 

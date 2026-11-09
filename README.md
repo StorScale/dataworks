@@ -5,26 +5,26 @@ DataWorks is one open data platform on [Buckets](https://github.com/StorScale/bu
 It brings together:
 
 - **Tables:** Iceberg, Nessie and Trino, on Buckets
-- **Notebooks:** JupyterHub, with VS Code in the browser
+- **Notebooks:** JupyterHub, with VS Code in the browser and Spark (Spark Connect) beside each notebook
 - **Dashboards:** Superset
 - **Pipelines:** Airflow and dbt, from each project's git repo; dlt imports and Debezium change capture
 - **Metrics:** a semantic layer (MetricFlow), with an MCP server for assistants and agents
 - **Catalog, lineage and data quality:** OpenMetadata and OpenLineage
 - **Models:** MLflow, and an LLM gateway (LiteLLM) in front of the company's models
-- **Access:** Keycloak and Apache Ranger
+- **Access:** Keycloak (brokering the company's Entra ID) and Apache Ranger
 - **Monitoring:** Prometheus and Grafana
 
-## What it does (0.31.0)
+## What it does
 
-- **One web app with one sign-in.** Notebooks, SQL, dashboards, pipelines and monitoring open inside it; each project has its own pages for its data, pipelines, metrics, apps, models, agents and access.
-- **Projects** defined once, and applied in Keycloak, Ranger, Buckets, Nessie, Trino and Airflow. Readers see their rows and masked columns everywhere, in SQL, dashboards, notebooks and agents' answers alike. Roles of the company's own, per project and platform-wide.
+- **One web app with one sign-in,** the company's Entra ID through Keycloak where it has one. Notebooks, SQL, dashboards, pipelines and monitoring open inside it; each project has its own pages for its data, pipelines, metrics, apps, models, agents and access.
+- **Projects** defined once, and applied in Keycloak, Ranger, Buckets, Nessie, Trino and Airflow. Readers see their rows and masked columns everywhere, in SQL, dashboards, notebooks and agents' answers alike. Roles of the company's own, per project and platform-wide. Applications as a project's members: service accounts, approved by an administrator, that may act for the people signed in to them, under those people's rules.
+- **A locked-down catalog:** Nessie answers the platform's own catalog account alone; people reach the tables through Trino, under Ranger's rules, or through Spark for the tables they read whole.
 - **Git-native pipelines:** each project's DAGs and dbt models from its repo, in an Airflow of its own; a merge request built and tested on a data branch of its own; the project itself released from its repo.
-- **Data in and out:** databases queried in place or copied by change capture, applications' data and files imported, Salesforce, Gong, HighSpot and SAP S/4HANA from a form; file deliveries to clients over SFTP and S3, approved before they run.
-- **The business layer:** the company's terms and metrics defined once, the same in SQL, Superset and assistants; certified data products read in place across projects.
-- **A pipeline canvas** that writes dbt models as a merge request; a step that asks a model about a column.
-- **Governed AI:** an LLM gateway with budgets and a guardrail; agents with their own identity, approved before they run; knowledge banks; new personal columns masked by their tag.
-- **Models:** MLflow per project, approval before use, batch scoring with drift, a model as an API.
-- **For the people who run it:** health and alerts, the audit log, usage and cost per project, limits, backups and restore, one-command upgrades, a Helm chart for a real cluster.
+- **Data in and out:** databases queried in place or copied by change capture, applications' data and files imported, Salesforce, Gong, HighSpot and SAP S/4HANA from a form; another platform's Iceberg tables adopted where they are, then taken over (and given back); file deliveries to clients over SFTP and S3, approved before they run.
+- **The business layer:** the company's terms and metrics defined once, the same in SQL, Superset and assistants; certified data products read in place across projects. A pipeline canvas that writes dbt models as a merge request.
+- **Governed AI:** an LLM gateway with budgets and a guardrail, also as OpenAI's API for a project's applications; agents with their own identity, approved before they run; knowledge banks; new personal columns masked by their tag.
+- **Notebooks and models:** JupyterLab and VS Code signed in as the person, with Distributed Spark beside each notebook on Kubernetes; templates for reading and changing tables and for the common models; MLflow per project, approval before use, batch scoring with drift, a model as an API.
+- **For the people who run it:** health and alerts, the audit log, usage and cost per project, limits, backups and restore, one-command upgrades, a Helm chart for a real cluster, an install for real users only (`examples.users: false`), and the platform's files on a company's own S3 store if it has one.
 
 ## Documentation
 
@@ -89,7 +89,7 @@ Without `--dir`, `storscale up --k8s` installs the published chart at its own ve
 **On a real cluster**, install the chart with Helm:
 
 ```bash
-helm install storscale oci://ghcr.io/storscale/charts/storscale-platform --version 0.31.0 \
+helm install storscale oci://ghcr.io/storscale/charts/storscale-platform --version 0.41.0 \
   -n storscale --create-namespace -f platform.yaml
 ```
 

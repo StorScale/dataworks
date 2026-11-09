@@ -8,29 +8,30 @@ This guide is the reference. The [lab guide](../guide.md) is the other way in: o
 build on each other, each with something to check. Where a lab shows a feature at work, the chapter here links to it.
 
 The examples use the lab's company, Harbor Outfitters, its projects `retail` and `marketing`, and the example people:
-**alice**, an analyst; **bob**, an engineer who also administers the platform; and **carol**, who has no access.
+**alice**, an analyst; **bob**, an engineer who also administers the platform; and **carol**, who has no access. An install
+for real users only (`examples.users: false`) has none of them: read their names as people in the same groups.
 
 ## Chapters
 
 | | Chapter | What it covers |
 |---|---|---|
-| 1 | [Concepts and first sign-in](01-concepts.md) | The platform, people and groups, signing in, projects, the tools, what each person sees |
-| 2 | [Projects](02-projects.md) | Making a project, its members, tables, files, pipelines, alerts and limits; project templates |
-| 3 | [Getting data in](03-data-in.md) | Uploads, imports (files, APIs, databases, Salesforce, Gong, HighSpot, SAP S/4HANA), sources queried in place, change capture, connections |
-| 4 | [Access and protection](04-access-and-protection.md) | Readers' rules (tables, row filters, masks), people's data, protection tags, what each role sees |
+| 1 | [Concepts and first sign-in](01-concepts.md) | The platform, people and groups, signing in (the company's Entra ID, a script's token by a device code), projects, the tools, what each person sees |
+| 2 | [Projects](02-projects.md) | Making a project, its members, service accounts (applications, acting for the people signed in to them), tables, files, pipelines, alerts and limits; project templates |
+| 3 | [Getting data in](03-data-in.md) | Uploads, imports (files, APIs, databases, Salesforce, Gong, HighSpot, SAP S/4HANA), sources queried in place, change capture, another platform's tables adopted, taken over and given back, connections |
+| 4 | [Access and protection](04-access-and-protection.md) | Readers' rules (tables, row filters, masks), people's data, protection tags, what each role sees, the catalog closed to all but the platform |
 | 5 | [Data quality](05-quality.md) | Checks, freshness, profiling, the project's alerts |
 | 6 | [Metrics and business terms](06-metrics-and-terms.md) | The semantic model, asking metrics, tests, sharing a model, business terms |
 | 7 | [Dashboards, apps and assistants](07-dashboards-apps-assistants.md) | Superset on the models, apps, assistants over MCP |
 | 8 | [Flows](08-flows.md) | The canvas: its steps, previews, the model step, saving as a merge request |
 | 9 | [Pipelines and the project's repo](09-pipelines-and-git.md) | A GitLab repo, the project's Airflow, dbt, merge-request reviews, scheduled notebooks, shared libraries |
-| 10 | [Notebooks and models](10-notebooks-and-models.md) | JupyterHub, buckets_lake, MLflow, approving models, scoring and drift, serving |
+| 10 | [Notebooks and models](10-notebooks-and-models.md) | JupyterHub, buckets_lake, Distributed Spark, MLflow, approving models, scoring and drift, serving, the notebook templates |
 | 11 | [Data products](11-data-products.md) | Publishing, contracts, consumers, certification, reading in place |
 | 12 | [Deliveries](12-deliveries.md) | Files to partners on a schedule, approved, with a manifest and a log |
 | 13 | [Privacy](13-privacy.md) | Where a person's data is, what was sent about them, erasure, retention |
-| 14 | [AI](14-ai.md) | The LLM gateway and budgets, the guardrail, agents, knowledge banks |
+| 14 | [AI](14-ai.md) | The LLM gateway and budgets, the guardrail, the gateway as OpenAI's API, agents, knowledge banks |
 | 15 | [History and releases](15-history-and-releases.md) | A table's history, reading as it was, tags, the project as code, releases |
-| 16 | [Roles](16-roles.md) | Built-in, project and platform roles, and what each permission gives |
-| 17 | [Operating the platform](17-operating.md) | Installing, upgrading, health, audit, usage and cost, backups, Buckets capacity, the install's settings |
+| 16 | [Roles](16-roles.md) | Built-in, project and platform roles (`table-adoption` among them), and what each permission gives |
+| 17 | [Operating the platform](17-operating.md) | Installing, upgrading, health, audit, usage and cost, external stores, the platform's files on a company's store, backups, Buckets capacity, the install's settings |
 | 18 | [Troubleshooting](18-troubleshooting.md) | The errors people meet, what they mean, and what to do |
 
 ## Where else to look
