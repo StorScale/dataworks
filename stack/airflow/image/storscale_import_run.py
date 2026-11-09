@@ -18,11 +18,7 @@ import os
 import urllib.parse
 
 import dlt
-import storscale_iceberg_merge
 from dlt.destinations import filesystem
-
-# A merge where a column first has a value partway through a load (storscale_iceberg_merge says why).
-storscale_iceberg_merge.apply()
 
 pi = json.loads(os.environ["STORSCALE_IMPORT"])
 secret = json.loads(os.environ.get("STORSCALE_IMPORT_SECRET") or "{}")
@@ -40,6 +36,12 @@ for k, v in {"TYPE": "rest", "URI": os.environ.get("NESSIE_ICEBERG_URL", "http:/
              "WAREHOUSE": "warehouse", "S3__ENDPOINT": "http://buckets:9000", "S3__ACCESS_KEY_ID": access,
              "S3__SECRET_ACCESS_KEY": key, "S3__REGION": "us-east-1", "S3__PATH_STYLE_ACCESS": "true"}.items():
     os.environ[f"PYICEBERG_CATALOG__DEFAULT__{k}"] = v
+
+# A merge where a column first has a value partway through a load (storscale_iceberg_merge says why). Only
+# now: it loads pyiceberg, which reads its catalog's settings (the environment, above) as it's first loaded.
+import storscale_iceberg_merge  # noqa: E402
+
+storscale_iceberg_merge.apply()
 
 
 def disposition(primary_key):
