@@ -4,7 +4,11 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
-**Upgrading:** adopting tables, taking them over and giving them back now take the new platform role `table-adoption` as well as editing the project. Its group is `data-migration` (the chart's `adoption.groups`), which setup makes in Keycloak and leaves empty: until someone is put in it, only administrators adopt. Put the people doing the move in it.
+## [0.42.0] - 2026-11-08
+
+Adopting another platform's tables, taking them over and giving them back become a platform role's, `table-adoption` (the group `data-migration`), in the projects one edits; a table taken over is writable at last. A notebook template on reading and changing tables, by SQL and by Spark.
+
+**Upgrading from 0.41.0:** `storscale upgrade --context <cluster> --version 0.42.0`, after a `--dry-run`. Adopting tables, taking them over and giving them back now take the new platform role `table-adoption` as well as editing the project. Its group is `data-migration` (the chart's `adoption.groups`), which setup makes in Keycloak and leaves empty: until someone is put in it, only administrators adopt. Put the people doing the move in it.
 
 ### Changed
 - **Adopting, taking over and giving back tables are a platform role's** (`table-adoption`, the new platform permission `adopt-tables`), in the projects whose tables one writes: no longer every editor's. Its group is the chart's `adoption.groups` (`ADOPTION_GROUPS`; default `data-migration`, a group of its own, made by setup and never filled); administrators may too, and more groups can be given it on Administration → Roles. Editors without it don't see the stores or the buttons, and are answered 403 naming the group, the refusal in the audit log. `/api/session` says `adopt`.
@@ -14,7 +18,7 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 - **The finance and governance groups' pages were missing from the menu** for people who aren't administrators: the web app dropped `usage` and `governance` from `/api/session`.
 
 ### Added
-- **A notebook template on reading and changing tables** (`work/templates/tables.ipynb`): the same work through Trino (`buckets_lake.sql`: read, make a table, insert, update, delete, merge, a few rows from pandas, snapshots and reading a table as it was) and through Spark (`buckets_lake.spark`: read, replace a table's rows, merge, update, delete), on the guide's `retail` project. CI runs it top to bottom as bob.
+- **A notebook template on reading and changing tables** (`work/templates/tables.ipynb`): the same work through Trino (`buckets_lake.sql`: read, make a table, insert, update, delete, merge, a few rows from pandas, a table's history and reading it as it was) and through Spark (`buckets_lake.spark`: read, replace a table's rows, merge, update, delete), on the guide's `retail` project. CI runs it top to bottom as bob.
 
 ## [0.41.0] - 2026-11-07
 
