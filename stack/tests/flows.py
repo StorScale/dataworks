@@ -283,6 +283,15 @@ def main():
               m.ok and mj.get("errors") == [] and "iceberg.sales.orders" in rev.get("sql", "") and "revenue" in names and "order__region" in names
               and " LIMIT " not in rev.get("sql", "").upper(), (m.status_code, m.text[:400]))
 
+        # 5b. The canvas's project keeps no files (no spec.files): its uploads are none,
+        # not the store's Access Denied for a bucket it doesn't have, and an upload is refused.
+        nf = bob.get(f"{PLATFORM}/api/projects/{NAME}/uploads", timeout=30)
+        nfj = nf.json() if nf.ok else {}
+        nfu = bob.post(f"{PLATFORM}/api/projects/{NAME}/uploads", headers=H, files={"file": ("x.csv", "x\n1\n", "text/csv")}, timeout=30)
+        check("a project without files has no uploads (files false) and refuses one (409), not the store's Access Denied",
+              nf.ok and nfj.get("files") is False and nfj.get("uploads") == [] and nfu.status_code == 409 and "Files" in nfu.text,
+              (nf.status_code, nf.text[:200], nfu.status_code, nfu.text[:200]))
+
         # 6. An upload, in a project of its own (one without a repo, whose imports run in
         # the platform's Airflow, where its Pipelines tab looks): into the landing area as
         # the person, previewed, imported, an input.

@@ -60,8 +60,21 @@ func (s *server) bucketAs(ctx context.Context, token string) (*minio.Client, err
 	return minio.New(u.Host, &minio.Options{Creds: creds, Secure: u.Scheme == "https", Region: "us-east-1", BucketLookup: minio.BucketLookupPath})
 }
 
-// bucketOf is the project's bucket: its name.
-func bucketOf(p *project.Project) string { return p.Metadata.Name }
+// bucketOf is the project's bucket (spec.files.bucket, by default its name),
+// or "" for a project that keeps no files (no spec.files): it has no bucket,
+// and no one has rights to one by its name.
+func bucketOf(p *project.Project) string {
+	if p.Spec.Files == nil {
+		return ""
+	}
+	if p.Spec.Files.Bucket != "" {
+		return p.Spec.Files.Bucket
+	}
+	return p.Metadata.Name
+}
+
+// noFiles is the answer to a request on the files of a project that keeps none.
+const noFiles = "the project keeps no files: turn on Files in its settings to give it a bucket"
 
 type upload struct {
 	Name   string    `json:"name"`
@@ -80,13 +93,18 @@ func (s *server) handleUploads(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	out := []upload{}
+	bucket := bucketOf(p)
+	if bucket == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"uploads": out, "prefix": uploadsPrefix, "bucket": "", "files": false})
+		return
+	}
 	c, err := s.bucketAs(r.Context(), token)
 	if err != nil {
 		s.fail(w, r, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	out := []upload{}
-	for o := range c.ListObjects(r.Context(), bucketOf(p), minio.ListObjectsOptions{Prefix: uploadsPrefix}) {
+	for o := range c.ListObjects(r.Context(), bucket, minio.ListObjectsOptions{Prefix: uploadsPrefix}) {
 		if o.Err != nil {
 			s.fail(w, r, http.StatusBadGateway, "Buckets: "+o.Err.Error())
 			return
@@ -98,7 +116,7 @@ func (s *server) handleUploads(w http.ResponseWriter, r *http.Request) {
 		out = append(out, upload{Name: name, Size: o.Size, At: o.LastModified, Format: project.FileFormat(name)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].At.After(out[j].At) })
-	writeJSON(w, http.StatusOK, map[string]any{"uploads": out, "prefix": uploadsPrefix, "bucket": bucketOf(p)})
+	writeJSON(w, http.StatusOK, map[string]any{"uploads": out, "prefix": uploadsPrefix, "bucket": bucket, "files": true})
 }
 
 // handleUpload puts a file in the project's landing area, as the person
@@ -110,6 +128,11 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 	p, _, ok := s.projectRole(w, r, who)
 	if !ok {
+		return
+	}
+	bucket := bucketOf(p)
+	if bucket == "" {
+		s.fail(w, r, http.StatusConflict, noFiles)
 		return
 	}
 	if !s.memberCan(r, p.Metadata.Name, who, project.PermWriteFiles) {
@@ -149,7 +172,7 @@ func (s *server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if size <= 0 {
 		size = -1
 	}
-	info, err := c.PutObject(r.Context(), bucketOf(p), uploadsPrefix+name, body, size, minio.PutObjectOptions{ContentType: hdr.Header.Get("Content-Type")})
+	info, err := c.PutObject(r.Context(), bucket, uploadsPrefix+name, body, size, minio.PutObjectOptions{ContentType: hdr.Header.Get("Content-Type")})
 	if err != nil {
 		code := http.StatusBadGateway
 		if resp := minio.ToErrorResponse(err); resp.Code == "AccessDenied" {
@@ -174,6 +197,11 @@ func (s *server) handleUploadPreview(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	bucket := bucketOf(p)
+	if bucket == "" {
+		s.fail(w, r, http.StatusConflict, noFiles)
+		return
+	}
 	name := r.PathValue("file")
 	if !uploadNameRE.MatchString(name) {
 		s.fail(w, r, http.StatusNotFound, "no such upload")
@@ -184,7 +212,7 @@ func (s *server) handleUploadPreview(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	obj, err := c.GetObject(r.Context(), bucketOf(p), uploadsPrefix+name, minio.GetObjectOptions{})
+	obj, err := c.GetObject(r.Context(), bucket, uploadsPrefix+name, minio.GetObjectOptions{})
 	if err != nil {
 		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
@@ -215,6 +243,11 @@ func (s *server) handleDeleteUpload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	bucket := bucketOf(p)
+	if bucket == "" {
+		s.fail(w, r, http.StatusConflict, noFiles)
+		return
+	}
 	name := r.PathValue("file")
 	if !s.memberCan(r, p.Metadata.Name, who, project.PermWriteFiles) || !uploadNameRE.MatchString(name) {
 		s.fail(w, r, http.StatusForbidden, "the project's editors remove its uploads")
@@ -225,7 +258,7 @@ func (s *server) handleDeleteUpload(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	if err := c.RemoveObject(r.Context(), bucketOf(p), uploadsPrefix+name, minio.RemoveObjectOptions{}); err != nil {
+	if err := c.RemoveObject(r.Context(), bucket, uploadsPrefix+name, minio.RemoveObjectOptions{}); err != nil {
 		s.fail(w, r, http.StatusBadGateway, err.Error())
 		return
 	}

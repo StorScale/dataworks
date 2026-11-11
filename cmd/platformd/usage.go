@@ -422,9 +422,9 @@ func (s *server) sampleUsage(ctx context.Context, day string) bool {
 	}
 	month := day[:7]
 	for _, p := range specs {
-		d := storageDay{Tables: map[string]int64{}, Bucket: buckets[bucketOf(p)]}
-		if p.Spec.Files != nil && p.Spec.Files.Bucket != "" {
-			d.Bucket = buckets[p.Spec.Files.Bucket]
+		d := storageDay{Tables: map[string]int64{}}
+		if b := bucketOf(p); b != "" {
+			d.Bucket = buckets[b]
 		}
 		if s.maintainer != nil && p.Spec.Tables != nil {
 			var ok bool

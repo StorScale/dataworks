@@ -3,7 +3,25 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/StorScale/dataworks/internal/project"
 )
+
+func TestBucketOf(t *testing.T) {
+	p := &project.Project{}
+	p.Metadata.Name = "crm"
+	if b := bucketOf(p); b != "" {
+		t.Errorf("a project without files: bucket %q, want none", b)
+	}
+	p.Spec.Files = &project.Files{}
+	if b := bucketOf(p); b != "crm" {
+		t.Errorf("files without a bucket named: %q, want the project's name", b)
+	}
+	p.Spec.Files.Bucket = "crm-landing"
+	if b := bucketOf(p); b != "crm-landing" {
+		t.Errorf("files with a bucket named: %q, want crm-landing", b)
+	}
+}
 
 func TestPreviewCSV(t *testing.T) {
 	head := "\ufeffSupplier ID,Name,Price,Since,Active,Note\n1,Acme,10.5,2026-01-02,true,\n2,Globex,7,2026-02-03,false,\"a, b\"\n3,Initech,x"

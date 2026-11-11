@@ -460,7 +460,7 @@ export const saveFlow = (name: string, flow: CanvasFlow) => api<FlowSaved>("PUT"
 // --- Uploads: files in the project's landing area (R11.3), put there as the person ---
 export type Upload = { name: string; size: number; at: string; format?: string };
 export type UploadPreview = { columns: { name: string; type: string }[]; rows: string[][]; partial?: boolean; note?: string };
-export const getUploads = (name: string) => api<{ uploads: Upload[]; prefix: string; bucket: string }>("GET", `/api/projects/${encodeURIComponent(name)}/uploads`);
+export const getUploads = (name: string) => api<{ uploads: Upload[]; prefix: string; bucket: string; files: boolean }>("GET", `/api/projects/${encodeURIComponent(name)}/uploads`);
 export const getUploadPreview = (name: string, file: string) =>
   api<{ name: string; preview: UploadPreview; table: string }>("GET", `/api/projects/${encodeURIComponent(name)}/uploads/${encodeURIComponent(file)}`);
 export const removeUpload = (name: string, file: string) => api<void>("DELETE", `/api/projects/${encodeURIComponent(name)}/uploads/${encodeURIComponent(file)}`);

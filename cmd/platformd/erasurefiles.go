@@ -62,6 +62,9 @@ func eraseFromLanding(ctx context.Context, c *minio.Client, p *project.Project, 
 		return out
 	}
 	bucket := bucketOf(p)
+	if bucket == "" {
+		return out
+	}
 	for obj := range c.ListObjects(ctx, bucket, minio.ListObjectsOptions{Prefix: uploadsPrefix}) {
 		if obj.Err != nil {
 			errs["landing files"] = obj.Err.Error()

@@ -4,6 +4,10 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+- **A project without files showed "Buckets: Access Denied." under Flows → Uploads**: the platform listed a bucket by the project's name that a project without Files (no `spec.files`) doesn't have. Uploads now says the project keeps no files and that turning on Files in its settings gives it a bucket; the API answers its uploads as none (`files: false`) and refuses an upload, preview or removal (409), as it does a knowledge bank's files.
+- **A project's files were looked for in a bucket by its name, not the one it names** (`spec.files.bucket`): uploads, knowledge banks' files and erasure in landing files now use the project's bucket.
+
 ## [0.42.1] - 2026-11-09
 
 Nessie's GC deletes again on a company's MinIO from before 2025: the store forwarder adds the `Content-MD5` such a MinIO asks of a multi-object delete.

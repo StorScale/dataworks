@@ -154,13 +154,18 @@ func (s *server) handleKnowledgeBuild(w http.ResponseWriter, r *http.Request) {
 	}
 	files, skipped := 0, 0
 	if len(kb.bank.Files) > 0 {
+		bucket := bucketOf(kb.p)
+		if bucket == "" {
+			s.fail(w, r, http.StatusConflict, noFiles)
+			return
+		}
 		bc, err := s.bucketAs(ctx, token)
 		if err != nil {
 			s.fail(w, r, http.StatusServiceUnavailable, err.Error())
 			return
 		}
 		for _, f := range kb.bank.Files {
-			for o := range bc.ListObjects(ctx, bucketOf(kb.p), minio.ListObjectsOptions{Prefix: f.Prefix, Recursive: true}) {
+			for o := range bc.ListObjects(ctx, bucket, minio.ListObjectsOptions{Prefix: f.Prefix, Recursive: true}) {
 				if o.Err != nil {
 					s.fail(w, r, http.StatusBadGateway, "reading the folder "+f.Prefix+": "+o.Err.Error())
 					return
@@ -170,7 +175,7 @@ func (s *server) handleKnowledgeBuild(w http.ResponseWriter, r *http.Request) {
 					skipped++
 					continue
 				}
-				obj, err := bc.GetObject(ctx, bucketOf(kb.p), o.Key, minio.GetObjectOptions{})
+				obj, err := bc.GetObject(ctx, bucket, o.Key, minio.GetObjectOptions{})
 				if err != nil {
 					s.fail(w, r, http.StatusBadGateway, "reading "+o.Key+": "+err.Error())
 					return

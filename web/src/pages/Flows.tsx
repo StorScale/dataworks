@@ -119,6 +119,16 @@ function Uploads({ project, canEdit }: { project: string; canEdit: boolean }) {
     await putImport(project, { name: "uploads", source: "files", schedule: uploads?.schedule ?? "0 * * * *", files: { tables } });
     reload();
   });
+  // A project without Files has no bucket, so no landing area to upload to.
+  const noFiles = list.data?.files === false || (view?.spec && !view.spec.spec.files);
+  if (noFiles) return (
+    <div className="card stack" style={{ gap: 8 }} data-testid="uploads">
+      <h2>Uploads</h2>
+      <div className="small muted" data-testid="uploads-no-files">
+        This project keeps no files, so there is nowhere to upload them. Turning on Files in the project's settings gives it a bucket, and uploads land in its landing area.
+      </div>
+    </div>
+  );
   return (
     <div className="card stack" style={{ gap: 8 }} data-testid="uploads">
       <div className="card-head">
