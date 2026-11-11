@@ -4,6 +4,12 @@ All notable changes to StorScale Platform are recorded here, in the [Keep a Chan
 
 ## [Unreleased]
 
+## [0.42.2] - 2026-11-11
+
+Uploads in a project without files says so in place of the store's "Access Denied", and a project's files are looked for in the bucket it names.
+
+**Upgrading from 0.42.1:** `storscale upgrade --context <cluster> --version 0.42.2`. Nothing to do first.
+
 ### Fixed
 - **A project without files showed "Buckets: Access Denied." under Flows → Uploads**: the platform listed a bucket by the project's name that a project without Files (no `spec.files`) doesn't have. Uploads now says the project keeps no files and that turning on Files in its settings gives it a bucket; the API answers its uploads as none (`files: false`) and refuses an upload, preview or removal (409), as it does a knowledge bank's files.
 - **A project's files were looked for in a bucket by its name, not the one it names** (`spec.files.bucket`): uploads, knowledge banks' files and erasure in landing files now use the project's bucket.
